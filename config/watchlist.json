@@ -1,0 +1,23 @@
+{
+    "MOMENTUM": [
+        "RDDT",
+        "PLTR",
+        "MSTR"
+    ],
+    "TECH": [
+        "AAPL",
+        "NVDA",
+        "TSLA",
+        "META",
+        "GOOGL"
+    ],
+    "VOLATILITY": [
+        "SMCI",
+        "CEG",
+        "COIN"
+    ],
+    "ENERGY": [
+        "CEG",
+        "NEE"
+    ]
+}

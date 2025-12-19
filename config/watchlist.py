@@ -1,34 +1,27 @@
-# Watchlist Configuration
-# Edit this file to maintain your daily watchlist
+import json
+import os
 
-# High Momentum Movers
-MOMENTUM = [
-    'RDDT',
-    'PLTR',
-    'MSTR',
-]
+def load_watchlist():
+    json_path = os.path.join(os.path.dirname(__file__), 'watchlist.json')
+    try:
+        with open(json_path, 'r') as f:
+            data = json.load(f)
+        return data
+    except FileNotFoundError:
+        # Fallback if file doesn't exist
+        return {
+            "MOMENTUM": ['RDDT', 'PLTR', 'MSTR'],
+            "TECH": ['AAPL', 'NVDA', 'TSLA', 'META', 'GOOGL'],
+            "VOLATILITY": ['SMCI', 'CEG', 'COIN'],
+            "ENERGY": ['CEG', 'NEE']
+        }
 
-# Large Cap Tech
-TECH = [
-    'AAPL',
-    'NVDA',
-    'TSLA',
-    'META',
-    'GOOGL',
-]
+_data = load_watchlist()
 
-# Volatility Plays
-VOLATILITY = [
-    'SMCI',
-    'CEG',
-    'COIN',
-]
-
-# Energy/Utilities
-ENERGY = [
-    'CEG',
-    'NEE',
-]
+MOMENTUM = _data.get('MOMENTUM', [])
+TECH = _data.get('TECH', [])
+VOLATILITY = _data.get('VOLATILITY', [])
+ENERGY = _data.get('ENERGY', [])
 
 # Combined Default Watchlist
-DEFAULT_WATCHLIST = MOMENTUM + TECH + VOLATILITY
+DEFAULT_WATCHLIST = list(set(MOMENTUM + TECH + VOLATILITY + ENERGY))

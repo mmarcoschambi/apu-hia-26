@@ -3,6 +3,21 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
+import json
+import os
+
+# Función para cargar/guardar watchlist
+WATCHLIST_FILE = 'config/watchlist.json'
+
+def load_watchlist_json():
+    if os.path.exists(WATCHLIST_FILE):
+        with open(WATCHLIST_FILE, 'r') as f:
+            return json.load(f)
+    return {}
+
+def save_watchlist_json(data):
+    with open(WATCHLIST_FILE, 'w') as f:
+        json.dump(data, f, indent=4)
 
 # Configuración de la página
 st.set_page_config(
@@ -69,6 +84,41 @@ if not df.empty:
             (df_filtered['entry_date'].dt.date >= date_range[0]) &
             (df_filtered['exit_date'].dt.date <= date_range[1])
         ]
+
+    # --- Gestión de Watchlist (Sidebar) ---
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Gestión de Watchlist")
+
+    watchlist_data = load_watchlist_json()
+    categories = list(watchlist_data.keys())
+
+    # Selector de Categoría para editar
+    selected_category = st.sidebar.selectbox("Categoría Watchlist", categories)
+
+    if selected_category:
+        current_symbols = watchlist_data[selected_category]
+        with st.sidebar.expander(f"Ver símbolos de {selected_category}"):
+            st.code(", ".join(current_symbols))
+
+        # Añadir Símbolo
+        new_symbol = st.sidebar.text_input("Añadir Símbolo (e.g. AMD)").upper()
+        if st.sidebar.button("Añadir"):
+            if new_symbol and new_symbol not in current_symbols:
+                watchlist_data[selected_category].append(new_symbol)
+                save_watchlist_json(watchlist_data)
+                st.sidebar.success(f"{new_symbol} añadido!")
+                st.rerun()
+            elif new_symbol in current_symbols:
+                st.sidebar.warning("El símbolo ya existe.")
+
+        # Eliminar Símbolo
+        symbol_to_remove = st.sidebar.selectbox("Eliminar Símbolo", ["Seleccionar..."] + sorted(current_symbols))
+        if st.sidebar.button("Eliminar"):
+            if symbol_to_remove != "Seleccionar...":
+                watchlist_data[selected_category].remove(symbol_to_remove)
+                save_watchlist_json(watchlist_data)
+                st.sidebar.success(f"{symbol_to_remove} eliminado!")
+                st.rerun()
 
     # --- Parámetros de Simulación (Sidebar) ---
     st.sidebar.markdown("---")
