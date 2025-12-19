@@ -5,6 +5,8 @@ import plotly.graph_objects as go
 from datetime import datetime
 import json
 import os
+import subprocess
+import time
 
 # Función para cargar/guardar watchlist
 WATCHLIST_FILE = 'config/watchlist.json'
@@ -19,6 +21,67 @@ def save_watchlist_json(data):
     with open(WATCHLIST_FILE, 'w') as f:
         json.dump(data, f, indent=4)
 
+# Función para ejecutar el backtest con UI de progreso
+def run_backtest_with_progress(start_date, end_date):
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    log_area = st.empty()
+    logs = []
+
+    cmd = [
+        "python3", "backtest_headless.py",
+        "--start", str(start_date),
+        "--end", str(end_date)
+    ]
+    
+    try:
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            universal_newlines=True
+        )
+        
+        while True:
+            line = process.stdout.readline()
+            if not line and process.poll() is not None:
+                break
+            if line:
+                line = line.strip()
+                # Parsear marcador de progreso
+                if "__PROGRESS__" in line:
+                    parts = line.split("__")
+                    if len(parts) >= 3:
+                        progress_info = parts[2].split("/") # "1/10"
+                        symbol_name = parts[3] if len(parts) > 3 else ""
+                        if len(progress_info) == 2:
+                            current = int(progress_info[0])
+                            total = int(progress_info[1])
+                            progress = float(current) / float(total)
+                            progress_bar.progress(progress)
+                            status_text.write(f"⏳ Procesando **{symbol_name}** ({current}/{total})...")
+                else:
+                    logs.append(line)
+                    # Mostrar solo las últimas 5 líneas para no saturar
+                    log_text = "\n".join(logs[-10:])
+                    log_area.code(log_text)
+        
+        if process.returncode == 0:
+            progress_bar.progress(1.0)
+            status_text.success("✅ Backtest completado!")
+            time.sleep(1)
+            st.cache_data.clear()
+            return True
+        else:
+            status_text.error("❌ Error en la ejecución.")
+            return False
+
+    except Exception as e:
+        status_text.error(f"Error inesperado: {e}")
+        return False
+
 # Configuración de la página
 st.set_page_config(
     page_title="Momentum V2 - Backtest Dashboard",
@@ -28,242 +91,158 @@ st.set_page_config(
 
 # Título y Descripción
 st.title("📈 Momentum V2 - Análisis de Backtest")
-st.markdown("""
-Esta herramienta simula el rendimiento de la estrategia. 
-**Cómo funciona el cálculo:**
-1. Defines un **Capital Inicial**.
-2. Defines un **Tamaño de Posición** fijo (cuánto dinero inviertes por operación).
-3. El sistema calcula cuántas acciones (`Qty`) compras con ese dinero.
-4. El **Resultado** es la ganancia o pérdida en dólares basada en el movimiento del precio.
-""")
 
-# Carga de datos
+# --- Gestión de Watchlist y Ejecución (Barra Lateral Superior) ---
+st.sidebar.header("⚙️ Configuración y Ejecución")
+
+# Inputs de fecha para el runner
+run_start_date = st.sidebar.date_input("Fecha Inicio Backtest", value=datetime(2024, 1, 1))
+run_end_date = st.sidebar.date_input("Fecha Fin Backtest", value=datetime.now())
+
+if st.sidebar.button("🚀 EJECUTAR BACKTEST", use_container_width=True, help="Ejecuta backtest_headless.py"):
+    if run_backtest_with_progress(run_start_date, run_end_date):
+        st.rerun()
+
+st.sidebar.markdown("---")
+
+# --- Carga de datos ---
 @st.cache_data
 def load_data():
     try:
-        df = pd.read_csv('backtest_results.csv')
-        # Convertir columnas de fecha
-        df['entry_date'] = pd.to_datetime(df['entry_date'])
-        df['exit_date'] = pd.to_datetime(df['exit_date'])
-        return df
-    except FileNotFoundError:
-        st.error("No se encontró el archivo 'backtest_results.csv'. Por favor, ejecuta el backtest primero.")
+        if os.path.exists('backtest_results.csv'):
+            df = pd.read_csv('backtest_results.csv')
+            df['entry_date'] = pd.to_datetime(df['entry_date'])
+            df['exit_date'] = pd.to_datetime(df['exit_date'])
+            return df
+        return pd.DataFrame()
+    except Exception as e:
         return pd.DataFrame()
 
-df = load_data()
+df_raw = load_data()
 
-if not df.empty:
-    # --- Sidebar Filtros ---
-    st.sidebar.header("Filtros")
-    
-    # Filtro de Símbolo
-    symbols = ['Todos'] + sorted(df['symbol'].unique().tolist())
-    selected_symbol = st.sidebar.selectbox("Símbolo", symbols)
-    
-    # Filtro de Tipo de Señal
-    if 'signal_type' in df.columns:
-        signal_types = ['Todos'] + sorted(df['signal_type'].unique().tolist())
-        selected_signal = st.sidebar.selectbox("Tipo de Señal", signal_types)
-    else:
-        selected_signal = 'Todos'
-
-    # Filtro de Fechas
-    min_date = df['entry_date'].min()
-    max_date = df['exit_date'].max()
-    date_range = st.sidebar.date_input(
-        "Rango de Fechas",
-        value=(min_date, max_date),
-        min_value=min_date,
-        max_value=max_date
-    )
-
-    # Aplicar Filtros
-    df_filtered = df.copy()
-    
-    if selected_symbol != 'Todos':
-        df_filtered = df_filtered[df_filtered['symbol'] == selected_symbol]
-        
-    if selected_signal != 'Todos':
-        df_filtered = df_filtered[df_filtered['signal_type'] == selected_signal]
-        
-    if len(date_range) == 2:
-        df_filtered = df_filtered[
-            (df_filtered['entry_date'].dt.date >= date_range[0]) &
-            (df_filtered['exit_date'].dt.date <= date_range[1])
-        ]
-
-    # --- Gestión de Watchlist (Sidebar) ---
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Gestión de Watchlist")
-
+# --- Gestión de Watchlist (Sidebar) ---
+with st.sidebar.expander("📝 Gestionar Watchlist", expanded=False):
     watchlist_data = load_watchlist_json()
     categories = list(watchlist_data.keys())
-
-    # Selector de Categoría para editar
-    selected_category = st.sidebar.selectbox("Categoría Watchlist", categories)
+    selected_category = st.selectbox("Categoría", categories)
 
     if selected_category:
         current_symbols = watchlist_data[selected_category]
-        with st.sidebar.expander(f"Ver símbolos de {selected_category}"):
-            st.code(", ".join(current_symbols))
+        st.code(", ".join(current_symbols))
 
-        # Añadir Símbolo
-        new_symbol = st.sidebar.text_input("Añadir Símbolo (e.g. AMD)").upper()
-        if st.sidebar.button("Añadir"):
+        new_symbol = st.text_input("Añadir Símbolo").upper()
+        if st.button("Añadir"):
             if new_symbol and new_symbol not in current_symbols:
                 watchlist_data[selected_category].append(new_symbol)
                 save_watchlist_json(watchlist_data)
-                st.sidebar.success(f"{new_symbol} añadido!")
+                st.success(f"{new_symbol} añadido!")
                 st.rerun()
-            elif new_symbol in current_symbols:
-                st.sidebar.warning("El símbolo ya existe.")
 
-        # Eliminar Símbolo
-        symbol_to_remove = st.sidebar.selectbox("Eliminar Símbolo", ["Seleccionar..."] + sorted(current_symbols))
-        if st.sidebar.button("Eliminar"):
+        symbol_to_remove = st.selectbox("Eliminar", ["Seleccionar..."] + sorted(current_symbols))
+        if st.button("Eliminar"):
             if symbol_to_remove != "Seleccionar...":
                 watchlist_data[selected_category].remove(symbol_to_remove)
                 save_watchlist_json(watchlist_data)
-                st.sidebar.success(f"{symbol_to_remove} eliminado!")
                 st.rerun()
 
-    # --- Parámetros de Simulación (Sidebar) ---
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Simulación de Portafolio")
-    initial_capital = st.sidebar.number_input("Capital Inicial ($)", value=10000.0, step=1000.0)
-    position_size = st.sidebar.number_input("Tamaño Posición ($)", value=1000.0, step=100.0)
-    assumed_risk_pct = st.sidebar.number_input("Riesgo Estimado por Trade (%)", value=2.0, step=0.1, help="Usado para calcular métricas R. Ejemplo: Si tu stop loss promedio es 2%, pon 2.")
+st.sidebar.markdown("---")
 
-    # --- Cálculos Avanzados ---
-    # Ordenar por fecha de salida para simular evolución del capital
+# --- Formulario de Filtros y Simulación ---
+with st.sidebar.form("filtros_form"):
+    st.header("🔍 Filtros de Visualización")
+    
+    # Valores por defecto para los filtros
+    if not df_raw.empty:
+        symbols_list = ['Todos'] + sorted(df_raw['symbol'].unique().tolist())
+        min_date_val = df_raw['entry_date'].min().date()
+        max_date_val = df_raw['exit_date'].max().date()
+        signal_types = ['Todos'] + sorted(df_raw['signal_type'].unique().tolist())
+    else:
+        symbols_list = ['Todos']
+        min_date_val = datetime.now().date()
+        max_date_val = datetime.now().date()
+        signal_types = ['Todos']
+
+    f_symbol = st.selectbox("Símbolo", symbols_list)
+    f_signal = st.selectbox("Tipo de Señal", signal_types)
+    f_dates = st.date_input("Rango de Fechas (Visualización)", value=(min_date_val, max_date_val))
+    
+    st.markdown("---")
+    st.header("💰 Simulación")
+    f_capital = st.number_input("Capital Inicial ($)", value=10000.0, step=1000.0)
+    f_pos_size = st.number_input("Tamaño Posición ($)", value=1000.0, step=100.0)
+    f_risk = st.number_input("Riesgo Est. por Trade (%)", value=2.0, step=0.1)
+    
+    submitted = st.form_submit_button("APLICAR CAMBIOS", use_container_width=True)
+
+# Lógica de Filtrado (solo se activa al cargar o al pulsar el botón del form)
+if not df_raw.empty:
+    df_filtered = df_raw.copy()
+    
+    if f_symbol != 'Todos':
+        df_filtered = df_filtered[df_filtered['symbol'] == f_symbol]
+    if f_signal != 'Todos':
+        df_filtered = df_filtered[df_filtered['signal_type'] == f_signal]
+    if len(f_dates) == 2:
+        df_filtered = df_filtered[
+            (df_filtered['entry_date'].dt.date >= f_dates[0]) &
+            (df_filtered['exit_date'].dt.date <= f_dates[1])
+        ]
+
+    # --- Cálculos ---
     df_filtered = df_filtered.sort_values('exit_date')
+    df_filtered['Qty'] = f_pos_size / df_filtered['entry_price']
+    df_filtered['Result'] = (df_filtered['returns_pct'] / 100) * f_pos_size
+    df_filtered['r_multiple'] = df_filtered['returns_pct'] / (f_risk if f_risk > 0 else 1.0)
+    df_filtered['Running_Capital'] = f_capital + df_filtered['Result'].cumsum()
 
-    # 1. Calcular Cantidad (Qty) y Resultado ($)
-    # Qty = Tamaño Posición / Precio Entrada
-    df_filtered['Qty'] = df_filtered.apply(lambda row: position_size / row['entry_price'], axis=1)
-    
-    # Resultado ($) = (Precio Salida - Precio Entrada) * Qty
-    # Nota: Usamos returns_pct para mayor precisión si existe discrepancia en precios brutos, 
-    # pero para consistencia con la tabla, calculamos directo:
-    df_filtered['Result'] = (df_filtered['returns_pct'] / 100) * position_size
-    
-    # 2. Calcular R-Multiples
-    risk_denom = assumed_risk_pct if assumed_risk_pct > 0 else 1.0
-    df_filtered['r_multiple'] = df_filtered['returns_pct'] / risk_denom
-
-    # 3. Evolución de Capital
-    # Capital Acumulado = Capital Inicial + Suma Acumulativa de Resultados
-    df_filtered['Running_Capital'] = initial_capital + df_filtered['Result'].cumsum()
-
-    # Métricas Agregadas
+    # Métricas
     total_trades = len(df_filtered)
     winners = df_filtered[df_filtered['Result'] > 0]
     losers = df_filtered[df_filtered['Result'] <= 0]
-    
-    num_winners = len(winners)
-    num_losers = len(losers)
-    
+    num_winners, num_losers = len(winners), len(losers)
     win_rate = (num_winners / total_trades * 100) if total_trades > 0 else 0.0
+    closed_pnl = df_filtered['Result'].sum()
+    final_cap = f_capital + closed_pnl
     
-    closed_trades_pnl = df_filtered['Result'].sum()
-    final_capital = initial_capital + closed_trades_pnl
-    
-    open_trades_pnl = 0.0 
-    
-    avg_win_dollar = winners['Result'].mean() if num_winners > 0 else 0
-    avg_loss_dollar = abs(losers['Result'].mean()) if num_losers > 0 else 0
-    
-    risk_reward_ratio = (avg_win_dollar / avg_loss_dollar) if avg_loss_dollar > 0 else 0
-    total_r = df_filtered['r_multiple'].sum()
-    gross_profit = winners['Result'].sum()
-    gross_loss = abs(losers['Result'].sum())
-    profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else 0
-    expectancy_r = df_filtered['r_multiple'].mean() if total_trades > 0 else 0
-    general_performance_pct = (closed_trades_pnl / initial_capital) * 100
-
-    # --- Visualización de Cards ---
+    # --- UI Principal ---
     st.markdown("### Resumen de Rendimiento")
-    
-    # Fila 1
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("General Performance (%)", f"{general_performance_pct:,.2f}%")
-    c2.metric("Available Capital", f"${final_capital:,.2f}")
-    c3.metric("Open Trades PnL", f"${open_trades_pnl:,.2f}")
-    c4.metric("Closed Trades PnL", f"${closed_trades_pnl:,.2f}", delta_color="normal")
-    
-    # Fila 2
+    c1.metric("Perf. General (%)", f"{(closed_pnl/f_capital)*100:,.2f}%")
+    c2.metric("Capital Final", f"${final_cap:,.2f}")
+    c3.metric("Win Rate", f"{win_rate:.1f}%")
+    c4.metric("PnL Cerrado", f"${closed_pnl:,.2f}")
+
+    # Cards Adicionales
     c5, c6, c7, c8 = st.columns(4)
-    c5.metric("Win Rate (%)", f"{win_rate:.1f}%")
-    c6.metric("Total Trades", f"{total_trades}")
-    c7.metric("Winners", f"{num_winners}")
-    c8.metric("Losers", f"{num_losers}")
-    
-    # Fila 3
-    c9, c10, c11, c12 = st.columns(4)
-    c9.metric("Risk/Reward Ratio", f"{risk_reward_ratio:.2f}")
-    c10.metric("Total R", f"{total_r:.2f}R")
-    c11.metric("Profit Factor", f"{profit_factor:.2f}")
-    c12.metric("Expectancy (R)", f"{expectancy_r:.2f}R")
+    c5.metric("Total Trades", total_trades)
+    c6.metric("Total R", f"{df_filtered['r_multiple'].sum():.2f}R")
+    c7.metric("Profit Factor", f"{(winners['Result'].sum()/abs(losers['Result'].sum())) if num_losers > 0 else 0:.2f}")
+    c8.metric("Expectancy (R)", f"{df_filtered['r_multiple'].mean() if total_trades > 0 else 0:.2f}R")
 
     st.markdown("---")
 
-    # --- Gráficos ---
     col_chart1, col_chart2 = st.columns(2)
-
     with col_chart1:
-        st.subheader("Curva de Capital (Equity Curve)")
-        fig_equity = px.line(
-            df_filtered, 
-            x='exit_date', 
-            y='Running_Capital',
-            title=f'Crecimiento del Capital (Inicio: ${initial_capital:,.0f})',
-            labels={'Running_Capital': 'Capital ($)', 'exit_date': 'Fecha de Cierre'}
-        )
+        fig_equity = px.line(df_filtered, x='exit_date', y='Running_Capital', title='Curva de Capital ($)')
         st.plotly_chart(fig_equity, use_container_width=True)
-
     with col_chart2:
-        st.subheader("Distribución de PnL ($)")
-        fig_hist = px.histogram(
-            df_filtered, 
-            x='Result',
-            nbins=30,
-            title='Distribución de Ganancias/Pérdidas en Dólares',
-            labels={'Result': 'PnL ($)'},
-            color_discrete_sequence=['#636EFA']
-        )
+        fig_hist = px.histogram(df_filtered, x='Result', title='Distribución PnL ($)')
         st.plotly_chart(fig_hist, use_container_width=True)
 
-    # --- Tabla de Datos (Formato Solicitado) ---
     st.markdown("### Detalle de Operaciones")
-    
-    # Preparar tabla para visualización exacta
-    # Ticker | Type | Qty | Entry Date | Entry Price | Exit Date | Exit Price | signal-type | Result
     df_display = df_filtered.copy()
-    df_display['Ticker'] = df_display['symbol']
-    df_display['Type'] = 'Long' # Asumimos Long-only por ahora
-    # Formatear columnas
-    df_display['Qty'] = df_display['Qty'].apply(lambda x: f"{x:.4f}")
-    df_display['Entry Price'] = df_display['entry_price'].apply(lambda x: f"${x:.2f}")
-    df_display['Exit Price'] = df_display['exit_price'].apply(lambda x: f"${x:.2f}")
-    df_display['Result'] = df_display['Result'].apply(lambda x: f"${x:.2f}")
-    
-    # Formatear Fechas para que se vean limpias
+    df_display['Type'] = 'Long'
+    df_display['Qty'] = df_display['Qty'].map('{:.2f}'.format)
+    df_display['Entry Price'] = df_display['entry_price'].map('${:.2f}'.format)
+    df_display['Exit Price'] = df_display['exit_price'].map('${:.2f}'.format)
+    df_display['Result'] = df_display['Result'].map('${:.2f}'.format)
     df_display['Entry Date'] = df_display['entry_date'].dt.strftime('%Y-%m-%d')
     df_display['Exit Date'] = df_display['exit_date'].dt.strftime('%Y-%m-%d')
-
-    # Seleccionar y reordenar columnas
-    cols_to_show = [
-        'Ticker', 'Type', 'Qty', 'Entry Date', 'Entry Price', 
-        'Exit Date', 'Exit Price', 'signal_type', 'Result'
-    ]
     
-    # Usar st.dataframe con estilo para el color del resultado si es posible, 
-    # o simplemente mostrar la tabla limpia.
     st.dataframe(
-        df_display[cols_to_show].sort_values('Exit Date', ascending=False),
-        use_container_width=True,
-        hide_index=True
+        df_display[['symbol', 'Type', 'Qty', 'Entry Date', 'Entry Price', 'Exit Date', 'Exit Price', 'signal_type', 'Result']].sort_values('Exit Date', ascending=False),
+        use_container_width=True, hide_index=True
     )
-
 else:
-    st.info("No hay datos para mostrar. Asegúrate de que el archivo backtest_results.csv existe y contiene datos.")
+    st.info("No hay datos. Haz clic en 'EJECUTAR BACKTEST' para generar resultados.")
