@@ -70,20 +70,86 @@ if not df.empty:
             (df_filtered['exit_date'].dt.date <= date_range[1])
         ]
 
-    # --- KPIs Principales ---
-    st.markdown("### Métricas Clave")
+    # --- Parámetros de Simulación (Sidebar) ---
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Simulación de Portafolio")
+    initial_capital = st.sidebar.number_input("Capital Inicial ($)", value=10000.0, step=1000.0)
+    position_size = st.sidebar.number_input("Tamaño Posición ($)", value=1000.0, step=100.0)
+    assumed_risk_pct = st.sidebar.number_input("Riesgo Estimado por Trade (%)", value=2.0, step=0.1, help="Usado para calcular métricas R. Ejemplo: Si tu stop loss promedio es 2%, pon 2.")
+
+    # --- Cálculos Avanzados ---
+    # Calcular PnL en $
+    df_filtered['pnl_dollar'] = (df_filtered['returns_pct'] / 100) * position_size
     
-    col1, col2, col3, col4 = st.columns(4)
-    
+    # Calcular R-Multiples (aproximación basada en riesgo estimado)
+    # R = Retorno % / Riesgo %
+    # Si riesgo_estimado es 0, evitar división por cero
+    risk_denom = assumed_risk_pct if assumed_risk_pct > 0 else 1.0
+    df_filtered['r_multiple'] = df_filtered['returns_pct'] / risk_denom
+
+    # Métricas Agregadas
     total_trades = len(df_filtered)
-    win_rate = (df_filtered['is_profitable'].sum() / total_trades * 100) if total_trades > 0 else 0
-    avg_return = df_filtered['returns_pct'].mean()
-    total_return = df_filtered['returns_pct'].sum()
+    winners = df_filtered[df_filtered['pnl_dollar'] > 0]
+    losers = df_filtered[df_filtered['pnl_dollar'] <= 0]
     
-    col1.metric("Total Operaciones", total_trades)
-    col2.metric("Win Rate", f"{win_rate:.2f}%")
-    col3.metric("Retorno Promedio", f"{avg_return:.2f}%")
-    col4.metric("Retorno Total Acumulado", f"{total_return:.2f}%")
+    num_winners = len(winners)
+    num_losers = len(losers)
+    
+    win_rate = (num_winners / total_trades * 100) if total_trades > 0 else 0.0
+    
+    closed_trades_pnl = df_filtered['pnl_dollar'].sum()
+    
+    # Capital Disponible (Teórico)
+    # Asumimos que todas las operaciones son secuenciales o acumulativas al capital
+    # Para simplificar: Capital Actual = Capital Inicial + PnL Total
+    available_capital = initial_capital + closed_trades_pnl
+    
+    # Open Trades PnL - (Placeholder o lógica futura)
+    # Sin datos en tiempo real, lo dejamos en 0 o requeriría conectar con API
+    open_trades_pnl = 0.0 
+    
+    # Métricas Avanzadas
+    avg_win_dollar = winners['pnl_dollar'].mean() if num_winners > 0 else 0
+    avg_loss_dollar = abs(losers['pnl_dollar'].mean()) if num_losers > 0 else 0
+    
+    risk_reward_ratio = (avg_win_dollar / avg_loss_dollar) if avg_loss_dollar > 0 else 0
+    
+    total_r = df_filtered['r_multiple'].sum()
+    
+    gross_profit = winners['pnl_dollar'].sum()
+    gross_loss = abs(losers['pnl_dollar'].sum())
+    profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else 0
+    
+    # Expectancy (R) = (Win Rate * Avg Win R) - (Loss Rate * Avg Loss R)
+    # O simplemente Average R per trade
+    expectancy_r = df_filtered['r_multiple'].mean() if total_trades > 0 else 0
+    
+    # General Performance %
+    general_performance_pct = (closed_trades_pnl / initial_capital) * 100
+
+    # --- Visualización de Cards ---
+    st.markdown("### Resumen de Rendimiento")
+    
+    # Fila 1
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("General Performance (%)", f"{general_performance_pct:,.2f}%")
+    c2.metric("Available Capital", f"${available_capital:,.2f}")
+    c3.metric("Open Trades PnL", f"${open_trades_pnl:,.2f}", help="Requiere datos en tiempo real")
+    c4.metric("Closed Trades PnL", f"${closed_trades_pnl:,.2f}")
+    
+    # Fila 2
+    c5, c6, c7, c8 = st.columns(4)
+    c5.metric("Win Rate (%)", f"{win_rate:.1f}%")
+    c6.metric("Total Trades", f"{total_trades}")
+    c7.metric("Winners", f"{num_winners}")
+    c8.metric("Losers", f"{num_losers}")
+    
+    # Fila 3
+    c9, c10, c11, c12 = st.columns(4)
+    c9.metric("Risk/Reward Ratio", f"{risk_reward_ratio:.2f}")
+    c10.metric("Total R", f"{total_r:.2f}R")
+    c11.metric("Profit Factor", f"{profit_factor:.2f}")
+    c12.metric("Expectancy (R)", f"{expectancy_r:.2f}R")
 
     st.markdown("---")
 
