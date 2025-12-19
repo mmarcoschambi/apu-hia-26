@@ -123,27 +123,82 @@ df_raw = load_data()
 # --- Gestión de Watchlist (Sidebar) ---
 with st.sidebar.expander("📝 Gestionar Watchlist", expanded=False):
     watchlist_data = load_watchlist_json()
-    categories = list(watchlist_data.keys())
-    selected_category = st.selectbox("Categoría", categories)
+    
+    tab1, tab2 = st.tabs(["Editar/Ver", "Crear Nueva"])
+    
+    # --- TAB 1: EDITAR EXISTENTE ---
+    with tab1:
+        if watchlist_data:
+            categories = list(watchlist_data.keys())
+            selected_category = st.selectbox("Seleccionar Lista", categories)
 
-    if selected_category:
-        current_symbols = watchlist_data[selected_category]
-        st.code(", ".join(current_symbols))
+            if selected_category:
+                current_symbols = watchlist_data[selected_category]
+                st.write(f"**{len(current_symbols)} símbolos**")
+                st.code(", ".join(current_symbols))
 
-        new_symbol = st.text_input("Añadir Símbolo").upper()
-        if st.button("Añadir"):
-            if new_symbol and new_symbol not in current_symbols:
-                watchlist_data[selected_category].append(new_symbol)
-                save_watchlist_json(watchlist_data)
-                st.success(f"{new_symbol} añadido!")
-                st.rerun()
+                # Bulk Add a lista existente
+                new_symbols_str = st.text_area("Añadir (separados por coma)", placeholder="AAPL, TSLA, NVDA")
+                if st.button("Añadir a Lista"):
+                    if new_symbols_str:
+                        new_list = [s.strip().upper() for s in new_symbols_str.split(',') if s.strip()]
+                        # Evitar duplicados
+                        added_count = 0
+                        for s in new_list:
+                            if s not in watchlist_data[selected_category]:
+                                watchlist_data[selected_category].append(s)
+                                added_count += 1
+                        
+                        if added_count > 0:
+                            save_watchlist_json(watchlist_data)
+                            st.success(f"✅ {added_count} símbolos añadidos.")
+                            st.rerun()
+                        else:
+                            st.warning("Todos los símbolos ya estaban en la lista.")
 
-        symbol_to_remove = st.selectbox("Eliminar", ["Seleccionar..."] + sorted(current_symbols))
-        if st.button("Eliminar"):
-            if symbol_to_remove != "Seleccionar...":
-                watchlist_data[selected_category].remove(symbol_to_remove)
-                save_watchlist_json(watchlist_data)
-                st.rerun()
+                st.markdown("---")
+                # Eliminar Símbolo Individual
+                symbol_to_remove = st.selectbox("Borrar Símbolo", ["Seleccionar..."] + sorted(current_symbols))
+                if st.button("Borrar Símbolo"):
+                    if symbol_to_remove != "Seleccionar...":
+                        watchlist_data[selected_category].remove(symbol_to_remove)
+                        save_watchlist_json(watchlist_data)
+                        st.rerun()
+                
+                # Borrar Lista Completa
+                if st.button("🗑️ Borrar Lista Completa", type="primary"):
+                    del watchlist_data[selected_category]
+                    save_watchlist_json(watchlist_data)
+                    st.success(f"Lista '{selected_category}' eliminada.")
+                    st.rerun()
+        else:
+            st.info("No hay listas creadas.")
+
+    # --- TAB 2: CREAR NUEVA ---
+    with tab2:
+        st.write("Crear una nueva lista personalizada")
+        new_list_name = st.text_input("Nombre de la Lista", placeholder="Ej. MIS_FAVORITOS").upper().strip()
+        bulk_symbols = st.text_area("Pegar Símbolos (separados por coma)", placeholder="BE, CRDO, AVGO, RDDT, ...", height=150)
+        
+        if st.button("💾 Guardar Nueva Lista"):
+            if new_list_name and bulk_symbols:
+                if new_list_name in watchlist_data:
+                    st.error("Ya existe una lista con ese nombre.")
+                else:
+                    # Parsear símbolos
+                    cleaned_symbols = [s.strip().upper() for s in bulk_symbols.split(',') if s.strip()]
+                    # Eliminar duplicados en la entrada
+                    cleaned_symbols = list(set(cleaned_symbols))
+                    
+                    if cleaned_symbols:
+                        watchlist_data[new_list_name] = cleaned_symbols
+                        save_watchlist_json(watchlist_data)
+                        st.success(f"✅ Lista '{new_list_name}' creada con {len(cleaned_symbols)} símbolos.")
+                        st.rerun()
+                    else:
+                        st.error("La lista de símbolos parece vacía.")
+            else:
+                st.warning("Por favor ingresa un nombre y al menos un símbolo.")
 
 st.sidebar.markdown("---")
 
