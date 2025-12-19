@@ -28,7 +28,14 @@ st.set_page_config(
 
 # Título y Descripción
 st.title("📈 Momentum V2 - Análisis de Backtest")
-st.markdown("Dashboard interactivo para analizar los resultados de las estrategias de Momentum V2.")
+st.markdown("""
+Esta herramienta simula el rendimiento de la estrategia. 
+**Cómo funciona el cálculo:**
+1. Defines un **Capital Inicial**.
+2. Defines un **Tamaño de Posición** fijo (cuánto dinero inviertes por operación).
+3. El sistema calcula cuántas acciones (`Qty`) compras con ese dinero.
+4. El **Resultado** es la ganancia o pérdida en dólares basada en el movimiento del precio.
+""")
 
 # Carga de datos
 @st.cache_data
@@ -128,53 +135,50 @@ if not df.empty:
     assumed_risk_pct = st.sidebar.number_input("Riesgo Estimado por Trade (%)", value=2.0, step=0.1, help="Usado para calcular métricas R. Ejemplo: Si tu stop loss promedio es 2%, pon 2.")
 
     # --- Cálculos Avanzados ---
-    # Calcular PnL en $
-    df_filtered['pnl_dollar'] = (df_filtered['returns_pct'] / 100) * position_size
+    # Ordenar por fecha de salida para simular evolución del capital
+    df_filtered = df_filtered.sort_values('exit_date')
+
+    # 1. Calcular Cantidad (Qty) y Resultado ($)
+    # Qty = Tamaño Posición / Precio Entrada
+    df_filtered['Qty'] = df_filtered.apply(lambda row: position_size / row['entry_price'], axis=1)
     
-    # Calcular R-Multiples (aproximación basada en riesgo estimado)
-    # R = Retorno % / Riesgo %
-    # Si riesgo_estimado es 0, evitar división por cero
+    # Resultado ($) = (Precio Salida - Precio Entrada) * Qty
+    # Nota: Usamos returns_pct para mayor precisión si existe discrepancia en precios brutos, 
+    # pero para consistencia con la tabla, calculamos directo:
+    df_filtered['Result'] = (df_filtered['returns_pct'] / 100) * position_size
+    
+    # 2. Calcular R-Multiples
     risk_denom = assumed_risk_pct if assumed_risk_pct > 0 else 1.0
     df_filtered['r_multiple'] = df_filtered['returns_pct'] / risk_denom
 
+    # 3. Evolución de Capital
+    # Capital Acumulado = Capital Inicial + Suma Acumulativa de Resultados
+    df_filtered['Running_Capital'] = initial_capital + df_filtered['Result'].cumsum()
+
     # Métricas Agregadas
     total_trades = len(df_filtered)
-    winners = df_filtered[df_filtered['pnl_dollar'] > 0]
-    losers = df_filtered[df_filtered['pnl_dollar'] <= 0]
+    winners = df_filtered[df_filtered['Result'] > 0]
+    losers = df_filtered[df_filtered['Result'] <= 0]
     
     num_winners = len(winners)
     num_losers = len(losers)
     
     win_rate = (num_winners / total_trades * 100) if total_trades > 0 else 0.0
     
-    closed_trades_pnl = df_filtered['pnl_dollar'].sum()
+    closed_trades_pnl = df_filtered['Result'].sum()
+    final_capital = initial_capital + closed_trades_pnl
     
-    # Capital Disponible (Teórico)
-    # Asumimos que todas las operaciones son secuenciales o acumulativas al capital
-    # Para simplificar: Capital Actual = Capital Inicial + PnL Total
-    available_capital = initial_capital + closed_trades_pnl
-    
-    # Open Trades PnL - (Placeholder o lógica futura)
-    # Sin datos en tiempo real, lo dejamos en 0 o requeriría conectar con API
     open_trades_pnl = 0.0 
     
-    # Métricas Avanzadas
-    avg_win_dollar = winners['pnl_dollar'].mean() if num_winners > 0 else 0
-    avg_loss_dollar = abs(losers['pnl_dollar'].mean()) if num_losers > 0 else 0
+    avg_win_dollar = winners['Result'].mean() if num_winners > 0 else 0
+    avg_loss_dollar = abs(losers['Result'].mean()) if num_losers > 0 else 0
     
     risk_reward_ratio = (avg_win_dollar / avg_loss_dollar) if avg_loss_dollar > 0 else 0
-    
     total_r = df_filtered['r_multiple'].sum()
-    
-    gross_profit = winners['pnl_dollar'].sum()
-    gross_loss = abs(losers['pnl_dollar'].sum())
+    gross_profit = winners['Result'].sum()
+    gross_loss = abs(losers['Result'].sum())
     profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else 0
-    
-    # Expectancy (R) = (Win Rate * Avg Win R) - (Loss Rate * Avg Loss R)
-    # O simplemente Average R per trade
     expectancy_r = df_filtered['r_multiple'].mean() if total_trades > 0 else 0
-    
-    # General Performance %
     general_performance_pct = (closed_trades_pnl / initial_capital) * 100
 
     # --- Visualización de Cards ---
@@ -183,9 +187,9 @@ if not df.empty:
     # Fila 1
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("General Performance (%)", f"{general_performance_pct:,.2f}%")
-    c2.metric("Available Capital", f"${available_capital:,.2f}")
-    c3.metric("Open Trades PnL", f"${open_trades_pnl:,.2f}", help="Requiere datos en tiempo real")
-    c4.metric("Closed Trades PnL", f"${closed_trades_pnl:,.2f}")
+    c2.metric("Available Capital", f"${final_capital:,.2f}")
+    c3.metric("Open Trades PnL", f"${open_trades_pnl:,.2f}")
+    c4.metric("Closed Trades PnL", f"${closed_trades_pnl:,.2f}", delta_color="normal")
     
     # Fila 2
     c5, c6, c7, c8 = st.columns(4)
@@ -204,57 +208,61 @@ if not df.empty:
     st.markdown("---")
 
     # --- Gráficos ---
-    
     col_chart1, col_chart2 = st.columns(2)
 
-    # 1. Curva de Equidad (Equity Curve)
     with col_chart1:
-        st.subheader("Curva de Rendimiento Acumulado")
-        df_filtered = df_filtered.sort_values('exit_date')
-        df_filtered['cumulative_return'] = df_filtered['returns_pct'].cumsum()
-        
+        st.subheader("Curva de Capital (Equity Curve)")
         fig_equity = px.line(
             df_filtered, 
             x='exit_date', 
-            y='cumulative_return',
-            title='Crecimiento del Portafolio (%)',
-            labels={'cumulative_return': 'Retorno Acumulado (%)', 'exit_date': 'Fecha de Salida'}
+            y='Running_Capital',
+            title=f'Crecimiento del Capital (Inicio: ${initial_capital:,.0f})',
+            labels={'Running_Capital': 'Capital ($)', 'exit_date': 'Fecha de Cierre'}
         )
         st.plotly_chart(fig_equity, use_container_width=True)
 
-    # 2. Distribución de Retornos
     with col_chart2:
-        st.subheader("Distribución de Retornos")
+        st.subheader("Distribución de PnL ($)")
         fig_hist = px.histogram(
             df_filtered, 
-            x='returns_pct',
+            x='Result',
             nbins=30,
-            title='Distribución de Ganancias/Pérdidas',
-            labels={'returns_pct': 'Retorno (%)'},
+            title='Distribución de Ganancias/Pérdidas en Dólares',
+            labels={'Result': 'PnL ($)'},
             color_discrete_sequence=['#636EFA']
         )
         st.plotly_chart(fig_hist, use_container_width=True)
 
-    # 3. Retornos por Símbolo (si hay múltiples)
-    if selected_symbol == 'Todos':
-        st.subheader("Rendimiento por Símbolo")
-        symbol_performance = df_filtered.groupby('symbol')['returns_pct'].sum().sort_values(ascending=False).reset_index()
-        fig_bar = px.bar(
-            symbol_performance,
-            x='symbol',
-            y='returns_pct',
-            title='Retorno Total por Símbolo',
-            labels={'returns_pct': 'Retorno Total (%)', 'symbol': 'Símbolo'},
-            color='returns_pct',
-            color_continuous_scale='RdYlGn'
-        )
-        st.plotly_chart(fig_bar, use_container_width=True)
-
-    # --- Tabla de Datos ---
+    # --- Tabla de Datos (Formato Solicitado) ---
     st.markdown("### Detalle de Operaciones")
+    
+    # Preparar tabla para visualización exacta
+    # Ticker | Type | Qty | Entry Date | Entry Price | Exit Date | Exit Price | signal-type | Result
+    df_display = df_filtered.copy()
+    df_display['Ticker'] = df_display['symbol']
+    df_display['Type'] = 'Long' # Asumimos Long-only por ahora
+    # Formatear columnas
+    df_display['Qty'] = df_display['Qty'].apply(lambda x: f"{x:.4f}")
+    df_display['Entry Price'] = df_display['entry_price'].apply(lambda x: f"${x:.2f}")
+    df_display['Exit Price'] = df_display['exit_price'].apply(lambda x: f"${x:.2f}")
+    df_display['Result'] = df_display['Result'].apply(lambda x: f"${x:.2f}")
+    
+    # Formatear Fechas para que se vean limpias
+    df_display['Entry Date'] = df_display['entry_date'].dt.strftime('%Y-%m-%d')
+    df_display['Exit Date'] = df_display['exit_date'].dt.strftime('%Y-%m-%d')
+
+    # Seleccionar y reordenar columnas
+    cols_to_show = [
+        'Ticker', 'Type', 'Qty', 'Entry Date', 'Entry Price', 
+        'Exit Date', 'Exit Price', 'signal_type', 'Result'
+    ]
+    
+    # Usar st.dataframe con estilo para el color del resultado si es posible, 
+    # o simplemente mostrar la tabla limpia.
     st.dataframe(
-        df_filtered[['entry_date', 'symbol', 'entry_price', 'exit_date', 'exit_price', 'returns_pct', 'signal_type', 'is_profitable']].sort_values('entry_date', ascending=False),
-        use_container_width=True
+        df_display[cols_to_show].sort_values('Exit Date', ascending=False),
+        use_container_width=True,
+        hide_index=True
     )
 
 else:
