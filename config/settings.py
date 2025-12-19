@@ -19,6 +19,10 @@ GAP_DOWN_THRESHOLD = -0.01  # -1% for market weakness detection
 INTRADAY_TIMEFRAME = "5m"  # M5 for VWAP reclaim detection
 POSITION_TIMEFRAME = "1d"  # Daily for base analysis
 
+# Data Source Configuration
+DATA_SOURCE = "openbb"  # Options: "yfinance", "openbb"
+OPENBB_PROVIDER = "yfinance"  # Provider to use with OpenBB (yfinance, intrinio, etc.)
+
 # Data
 CACHE_DIR = BASE_DIR / "data" / "cache"
 LOG_DIR = BASE_DIR / "logs"
