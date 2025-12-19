@@ -161,35 +161,80 @@ class TriadOpenBB:
     
     def simulate_trade(self, data: pd.DataFrame, signal: Dict) -> Optional[Dict]:
         """
-        Simular trade basado en señal
+        Simular trade con gestión de posición parcial:
+        - 70% liquidación tras 5 días (swing fijo).
+        - 30% runner hasta cruce EMA 8 < EMA 21 (trailing).
         """
         try:
             # Encontrar índice del signal
             signal_idx = data.index.get_loc(signal['date'])
-            
-            # Simular trade por 5 días hábiles
-            holding_period = 5
-            if signal_idx + holding_period >= len(data):
-                return None  # No hay suficientes datos
-            
             entry_price = signal['price']
-            exit_price = data.iloc[signal_idx + holding_period]['close']
             
-            # Calcular retorno
-            returns_pct = (exit_price - entry_price) / entry_price * 100
+            # ---------------------------------------------------------
+            # PARTE 1: Liquidación Fija (70%)
+            # ---------------------------------------------------------
+            holding_period = 5
             
-            # Determinar si fue ganancia o pérdida
-            is_profitable = returns_pct > 0
+            if signal_idx + holding_period >= len(data):
+                return None  # No hay suficientes datos para la primera salida
+            
+            # Salida de la parte fija
+            idx_fixed = signal_idx + holding_period
+            exit_price_fixed = data.iloc[idx_fixed]['close']
+            return_pct_fixed = (exit_price_fixed - entry_price) / entry_price * 100
+            
+            # ---------------------------------------------------------
+            # PARTE 2: Runner con EMA Cross (30%)
+            # ---------------------------------------------------------
+            # Buscamos desde el día siguiente a la salida fija
+            idx_runner = idx_fixed + 1
+            exit_price_runner = exit_price_fixed # Default si no encuentra cruce
+            exit_date_runner = data.index[idx_fixed]
+            
+            found_cross = False
+            
+            # Iterar hasta encontrar cruce EMA 8 < EMA 21 o fin de datos
+            while idx_runner < len(data):
+                row = data.iloc[idx_runner]
+                if row['ema_8'] < row['ema_21']:
+                    exit_price_runner = row['close']
+                    exit_date_runner = data.index[idx_runner]
+                    found_cross = True
+                    break
+                idx_runner += 1
+            
+            # Si llegamos al final sin cruce, cerramos al último precio
+            if not found_cross:
+                exit_price_runner = data.iloc[-1]['close']
+                exit_date_runner = data.index[-1]
+            
+            return_pct_runner = (exit_price_runner - entry_price) / entry_price * 100
+            
+            # ---------------------------------------------------------
+            # RESULTADO COMPUESTO
+            # ---------------------------------------------------------
+            # Retorno total ponderado
+            # 70% del retorno fijo + 30% del retorno runner
+            total_return_pct = (return_pct_fixed * 0.70) + (return_pct_runner * 0.30)
+            
+            # Precio de salida promedio ponderado (para referencia)
+            avg_exit_price = (exit_price_fixed * 0.70) + (exit_price_runner * 0.30)
+            
+            # Usamos la fecha de salida del runner como fecha final del trade
+            final_exit_date = exit_date_runner
+            
+            # Determinar si fue ganancia o pérdida global
+            is_profitable = total_return_pct > 0
             
             trade_result = {
                 'entry_date': signal['date'],
-                'exit_date': data.index[signal_idx + holding_period],
+                'exit_date': final_exit_date,
                 'entry_price': entry_price,
-                'exit_price': exit_price,
-                'returns_pct': returns_pct,
+                'exit_price': avg_exit_price,
+                'returns_pct': total_return_pct,
                 'is_profitable': is_profitable,
                 'signal_type': signal['type'],
-                'signal_reason': signal['reason']
+                'signal_reason': f"{signal['reason']} (70% Fixed / 30% Runner)"
             }
             
             return trade_result
@@ -207,6 +252,10 @@ class TriadOpenBB:
         
         # SMA 50
         df['sma_50'] = df['close'].rolling(window=50).mean()
+        
+        # EMAs para trailing stop (Runner)
+        df['ema_8'] = df['close'].ewm(span=8, adjust=False).mean()
+        df['ema_21'] = df['close'].ewm(span=21, adjust=False).mean()
         
         # RSI
         delta = df['close'].diff()
