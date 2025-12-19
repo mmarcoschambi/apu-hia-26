@@ -7,3 +7,4 @@ ta>=0.11.0
 matplotlib>=3.7.0
 plotly>=5.18.0
 mplfinance>=0.12.10
+streamlit>=1.30.0
