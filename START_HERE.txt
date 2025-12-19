@@ -1,0 +1,90 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║               🎯 TRIAD MOMENTUM SYSTEM - START HERE                         ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+¡Bienvenido a tu sistema de trading institucional!
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 📚 DOCUMENTACIÓN (Lee en este orden)                                        │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  1. GETTING_STARTED.md  ← EMPIEZA AQUÍ (Setup + Primera ejecución)         │
+│  2. README.md           ← Visión general del sistema                        │
+│  3. QUICKREF.md         ← Referencia rápida (imprime esto)                 │
+│  4. USAGE.md            ← Workflow diario detallado                         │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ ⚡ QUICK START (5 minutos)                                                   │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  $ pip3 install -r requirements.txt                                         │
+│  $ python3 test_system.py                                                   │
+│  $ python3 example_scan.py                                                  │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 🎓 TU PRIMERA SEMANA                                                         │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Lunes-Martes:    Solo observa (run scanner, no trades)                    │
+│  Miércoles-Jueves: Estudia cada setup con quick_analysis.py                │
+│  Viernes:         Paper trade tu primer Camino 1                            │
+│  Fin de semana:   Revisa logs y tus notas                                  │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 🔧 PERSONALIZACIÓN                                                           │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Watchlist:   Edit example_scan.py (línea 16)                              │
+│  Parámetros:  Edit config/settings.py                                      │
+│  Riesgo:      Default 0.5% - Ajusta en config/settings.py                 │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 📊 COMANDOS ESENCIALES                                                       │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Scan diario:        python3 example_scan.py                               │
+│  Análisis profundo:  python3 quick_analysis.py SYMBOL                      │
+│  Ver logs:           tail -f logs/triad_$(date +%Y%m%d).log                │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ ⚠️  REGLAS CRÍTICAS ANTES DE EMPEZAR                                        │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  1. PAPER TRADE primero (mínimo 2 semanas)                                 │
+│  2. NUNCA skipees el position sizing                                        │
+│  3. Los STOPS son sagrados (especialmente LOD en Camino 2)                 │
+│  4. NO modifiques el sistema con "intuición"                               │
+│  5. Si no hay setup → NO TRADES (disciplina)                               │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 🎯 LOS 3 CAMINOS (Resumen Ultra-Rápido)                                     │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Camino 1 (Blue Sky):       Base + AVWAP juntos → BUY STOP automático      │
+│  Camino 2 (VWAP Reclaim):   Gap down → Recupera VWAP → Manual entry        │
+│  Camino 3 (Safety):         AVWAP muy arriba → WAIT (no comprar hoy)       │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+
+📖 SIGUIENTE PASO: Abre GETTING_STARTED.md
+
+
+                    "No perseguimos precios;
+              capturamos energía cuando desaparece la oferta"
+
+
