@@ -23,7 +23,8 @@ def save_watchlist_json(data):
 
 # Función para ejecutar el backtest con UI de progreso y parámetros de riesgo
 def run_backtest_with_progress(start_date, end_date, stop_loss_pct=None, 
-                               equity=100000, risk_pct=0.5, max_exp_pct=25):
+                               equity=100000, risk_pct=0.5, max_exp_pct=25,
+                               min_mcap_b=2.0, max_mcap_b=20.0):
     progress_bar = st.progress(0)
     status_text = st.empty()
     log_area = st.empty()
@@ -35,7 +36,9 @@ def run_backtest_with_progress(start_date, end_date, stop_loss_pct=None,
         "--end", str(end_date),
         "--equity", str(equity),
         "--risk", str(risk_pct / 100.0),
-        "--max_exp", str(max_exp_pct / 100.0)
+        "--max_exp", str(max_exp_pct / 100.0),
+        "--min_mcap", str(min_mcap_b * 1e9),
+        "--max_mcap", str(max_mcap_b * 1e9)
     ]
     
     if stop_loss_pct is not None and stop_loss_pct > 0:
@@ -101,9 +104,14 @@ st.title("📈 Momentum V2 - Institutional Risk Dashboard")
 # --- Barra Lateral: Configuración y Ejecución ---
 st.sidebar.header("⚙️ Configuración del Sistema")
 
-with st.sidebar.expander("📅 Fechas y Ejecución", expanded=True):
+with st.sidebar.expander("📅 Fechas y Filtros Universo", expanded=True):
     run_start_date = st.date_input("Fecha Inicio", value=datetime(2024, 1, 1))
     run_end_date = st.date_input("Fecha Fin", value=datetime.now())
+    
+    st.markdown("**Filtro Market Cap (Billions)**")
+    c1, c2 = st.columns(2)
+    in_min_mcap = c1.number_input("Min ($B)", value=2.0, step=0.5)
+    in_max_mcap = c2.number_input("Max ($B)", value=20.0, step=1.0)
     
     # Stop Loss Config
     use_custom_stop = st.checkbox("Forzar Stop Loss Fijo (%)")
@@ -111,17 +119,15 @@ with st.sidebar.expander("📅 Fechas y Ejecución", expanded=True):
     if use_custom_stop:
         stop_loss_input = st.number_input("Stop Loss %", value=3.0, step=0.5)
 
-    st.markdown("---")
-    st.markdown("**🛡️ Institutional Risk Manager**")
-    
+with st.sidebar.expander("🛡️ Institutional Risk Manager", expanded=True):
     in_equity = st.number_input("Equity ($)", value=100000.0, step=10000.0)
     in_risk = st.number_input("Risk per Trade (%)", value=0.5, step=0.1, format="%.2f")
     in_max_exp = st.number_input("Max Exposure (%)", value=25.0, step=5.0)
 
-    if st.button("🚀 EJECUTAR BACKTEST", use_container_width=True):
-        sl_val = stop_loss_input if use_custom_stop else None
-        if run_backtest_with_progress(run_start_date, run_end_date, sl_val, in_equity, in_risk, in_max_exp):
-            st.rerun()
+if st.sidebar.button("🚀 EJECUTAR BACKTEST", use_container_width=True):
+    sl_val = stop_loss_input if use_custom_stop else None
+    if run_backtest_with_progress(run_start_date, run_end_date, sl_val, in_equity, in_risk, in_max_exp, in_min_mcap, in_max_mcap):
+        st.rerun()
 
 st.sidebar.markdown("---")
 
@@ -144,14 +150,50 @@ df_raw = load_data()
 with st.sidebar.expander("📝 Gestionar Watchlist", expanded=False):
     watchlist_data = load_watchlist_json()
     tab1, tab2 = st.tabs(["Editar", "Crear"])
-    # (Mantener lógica existente de tabs, resumida aquí para brevedad)
+    # --- TAB 1: EDITAR EXISTENTE ---
     with tab1:
         if watchlist_data:
-            cats = list(watchlist_data.keys())
-            sel_cat = st.selectbox("Lista", cats)
-            if sel_cat:
-                st.code(", ".join(watchlist_data[sel_cat]))
-                # ... (Lógica de añadir/borrar igual que antes)
+            categories = list(watchlist_data.keys())
+            selected_category = st.selectbox("Seleccionar Lista", categories)
+
+            if selected_category:
+                current_symbols = watchlist_data[selected_category]
+                st.write(f"**{len(current_symbols)} símbolos**")
+                st.code(", ".join(current_symbols))
+
+                new_symbols_str = st.text_area("Añadir (separados por coma)", placeholder="AAPL, TSLA")
+                if st.button("Añadir a Lista"):
+                    if new_symbols_str:
+                        new_list = [s.strip().upper() for s in new_symbols_str.split(',') if s.strip()]
+                        added_count = 0
+                        for s in new_list:
+                            if s not in watchlist_data[selected_category]:
+                                watchlist_data[selected_category].append(s)
+                                added_count += 1
+                        if added_count > 0:
+                            save_watchlist_json(watchlist_data)
+                            st.success(f"✅ {added_count} símbolos añadidos.")
+                            st.rerun()
+                
+                if st.button("🗑️ Borrar Lista"):
+                    del watchlist_data[selected_category]
+                    save_watchlist_json(watchlist_data)
+                    st.rerun()
+
+    # --- TAB 2: CREAR NUEVA ---
+    with tab2:
+        st.write("Crear una nueva lista personalizada")
+        new_list_name = st.text_input("Nombre de la Lista", placeholder="Ej. MID_CAPS").upper().strip()
+        bulk_symbols = st.text_area("Pegar Símbolos", placeholder="BE, CRDO, AVGO, ...", height=150)
+        
+        if st.button("💾 Guardar Nueva Lista"):
+            if new_list_name and bulk_symbols:
+                cleaned = [s.strip().upper() for s in bulk_symbols.split(',') if s.strip()]
+                if cleaned:
+                    watchlist_data[new_list_name] = cleaned
+                    save_watchlist_json(watchlist_data)
+                    st.success(f"✅ Lista creada.")
+                    st.rerun()
 
 # --- Formulario de Filtros (Solo visualización) ---
 with st.sidebar.form("filtros_form"):
@@ -174,28 +216,19 @@ if not df_raw.empty:
 
     df_filtered = df_filtered.sort_values('exit_date')
     
-    # Calcular PnL usando los valores reales calculados por el RiskManager
-    # Result = (Retorno %) * Valor Posición / 100
-    # O mejor: (Exit Price - Entry Price) * Shares
-    
     if 'shares' in df_filtered.columns:
         df_filtered['Result'] = (df_filtered['exit_price'] - df_filtered['entry_price']) * df_filtered['shares']
-        # Ajuste para PnL parciales (ya que exit_price y returns_pct son ponderados en triad_openbb)
-        # Result = Position Value * (Returns % / 100) es más seguro si usamos retornos compuestos
+        # Ajuste para PnL parciales (usando return_pct que ya pondera salidas)
+        # Result = Position Value * (Returns % / 100)
         df_filtered['Result'] = df_filtered['position_value'] * (df_filtered['returns_pct'] / 100)
         
-        # R-Multiple Real = PnL / Monetary Risk
         if 'monetary_risk' in df_filtered.columns:
             df_filtered['r_multiple'] = df_filtered['Result'] / df_filtered['monetary_risk']
         else:
-            # Fallback si no existe columna
-            df_filtered['r_multiple'] = df_filtered['returns_pct'] 
-            
+            df_filtered['r_multiple'] = 0.0
     else:
-        # Fallback si no se ha corrido el nuevo backtest
         df_filtered['Result'] = 0.0
         df_filtered['r_multiple'] = 0.0
-        st.warning("Ejecuta el backtest nuevamente para ver métricas de riesgo actualizadas.")
 
     df_filtered['Running_Capital'] = in_equity + df_filtered['Result'].cumsum()
 
@@ -218,7 +251,7 @@ if not df_raw.empty:
     avg_risk = df_filtered['monetary_risk'].mean() if 'monetary_risk' in df_filtered.columns else 0
     c5.metric("Avg Risk per Trade", f"${avg_risk:,.0f}")
     c6.metric("Total R", f"{df_filtered['r_multiple'].sum():.1f}R")
-    c7.metric("Expectancy", f"{df_filtered['r_multiple'].mean():.2f}R")
+    c7.metric("Expectancy", f"{df_filtered['r_multiple'].mean() if total_trades > 0 else 0:.2f}R")
     
     gross_loss = abs(losers['Result'].sum())
     profit_factor = (winners['Result'].sum() / gross_loss) if gross_loss > 0 else 0.0
@@ -244,7 +277,6 @@ if not df_raw.empty:
     if 'shares' in df_disp.columns:
         cols = ['symbol', 'entry_date', 'signal_type', 'shares', 'position_value', 'monetary_risk', 'returns_pct', 'r_multiple', 'Result']
         
-        # Formatting
         df_disp['entry_date'] = df_disp['entry_date'].dt.date
         df_disp['position_value'] = df_disp['position_value'].map('${:,.0f}'.format)
         df_disp['monetary_risk'] = df_disp['monetary_risk'].map('${:,.0f}'.format)

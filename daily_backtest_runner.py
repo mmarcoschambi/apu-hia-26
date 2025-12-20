@@ -36,6 +36,10 @@ def main():
     parser.add_argument('--max_exp', type=float, default=0.25)
     parser.add_argument('--stop_loss', type=float, default=None, help="Fixed Stop Loss % (Optional Override)")
     
+    # Market Cap Filters (Mid-Cap Default)
+    parser.add_argument('--min_mcap', type=float, default=2e9)
+    parser.add_argument('--max_mcap', type=float, default=20e9)
+    
     args = parser.parse_args()
     
     universe = load_watchlist(args.watchlist)
@@ -53,7 +57,9 @@ def main():
         universe=universe,
         start_date=args.start,
         end_date=args.end,
-        risk_manager=rm
+        risk_manager=rm,
+        min_mcap=args.min_mcap,
+        max_mcap=args.max_mcap
     )
     
     print("Running Daily Simulation (this may take a moment to preload data)...")
