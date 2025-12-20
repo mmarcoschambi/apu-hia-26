@@ -7,6 +7,13 @@ import json
 import os
 import subprocess
 import time
+import sys
+from pathlib import Path
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from src.backtest.dashboard import InteractiveDashboard
 from config.universe_presets import LIQUID_MID_CAPS
 
 # Función para cargar/guardar watchlist
@@ -46,7 +53,7 @@ def run_backtest_with_progress(start_date, end_date, stop_loss_pct=None,
         "--min_volume", str(int(min_vol_k * 1000)),
         "--min_adr", str(min_adr),
         "--min_price", str(min_price),
-        "--min_dollar_vol", str(int(min_dollar_m * 1e6))
+        "--min_dollar_vol", str(int(min_dollar_m * 1e6)))
     ]
     
     if stop_loss_pct is not None and stop_loss_pct > 0:
@@ -176,68 +183,6 @@ def load_data():
 
 df_raw = load_data()
 
-# --- Gestión de Watchlist ---
-with st.sidebar.expander("📝 Gestionar Watchlist", expanded=False):
-    watchlist_data = load_watchlist_json()
-    tab1, tab2 = st.tabs(["Editar", "Crear"])
-    
-    # --- TAB 1: EDITAR EXISTENTE ---
-    with tab1:
-        if watchlist_data:
-            categories = list(watchlist_data.keys())
-            selected_category = st.selectbox("Seleccionar Lista", categories)
-
-            if selected_category:
-                current_symbols = watchlist_data[selected_category]
-                st.write(f"**{len(current_symbols)} símbolos**")
-                st.code(", ".join(current_symbols))
-
-                new_symbols_str = st.text_area("Añadir (separados por coma)", placeholder="AAPL, TSLA")
-                if st.button("Añadir a Lista"):
-                    if new_symbols_str:
-                        new_list = [s.strip().upper() for s in new_symbols_str.split(',') if s.strip()]
-                        added_count = 0
-                        for s in new_list:
-                            if s not in watchlist_data[selected_category]:
-                                watchlist_data[selected_category].append(s)
-                                added_count += 1
-                        if added_count > 0:
-                            save_watchlist_json(watchlist_data)
-                            st.success(f"✅ {added_count} símbolos añadidos.")
-                            st.rerun()
-                
-                if st.button("🗑️ Borrar Lista"):
-                    del watchlist_data[selected_category]
-                    save_watchlist_json(watchlist_data)
-                    st.rerun()
-
-    # --- TAB 2: CREAR NUEVA ---
-    with tab2:
-        st.write("Crear una nueva lista personalizada")
-        
-        if st.button("📥 Cargar Universo Mid-Cap (Automático)", help="Carga ~100 acciones líquidas Mid-Cap ($2B-$20B) filtradas."):
-             st.session_state['new_list_name_input'] = "INSTITUTIONAL_MIDCAPS"
-             st.session_state['bulk_symbols_input'] = ", ".join(LIQUID_MID_CAPS)
-             st.success("Universo cargado en el formulario. Revisa y guarda.")
-
-        default_name = st.session_state.get('new_list_name_input', "")
-        default_symbols = st.session_state.get('bulk_symbols_input', "")
-
-        new_list_name = st.text_input("Nombre de la Lista", value=default_name, placeholder="Ej. MID_CAPS").upper().strip()
-        bulk_symbols = st.text_area("Pegar Símbolos", value=default_symbols, placeholder="BE, CRDO, AVGO, ...", height=150)
-        
-        if st.button("💾 Guardar Nueva Lista"):
-            if new_list_name and bulk_symbols:
-                cleaned = [s.strip().upper() for s in bulk_symbols.split(',') if s.strip()]
-                cleaned = list(set(cleaned))
-                if cleaned:
-                    watchlist_data[new_list_name] = cleaned
-                    save_watchlist_json(watchlist_data)
-                    st.success(f"✅ Lista '{new_list_name}' creada con {len(cleaned)} símbolos.")
-                    if 'new_list_name_input' in st.session_state: del st.session_state['new_list_name_input']
-                    if 'bulk_symbols_input' in st.session_state: del st.session_state['bulk_symbols_input']
-                    st.rerun()
-
 # --- Formulario de Filtros (Solo visualización) ---
 with st.sidebar.form("filtros_form"):
     st.header("🔍 Filtros de Visualización")
@@ -329,6 +274,92 @@ if not df_raw.empty:
         st.dataframe(df_disp[cols].sort_values('entry_date', ascending=False), use_container_width=True, hide_index=True)
     else:
         st.dataframe(df_filtered)
+
+    # --- 🔬 TRADE ANALYSIS SECTION ---
+    st.markdown("---")
+    st.header("🔬 Análisis Detallado de Operaciones")
+    
+    if not df_filtered.empty:
+        # Create a selection list
+        df_analysis = df_filtered.sort_values('entry_date', ascending=False)
+        trade_options = []
+        trade_map = {}
+        
+        for idx, row in df_analysis.iterrows():
+            sym = row['symbol']
+            date = row['entry_date'].strftime('%Y-%m-%d')
+            pnl = row['Result'] if 'Result' in row else 0
+            label = f"{date} | {sym} | PnL: ${pnl:,.2f}"
+            trade_options.append(label)
+            trade_map[label] = row
+            
+        selected_trade_label = st.selectbox("Selecciona una operación para analizar:", trade_options)
+        
+        if selected_trade_label:
+            trade_data = trade_map[selected_trade_label]
+            
+            # Init Dashboard Logic (Lazy load)
+            if 'dashboard_engine' not in st.session_state:
+                 # Ensure results file exists or use df directly if we could modify dashboard.py, 
+                 # but for now we rely on the CSV being there from the run
+                 if os.path.exists('backtest_results.csv'):
+                     st.session_state['dashboard_engine'] = InteractiveDashboard('backtest_results.csv')
+                 else:
+                     st.warning("⚠️ No se encontró backtest_results.csv")
+            
+            if 'dashboard_engine' in st.session_state:
+                db = st.session_state['dashboard_engine']
+                
+                # Prepare signal data for chart
+                signal_data = {
+                    'camino': trade_data.get('signal_type', 'N/A'),
+                    'entry_price': trade_data['entry_price'],
+                    'stop_loss': trade_data.get('entry_price', 0) * 0.95, # Fallback if not saved
+                    'exit_price': trade_data['exit_price'],
+                    'outcome': 'WIN' if trade_data.get('is_profitable') else 'LOSS',
+                    'return_pct': trade_data['returns_pct'],
+                    'hold_days': (trade_data['exit_date'] - trade_data['entry_date']).days
+                }
+                
+                # Generate Chart
+                try:
+                    with st.spinner(f"Generando gráfico para {trade_data['symbol']}..."):
+                        fig = db.create_trade_chart(
+                            trade_data['symbol'], 
+                            trade_data['entry_date'].strftime('%Y-%m-%d'), 
+                            signal_data
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                except Exception as e:
+                    st.error(f"Error generando gráfico: {e}")
+                
+                # Trade Story/Log
+                c1, c2 = st.columns([1, 2])
+                with c1:
+                    st.subheader("📊 Métricas Clave")
+                    st.markdown(f"""
+                    - **Entrada:** ${trade_data['entry_price']:.2f}
+                    - **Salida:** ${trade_data['exit_price']:.2f}
+                    - **Retorno:** {trade_data['returns_pct']:+.2f}%
+                    - **Días en Posición:** {(trade_data['exit_date'] - trade_data['entry_date']).days} días
+                    """)
+                
+                with c2:
+                    st.subheader("📝 Lógica de Ejecución")
+                    reason = trade_data.get('signal_reason', 'N/A')
+                    # Parse reason for better display if it has pipes
+                    if "|" in str(reason):
+                        parts = str(reason).split("|")
+                        main_reason = parts[0].strip()
+                        events = parts[1].strip() if len(parts) > 1 else ""
+                        
+                        st.info(f"**Señal:** {main_reason}")
+                        if events:
+                            st.write("**Eventos:**")
+                            for evt in events.split('+'):
+                                st.code(evt.strip())
+                    else:
+                        st.info(str(reason))
 
 else:
     st.info("👋 Bienvenido. Configura los parámetros de riesgo a la izquierda y pulsa 'EJECUTAR BACKTEST'.")
