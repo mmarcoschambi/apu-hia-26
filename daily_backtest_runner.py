@@ -34,6 +34,7 @@ def main():
     parser.add_argument('--equity', type=float, default=100000.0)
     parser.add_argument('--risk', type=float, default=0.005)
     parser.add_argument('--max_exp', type=float, default=0.25)
+    parser.add_argument('--stop_loss', type=float, default=None, help="Fixed Stop Loss % (Optional Override)")
     
     args = parser.parse_args()
     
