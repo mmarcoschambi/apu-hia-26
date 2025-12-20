@@ -338,7 +338,12 @@ class InteractiveDashboard:
             template='plotly_white',
             hovermode='x unified',
             height=600,
-            xaxis_rangeslider_visible=False
+            xaxis_rangeslider_visible=False,
+            xaxis=dict(
+                rangebreaks=[
+                    dict(bounds=["sat", "mon"]), # Hide weekends
+                ]
+            )
         )
         
         return fig
