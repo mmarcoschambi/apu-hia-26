@@ -25,7 +25,8 @@ def save_watchlist_json(data):
 # Función para ejecutar el backtest con UI de progreso y parámetros de riesgo
 def run_backtest_with_progress(start_date, end_date, stop_loss_pct=None, 
                                equity=100000, risk_pct=0.5, max_exp_pct=25,
-                               min_mcap_b=2.0, max_mcap_b=20.0, min_vol_k=500):
+                               min_mcap_b=2.0, max_mcap_b=20.0, 
+                               min_vol_k=300, min_adr=1.5, min_price=5.0, min_dollar_m=15):
     progress_bar = st.progress(0)
     status_text = st.empty()
     log_area = st.empty()
@@ -40,7 +41,10 @@ def run_backtest_with_progress(start_date, end_date, stop_loss_pct=None,
         "--max_exp", str(max_exp_pct / 100.0),
         "--min_mcap", str(min_mcap_b * 1e9),
         "--max_mcap", str(max_mcap_b * 1e9),
-        "--min_volume", str(int(min_vol_k * 1000))
+        "--min_volume", str(int(min_vol_k * 1000)),
+        "--min_adr", str(min_adr),
+        "--min_price", str(min_price),
+        "--min_dollar_vol", str(int(min_dollar_m * 1e6))
     ]
     
     if stop_loss_pct is not None and stop_loss_pct > 0:
@@ -94,7 +98,7 @@ def run_backtest_with_progress(start_date, end_date, stop_loss_pct=None,
 
 # Configuración de la página
 st.set_page_config(
-    page_title="Momentum V2 - Backtest Dashboard",
+    page_title="Momentum V2 - Institutional Risk Dashboard",
     page_icon="📈",
     layout="wide"
 )
@@ -109,11 +113,16 @@ with st.sidebar.expander("📅 Fechas y Filtros Universo", expanded=True):
     run_start_date = st.date_input("Fecha Inicio", value=datetime(2024, 1, 1))
     run_end_date = st.date_input("Fecha Fin", value=datetime.now())
     
-    st.markdown("**Filtros Fundamentales**")
+    st.markdown("**Filtros de Calidad**")
     c1, c2 = st.columns(2)
     in_min_mcap = c1.number_input("Min Mcap ($B)", value=2.0, step=0.5)
     in_max_mcap = c2.number_input("Max Mcap ($B)", value=20.0, step=1.0)
-    in_min_vol = st.number_input("Min Volumen Diario (k)", value=500, step=100, help="Ej. 500 = 500,000 acciones")
+    in_min_price = st.number_input("Precio Mínimo ($)", value=5.0, step=1.0)
+    
+    st.markdown("**Filtros de Liquidez y Volatilidad**")
+    in_min_vol = st.number_input("Min Volumen Diario (k)", value=300, step=50)
+    in_min_dollar_m = st.number_input("Min Dollar Volume ($M)", value=15, step=5)
+    in_min_adr = st.number_input("Min ADR 20 (%)", value=1.5, step=0.1, format="%.1f")
     
     # Stop Loss Config
     use_custom_stop = st.checkbox("Forzar Stop Loss Fijo (%)")
@@ -128,7 +137,8 @@ with st.sidebar.expander("🛡️ Institutional Risk Manager", expanded=True):
 
 if st.sidebar.button("🚀 EJECUTAR BACKTEST", use_container_width=True):
     sl_val = stop_loss_input if use_custom_stop else None
-    if run_backtest_with_progress(run_start_date, run_end_date, sl_val, in_equity, in_risk, in_max_exp, in_min_mcap, in_max_mcap, in_min_vol):
+    if run_backtest_with_progress(run_start_date, run_end_date, sl_val, in_equity, in_risk, in_max_exp, 
+                                  in_min_mcap, in_max_mcap, in_min_vol, in_min_adr, in_min_price, in_min_dollar_m):
         st.rerun()
 
 st.sidebar.markdown("---")

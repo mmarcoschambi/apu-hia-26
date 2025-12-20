@@ -57,7 +57,9 @@ class Portfolio:
 
 class DailyBacktestEngine:
     def __init__(self, universe: List[str], start_date: str, end_date: str, risk_manager: RiskManager, 
-                 min_mcap: float = 2e9, max_mcap: float = 20e9, min_avg_volume: int = 500000):
+                 min_mcap: float = 2e9, max_mcap: float = 20e9, 
+                 min_avg_volume: int = 300000, min_adr: float = 1.5, min_price: float = 5.0,
+                 min_dollar_vol: float = 15000000):
         self.universe = universe
         self.start_date = pd.to_datetime(start_date)
         self.end_date = pd.to_datetime(end_date)
@@ -72,10 +74,17 @@ class DailyBacktestEngine:
         self.market_data: Dict[str, pd.DataFrame] = {}
         self.spy_data = pd.DataFrame()
         self.triad_logic = TriadOpenBB()
-        self.screener = InstitutionalScreener(adr_threshold=4.0)
+        
+        # New Institutional Screener with requested thresholds
+        self.screener = InstitutionalScreener(
+            adr_threshold=min_adr,
+            min_price=min_price,
+            min_avg_vol=min_avg_volume,
+            min_dollar_vol=min_dollar_vol
+        )
         
         print(f"Initializing Engine for {len(universe)} symbols...")
-        print(f"Filters: Mcap ${min_mcap/1e9:.1f}B-${max_mcap/1e9:.1f}B | Min Vol {min_avg_volume/1000:.0f}k")
+        print(f"Filters: Mcap ${min_mcap/1e9:.1f}B-${max_mcap/1e9:.1f}B | Min Vol {min_avg_volume/1000:.0f}k | ADR > {min_adr}%")
         self._preload_market_data()
 
     def _preload_market_data(self):

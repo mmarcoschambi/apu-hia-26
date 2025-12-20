@@ -39,7 +39,10 @@ def main():
     # Market Cap Filters (Mid-Cap Default)
     parser.add_argument('--min_mcap', type=float, default=2e9)
     parser.add_argument('--max_mcap', type=float, default=20e9)
-    parser.add_argument('--min_volume', type=int, default=500000)
+    parser.add_argument('--min_volume', type=int, default=300000) # Updated default
+    parser.add_argument('--min_adr', type=float, default=1.5) # New
+    parser.add_argument('--min_price', type=float, default=5.0) # New
+    parser.add_argument('--min_dollar_vol', type=float, default=15000000.0) # New
     
     args = parser.parse_args()
     
@@ -61,7 +64,10 @@ def main():
         risk_manager=rm,
         min_mcap=args.min_mcap,
         max_mcap=args.max_mcap,
-        min_avg_volume=args.min_volume
+        min_avg_volume=args.min_volume,
+        min_adr=args.min_adr,
+        min_price=args.min_price,
+        min_dollar_vol=args.min_dollar_vol
     )
     
     print("Running Daily Simulation (this may take a moment to preload data)...")
