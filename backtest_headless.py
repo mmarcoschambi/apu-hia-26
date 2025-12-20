@@ -33,9 +33,12 @@ def main():
     parser.add_argument('--start', required=True)
     parser.add_argument('--end', required=True)
     parser.add_argument('--watchlist', default='config/watchlist.json')
+    parser.add_argument('--stop_loss', type=float, default=None, help="Fixed Stop Loss %")
     args = parser.parse_args()
 
     print(f"Starting OpenBB backtest from {args.start} to {args.end}")
+    if args.stop_loss:
+        print(f"Using Fixed Stop Loss: {args.stop_loss}%")
     
     symbols = load_watchlist(args.watchlist)
     total_symbols = len(symbols)
@@ -50,7 +53,7 @@ def main():
         print(f"__PROGRESS__{i+1}/{total_symbols}__{symbol}")
         try:
             # We pass a list of 1 symbol to leverage the existing method signature
-            res = triad.backtest_with_openbb([symbol], args.start, args.end)
+            res = triad.backtest_with_openbb([symbol], args.start, args.end, stop_loss_pct=args.stop_loss)
             if not res.empty:
                 all_results.append(res)
         except Exception as e:

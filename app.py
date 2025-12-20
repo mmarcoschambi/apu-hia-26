@@ -22,7 +22,7 @@ def save_watchlist_json(data):
         json.dump(data, f, indent=4)
 
 # Función para ejecutar el backtest con UI de progreso
-def run_backtest_with_progress(start_date, end_date):
+def run_backtest_with_progress(start_date, end_date, stop_loss_pct=None):
     progress_bar = st.progress(0)
     status_text = st.empty()
     log_area = st.empty()
@@ -33,6 +33,9 @@ def run_backtest_with_progress(start_date, end_date):
         "--start", str(start_date),
         "--end", str(end_date)
     ]
+    
+    if stop_loss_pct is not None and stop_loss_pct > 0:
+        cmd.extend(["--stop_loss", str(stop_loss_pct)])
     
     try:
         process = subprocess.Popen(
@@ -99,8 +102,15 @@ st.sidebar.header("⚙️ Configuración y Ejecución")
 run_start_date = st.sidebar.date_input("Fecha Inicio Backtest", value=datetime(2024, 1, 1))
 run_end_date = st.sidebar.date_input("Fecha Fin Backtest", value=datetime.now())
 
+# Stop Loss Config
+use_custom_stop = st.sidebar.checkbox("Definir Stop Loss Fijo (%)")
+stop_loss_input = 2.0
+if use_custom_stop:
+    stop_loss_input = st.sidebar.number_input("Stop Loss %", value=3.0, step=0.5, help="Define la distancia inicial del Stop Loss.")
+
 if st.sidebar.button("🚀 EJECUTAR BACKTEST", use_container_width=True, help="Ejecuta backtest_headless.py"):
-    if run_backtest_with_progress(run_start_date, run_end_date):
+    sl_val = stop_loss_input if use_custom_stop else None
+    if run_backtest_with_progress(run_start_date, run_end_date, stop_loss_pct=sl_val):
         st.rerun()
 
 st.sidebar.markdown("---")
@@ -223,10 +233,13 @@ with st.sidebar.form("filtros_form"):
     f_dates = st.date_input("Rango de Fechas (Visualización)", value=(min_date_val, max_date_val))
     
     st.markdown("---")
-    st.header("💰 Simulación")
+    st.header("💰 Simulación (Post-Trade)")
     f_capital = st.number_input("Capital Inicial ($)", value=10000.0, step=1000.0)
     f_pos_size = st.number_input("Tamaño Posición ($)", value=1000.0, step=100.0)
-    f_risk = st.number_input("Riesgo Est. por Trade (%)", value=2.0, step=0.1)
+    
+    # Explicación clara de que este valor es solo para calcular R
+    st.markdown("**Métricas R-Multiples**")
+    f_risk = st.number_input("Riesgo Estimado (%)", value=2.0, step=0.1, help="Usado solo para calcular cuántas 'R' ganaste. No afecta el backtest real.")
     
     submitted = st.form_submit_button("APLICAR CAMBIOS", use_container_width=True)
 

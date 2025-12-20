@@ -80,7 +80,7 @@ class TriadOpenBB:
         
         return signals
     
-    def backtest_with_openbb(self, symbols: List[str], start: str, end: str) -> pd.DataFrame:
+    def backtest_with_openbb(self, symbols: List[str], start: str, end: str, stop_loss_pct: Optional[float] = None) -> pd.DataFrame:
         """Backtest iterativo"""
         results = []
         for symbol in symbols:
@@ -90,7 +90,7 @@ class TriadOpenBB:
                 
                 signals = self.detect_caminos(daily_data)
                 for signal in signals:
-                    outcome = self.simulate_trade_advanced(daily_data, signal)
+                    outcome = self.simulate_trade_advanced(daily_data, signal, stop_loss_pct)
                     if outcome:
                         outcome['symbol'] = symbol
                         results.append(outcome)
@@ -99,7 +99,7 @@ class TriadOpenBB:
                 continue
         return pd.DataFrame(results) if results else pd.DataFrame()
 
-    def simulate_trade_advanced(self, data: pd.DataFrame, signal: Dict) -> Optional[Dict]:
+    def simulate_trade_advanced(self, data: pd.DataFrame, signal: Dict, stop_loss_pct: Optional[float] = None) -> Optional[Dict]:
         """
         MOTOR DE GESTIÓN DE POSICIONES (Senior Quant Logic)
         Implementa máquina de estados: ENTRY -> PARTIAL_1 -> PARTIAL_2 -> RUNNER -> EXIT
@@ -112,12 +112,16 @@ class TriadOpenBB:
             entry_price = signal['price']
             entry_date = signal['date']
             
-            # Stop Loss Inicial: Mínimo del día de señal (Swing Low proxy)
-            # Si el stop es muy ajustado (<1%), usamos 3% de seguridad
-            low_of_day = data.iloc[idx_entry]['low']
-            stop_loss = low_of_day
-            if (entry_price - stop_loss) / entry_price < 0.01:
-                stop_loss = entry_price * 0.97
+            # Stop Loss Inicial:
+            if stop_loss_pct is not None and stop_loss_pct > 0:
+                # Usar porcentaje fijo si se provee
+                stop_loss = entry_price * (1 - (stop_loss_pct / 100))
+            else:
+                # Lógica por defecto: Mínimo del día de señal (Swing Low proxy)
+                low_of_day = data.iloc[idx_entry]['low']
+                stop_loss = low_of_day
+                if (entry_price - stop_loss) / entry_price < 0.01:
+                    stop_loss = entry_price * 0.97
             
             risk_per_share = entry_price - stop_loss
             if risk_per_share <= 0: risk_per_share = entry_price * 0.02 # Fallback
