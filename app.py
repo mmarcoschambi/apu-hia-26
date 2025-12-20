@@ -30,12 +30,12 @@ def run_backtest_with_progress(start_date, end_date, stop_loss_pct=None,
     logs = []
 
     cmd = [
-        "python3", "backtest_headless.py",
+        "python3", "daily_backtest_runner.py",
         "--start", str(start_date),
         "--end", str(end_date),
-        "--account_equity", str(equity),
-        "--risk_fraction", str(risk_pct / 100.0), # Convert 0.5% to 0.005
-        "--max_exposure", str(max_exp_pct / 100.0)
+        "--equity", str(equity),
+        "--risk", str(risk_pct / 100.0),
+        "--max_exp", str(max_exp_pct / 100.0)
     ]
     
     if stop_loss_pct is not None and stop_loss_pct > 0:
