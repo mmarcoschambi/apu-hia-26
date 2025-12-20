@@ -193,7 +193,8 @@ if not df_raw.empty:
             
     else:
         # Fallback si no se ha corrido el nuevo backtest
-        df_filtered['Result'] = 0
+        df_filtered['Result'] = 0.0
+        df_filtered['r_multiple'] = 0.0
         st.warning("Ejecuta el backtest nuevamente para ver métricas de riesgo actualizadas.")
 
     df_filtered['Running_Capital'] = in_equity + df_filtered['Result'].cumsum()
