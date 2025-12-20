@@ -262,7 +262,10 @@ if not df_raw.empty:
     st.markdown("### 📋 Trade Log (Institutional)")
     df_disp = df_filtered.copy()
     if 'shares' in df_disp.columns:
-        cols = ['symbol', 'entry_date', 'signal_type', 'shares', 'position_value', 'monetary_risk', 'returns_pct', 'r_multiple', 'Result']
+        # Calculate days held before formatting dates
+        df_disp['days_held'] = (df_filtered['exit_date'] - df_filtered['entry_date']).dt.days
+        
+        cols = ['symbol', 'entry_date', 'days_held', 'signal_type', 'shares', 'position_value', 'monetary_risk', 'returns_pct', 'r_multiple', 'Result']
         
         df_disp['entry_date'] = df_disp['entry_date'].dt.date
         df_disp['position_value'] = df_disp['position_value'].map('${:,.0f}'.format)
