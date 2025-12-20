@@ -7,193 +7,43 @@ import json
 import os
 import subprocess
 import time
+from config.universe_presets import LIQUID_MID_CAPS
 
 # Función para cargar/guardar watchlist
 WATCHLIST_FILE = 'config/watchlist.json'
-
-def load_watchlist_json():
-    if os.path.exists(WATCHLIST_FILE):
-        with open(WATCHLIST_FILE, 'r') as f:
-            return json.load(f)
-    return {}
-
-def save_watchlist_json(data):
-    with open(WATCHLIST_FILE, 'w') as f:
-        json.dump(data, f, indent=4)
-
-# Función para ejecutar el backtest con UI de progreso y parámetros de riesgo
-def run_backtest_with_progress(start_date, end_date, stop_loss_pct=None, 
-                               equity=100000, risk_pct=0.5, max_exp_pct=25,
-                               min_mcap_b=2.0, max_mcap_b=20.0):
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-    log_area = st.empty()
-    logs = []
-
-    cmd = [
-        "python3", "daily_backtest_runner.py",
-        "--start", str(start_date),
-        "--end", str(end_date),
-        "--equity", str(equity),
-        "--risk", str(risk_pct / 100.0),
-        "--max_exp", str(max_exp_pct / 100.0),
-        "--min_mcap", str(min_mcap_b * 1e9),
-        "--max_mcap", str(max_mcap_b * 1e9)
-    ]
-    
-    if stop_loss_pct is not None and stop_loss_pct > 0:
-        cmd.extend(["--stop_loss", str(stop_loss_pct)])
-    
-    try:
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            universal_newlines=True
-        )
-        
-        while True:
-            line = process.stdout.readline()
-            if not line and process.poll() is not None:
-                break
-            if line:
-                line = line.strip()
-                # Parsear marcador de progreso
-                if "__PROGRESS__" in line:
-                    parts = line.split("__")
-                    if len(parts) >= 3:
-                        progress_info = parts[2].split("/") # "1/10"
-                        symbol_name = parts[3] if len(parts) > 3 else ""
-                        if len(progress_info) == 2:
-                            current = int(progress_info[0])
-                            total = int(progress_info[1])
-                            progress = float(current) / float(total)
-                            progress_bar.progress(progress)
-                            status_text.write(f"⏳ Procesando **{symbol_name}** ({current}/{total})...")
-                else:
-                    logs.append(line)
-                    log_text = "\n".join(logs[-10:])
-                    log_area.code(log_text)
-        
-        if process.returncode == 0:
-            progress_bar.progress(1.0)
-            status_text.success("✅ Backtest completado!")
-            time.sleep(1)
-            st.cache_data.clear()
-            return True
-        else:
-            status_text.error("❌ Error en la ejecución.")
-            return False
-
-    except Exception as e:
-        status_text.error(f"Error inesperado: {e}")
-        return False
-
-# Configuración de la página
-st.set_page_config(
-    page_title="Momentum V2 - Backtest Dashboard",
-    page_icon="📈",
-    layout="wide"
-)
-
-# Título y Descripción
-st.title("📈 Momentum V2 - Institutional Risk Dashboard")
-
-# --- Barra Lateral: Configuración y Ejecución ---
-st.sidebar.header("⚙️ Configuración del Sistema")
-
-with st.sidebar.expander("📅 Fechas y Filtros Universo", expanded=True):
-    run_start_date = st.date_input("Fecha Inicio", value=datetime(2024, 1, 1))
-    run_end_date = st.date_input("Fecha Fin", value=datetime.now())
-    
-    st.markdown("**Filtro Market Cap (Billions)**")
-    c1, c2 = st.columns(2)
-    in_min_mcap = c1.number_input("Min ($B)", value=2.0, step=0.5)
-    in_max_mcap = c2.number_input("Max ($B)", value=20.0, step=1.0)
-    
-    # Stop Loss Config
-    use_custom_stop = st.checkbox("Forzar Stop Loss Fijo (%)")
-    stop_loss_input = 2.0
-    if use_custom_stop:
-        stop_loss_input = st.number_input("Stop Loss %", value=3.0, step=0.5)
-
-with st.sidebar.expander("🛡️ Institutional Risk Manager", expanded=True):
-    in_equity = st.number_input("Equity ($)", value=100000.0, step=10000.0)
-    in_risk = st.number_input("Risk per Trade (%)", value=0.5, step=0.1, format="%.2f")
-    in_max_exp = st.number_input("Max Exposure (%)", value=25.0, step=5.0)
-
-if st.sidebar.button("🚀 EJECUTAR BACKTEST", use_container_width=True):
-    sl_val = stop_loss_input if use_custom_stop else None
-    if run_backtest_with_progress(run_start_date, run_end_date, sl_val, in_equity, in_risk, in_max_exp, in_min_mcap, in_max_mcap):
-        st.rerun()
-
-st.sidebar.markdown("---")
-
-# --- Carga de datos ---
-@st.cache_data
-def load_data():
-    try:
-        if os.path.exists('backtest_results.csv'):
-            df = pd.read_csv('backtest_results.csv')
-            df['entry_date'] = pd.to_datetime(df['entry_date'])
-            df['exit_date'] = pd.to_datetime(df['exit_date'])
-            return df
-        return pd.DataFrame()
-    except Exception as e:
-        return pd.DataFrame()
-
-df_raw = load_data()
-
-# --- Gestión de Watchlist ---
-with st.sidebar.expander("📝 Gestionar Watchlist", expanded=False):
-    watchlist_data = load_watchlist_json()
-    tab1, tab2 = st.tabs(["Editar", "Crear"])
-    # --- TAB 1: EDITAR EXISTENTE ---
-    with tab1:
-        if watchlist_data:
-            categories = list(watchlist_data.keys())
-            selected_category = st.selectbox("Seleccionar Lista", categories)
-
-            if selected_category:
-                current_symbols = watchlist_data[selected_category]
-                st.write(f"**{len(current_symbols)} símbolos**")
-                st.code(", ".join(current_symbols))
-
-                new_symbols_str = st.text_area("Añadir (separados por coma)", placeholder="AAPL, TSLA")
-                if st.button("Añadir a Lista"):
-                    if new_symbols_str:
-                        new_list = [s.strip().upper() for s in new_symbols_str.split(',') if s.strip()]
-                        added_count = 0
-                        for s in new_list:
-                            if s not in watchlist_data[selected_category]:
-                                watchlist_data[selected_category].append(s)
-                                added_count += 1
-                        if added_count > 0:
-                            save_watchlist_json(watchlist_data)
-                            st.success(f"✅ {added_count} símbolos añadidos.")
-                            st.rerun()
-                
-                if st.button("🗑️ Borrar Lista"):
-                    del watchlist_data[selected_category]
-                    save_watchlist_json(watchlist_data)
-                    st.rerun()
-
+# ... (rest of the file until the Watchlist Manager section)
     # --- TAB 2: CREAR NUEVA ---
     with tab2:
         st.write("Crear una nueva lista personalizada")
-        new_list_name = st.text_input("Nombre de la Lista", placeholder="Ej. MID_CAPS").upper().strip()
-        bulk_symbols = st.text_area("Pegar Símbolos", placeholder="BE, CRDO, AVGO, ...", height=150)
+        
+        # Opciones de carga rápida
+        if st.button("📥 Cargar Universo Mid-Cap (Automático)", help="Carga ~100 acciones líquidas Mid-Cap ($2B-$20B) filtradas."):
+             st.session_state['new_list_name_input'] = "INSTITUTIONAL_MIDCAPS"
+             st.session_state['bulk_symbols_input'] = ", ".join(LIQUID_MID_CAPS)
+             st.success("Universo cargado en el formulario. Revisa y guarda.")
+
+        # Inputs con session state para permitir llenado automático
+        default_name = st.session_state.get('new_list_name_input', "")
+        default_symbols = st.session_state.get('bulk_symbols_input', "")
+
+        new_list_name = st.text_input("Nombre de la Lista", value=default_name, placeholder="Ej. MIS_FAVORITOS").upper().strip()
+        bulk_symbols = st.text_area("Pegar Símbolos", value=default_symbols, placeholder="BE, CRDO, AVGO, ...", height=150)
         
         if st.button("💾 Guardar Nueva Lista"):
             if new_list_name and bulk_symbols:
                 cleaned = [s.strip().upper() for s in bulk_symbols.split(',') if s.strip()]
+                # Eliminar duplicados
+                cleaned = list(set(cleaned))
                 if cleaned:
                     watchlist_data[new_list_name] = cleaned
                     save_watchlist_json(watchlist_data)
-                    st.success(f"✅ Lista creada.")
+                    st.success(f"✅ Lista '{new_list_name}' creada con {len(cleaned)} símbolos.")
+                    # Limpiar session state
+                    if 'new_list_name_input' in st.session_state: del st.session_state['new_list_name_input']
+                    if 'bulk_symbols_input' in st.session_state: del st.session_state['bulk_symbols_input']
                     st.rerun()
+            else:
+                st.warning("El nombre o la lista no pueden estar vacíos.")
 
 # --- Formulario de Filtros (Solo visualización) ---
 with st.sidebar.form("filtros_form"):
