@@ -220,7 +220,8 @@ if not df_raw.empty:
     c6.metric("Total R", f"{df_filtered['r_multiple'].sum():.1f}R")
     c7.metric("Expectancy", f"{df_filtered['r_multiple'].mean():.2f}R")
     
-    profit_factor = abs(winners['Result'].sum() / losers['Result'].sum()) if len(losers) > 0 else 0
+    gross_loss = abs(losers['Result'].sum())
+    profit_factor = (winners['Result'].sum() / gross_loss) if gross_loss > 0 else 0.0
     c8.metric("Profit Factor", f"{profit_factor:.2f}")
 
     st.markdown("---")
