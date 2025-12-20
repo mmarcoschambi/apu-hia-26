@@ -26,7 +26,8 @@ def save_watchlist_json(data):
 def run_backtest_with_progress(start_date, end_date, stop_loss_pct=None, 
                                equity=100000, risk_pct=0.5, max_exp_pct=25,
                                min_mcap_b=2.0, max_mcap_b=20.0, 
-                               min_vol_k=300, min_adr=1.5, min_price=5.0, min_dollar_m=15):
+                               min_vol_k=300, min_adr=1.5, min_price=5.0, min_dollar_m=15,
+                               watchlist_path='config/watchlist.json'):
     progress_bar = st.progress(0)
     status_text = st.empty()
     log_area = st.empty()
@@ -36,6 +37,7 @@ def run_backtest_with_progress(start_date, end_date, stop_loss_pct=None,
         "python3", "daily_backtest_runner.py",
         "--start", str(start_date),
         "--end", str(end_date),
+        "--watchlist", watchlist_path,
         "--equity", str(equity),
         "--risk", str(risk_pct / 100.0),
         "--max_exp", str(max_exp_pct / 100.0),
@@ -135,11 +137,27 @@ with st.sidebar.expander("🛡️ Institutional Risk Manager", expanded=True):
     in_risk = st.number_input("Risk per Trade (%)", value=0.5, step=0.1, format="%.2f")
     in_max_exp = st.number_input("Max Exposure (%)", value=25.0, step=5.0)
 
+# --- Nueva Entrada Directa de Símbolos ---
+st.sidebar.markdown("---")
+st.sidebar.header("🚀 Ejecución Rápida")
+direct_symbols = st.sidebar.text_area("Símbolos a Testear (separados por coma)", value="APP, PLTR", help="Escribe los tickers que quieras probar, ej: AAPL, TSLA, NVDA")
+
 if st.sidebar.button("🚀 EJECUTAR BACKTEST", use_container_width=True):
     sl_val = stop_loss_input if use_custom_stop else None
-    if run_backtest_with_progress(run_start_date, run_end_date, sl_val, in_equity, in_risk, in_max_exp, 
-                                  in_min_mcap, in_max_mcap, in_min_vol, in_min_adr, in_min_price, in_min_dollar_m):
-        st.rerun()
+    
+    # Crear lista temporal basada en la entrada directa
+    if direct_symbols:
+        symbols_list = [s.strip().upper() for s in direct_symbols.split(',') if s.strip()]
+        temp_watchlist_path = 'temp_backtest_list.json'
+        with open(temp_watchlist_path, 'w') as f:
+            json.dump({"DIRECT_INPUT": symbols_list}, f)
+        
+        if run_backtest_with_progress(run_start_date, run_end_date, sl_val, in_equity, in_risk, in_max_exp, 
+                                      in_min_mcap, in_max_mcap, in_min_vol, in_min_adr, in_min_price, in_min_dollar_m,
+                                      watchlist_path=temp_watchlist_path):
+            st.rerun()
+    else:
+        st.sidebar.error("Escribe al menos un símbolo para testear.")
 
 st.sidebar.markdown("---")
 

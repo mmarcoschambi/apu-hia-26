@@ -13,14 +13,16 @@ MIN_DOLLAR_VOLUME = 100_000_000  # $100M
 
 # 2. VOLATILITY FILTER  
 # Minimum ADR (Average Daily Range) percentage
-# Default: 2.5% (balanced - allows most momentum stocks)
-# More conservative: 4.0% (only high-volatility movers)
-# More aggressive: 1.5% (includes less volatile stocks)
-MIN_ADR_PCT = 2.5  # 2.5%
+# Default: 1.5% (relaxed - allows most large cap momentum stocks)
+# More conservative: 2.5% (moderate volatility)
+# Very conservative: 4.0% (only high-volatility movers)
+MIN_ADR_PCT = 1.5  # 1.5% - RELAXED DEFAULT
 
-# Note: Original recommendation was 4%, but that's too restrictive
-# Most quality stocks (AAPL, MSFT, etc) have ADR 1.5-3%
-# Only highly volatile stocks (TSLA, COIN, etc) exceed 4%
+# Note: Original recommendation was 4%, but that's extremely restrictive
+# Most quality stocks (AAPL, MSFT, GOOGL, etc) have ADR 1.5-2.5%
+# Only highly volatile stocks (TSLA, COIN, NVDA on volatile days) exceed 4%
+# With combined filters (ADR + breakout + volume + SPY outperformance), 
+# even 2% ADR is too restrictive
 
 # 3. TREND FILTER
 # Require Price > SMA50 > SMA200 alignment
@@ -34,27 +36,33 @@ REQUIRE_TREND_ALIGNMENT = True
 
 PRESET_CONSERVATIVE = {
     'min_dollar_volume': 200_000_000,  # $200M
-    'min_adr_pct': 3.5,                # 3.5%
+    'min_adr_pct': 3.5,                # 3.5% - EXPECT VERY FEW SIGNALS
     'require_trend_alignment': True
 }
 
 PRESET_BALANCED = {
-    'min_dollar_volume': 100_000_000,  # $100M (default)
-    'min_adr_pct': 2.5,                # 2.5% (default)
+    'min_dollar_volume': 100_000_000,  # $100M
+    'min_adr_pct': 2.0,                # 2.0% - MODERATE SIGNALS
+    'require_trend_alignment': True
+}
+
+PRESET_RELAXED = {
+    'min_dollar_volume': 50_000_000,   # $50M
+    'min_adr_pct': 1.5,                # 1.5% - MORE SIGNALS (default)
     'require_trend_alignment': True
 }
 
 PRESET_AGGRESSIVE = {
-    'min_dollar_volume': 50_000_000,   # $50M
-    'min_adr_pct': 1.5,                # 1.5%
-    'require_trend_alignment': True
+    'min_dollar_volume': 25_000_000,   # $25M
+    'min_adr_pct': 1.0,                # 1.0% - MAXIMUM SIGNALS
+    'require_trend_alignment': False   # No trend filter
 }
 
 PRESET_ORIGINAL_SPEC = {
     'min_dollar_volume': 100_000_000,  # $100M
-    'min_adr_pct': 4.0,                # 4% (very restrictive!)
+    'min_adr_pct': 4.0,                # 4% - ALMOST IMPOSSIBLE TO FIND SIGNALS!
     'require_trend_alignment': True
 }
 
 # Current preset to use
-CURRENT_PRESET = 'BALANCED'  # 'CONSERVATIVE', 'BALANCED', 'AGGRESSIVE', 'ORIGINAL_SPEC'
+CURRENT_PRESET = 'RELAXED'  # 'CONSERVATIVE', 'BALANCED', 'RELAXED', 'AGGRESSIVE', 'ORIGINAL_SPEC'

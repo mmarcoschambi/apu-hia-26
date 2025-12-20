@@ -98,16 +98,17 @@ class DailyBacktestEngine:
         print("Filtering Universe by Fundamentals...")
         for symbol in self.universe:
             try:
-                overview = obb.equity.fundamental.overview(symbol=symbol, provider='yfinance').to_df()
+                # Use metrics instead of overview for OpenBB v4
+                overview = obb.equity.fundamental.metrics(symbol=symbol, provider='yfinance').to_df()
                 if not overview.empty and 'market_cap' in overview.columns:
                     mcap = overview['market_cap'].iloc[0]
                     
                     # Check Market Cap
                     if not (self.min_mcap <= mcap <= self.max_mcap):
+                        # print(f"Skipping {symbol}: Mcap ${mcap/1e9:.1f}B not in range")
                         continue
                         
                     # Check Volume (if available in overview, otherwise check history later)
-                    # Note: 'average_volume' is often available
                     if 'average_volume' in overview.columns:
                         vol = overview['average_volume'].iloc[0]
                         if vol < self.min_avg_volume:
@@ -124,6 +125,7 @@ class DailyBacktestEngine:
         # 2. Preload SPY
         try:
             self.spy_data = obb.equity.price.historical(symbol='SPY', start_date=fetch_start, end_date=fetch_end, provider='yfinance').to_df()
+            self.spy_data.index = pd.to_datetime(self.spy_data.index)
         except:
             print("Warning: Could not load SPY data.")
 
@@ -133,6 +135,7 @@ class DailyBacktestEngine:
             try:
                 df = obb.equity.price.historical(symbol=symbol, start_date=fetch_start, end_date=fetch_end, provider='yfinance').to_df()
                 if not df.empty:
+                    df.index = pd.to_datetime(df.index)
                     # Double Check Volume from actual history (more reliable)
                     avg_vol_hist = df['volume'].tail(20).mean()
                     if avg_vol_hist < self.min_avg_volume:
@@ -149,8 +152,13 @@ class DailyBacktestEngine:
     def run(self):
         print("🚀 Starting Daily Simulation...")
         date_range = pd.date_range(start=self.start_date, end=self.end_date, freq='B')
+        total_days = len(date_range)
         
-        for today in date_range:
+        for i, today in enumerate(date_range):
+            # Emit progress for UI
+            if i % 5 == 0 or i == total_days - 1:
+                print(f"__PROGRESS__{i+1}/{total_days}__{today.date()}", flush=True)
+            
             # 1. Manage Exits and Entries
             self._manage_positions(today)
             
@@ -228,7 +236,8 @@ class DailyBacktestEngine:
         candidates = []
         for symbol, df in self.market_data.items():
             res = self.screener.scan(symbol, df, self.spy_data, today)
-            if res: candidates.append(res)
+            if res: 
+                candidates.append(res)
         return candidates
 
     def _prepare_orders(self, today, candidates, equity):
@@ -239,6 +248,7 @@ class DailyBacktestEngine:
             self.risk_manager.account_equity = equity
             self.risk_manager.buying_power = self.portfolio.cash
             sizing = self.risk_manager.calculate_position_size(trigger_price, stop_price)
+            
             if sizing['shares'] > 0:
                 self.pending_orders.append(PendingOrder(
                     symbol=cand['symbol'], order_type='BUY_STOP', limit_price=trigger_price,
