@@ -4,6 +4,14 @@ import numpy as np
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timedelta
 import logging
+import sys
+from pathlib import Path
+
+# Add project root to path to ensure imports work if run directly
+project_root = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(project_root))
+
+from src.utils.risk_manager import RiskManager
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +24,7 @@ class TriadOpenBB:
     def __init__(self):
         self.obb = obb
     
+    # ... (calculate_avwap_ath remains same)
     def calculate_avwap_ath(self, symbol: str, start_date: str = '2020-01-01') -> Optional[Dict]:
         """Calcula AVWAP y ATH (Sin cambios)"""
         try:
@@ -36,15 +45,19 @@ class TriadOpenBB:
             current_price = hist_data['close'].iloc[-1]
             ath_distance = (current_price - ath) / ath * 100
             
-            return {
+            result = {
                 'symbol': symbol, 'avwap': avwap, 'ath': ath, 'ath_date': ath_date,
                 'current_price': current_price, 'ath_distance_pct': ath_distance,
                 'data_available': len(hist_data)
             }
+            
+            return result
+            
         except Exception as e:
-            logger.error(f"Error AVWAP/ATH {symbol}: {e}")
+            logger.error(f"Error calculando AVWAP/ATH para {symbol}: {str(e)}")
             return None
-    
+
+    # ... (detect_caminos remains same)
     def detect_caminos(self, df: pd.DataFrame) -> List[Dict]:
         """Detecta patrones de entrada (Sin cambios sustanciales, asegura indicadores)"""
         signals = []
@@ -79,8 +92,8 @@ class TriadOpenBB:
                 signals.append({'date': current.name, 'type': 'camino_3', 'price': current['close'], 'reason': 'breakout_3'})
         
         return signals
-    
-    def backtest_with_openbb(self, symbols: List[str], start: str, end: str, stop_loss_pct: Optional[float] = None) -> pd.DataFrame:
+
+    def backtest_with_openbb(self, symbols: List[str], start: str, end: str, stop_loss_pct: Optional[float] = None, risk_manager: Optional[RiskManager] = None) -> pd.DataFrame:
         """Backtest iterativo"""
         results = []
         for symbol in symbols:
@@ -90,7 +103,7 @@ class TriadOpenBB:
                 
                 signals = self.detect_caminos(daily_data)
                 for signal in signals:
-                    outcome = self.simulate_trade_advanced(daily_data, signal, stop_loss_pct)
+                    outcome = self.simulate_trade_advanced(daily_data, signal, stop_loss_pct, risk_manager)
                     if outcome:
                         outcome['symbol'] = symbol
                         results.append(outcome)
@@ -99,7 +112,7 @@ class TriadOpenBB:
                 continue
         return pd.DataFrame(results) if results else pd.DataFrame()
 
-    def simulate_trade_advanced(self, data: pd.DataFrame, signal: Dict, stop_loss_pct: Optional[float] = None) -> Optional[Dict]:
+    def simulate_trade_advanced(self, data: pd.DataFrame, signal: Dict, stop_loss_pct: Optional[float] = None, risk_manager: Optional[RiskManager] = None) -> Optional[Dict]:
         """
         MOTOR DE GESTIÓN DE POSICIONES (Senior Quant Logic)
         Implementa máquina de estados: ENTRY -> PARTIAL_1 -> PARTIAL_2 -> RUNNER -> EXIT
@@ -126,6 +139,25 @@ class TriadOpenBB:
             risk_per_share = entry_price - stop_loss
             if risk_per_share <= 0: risk_per_share = entry_price * 0.02 # Fallback
             
+            # --- RISK MANAGEMENT CALCULATION ---
+            shares = 1
+            position_value = entry_price
+            monetary_risk = risk_per_share
+            
+            if risk_manager:
+                sizing = risk_manager.calculate_position_size(
+                    entry_price=entry_price,
+                    stop_price=stop_loss,
+                    market_regime_factor=1.0, # Default for now, could be dynamic
+                    adr_pct=0.0 # Could calculate if needed
+                )
+                shares = sizing['shares']
+                position_value = sizing['position_value']
+                monetary_risk = sizing['risk_monetary']
+                
+                if shares == 0:
+                    return None # Risk manager rejected trade
+
             # Objetivos basados en R
             target_1r = entry_price + risk_per_share
             target_1_5r = entry_price + (1.5 * risk_per_share)
@@ -232,7 +264,10 @@ class TriadOpenBB:
                 'returns_pct': realized_pnl_pct * 100, # Convertir a porcentaje visual
                 'is_profitable': realized_pnl_pct > 0,
                 'signal_type': signal['type'],
-                'signal_reason': f"{signal['reason']} | {' + '.join(exit_reasons)}"
+                'signal_reason': f"{signal['reason']} | {' + '.join(exit_reasons)}",
+                'shares': shares,
+                'position_value': position_value,
+                'monetary_risk': monetary_risk
             }
 
         except Exception as e:
