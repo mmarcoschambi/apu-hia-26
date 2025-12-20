@@ -53,7 +53,7 @@ def run_backtest_with_progress(start_date, end_date, stop_loss_pct=None,
         "--min_volume", str(int(min_vol_k * 1000)),
         "--min_adr", str(min_adr),
         "--min_price", str(min_price),
-        "--min_dollar_vol", str(int(min_dollar_m * 1e6)))
+        "--min_dollar_vol", str(int(min_dollar_m * 1e6))
     ]
     
     if stop_loss_pct is not None and stop_loss_pct > 0:
