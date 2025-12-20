@@ -160,6 +160,8 @@ class MarketDataProvider:
                 start_date = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')
             elif period == "1mo":
                 start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+            elif period == "max":
+                start_date = (datetime.now() - timedelta(days=365*5)).strftime('%Y-%m-%d') # 5 years
             else:
                 start_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')  # default to 1 year
 
