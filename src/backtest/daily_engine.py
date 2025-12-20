@@ -254,14 +254,36 @@ class DailyBacktestEngine:
         for cand in candidates:
             if cand['symbol'] in self.portfolio.positions: continue
             trigger_price = cand['entry_trigger'] * 1.005
-            stop_price = cand['stop_loss']
+            technical_stop = cand['stop_loss']
+            
+            # --- RISK MANAGEMENT: STOP LOSS CAP ---
+            # Rule: Stop never > 8% OR 2x ADR
+            entry_price = trigger_price
+            current_risk_pct = (entry_price - technical_stop) / entry_price
+            
+            cand_adr = cand.get('adr_pct', 2.0) / 100.0 # Default to 2% if missing
+            max_risk_adr = cand_adr * 2.0
+            max_risk_hard = 0.08 # 8% Hard Cap
+            
+            allowed_risk_pct = min(max_risk_adr, max_risk_hard)
+            
+            risk_note = ""
+            final_stop = technical_stop
+            
+            if current_risk_pct > allowed_risk_pct:
+                # Clamp stop to max allowed
+                final_stop = entry_price * (1 - allowed_risk_pct)
+                risk_note = f"Risk Clamped: {current_risk_pct*100:.1f}% -> {allowed_risk_pct*100:.1f}% (Max 2xADR/8%)"
+            
+            stop_price = final_stop
+
             self.risk_manager.account_equity = equity
             self.risk_manager.buying_power = self.portfolio.cash
             sizing = self.risk_manager.calculate_position_size(trigger_price, stop_price)
             
             # --- EARNINGS CHECK ---
             earnings_dates = self.data_provider.get_earnings_dates(cand['symbol'])
-            risk_note = ""
+            earnings_note = ""
             if not earnings_dates.empty:
                 # Find next earnings date after today
                 future_dates = earnings_dates[earnings_dates > pd.to_datetime(today)]
@@ -273,15 +295,18 @@ class DailyBacktestEngine:
                         # ⚠️ EARNINGS RISK: Reduce size to 1/4
                         original_shares = sizing['shares']
                         sizing['shares'] = int(original_shares * 0.25)
-                        risk_note = f"EARNINGS_RISK ({days_to_earning}d away) - Size reduced 75% ({original_shares}->{sizing['shares']})"
+                        earnings_note = f"EARNINGS_RISK ({days_to_earning}d away) - Size reduced 75% ({original_shares}->{sizing['shares']})"
                         # If size becomes 0, we effectively "NO ENTER"
             
+            # Combine notes
+            final_note = " | ".join(filter(None, [risk_note, earnings_note]))
+
             if sizing['shares'] > 0:
                 self.pending_orders.append(PendingOrder(
                     symbol=cand['symbol'], order_type='BUY_STOP', limit_price=trigger_price,
                     stop_loss_initial=stop_price, shares=sizing['shares'],
                     valid_date=today + pd.tseries.offsets.BusinessDay(1),
-                    note=risk_note
+                    note=final_note
                 ))
 
     def _update_equity(self, today):

@@ -222,7 +222,11 @@ class InteractiveDashboard:
         # Get window
         start_idx = max(0, entry_idx - 30)
         end_idx = min(len(daily_df), entry_idx + 15)
-        window_df = daily_df.iloc[start_idx:end_idx]
+        window_df = daily_df.iloc[start_idx:end_idx].copy()
+        
+        # Calculate SMAs for context
+        window_df['SMA_10'] = window_df['Close'].rolling(window=10).mean()
+        window_df['SMA_20'] = window_df['Close'].rolling(window=20).mean()
         
         # Calculate AVWAP
         historical_df = daily_df.iloc[:entry_idx+1]
@@ -240,6 +244,24 @@ class InteractiveDashboard:
             name='Price',
             increasing_line_color='green',
             decreasing_line_color='red'
+        ))
+        
+        # Add SMA 10
+        fig.add_trace(go.Scatter(
+            x=window_df.index,
+            y=window_df['SMA_10'],
+            mode='lines',
+            line=dict(color='#FFD700', width=1.5), # Gold
+            name='SMA 10'
+        ))
+
+        # Add SMA 20
+        fig.add_trace(go.Scatter(
+            x=window_df.index,
+            y=window_df['SMA_20'],
+            mode='lines',
+            line=dict(color='#1E90FF', width=1.5), # Dodger Blue
+            name='SMA 20'
         ))
         
         # Add AVWAP line
