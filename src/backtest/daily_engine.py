@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from src.utils.risk_manager import RiskManager
 from src.core.triad_openbb import TriadOpenBB
 from src.core.screener import InstitutionalScreener
+from src.data.market_data import MarketDataProvider
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,8 @@ class Position:
     stop_loss: float
     take_profit_1: float
     tp1_hit: bool = False
-    entry_stage: str = 'FULL'
+    entry_stage: str = 'FULL' # 'FULL' or 'QUARTER' (Earnings)
+    note: str = ""
 
 @dataclass
 class PendingOrder:
@@ -42,6 +44,7 @@ class PendingOrder:
     stop_loss_initial: float
     shares: int
     valid_date: pd.Timestamp
+    note: str = "" # Metadata for the order
 
 class Portfolio:
     def __init__(self, initial_capital: float):
@@ -74,6 +77,7 @@ class DailyBacktestEngine:
         self.market_data: Dict[str, pd.DataFrame] = {}
         self.spy_data = pd.DataFrame()
         self.triad_logic = TriadOpenBB()
+        self.data_provider = MarketDataProvider() # New instance for earnings data
         
         # New Institutional Screener with requested thresholds
         self.screener = InstitutionalScreener(
@@ -194,7 +198,8 @@ class DailyBacktestEngine:
                         entry_price=execution_price,
                         shares=order.shares,
                         stop_loss=order.stop_loss_initial,
-                        take_profit_1=execution_price + (1.5 * (execution_price - order.stop_loss_initial))
+                        take_profit_1=execution_price + (1.5 * (execution_price - order.stop_loss_initial)),
+                        note=order.note
                     )
                     self.portfolio.positions[symbol] = new_pos
         self.pending_orders = []
@@ -225,11 +230,16 @@ class DailyBacktestEngine:
         pos = self.portfolio.positions.pop(symbol)
         pnl = (price - pos.entry_price) * pos.shares
         self.portfolio.cash += (pos.shares * price)
+        
+        final_reason = reason
+        if pos.note:
+            final_reason = f"{reason} | {pos.note}"
+            
         self.portfolio.closed_trades.append({
             'symbol': symbol, 'entry_date': pos.entry_date, 'exit_date': date,
             'entry_price': pos.entry_price, 'exit_price': price, 'shares': pos.shares,
             'pnl': pnl, 'return_pct': ((price - pos.entry_price) / pos.entry_price) * 100,
-            'reason': reason
+            'reason': final_reason
         })
 
     def _run_daily_screener(self, today) -> List[Dict]:
@@ -249,11 +259,29 @@ class DailyBacktestEngine:
             self.risk_manager.buying_power = self.portfolio.cash
             sizing = self.risk_manager.calculate_position_size(trigger_price, stop_price)
             
+            # --- EARNINGS CHECK ---
+            earnings_dates = self.data_provider.get_earnings_dates(cand['symbol'])
+            risk_note = ""
+            if not earnings_dates.empty:
+                # Find next earnings date after today
+                future_dates = earnings_dates[earnings_dates > pd.to_datetime(today)]
+                if not future_dates.empty:
+                    next_earning = future_dates[0]
+                    days_to_earning = (next_earning - pd.to_datetime(today)).days
+                    
+                    if 0 <= days_to_earning < 5:
+                        # ⚠️ EARNINGS RISK: Reduce size to 1/4
+                        original_shares = sizing['shares']
+                        sizing['shares'] = int(original_shares * 0.25)
+                        risk_note = f"EARNINGS_RISK ({days_to_earning}d away) - Size reduced 75% ({original_shares}->{sizing['shares']})"
+                        # If size becomes 0, we effectively "NO ENTER"
+            
             if sizing['shares'] > 0:
                 self.pending_orders.append(PendingOrder(
                     symbol=cand['symbol'], order_type='BUY_STOP', limit_price=trigger_price,
                     stop_loss_initial=stop_price, shares=sizing['shares'],
-                    valid_date=today + pd.tseries.offsets.BusinessDay(1)
+                    valid_date=today + pd.tseries.offsets.BusinessDay(1),
+                    note=risk_note
                 ))
 
     def _update_equity(self, today):

@@ -287,3 +287,28 @@ class MarketDataProvider:
         adr = df['Range'].tail(period).mean()
 
         return adr
+
+    def get_earnings_dates(self, symbol: str) -> pd.DatetimeIndex:
+        """
+        Get historical and future earnings dates
+        Returns a sorted DatetimeIndex
+        """
+        cache_file = self.cache_dir / f"{symbol}_earnings.pkl"
+
+        if cache_file.exists():
+            return pickle.load(open(cache_file, "rb"))
+
+        try:
+            # Use yfinance directly for earnings
+            ticker = yf.Ticker(symbol)
+            earnings = ticker.earnings_dates
+            
+            if earnings is not None and not earnings.empty:
+                # Extract index (dates) and sort
+                dates = pd.to_datetime(earnings.index).tz_localize(None).sort_values()
+                pickle.dump(dates, open(cache_file, "wb"))
+                return dates
+        except Exception as e:
+            logger.warning(f"Could not fetch earnings for {symbol}: {e}")
+        
+        return pd.DatetimeIndex([])
