@@ -2,7 +2,9 @@
     "MOMENTUM": [
         "RDDT",
         "PLTR",
-        "MSTR"
+        "AAPL",
+        "TSLA",
+        "NVDA"
     ],
     "TECH": [
         "AAPL",
@@ -14,10 +16,66 @@
     "VOLATILITY": [
         "SMCI",
         "CEG",
-        "COIN"
+        "COIN",
+        "APP"
     ],
     "ENERGY": [
-        "CEG",
-        "NEE"
+        "BE, CRDO, AVGO, RDDT, SNDK, NBIS, TSLA, EOSE, BMNR, ALAB, GEV, OPEN, RIVN, ETHE, ASTS, NVDA, UNH, CRWD, VICR"
+    ],
+    "LONG": [
+        "OPEN",
+        "CRWD",
+        "ALAB",
+        "ETHE",
+        "ASTS",
+        "EOSE",
+        "GEV",
+        "NBIS",
+        "VICR",
+        "TSLA",
+        "UNH",
+        "NVDA",
+        "RDDT",
+        "SNDK",
+        "BMNR",
+        "AVGO",
+        "RIVN"
+    ],
+    "ANAND": [
+        "PLTR",
+        "PL",
+        "RKLB",
+        "TSLA",
+        "CIEN",
+        "LMND",
+        "RDDT",
+        "LITE",
+        "COHR",
+        "MU",
+        "RIVN",
+        "APP"
+    ],
+    "OPENBB": [
+        "LUNR",
+        "RKLB",
+        "TSLA",
+        "RIVN",
+        "SUZ",
+        "PLTR",
+        "ORLA",
+        "LRCX",
+        "SHOP",
+        "COHR",
+        "AFRM",
+        "MU",
+        "AEO",
+        "GEV",
+        "RDDT",
+        "WDC",
+        "ALM",
+        "STX",
+        "SNDK",
+        "SBUX",
+        "LITE"
     ]
 }

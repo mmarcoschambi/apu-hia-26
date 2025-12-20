@@ -9,253 +9,243 @@ logger = logging.getLogger(__name__)
 
 class TriadOpenBB:
     """
-    Clase para implementar la estrategia TRIAD usando OpenBB como fuente de datos
+    Clase para implementar la estrategia TRIAD usando OpenBB como fuente de datos.
+    Implementa gestión de posición avanzada tipo Quant (TP1, TP2, Runner, Breakeven).
     """
     
     def __init__(self):
         self.obb = obb
     
     def calculate_avwap_ath(self, symbol: str, start_date: str = '2020-01-01') -> Optional[Dict]:
-        """
-        Calcular AVWAP y ATH basado en datos de OpenBB
-        """
+        """Calcula AVWAP y ATH (Sin cambios)"""
         try:
-            # Obtener datos históricos
             hist_data = obb.equity.price.historical(
-                symbol=symbol,
-                start_date=start_date,
-                provider='yfinance'  # Podemos especificar proveedor
+                symbol=symbol, start_date=start_date, provider='yfinance'
             ).to_df()
             
-            if hist_data.empty:
-                logger.warning(f"No se encontraron datos para {symbol}")
-                return None
+            if hist_data.empty: return None
             
-            # Calcular AVWAP (Average Volume Weighted Average Price)
-            # AVWAP = sum(Close * Volume) / sum(Volume)
             if 'volume' in hist_data.columns and hist_data['volume'].sum() > 0:
                 hist_data['close_volume'] = hist_data['close'] * hist_data['volume']
                 avwap = hist_data['close_volume'].sum() / hist_data['volume'].sum()
             else:
-                # Si no hay volumen, usar media simple
                 avwap = hist_data['close'].mean()
             
-            # Encontrar ATH (All Time High)
             ath = hist_data['high'].max()
             ath_date = hist_data['high'].idxmax()
-            
-            # Calcular distancia al ATH
             current_price = hist_data['close'].iloc[-1]
             ath_distance = (current_price - ath) / ath * 100
             
-            result = {
-                'symbol': symbol,
-                'avwap': avwap,
-                'ath': ath,
-                'ath_date': ath_date,
-                'current_price': current_price,
-                'ath_distance_pct': ath_distance,
+            return {
+                'symbol': symbol, 'avwap': avwap, 'ath': ath, 'ath_date': ath_date,
+                'current_price': current_price, 'ath_distance_pct': ath_distance,
                 'data_available': len(hist_data)
             }
-            
-            return result
-            
         except Exception as e:
-            logger.error(f"Error calculando AVWAP/ATH para {symbol}: {str(e)}")
+            logger.error(f"Error AVWAP/ATH {symbol}: {e}")
             return None
     
     def detect_caminos(self, df: pd.DataFrame) -> List[Dict]:
-        """
-        Detectar los 3 caminos (momentum patterns) en los datos
-        """
+        """Detecta patrones de entrada (Sin cambios sustanciales, asegura indicadores)"""
         signals = []
-        
-        # Asegurar que el dataframe tiene las columnas necesarias
         required_cols = ['open', 'high', 'low', 'close', 'volume']
         if not all(col in df.columns for col in required_cols):
-            logger.warning("Columnas insuficientes para detección de patrones")
             return signals
         
-        # Calcular indicadores técnicos
         df = self._calculate_indicators(df)
         
-        # Detectar patrones de momentum (caminos)
-        for i in range(20, len(df)):  # Empezar después de tener suficientes datos para indicadores
+        for i in range(20, len(df)):
             current = df.iloc[i]
             prev = df.iloc[i-1]
             
-            # Patrón 1: Momentum alcista (Camino 1)
+            # Camino 1: Momentum
             if (current['close'] > current['sma_20'] and 
                 current['rsi'] < 70 and current['rsi'] > 50 and
                 current['close'] > prev['close'] and
                 current['volume'] > current['sma_volume_20']):
-                
-                signals.append({
-                    'date': current.name,
-                    'type': 'camino_1',
-                    'price': current['close'],
-                    'reason': 'momentum_1'
-                })
+                signals.append({'date': current.name, 'type': 'camino_1', 'price': current['close'], 'reason': 'momentum_1'})
             
-            # Patrón 2: Pullback con soporte (Camino 2)
+            # Camino 2: Pullback
             elif (current['close'] < current['sma_20'] and 
                   current['close'] > current['sma_50'] and
                   current['rsi'] > 30 and current['rsi'] < 50 and
                   current['close'] > prev['close']):
-                
-                signals.append({
-                    'date': current.name,
-                    'type': 'camino_2',
-                    'price': current['close'],
-                    'reason': 'pullback_2'
-                })
+                signals.append({'date': current.name, 'type': 'camino_2', 'price': current['close'], 'reason': 'pullback_2'})
             
-            # Patrón 3: Breakout (Camino 3)
+            # Camino 3: Breakout
             elif (current['close'] > current['upper_bb'] and
                   current['rsi'] < 80 and current['rsi'] > 50 and
                   current['volume'] > current['sma_volume_20'] * 1.5):
-                
-                signals.append({
-                    'date': current.name,
-                    'type': 'camino_3',
-                    'price': current['close'],
-                    'reason': 'breakout_3'
-                })
+                signals.append({'date': current.name, 'type': 'camino_3', 'price': current['close'], 'reason': 'breakout_3'})
         
         return signals
     
     def backtest_with_openbb(self, symbols: List[str], start: str, end: str) -> pd.DataFrame:
-        """
-        Backtest usando datos de OpenBB
-        """
+        """Backtest iterativo"""
         results = []
-        
         for symbol in symbols:
             try:
-                # Obtener datos diarios
-                daily_data = obb.equity.price.historical(
-                    symbol=symbol,
-                    start_date=start,
-                    end_date=end
-                ).to_df()
+                daily_data = obb.equity.price.historical(symbol=symbol, start_date=start, end_date=end).to_df()
+                if daily_data.empty: continue
                 
-                if daily_data.empty:
-                    logger.warning(f"No se encontraron datos para {symbol}")
-                    continue
-                
-                # Detectar señales
                 signals = self.detect_caminos(daily_data)
-                
-                # Simular trades para cada señal
                 for signal in signals:
-                    outcome = self.simulate_trade(daily_data, signal)
+                    outcome = self.simulate_trade_advanced(daily_data, signal)
                     if outcome:
                         outcome['symbol'] = symbol
                         results.append(outcome)
-                        
             except Exception as e:
-                logger.error(f"Error en backtest para {symbol}: {str(e)}")
+                logger.error(f"Error backtest {symbol}: {e}")
                 continue
-        
         return pd.DataFrame(results) if results else pd.DataFrame()
-    
-    def simulate_trade(self, data: pd.DataFrame, signal: Dict) -> Optional[Dict]:
+
+    def simulate_trade_advanced(self, data: pd.DataFrame, signal: Dict) -> Optional[Dict]:
         """
-        Simular trade con gestión de posición parcial:
-        - 70% liquidación tras 5 días (swing fijo).
-        - 30% runner hasta cruce EMA 8 < EMA 21 (trailing).
+        MOTOR DE GESTIÓN DE POSICIONES (Senior Quant Logic)
+        Implementa máquina de estados: ENTRY -> PARTIAL_1 -> PARTIAL_2 -> RUNNER -> EXIT
         """
         try:
-            # Encontrar índice del signal
-            signal_idx = data.index.get_loc(signal['date'])
+            # --- 1. CONFIGURACIÓN INICIAL DEL TRADE ---
+            idx_entry = data.index.get_loc(signal['date'])
+            if idx_entry + 1 >= len(data): return None # Sin datos futuros
+            
             entry_price = signal['price']
+            entry_date = signal['date']
             
-            # ---------------------------------------------------------
-            # PARTE 1: Liquidación Fija (70%)
-            # ---------------------------------------------------------
-            holding_period = 5
+            # Stop Loss Inicial: Mínimo del día de señal (Swing Low proxy)
+            # Si el stop es muy ajustado (<1%), usamos 3% de seguridad
+            low_of_day = data.iloc[idx_entry]['low']
+            stop_loss = low_of_day
+            if (entry_price - stop_loss) / entry_price < 0.01:
+                stop_loss = entry_price * 0.97
             
-            if signal_idx + holding_period >= len(data):
-                return None  # No hay suficientes datos para la primera salida
+            risk_per_share = entry_price - stop_loss
+            if risk_per_share <= 0: risk_per_share = entry_price * 0.02 # Fallback
             
-            # Salida de la parte fija
-            idx_fixed = signal_idx + holding_period
-            exit_price_fixed = data.iloc[idx_fixed]['close']
-            return_pct_fixed = (exit_price_fixed - entry_price) / entry_price * 100
+            # Objetivos basados en R
+            target_1r = entry_price + risk_per_share
+            target_1_5r = entry_price + (1.5 * risk_per_share)
             
-            # ---------------------------------------------------------
-            # PARTE 2: Runner con EMA Cross (30%)
-            # ---------------------------------------------------------
-            # Buscamos desde el día siguiente a la salida fija
-            idx_runner = idx_fixed + 1
-            exit_price_runner = exit_price_fixed # Default si no encuentra cruce
-            exit_date_runner = data.index[idx_fixed]
+            # --- 2. ESTADO DEL TRADE ---
+            position_pct = 1.0  # 100% de la posición viva
+            realized_pnl_pct = 0.0 # PnL acumulado (ponderado)
+            state = "ENTRY"
             
-            found_cross = False
+            exit_reasons = []
+            final_exit_date = None
+            final_exit_price = 0.0
             
-            # Iterar hasta encontrar cruce EMA 8 < EMA 21 o fin de datos
-            while idx_runner < len(data):
-                row = data.iloc[idx_runner]
-                if row['ema_8'] < row['ema_21']:
-                    exit_price_runner = row['close']
-                    exit_date_runner = data.index[idx_runner]
-                    found_cross = True
+            # --- 3. BUCLE DE SIMULACIÓN (BAR-BY-BAR) ---
+            # Iteramos hasta 60 días máximo o fin de datos
+            max_days = 60
+            
+            for i in range(1, max_days + 1):
+                curr_idx = idx_entry + i
+                if curr_idx >= len(data):
+                    # Fin de datos: cerrar todo lo que queda
+                    close_price = data.iloc[-1]['close']
+                    realized_pnl_pct += ((close_price - entry_price) / entry_price) * position_pct
+                    exit_reasons.append("End of Data")
+                    final_exit_date = data.index[-1]
+                    final_exit_price = close_price # Precio ref último cierre
                     break
-                idx_runner += 1
+                
+                row = data.iloc[curr_idx]
+                curr_date = data.index[curr_idx]
+                
+                # A. VERIFICAR STOP LOSS / HARD EXIT
+                if row['low'] <= stop_loss:
+                    # SL Ejecutado al precio de Stop
+                    loss_pct = ((stop_loss - entry_price) / entry_price) * position_pct
+                    realized_pnl_pct += loss_pct
+                    exit_reasons.append(f"Stop Loss ({state})")
+                    final_exit_date = curr_date
+                    final_exit_price = stop_loss
+                    state = "FULL_EXIT"
+                    break
+                
+                # B. LÓGICA DE ESTADOS
+                
+                # --- ESTADO: ENTRY ---
+                if state == "ENTRY":
+                    # TP1 Check: 1.5R alcanzado (High >= Target)
+                    if row['high'] >= target_1_5r:
+                        # ACCIÓN: Vender 40% (TP1 - Risk Off)
+                        exit_price_tp1 = target_1_5r
+                        gain_pct = ((exit_price_tp1 - entry_price) / entry_price) * 0.40
+                        realized_pnl_pct += gain_pct
+                        position_pct -= 0.40
+                        
+                        # ACCIÓN: Mover Stop a Breakeven
+                        stop_loss = entry_price * 1.005 # Levemente sobre BE para cubrir fees
+                        
+                        state = "PARTIAL_1_TAKEN"
+                        exit_reasons.append("TP1 (1.5R)")
+                
+                # --- ESTADO: PARTIAL_1_TAKEN ---
+                elif state == "PARTIAL_1_TAKEN":
+                    # TP2 Check: Momentum (4 días tras entrada)
+                    if i >= 4:
+                        # ACCIÓN: Vender 30% adicional
+                        exit_price_tp2 = row['close']
+                        gain_pct = ((exit_price_tp2 - entry_price) / entry_price) * 0.30
+                        realized_pnl_pct += gain_pct
+                        position_pct -= 0.30
+                        
+                        state = "PARTIAL_2_TAKEN" # (Runner Active)
+                        exit_reasons.append("TP2 (Time/Mom)")
+
+                # --- ESTADO: PARTIAL_2_TAKEN (RUNNER) ---
+                elif state == "PARTIAL_2_TAKEN":
+                    # Trailing Stop Dinámico: Cruce EMA 8 < EMA 21
+                    # "Condición de salida final: Runner activo con trailing stop dinámico (8/21 cross)"
+                    if row['ema_8'] < row['ema_21']:
+                        # ACCIÓN: Cerrar Runner (restante ~30%)
+                        exit_price_runner = row['close']
+                        gain_pct = ((exit_price_runner - entry_price) / entry_price) * position_pct
+                        realized_pnl_pct += gain_pct
+                        
+                        final_exit_date = curr_date
+                        final_exit_price = row['close']
+                        exit_reasons.append("Runner Exit (EMA 8/21 Cross)")
+                        state = "FULL_EXIT"
+                        break
             
-            # Si llegamos al final sin cruce, cerramos al último precio
-            if not found_cross:
-                exit_price_runner = data.iloc[-1]['close']
-                exit_date_runner = data.index[-1]
-            
-            return_pct_runner = (exit_price_runner - entry_price) / entry_price * 100
-            
-            # ---------------------------------------------------------
-            # RESULTADO COMPUESTO
-            # ---------------------------------------------------------
-            # Retorno total ponderado
-            # 70% del retorno fijo + 30% del retorno runner
-            total_return_pct = (return_pct_fixed * 0.70) + (return_pct_runner * 0.30)
-            
-            # Precio de salida promedio ponderado (para referencia)
-            avg_exit_price = (exit_price_fixed * 0.70) + (exit_price_runner * 0.30)
-            
-            # Usamos la fecha de salida del runner como fecha final del trade
-            final_exit_date = exit_date_runner
-            
-            # Determinar si fue ganancia o pérdida global
-            is_profitable = total_return_pct > 0
-            
-            trade_result = {
-                'entry_date': signal['date'],
+            # --- 4. COMPILACIÓN DE RESULTADOS ---
+            # Si el bucle termina y aún hay posición (ej. runner nunca tocó EMA10 en 60 días)
+            if state != "FULL_EXIT" and position_pct > 0:
+                close_price = data.iloc[curr_idx]['close'] # Último precio iterado
+                realized_pnl_pct += ((close_price - entry_price) / entry_price) * position_pct
+                final_exit_date = data.index[curr_idx]
+                final_exit_price = close_price
+                exit_reasons.append("Max Hold Reached")
+
+            return {
+                'entry_date': entry_date,
                 'exit_date': final_exit_date,
                 'entry_price': entry_price,
-                'exit_price': avg_exit_price,
-                'returns_pct': total_return_pct,
-                'is_profitable': is_profitable,
+                'exit_price': final_exit_price, # Precio ref del último cierre
+                'returns_pct': realized_pnl_pct * 100, # Convertir a porcentaje visual
+                'is_profitable': realized_pnl_pct > 0,
                 'signal_type': signal['type'],
-                'signal_reason': f"{signal['reason']} (70% Fixed / 30% Runner)"
+                'signal_reason': f"{signal['reason']} | {' + '.join(exit_reasons)}"
             }
-            
-            return trade_result
-            
+
         except Exception as e:
-            logger.error(f"Error simulando trade: {str(e)}")
+            logger.error(f"Error advanced simulation: {e}")
             return None
-    
+
     def _calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Calcular indicadores técnicos necesarios
-        """
-        # SMA 20
+        """Indicadores necesarios para la lógica Quant"""
         df['sma_20'] = df['close'].rolling(window=20).mean()
-        
-        # SMA 50
         df['sma_50'] = df['close'].rolling(window=50).mean()
         
-        # EMAs para trailing stop (Runner)
+        # EMAs para el Runner Trailing Stop (8 y 21)
         df['ema_8'] = df['close'].ewm(span=8, adjust=False).mean()
         df['ema_21'] = df['close'].ewm(span=21, adjust=False).mean()
+        
+        # SMA Volumen para confirmación
+        df['sma_volume_20'] = df['volume'].rolling(window=20).mean()
         
         # RSI
         delta = df['close'].diff()
@@ -264,13 +254,10 @@ class TriadOpenBB:
         rs = gain / loss
         df['rsi'] = 100 - (100 / (1 + rs))
         
-        # Bandas de Bollinger
+        # Bandas Bollinger (para Camino 3)
         df['middle_bb'] = df['close'].rolling(window=20).mean()
         bb_std = df['close'].rolling(window=20).std()
         df['upper_bb'] = df['middle_bb'] + (bb_std * 2)
         df['lower_bb'] = df['middle_bb'] - (bb_std * 2)
-        
-        # SMA de volumen
-        df['sma_volume_20'] = df['volume'].rolling(window=20).mean()
         
         return df
