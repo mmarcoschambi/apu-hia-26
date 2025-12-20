@@ -25,7 +25,12 @@ class InteractiveDashboard:
     
     def __init__(self, results_csv: str):
         self.results_df = pd.read_csv(results_csv)
-        self.results_df['date'] = pd.to_datetime(self.results_df['date'])
+        # Fix column name mismatch: Dashboard expects 'date', CSV has 'entry_date'
+        if 'date' not in self.results_df.columns and 'entry_date' in self.results_df.columns:
+            self.results_df['date'] = pd.to_datetime(self.results_df['entry_date'])
+        else:
+            self.results_df['date'] = pd.to_datetime(self.results_df['date'])
+            
         self.data_provider = MarketDataProvider()
         self.indicators = TriadIndicators()
         
