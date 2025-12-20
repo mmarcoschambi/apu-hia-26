@@ -35,6 +35,7 @@ class Position:
     tp1_hit: bool = False
     entry_stage: str = 'FULL' # 'FULL' or 'QUARTER' (Earnings)
     note: str = ""
+    bars_held: int = 0
 
 @dataclass
 class PendingOrder:
@@ -207,20 +208,60 @@ class DailyBacktestEngine:
         # B. Exit Management
         for symbol, pos in list(self.portfolio.positions.items()):
             if symbol not in self.market_data or today not in self.market_data[symbol].index: continue
-            daily_bar = self.market_data[symbol].loc[today]
             
+            daily_bar = self.market_data[symbol].loc[today]
+            current_close = daily_bar['close']
+            
+            # --- 0. Update Time in Trade ---
+            pos.bars_held += 1
+            
+            # --- 1. Hard Stop Loss ---
             if daily_bar['low'] <= pos.stop_loss:
                 exit_price = min(daily_bar['open'], pos.stop_loss)
                 self._close_position(symbol, exit_price, today, "STOP_LOSS")
                 continue
             
+            # --- 2. Momentum Validation Rules (Time-Based) ---
+            # Calculate current PnL %
+            pnl_pct = (current_close - pos.entry_price) / pos.entry_price
+            
+            # Rule A: 3-Day Momentum Confirmation (Kill if Stagnant)
+            if pos.bars_held == 3:
+                # If Breakeven or Red (Buffer 0.25%)
+                if pnl_pct < 0.0025: 
+                    self._close_position(symbol, current_close, today, "MOMENTUM_FAIL (3-Day Rule)")
+                    continue
+
+            # Rule B: 10-Day Expiration (Kill Dead Money)
+            if pos.bars_held >= 10:
+                # If less than 2% gain after 2 weeks
+                if pnl_pct < 0.02:
+                    self._close_position(symbol, current_close, today, "TIME_EXPIRATION (10-Day Rule)")
+                    continue
+
+            # --- 3. Opportunity Cost (Relative Strength Filter) ---
+            # Scenario: Market Ripping (+0.8%), Stock Lagging (Red/Flat)
+            if not self.spy_data.empty and today in self.spy_data.index:
+                spy_day = self.spy_data.loc[today]
+                # Calculate SPY Daily Return (approx based on open for simplicity or close-to-close if we had prev)
+                # Ideally close-to-close, let's look at today's candle body as proxy for 'day strength'
+                spy_daily_perf = (spy_day['close'] - spy_day['open']) / spy_day['open']
+                
+                stock_daily_perf = (current_close - daily_bar['open']) / daily_bar['open']
+                
+                # Condition: SPY > +0.8% AND Stock < +0.1%
+                if spy_daily_perf > 0.008 and stock_daily_perf < 0.001:
+                     self._close_position(symbol, current_close, today, "OPP_COST (Weak RS)")
+                     continue
+
+            # --- 4. Take Profit Management ---
             if not pos.tp1_hit and daily_bar['high'] >= pos.take_profit_1:
                 exit_shares = int(pos.shares * 0.5)
                 if exit_shares > 0:
                     self.portfolio.cash += (exit_shares * pos.take_profit_1)
                     pos.shares -= exit_shares
                     pos.tp1_hit = True
-                    pos.stop_loss = pos.entry_price
+                    pos.stop_loss = pos.entry_price # Move to BE
 
             if pos.tp1_hit:
                  if daily_bar['ema_8'] < daily_bar['ema_21']:
