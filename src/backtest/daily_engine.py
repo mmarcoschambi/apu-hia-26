@@ -56,13 +56,15 @@ class Portfolio:
         return self.cash
 
 class DailyBacktestEngine:
-    def __init__(self, universe: List[str], start_date: str, end_date: str, risk_manager: RiskManager, min_mcap: float = 2e9, max_mcap: float = 20e9):
+    def __init__(self, universe: List[str], start_date: str, end_date: str, risk_manager: RiskManager, 
+                 min_mcap: float = 2e9, max_mcap: float = 20e9, min_avg_volume: int = 500000):
         self.universe = universe
         self.start_date = pd.to_datetime(start_date)
         self.end_date = pd.to_datetime(end_date)
         self.risk_manager = risk_manager
         self.min_mcap = min_mcap
         self.max_mcap = max_mcap
+        self.min_avg_volume = min_avg_volume
         
         self.portfolio = Portfolio(risk_manager.account_equity)
         self.pending_orders: List[PendingOrder] = []
@@ -72,7 +74,8 @@ class DailyBacktestEngine:
         self.triad_logic = TriadOpenBB()
         self.screener = InstitutionalScreener(adr_threshold=4.0)
         
-        print(f"Initializing Engine for {len(universe)} symbols (Mid-Cap Filter: ${min_mcap/1e9:.1f}B - ${max_mcap/1e9:.1f}B)...")
+        print(f"Initializing Engine for {len(universe)} symbols...")
+        print(f"Filters: Mcap ${min_mcap/1e9:.1f}B-${max_mcap/1e9:.1f}B | Min Vol {min_avg_volume/1000:.0f}k")
         self._preload_market_data()
 
     def _preload_market_data(self):
@@ -81,27 +84,33 @@ class DailyBacktestEngine:
         fetch_start = (self.start_date - timedelta(days=200)).strftime('%Y-%m-%d')
         fetch_end = self.end_date.strftime('%Y-%m-%d')
         
-        # 1. Filter Universe by Market Cap (Proxy: Current Mcap)
+        # 1. Filter Universe by Fundamentals (Mcap & Volume proxy)
         filtered_universe = []
-        print("Filtering Universe by Market Cap...")
+        print("Filtering Universe by Fundamentals...")
         for symbol in self.universe:
             try:
-                # Fetch overview
                 overview = obb.equity.fundamental.overview(symbol=symbol, provider='yfinance').to_df()
                 if not overview.empty and 'market_cap' in overview.columns:
                     mcap = overview['market_cap'].iloc[0]
-                    if self.min_mcap <= mcap <= self.max_mcap:
-                        filtered_universe.append(symbol)
-                    else:
-                        pass # print(f"Skipping {symbol}: Mcap ${mcap/1e9:.1f}B outside range")
-                else:
-                    # If no data, keep it to be safe or skip? Let's skip to be strict.
-                    print(f"Skipping {symbol}: No fundamental data")
+                    
+                    # Check Market Cap
+                    if not (self.min_mcap <= mcap <= self.max_mcap):
+                        continue
+                        
+                    # Check Volume (if available in overview, otherwise check history later)
+                    # Note: 'average_volume' is often available
+                    if 'average_volume' in overview.columns:
+                        vol = overview['average_volume'].iloc[0]
+                        if vol < self.min_avg_volume:
+                            # print(f"Skipping {symbol}: Low Volume ({vol/1000:.0f}k)")
+                            continue
+                    
+                    filtered_universe.append(symbol)
             except Exception as e:
-                print(f"Skipping {symbol}: Error fetching fundamentals ({e})")
+                print(f"Skipping {symbol}: Fundamental Error ({e})")
         
         self.universe = filtered_universe
-        print(f"Final Universe Size: {len(self.universe)} symbols")
+        print(f"Universe after Funda Filter: {len(self.universe)} symbols")
 
         # 2. Preload SPY
         try:
@@ -109,15 +118,24 @@ class DailyBacktestEngine:
         except:
             print("Warning: Could not load SPY data.")
 
-        # 3. Preload Market Data
+        # 3. Preload Market Data & Double Check Volume
+        valid_data_count = 0
         for symbol in self.universe:
             try:
                 df = obb.equity.price.historical(symbol=symbol, start_date=fetch_start, end_date=fetch_end, provider='yfinance').to_df()
                 if not df.empty:
+                    # Double Check Volume from actual history (more reliable)
+                    avg_vol_hist = df['volume'].tail(20).mean()
+                    if avg_vol_hist < self.min_avg_volume:
+                        continue
+
                     df = self.triad_logic._calculate_indicators(df)
                     self.market_data[symbol] = df
+                    valid_data_count += 1
             except Exception as e:
                 logger.warning(f"Failed to load data for {symbol}: {e}")
+        
+        print(f"Final Tradable Universe: {valid_data_count} symbols loaded.")
 
     def run(self):
         print("🚀 Starting Daily Simulation...")
