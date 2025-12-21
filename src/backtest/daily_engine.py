@@ -63,7 +63,7 @@ class DailyBacktestEngine:
     def __init__(self, universe: List[str], start_date: str, end_date: str, risk_manager: RiskManager, 
                  min_mcap: float = 2e9, max_mcap: float = 20e9, 
                  min_avg_volume: int = 300000, min_adr: float = 1.5, min_price: float = 5.0,
-                 min_dollar_vol: float = 15000000):
+                 min_dollar_vol: float = 15000000, skip_filters: bool = False):
         self.universe = universe
         self.start_date = pd.to_datetime(start_date)
         self.end_date = pd.to_datetime(end_date)
@@ -71,6 +71,9 @@ class DailyBacktestEngine:
         self.min_mcap = min_mcap
         self.max_mcap = max_mcap
         self.min_avg_volume = min_avg_volume
+        self.min_price = min_price
+        self.min_dollar_vol = min_dollar_vol
+        self.skip_filters = skip_filters
         
         self.portfolio = Portfolio(risk_manager.account_equity)
         self.pending_orders: List[PendingOrder] = []
@@ -89,7 +92,10 @@ class DailyBacktestEngine:
         )
         
         print(f"Initializing Engine for {len(universe)} symbols...")
-        print(f"Filters: Mcap ${min_mcap/1e9:.1f}B-${max_mcap/1e9:.1f}B | Min Vol {min_avg_volume/1000:.0f}k | ADR > {min_adr}%")
+        if self.skip_filters:
+            print("⚠️ Filters DISABLED (Direct Input Mode)")
+        else:
+            print(f"Filters: Mcap ${min_mcap/1e9:.1f}B-${max_mcap/1e9:.1f}B | Min Vol {min_avg_volume/1000:.0f}k | ADR > {min_adr}%")
         self._preload_market_data()
 
     def _preload_market_data(self):
@@ -98,34 +104,35 @@ class DailyBacktestEngine:
         fetch_start = (self.start_date - timedelta(days=200)).strftime('%Y-%m-%d')
         fetch_end = self.end_date.strftime('%Y-%m-%d')
         
-        # 1. Filter Universe by Fundamentals (Mcap & Volume proxy)
-        filtered_universe = []
-        print("Filtering Universe by Fundamentals...")
-        for symbol in self.universe:
-            try:
-                # Use metrics instead of overview for OpenBB v4
-                overview = obb.equity.fundamental.metrics(symbol=symbol, provider='yfinance').to_df()
-                if not overview.empty and 'market_cap' in overview.columns:
-                    mcap = overview['market_cap'].iloc[0]
-                    
-                    # Check Market Cap
-                    if not (self.min_mcap <= mcap <= self.max_mcap):
-                        # print(f"Skipping {symbol}: Mcap ${mcap/1e9:.1f}B not in range")
-                        continue
+        if self.skip_filters:
+            print("Skipping Fundamental Filters...")
+        else:
+            # 1. Filter Universe by Fundamentals (Mcap & Volume proxy)
+            filtered_universe = []
+            print("Filtering Universe by Fundamentals...")
+            for symbol in self.universe:
+                try:
+                    # Use metrics instead of overview for OpenBB v4
+                    overview = obb.equity.fundamental.metrics(symbol=symbol, provider='yfinance').to_df()
+                    if not overview.empty and 'market_cap' in overview.columns:
+                        mcap = overview['market_cap'].iloc[0]
                         
-                    # Check Volume (if available in overview, otherwise check history later)
-                    if 'average_volume' in overview.columns:
-                        vol = overview['average_volume'].iloc[0]
-                        if vol < self.min_avg_volume:
-                            # print(f"Skipping {symbol}: Low Volume ({vol/1000:.0f}k)")
+                        # Check Market Cap
+                        if not (self.min_mcap <= mcap <= self.max_mcap):
                             continue
-                    
-                    filtered_universe.append(symbol)
-            except Exception as e:
-                print(f"Skipping {symbol}: Fundamental Error ({e})")
-        
-        self.universe = filtered_universe
-        print(f"Universe after Funda Filter: {len(self.universe)} symbols")
+                            
+                        # Check Volume (if available in overview, otherwise check history later)
+                        if 'average_volume' in overview.columns:
+                            vol = overview['average_volume'].iloc[0]
+                            if vol < self.min_avg_volume:
+                                continue
+                        
+                        filtered_universe.append(symbol)
+                except Exception as e:
+                    pass
+            
+            self.universe = filtered_universe
+            print(f"Universe after Funda Filter: {len(self.universe)} symbols")
 
         # 2. Preload SPY
         try:
@@ -134,18 +141,36 @@ class DailyBacktestEngine:
         except:
             print("Warning: Could not load SPY data.")
 
-        # 3. Preload Market Data & Double Check Volume
+        # 3. Preload Market Data & Double Check Volume/Price
         valid_data_count = 0
         for symbol in self.universe:
             try:
                 df = obb.equity.price.historical(symbol=symbol, start_date=fetch_start, end_date=fetch_end, provider='yfinance').to_df()
                 if not df.empty:
                     df.index = pd.to_datetime(df.index)
-                    # Double Check Volume from actual history (more reliable)
-                    avg_vol_hist = df['volume'].tail(20).mean()
+                    
+                    # --- Institutional Quality & Liquidity Filters ---
+                    recent_tail = df.tail(20)
+                    
+                    # A. Average Volume
+                    avg_vol_hist = recent_tail['volume'].mean()
                     if avg_vol_hist < self.min_avg_volume:
+                        print(f"Skipping {symbol}: Low Avg Volume ({avg_vol_hist/1000:.0f}k < {self.min_avg_volume/1000:.0f}k)")
+                        continue
+                    
+                    # B. Average Dollar Volume (Price * Volume)
+                    avg_dollar_vol = (recent_tail['close'] * recent_tail['volume']).mean()
+                    if avg_dollar_vol < self.min_dollar_vol:
+                        print(f"Skipping {symbol}: Low Dollar Vol (${avg_dollar_vol/1e6:.1f}M < ${self.min_dollar_vol/1e6:.1f}M)")
+                        continue
+                        
+                    # C. Minimum Price (Current)
+                    current_price = df['close'].iloc[-1]
+                    if current_price < self.min_price:
+                        print(f"Skipping {symbol}: Low Price (${current_price:.2f} < ${self.min_price})")
                         continue
 
+                    print(f"✅ {symbol} Loaded. Price: ${current_price:.2f}, $Vol: ${avg_dollar_vol/1e6:.1f}M")
                     df = self.triad_logic._calculate_indicators(df)
                     self.market_data[symbol] = df
                     valid_data_count += 1
@@ -320,7 +345,29 @@ class DailyBacktestEngine:
 
             self.risk_manager.account_equity = equity
             self.risk_manager.buying_power = self.portfolio.cash
-            sizing = self.risk_manager.calculate_position_size(trigger_price, stop_price)
+            
+            # Obtener ADR y volumen para el risk manager institucional
+            symbol_data = self.market_data.get(cand['symbol'])
+            if symbol_data is not None and not symbol_data.empty:
+                # Calcular últimos 20 días hasta hoy
+                recent_data = symbol_data[symbol_data.index <= pd.to_datetime(today)].tail(20)
+                if len(recent_data) > 1:
+                    adr_pct = ((recent_data['high'] - recent_data['low']) / recent_data['close'] * 100).mean()
+                    avg_volume = int(recent_data['volume'].mean()) if 'volume' in recent_data.columns else 1000000
+                else:
+                    adr_pct = cand.get('adr_pct', 4.0)
+                    avg_volume = 1000000
+            else:
+                adr_pct = cand.get('adr_pct', 4.0)
+                avg_volume = 1000000
+            
+            sizing = self.risk_manager.calculate_position_size(
+                entry_price=trigger_price,
+                stop_price=stop_price,
+                adr_percent=adr_pct,
+                avg_daily_volume=avg_volume,
+                market_regime_factor=1.0
+            )
             
             # --- EARNINGS CHECK ---
             earnings_dates = self.data_provider.get_earnings_dates(cand['symbol'])

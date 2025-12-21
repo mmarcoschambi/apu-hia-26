@@ -34,7 +34,7 @@ def run_backtest_with_progress(start_date, end_date, stop_loss_pct=None,
                                equity=100000, risk_pct=0.5, max_exp_pct=25,
                                min_mcap_b=2.0, max_mcap_b=20.0, 
                                min_vol_k=300, min_adr=1.5, min_price=5.0, min_dollar_m=15,
-                               watchlist_path='config/watchlist.json'):
+                               watchlist_path='config/watchlist.json', skip_filters=False):
     progress_bar = st.progress(0)
     status_text = st.empty()
     log_area = st.empty()
@@ -55,6 +55,9 @@ def run_backtest_with_progress(start_date, end_date, stop_loss_pct=None,
         "--min_price", str(min_price),
         "--min_dollar_vol", str(int(min_dollar_m * 1e6))
     ]
+    
+    if skip_filters:
+        cmd.append("--skip_filters")
     
     if stop_loss_pct is not None and stop_loss_pct > 0:
         cmd.extend(["--stop_loss", str(stop_loss_pct)])
@@ -122,15 +125,25 @@ with st.sidebar.expander("📅 Fechas y Filtros Universo", expanded=True):
     run_start_date = st.date_input("Fecha Inicio", value=datetime(2024, 1, 1))
     run_end_date = st.date_input("Fecha Fin", value=datetime.now())
     
+    st.markdown("---")
+    # Checkbox para forzar calidad institucional
+    use_inst_quality = st.checkbox("🛡️ Modo Calidad Institucional", value=True, help="Fuerza filtros mínimos: Mcap > 2B, Precio > $5, Volumen > 300k, $Vol > 15M")
+    
+    # Logic to set defaults based on checkbox
+    def_mcap = 2.0 if use_inst_quality else 0.5
+    def_price = 5.0 if use_inst_quality else 1.0
+    def_vol = 300 if use_inst_quality else 50
+    def_dvol = 15 if use_inst_quality else 1
+    
     st.markdown("**Filtros de Calidad**")
     c1, c2 = st.columns(2)
-    in_min_mcap = c1.number_input("Min Mcap ($B)", value=2.0, step=0.5)
+    in_min_mcap = c1.number_input("Min Mcap ($B)", value=def_mcap, step=0.5, disabled=use_inst_quality)
     in_max_mcap = c2.number_input("Max Mcap ($B)", value=20.0, step=1.0)
-    in_min_price = st.number_input("Precio Mínimo ($)", value=5.0, step=1.0)
+    in_min_price = st.number_input("Precio Mínimo ($)", value=def_price, step=1.0, disabled=use_inst_quality)
     
     st.markdown("**Filtros de Liquidez y Volatilidad**")
-    in_min_vol = st.number_input("Min Volumen Diario (k)", value=300, step=50)
-    in_min_dollar_m = st.number_input("Min Dollar Volume ($M)", value=15, step=5)
+    in_min_vol = st.number_input("Min Volumen Diario (k)", value=def_vol, step=50, disabled=use_inst_quality)
+    in_min_dollar_m = st.number_input("Min Dollar Volume ($M)", value=def_dvol, step=5, disabled=use_inst_quality)
     in_min_adr = st.number_input("Min ADR 20 (%)", value=1.5, step=0.1, format="%.1f")
     
     # Stop Loss Config
@@ -161,7 +174,7 @@ if st.sidebar.button("🚀 EJECUTAR BACKTEST", use_container_width=True):
         
         if run_backtest_with_progress(run_start_date, run_end_date, sl_val, in_equity, in_risk, in_max_exp, 
                                       in_min_mcap, in_max_mcap, in_min_vol, in_min_adr, in_min_price, in_min_dollar_m,
-                                      watchlist_path=temp_watchlist_path):
+                                      watchlist_path=temp_watchlist_path, skip_filters=True):
             st.rerun()
     else:
         st.sidebar.error("Escribe al menos un símbolo para testear.")
@@ -262,19 +275,29 @@ if not df_raw.empty:
     st.markdown("### 📋 Trade Log (Institutional)")
     df_disp = df_filtered.copy()
     if 'shares' in df_disp.columns:
-        # Calculate days held before formatting dates
+        # Calculate days held
         df_disp['days_held'] = (df_filtered['exit_date'] - df_filtered['entry_date']).dt.days
         
         cols = ['symbol', 'entry_date', 'days_held', 'signal_type', 'shares', 'position_value', 'monetary_risk', 'returns_pct', 'r_multiple', 'Result']
         
-        df_disp['entry_date'] = df_disp['entry_date'].dt.date
-        df_disp['position_value'] = df_disp['position_value'].map('${:,.0f}'.format)
-        df_disp['monetary_risk'] = df_disp['monetary_risk'].map('${:,.0f}'.format)
-        df_disp['Result'] = df_disp['Result'].map('${:,.2f}'.format)
-        df_disp['returns_pct'] = df_disp['returns_pct'].map('{:+.2f}%'.format)
-        df_disp['r_multiple'] = df_disp['r_multiple'].map('{:+.2f}R'.format)
-        
-        st.dataframe(df_disp[cols].sort_values('entry_date', ascending=False), use_container_width=True, hide_index=True)
+        # Usar column_config para formatear sin perder tipos numéricos
+        st.dataframe(
+            df_disp[cols].sort_values('entry_date', ascending=False),
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "symbol": st.column_config.TextColumn("Symbol", width="small"),
+                "entry_date": st.column_config.DateColumn("Entry Date", format="YYYY-MM-DD"),
+                "days_held": st.column_config.NumberColumn("Days", format="%d"),
+                "signal_type": st.column_config.TextColumn("Signal"),
+                "shares": st.column_config.NumberColumn("Shares", format="%.2f"),
+                "position_value": st.column_config.NumberColumn("Position", format="$%,.0f"),
+                "monetary_risk": st.column_config.NumberColumn("Risk", format="$%,.0f"),
+                "returns_pct": st.column_config.NumberColumn("Return %", format="%+.2f%%"),
+                "r_multiple": st.column_config.NumberColumn("R Multiple", format="%+.2f R"),
+                "Result": st.column_config.NumberColumn("P/L", format="$%,.2f")
+            }
+        )
     else:
         st.dataframe(df_filtered)
 
