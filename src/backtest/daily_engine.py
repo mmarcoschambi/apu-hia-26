@@ -21,6 +21,7 @@ from src.utils.risk_manager import RiskManager
 from src.core.triad_openbb import TriadOpenBB
 from src.core.screener import InstitutionalScreener
 from src.data.market_data import MarketDataProvider
+from src.strategies.triad_protocol import TriadStrategy, Camino
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +34,15 @@ class Position:
     stop_loss: float
     take_profit_1: float
     tp1_hit: bool = False
+    tp2_hit: bool = False
+    initial_shares: int = 0
     entry_stage: str = 'FULL' # 'FULL' or 'QUARTER' (Earnings)
     note: str = ""
     bars_held: int = 0
+    signal_type: str = "UNKNOWN"
+    context_data: Dict = None
+    R_inicial: float = 0.0  # Riesgo inicial (entry - stop)
+    adr_valor: float = 0.0  # ADR del símbolo
 
 @dataclass
 class PendingOrder:
@@ -46,6 +53,8 @@ class PendingOrder:
     shares: int
     valid_date: pd.Timestamp
     note: str = "" # Metadata for the order
+    signal_type: str = "UNKNOWN"
+    context_data: Dict = None
 
 class Portfolio:
     def __init__(self, initial_capital: float):
@@ -53,6 +62,7 @@ class Portfolio:
         self.initial_capital = initial_capital
         self.positions: Dict[str, Position] = {}
         self.closed_trades: List[Dict] = []
+        self.partial_exits: List[Dict] = []  # Nuevo: registro de salidas parciales
         self.equity_curve: List[Dict] = []
     
     @property
@@ -63,7 +73,7 @@ class DailyBacktestEngine:
     def __init__(self, universe: List[str], start_date: str, end_date: str, risk_manager: RiskManager, 
                  min_mcap: float = 2e9, max_mcap: float = 20e9, 
                  min_avg_volume: int = 300000, min_adr: float = 1.5, min_price: float = 5.0,
-                 min_dollar_vol: float = 15000000, skip_filters: bool = False):
+                 min_dollar_vol: float = 15000000, min_rvol: float = 1.5, skip_filters: bool = False):
         self.universe = universe
         self.start_date = pd.to_datetime(start_date)
         self.end_date = pd.to_datetime(end_date)
@@ -73,6 +83,7 @@ class DailyBacktestEngine:
         self.min_avg_volume = min_avg_volume
         self.min_price = min_price
         self.min_dollar_vol = min_dollar_vol
+        self.min_rvol = min_rvol
         self.skip_filters = skip_filters
         
         self.portfolio = Portfolio(risk_manager.account_equity)
@@ -81,6 +92,7 @@ class DailyBacktestEngine:
         self.market_data: Dict[str, pd.DataFrame] = {}
         self.spy_data = pd.DataFrame()
         self.triad_logic = TriadOpenBB()
+        self.triad_strategy = TriadStrategy()
         self.data_provider = MarketDataProvider() # New instance for earnings data
         
         # New Institutional Screener with requested thresholds
@@ -88,14 +100,15 @@ class DailyBacktestEngine:
             adr_threshold=min_adr,
             min_price=min_price,
             min_avg_vol=min_avg_volume,
-            min_dollar_vol=min_dollar_vol
+            min_dollar_vol=min_dollar_vol,
+            min_rvol=min_rvol
         )
         
         print(f"Initializing Engine for {len(universe)} symbols...")
         if self.skip_filters:
             print("⚠️ Filters DISABLED (Direct Input Mode)")
         else:
-            print(f"Filters: Mcap ${min_mcap/1e9:.1f}B-${max_mcap/1e9:.1f}B | Min Vol {min_avg_volume/1000:.0f}k | ADR > {min_adr}%")
+            print(f"Filters: Mcap ${min_mcap/1e9:.1f}B-${max_mcap/1e9:.1f}B | Min Vol {min_avg_volume/1000:.0f}k | ADR > {min_adr}% | RVOL > {min_rvol}x")
         self._preload_market_data()
 
     def _preload_market_data(self):
@@ -201,7 +214,16 @@ class DailyBacktestEngine:
             # 4. Prepare Orders for Tomorrow
             self._prepare_orders(today, candidates, self.portfolio.equity)
         
-        return pd.DataFrame(self.portfolio.closed_trades)
+        # Retornar tanto closed_trades como partial_exits
+        trades_df = pd.DataFrame(self.portfolio.closed_trades)
+        
+        # Guardar partial_exits por separado para análisis
+        if self.portfolio.partial_exits:
+            partial_df = pd.DataFrame(self.portfolio.partial_exits)
+            partial_df.to_csv('partial_exits.csv', index=False)
+            print(f"📊 Salidas parciales guardadas: {len(partial_df)} registros en partial_exits.csv")
+        
+        return trades_df
 
     def _manage_positions(self, today):
         # A. Execution of Pending Orders
@@ -218,14 +240,30 @@ class DailyBacktestEngine:
                 cost = execution_price * order.shares
                 if self.portfolio.cash >= cost:
                     self.portfolio.cash -= cost
+                    
+                    # Calcular R (riesgo inicial) y ADR
+                    R_inicial = execution_price - order.stop_loss_initial
+                    
+                    # Calcular ADR del símbolo (últimos 20 días)
+                    df_hist = self.market_data[symbol].loc[:today]
+                    if len(df_hist) >= 20:
+                        adr_valor = (df_hist['high'] - df_hist['low']).tail(20).mean()
+                    else:
+                        adr_valor = R_inicial * 2  # Default fallback
+                    
                     new_pos = Position(
                         symbol=symbol,
                         entry_date=today,
                         entry_price=execution_price,
                         shares=order.shares,
+                        initial_shares=order.shares,
                         stop_loss=order.stop_loss_initial,
-                        take_profit_1=execution_price + (1.5 * (execution_price - order.stop_loss_initial)),
-                        note=order.note
+                        take_profit_1=execution_price + (1.0 * R_inicial),  # TP1 en +1R (para activar entre +1R y +1.5R)
+                        R_inicial=R_inicial,
+                        adr_valor=adr_valor,
+                        note=order.note,
+                        signal_type=order.signal_type,
+                        context_data=order.context_data
                     )
                     self.portfolio.positions[symbol] = new_pos
         self.pending_orders = []
@@ -239,6 +277,21 @@ class DailyBacktestEngine:
             
             # --- 0. Update Time in Trade ---
             pos.bars_held += 1
+            
+            # --- 0.1 EARNINGS DEFENSE RULE ---
+            # "Nunca mantenemos una posición completa a menos que tengamos un 'colchón' de beneficios de al menos un 10-15%."
+            earnings_dates = self.data_provider.get_earnings_dates(symbol)
+            if not earnings_dates.empty:
+                future_dates = earnings_dates[earnings_dates >= pd.to_datetime(today)]
+                if not future_dates.empty:
+                    next_earning = future_dates[0]
+                    days_to_earning = (next_earning - pd.to_datetime(today)).days
+                    
+                    if days_to_earning <= 1: # Imminent Report (Today/Tomorrow)
+                        current_pnl_pct = (current_close - pos.entry_price) / pos.entry_price
+                        if current_pnl_pct < 0.10: # Less than 10% Cushion
+                             self._close_position(symbol, current_close, today, f"EARNINGS_EXIT (<10% Cushion)")
+                             continue
             
             # --- 1. Hard Stop Loss ---
             if daily_bar['low'] <= pos.stop_loss:
@@ -279,42 +332,356 @@ class DailyBacktestEngine:
                      self._close_position(symbol, current_close, today, "OPP_COST (Weak RS)")
                      continue
 
-            # --- 4. Take Profit Management ---
-            if not pos.tp1_hit and daily_bar['high'] >= pos.take_profit_1:
-                exit_shares = int(pos.shares * 0.5)
-                if exit_shares > 0:
-                    self.portfolio.cash += (exit_shares * pos.take_profit_1)
-                    pos.shares -= exit_shares
-                    pos.tp1_hit = True
-                    pos.stop_loss = pos.entry_price # Move to BE
-
-            if pos.tp1_hit:
-                 if daily_bar['ema_8'] < daily_bar['ema_21']:
-                     self._close_position(symbol, daily_bar['close'], today, "EMA_CROSS")
+            # --- 4. SISTEMA DE SALIDAS ESCALONADAS (3 FASES) ---
+            
+            # FASE 1: CONVERSIÓN A RISK-FREE (+1R o +1 ADR)
+            # Trigger: Precio toca +1R O +1 ADR (lo que ocurra primero)
+            if not pos.tp1_hit:
+                precio_1R = pos.entry_price + (1.0 * pos.R_inicial)
+                precio_1ADR = pos.entry_price + pos.adr_valor
+                
+                # Trigger: Alcanzó +1R O +1 ADR
+                fase1_triggered = (daily_bar['high'] >= precio_1R) or (daily_bar['high'] >= precio_1ADR)
+                
+                if fase1_triggered:
+                    # Vender 30-50% de la posición (usando 40% como balance)
+                    exit_shares = int(pos.initial_shares * 0.40)
+                    if exit_shares > 0 and pos.shares >= exit_shares:
+                        # Precio de ejecución: el que se alcanzó primero
+                        exit_price = max(precio_1R, precio_1ADR, daily_bar['open'])
+                        pnl_partial = (exit_price - pos.entry_price) * exit_shares
+                        
+                        self.portfolio.cash += (exit_shares * exit_price)
+                        pos.shares -= exit_shares
+                        pos.tp1_hit = True
+                        pos.stop_loss = pos.entry_price  # CRÍTICO: Move to BREAKEVEN
+                        
+                        # Determinar qué trigger se activó
+                        trigger_reason = "+1R" if daily_bar['high'] >= precio_1R else "+1ADR"
+                        
+                        # Registrar salida parcial
+                        self._register_partial_exit(
+                            symbol=symbol,
+                            phase="FASE_1",
+                            exit_date=today,
+                            entry_price=pos.entry_price,
+                            exit_price=exit_price,
+                            shares_sold=exit_shares,
+                            shares_remaining=pos.shares,
+                            pnl=pnl_partial,
+                            reason=f"TP1: {trigger_reason} Risk-Free Conversion",
+                            position=pos
+                        )
+                        
+                        logger.info(f"✅ FASE 1: {symbol} - 40% vendido en {trigger_reason} (${exit_price:.2f}), Stop → BE (${pos.entry_price:.2f}), PnL: ${pnl_partial:.2f}")
+            
+            # FASE 2: TOMA DE BENEFICIOS EN RESISTENCIA/ADR (+2.5R o ADR completo)
+            # Condición: TP1 ya ejecutado Y precio alcanza resistencia técnica o ADR
+            # IMPORTANTE: Usar 'if' no 'elif' para permitir ejecución el mismo día que FASE_1
+            if pos.tp1_hit and not pos.tp2_hit:
+                # Opción A: Alcanzó +2R (resistencia técnica intermedia)
+                precio_2R = pos.entry_price + (2.0 * pos.R_inicial)
+                
+                # Opción B: Ganancia desde entrada >= 1.5 * ADR (expansión significativa)
+                ganancia_desde_entrada = current_close - pos.entry_price
+                expansion_adr = ganancia_desde_entrada >= (pos.adr_valor * 1.5)
+                
+                # Opción C: Alto del día alcanzó 2.5R (extensión agresiva)
+                precio_2_5R = pos.entry_price + (2.5 * pos.R_inicial)
+                
+                trigger_fase2 = (daily_bar['high'] >= precio_2R) or expansion_adr or (daily_bar['high'] >= precio_2_5R)
+                
+                # DEBUG: Log cuando tp1_hit pero no trigger fase2
+                if not trigger_fase2:
+                    logger.debug(f"🔍 {symbol} {today.date()}: TP1 activo pero NO FASE_2 | High:{daily_bar['high']:.2f} vs 2R:{precio_2R:.2f} | Gain:{ganancia_desde_entrada:.2f} vs 1.5ADR:{pos.adr_valor*1.5:.2f}")
+                
+                if trigger_fase2:
+                    # Vender 30% de la posición ORIGINAL (no de lo que queda)
+                    exit_shares = int(pos.initial_shares * 0.30)
+                    if exit_shares > 0 and pos.shares >= exit_shares:
+                        # Precio de ejecución: usar el nivel alcanzado, no el close
+                        if daily_bar['high'] >= precio_2_5R:
+                            exit_price = precio_2_5R
+                            trigger_reason = "+2.5R"
+                        elif daily_bar['high'] >= precio_2R:
+                            exit_price = precio_2R
+                            trigger_reason = "+2R"
+                        else:
+                            # Expansion ADR: usar close porque es basado en close
+                            exit_price = current_close
+                            trigger_reason = "+1.5ADR"
+                        
+                        pnl_partial = (exit_price - pos.entry_price) * exit_shares
+                        
+                        self.portfolio.cash += (exit_shares * exit_price)
+                        pos.shares -= exit_shares
+                        pos.tp2_hit = True
+                        
+                        self._register_partial_exit(
+                            symbol=symbol,
+                            phase="FASE_2",
+                            exit_date=today,
+                            entry_price=pos.entry_price,
+                            exit_price=exit_price,
+                            shares_sold=exit_shares,
+                            shares_remaining=pos.shares,
+                            pnl=pnl_partial,
+                            reason=f"TP2: {trigger_reason} Resistance",
+                            position=pos
+                        )
+                        
+                        logger.info(f"✅ FASE 2: {symbol} - 30% vendido en {trigger_reason} (${exit_price:.2f}), PnL: ${pnl_partial:.2f}")
+            
+            # FASE 3: RUNNER CON TRAILING STOP (EMA 8/21 o MA 20)
+            # Solo se activa si TP1 ya fue ejecutado (posición risk-free)
+            # IMPORTANTE: Stop está en Breakeven, nunca pierde después de Fase 1
+            if pos.tp1_hit and pos.shares > 0:
+                # Validar que stop loss nunca esté por debajo de breakeven
+                if pos.stop_loss < pos.entry_price:
+                    pos.stop_loss = pos.entry_price  # Protección: forzar BE
+                
+                # Opción: EMA 8 cruza por debajo de EMA 21 (cambio de tendencia)
+                if 'ema_8' in daily_bar.index and 'ema_21' in daily_bar.index:
+                    if daily_bar['ema_8'] < daily_bar['ema_21']:
+                        self._close_position(symbol, daily_bar['close'], today, "FASE_3_EMA_CROSS")
+                        continue
+                
+                # Fallback: Si no hay EMAs, usar MA 20
+                if 'sma_20' in daily_bar.index:
+                    if current_close < daily_bar['sma_20']:
+                        self._close_position(symbol, daily_bar['close'], today, "FASE_3_MA20_BREACH")
+                        continue
 
     def _close_position(self, symbol, price, date, reason):
         pos = self.portfolio.positions.pop(symbol)
-        pnl = (price - pos.entry_price) * pos.shares
+        
+        # PnL del cierre final (solo shares restantes)
+        final_exit_pnl = (price - pos.entry_price) * pos.shares
         self.portfolio.cash += (pos.shares * price)
         
         final_reason = reason
         if pos.note:
             final_reason = f"{reason} | {pos.note}"
+        
+        shares_at_close = pos.shares
+        initial_shares = pos.initial_shares if pos.initial_shares > 0 else pos.shares
+        
+        # **CALCULAR PNL TOTAL**: Suma de salidas parciales + cierre final
+        total_pnl = final_exit_pnl
+        
+        # Buscar salidas parciales de este símbolo y sumar su PnL
+        for partial_exit in self.portfolio.partial_exits:
+            if partial_exit['symbol'] == symbol and partial_exit['entry_date'] == pos.entry_date:
+                total_pnl += partial_exit['pnl']
+        
+        # **REGISTRAR FASE_3 en partial_exits SOLO si hubo salidas parciales**
+        # FASE_3 = Runner exit después de convertir a risk-free
+        # Si el trade nunca llegó a +1R, NO es FASE_3 (es cierre normal)
+        if pos.tp1_hit:  # Solo si ejecutó al menos FASE_1
+            self._register_partial_exit(
+                symbol=symbol,
+                phase='FASE_3',
+                exit_date=date,
+                entry_price=pos.entry_price,
+                exit_price=price,
+                shares_sold=shares_at_close,
+                shares_remaining=0,  # Ya no quedan shares
+                pnl=final_exit_pnl,
+                reason=reason,
+                position=pos
+            )
+        
+        # Return % se calcula desde precio de entrada
+        total_return_pct = ((price - pos.entry_price) / pos.entry_price) * 100
             
-        self.portfolio.closed_trades.append({
-            'symbol': symbol, 'entry_date': pos.entry_date, 'exit_date': date,
-            'entry_price': pos.entry_price, 'exit_price': price, 'shares': pos.shares,
-            'pnl': pnl, 'return_pct': ((price - pos.entry_price) / pos.entry_price) * 100,
-            'reason': final_reason
-        })
+        trade_record = {
+            'symbol': symbol, 
+            'entry_date': pos.entry_date, 
+            'exit_date': date,
+            'entry_price': pos.entry_price, 
+            'exit_price': price, 
+            'shares': shares_at_close,  # Shares al cerrar (después de parciales)
+            'initial_shares': initial_shares,  # Shares originales
+            'pnl': total_pnl,  # PnL TOTAL (parciales + cierre final) 
+            'return_pct': total_return_pct,
+            'reason': final_reason,
+            'signal_type': pos.signal_type,
+            'tp1_executed': pos.tp1_hit,
+            'tp2_executed': pos.tp2_hit,
+            'final_shares_pct': (shares_at_close / initial_shares * 100) if initial_shares > 0 else 100,
+            
+            # Pre-Trade Checklist (configuración al entrar)
+            'R_inicial': pos.R_inicial,
+            'adr_valor': pos.adr_valor,
+            'entry_stage': pos.entry_stage,
+            'initial_stop_loss': pos.entry_price - pos.R_inicial,  # Stop inicial calculado
+        }
+        
+        if pos.context_data:
+            trade_record['context_adr'] = pos.context_data.get('adr_pct', 0)
+            trade_record['context_vol'] = pos.context_data.get('avg_volume', 0)
+            trade_record['context_trend'] = pos.context_data.get('trend_sma', '')
+            trade_record['context_price'] = pos.context_data.get('current_price', 0)
+            trade_record['context_sma20'] = pos.context_data.get('sma_20', 0)
+            trade_record['context_rvol'] = pos.context_data.get('rvol', 0)  # Usar RVOL guardado del screener
+        else:
+            trade_record['context_rvol'] = 0.0
+
+        self.portfolio.closed_trades.append(trade_record)
+    
+    def _register_partial_exit(self, symbol: str, phase: str, exit_date, entry_price: float,
+                               exit_price: float, shares_sold: int, shares_remaining: int,
+                               pnl: float, reason: str, position: Position):
+        """
+        Registra una salida parcial como evento separado para tracking detallado
+        """
+        partial_exit_record = {
+            'symbol': symbol,
+            'phase': phase,  # FASE_1, FASE_2
+            'exit_date': exit_date,
+            'entry_date': position.entry_date,
+            'entry_price': entry_price,
+            'exit_price': exit_price,
+            'shares_sold': shares_sold,
+            'shares_remaining': shares_remaining,
+            'pct_sold': (shares_sold / position.initial_shares * 100) if position.initial_shares > 0 else 0,
+            'pnl': pnl,
+            'return_pct': ((exit_price - entry_price) / entry_price) * 100,
+            'reason': reason,
+            'signal_type': position.signal_type,
+            
+            # Pre-trade context (configuración al momento de entrada)
+            'pre_trade_context': {
+                'R_inicial': position.R_inicial,
+                'adr_valor': position.adr_valor,
+                'initial_shares': position.initial_shares,
+                'initial_stop': position.stop_loss if not position.tp1_hit else entry_price,
+                'entry_stage': position.entry_stage,
+            }
+        }
+        
+        # Copiar contexto adicional si existe
+        if position.context_data:
+            partial_exit_record['pre_trade_context'].update({
+                'context_adr': position.context_data.get('adr_pct', 0),
+                'context_vol': position.context_data.get('avg_volume', 0),
+                'context_trend': position.context_data.get('trend_sma', ''),
+                'context_rvol': position.context_data.get('rvol', 0)
+            })
+        
+        self.portfolio.partial_exits.append(partial_exit_record)
 
     def _run_daily_screener(self, today) -> List[Dict]:
-        candidates = []
+        raw_candidates = []
+        # 1. Run Basic Institutional Screener
         for symbol, df in self.market_data.items():
             res = self.screener.scan(symbol, df, self.spy_data, today)
             if res: 
-                candidates.append(res)
-        return candidates
+                # Add historical context for Triad Strategy
+                res['hist_data'] = df.loc[:today]
+                raw_candidates.append(res)
+        
+        # 2. Refine with Triad Strategy Logic
+        refined_candidates = []
+        for cand in raw_candidates:
+            df = cand['hist_data']
+            if df.empty: continue
+            
+            # Prepare Data Objects for Strategy
+            current_bar = df.iloc[-1]
+            base_high = cand['entry_trigger'] # Screener gives Base High
+            
+            # Calculate AVWAP from ATH (Simplified for speed)
+            # Find ATH
+            ath = df['high'].max()
+            ath_idx = df['high'].idxmax()
+            df_ath = df.loc[ath_idx:]
+            
+            avwap_price = current_bar['close'] # Default fallback
+            if not df_ath.empty and 'volume' in df_ath.columns and df_ath['volume'].sum() > 0:
+                 avwap_price = (df_ath['close'] * df_ath['volume']).sum() / df_ath['volume'].sum()
+            
+            # Prepare Gap Data
+            gap_data = {'detected': False, 'gap_pct': 0}
+            if len(df) >= 2:
+                prev_close = df.iloc[-2]['close']
+                curr_open = current_bar['open']
+                if curr_open < prev_close:
+                    gap_data = {'detected': True, 'gap_pct': (curr_open - prev_close)/prev_close}
+            
+            vwap_data = {'calculated': False, 'current_vwap': 0, 'session_low': current_bar['low'], 'crossed_up': False}
+            # Note: Without Intraday Data, we can't truly check VWAP Reclaim intra-bar here.
+            # We assume if Screener found it, it's a candidate, and check logic.
+            # However, TriadStrategy needs 'vwap_data'.
+            # For backtest simulation WITHOUT intraday, we can check if Close > Open (Green Day after Gap)
+            if gap_data['detected'] and current_bar['close'] > current_bar['open']:
+                # Simulate a reclaim scenario for backtesting purposes if intraday is missing
+                vwap_data = {
+                    'calculated': True,
+                    'current_vwap': (current_bar['high'] + current_bar['low'] + current_bar['close'])/3,
+                    'session_low': current_bar['low'],
+                    'crossed_up': True,
+                    'session_open': current_bar['open'],
+                    'above_vwap': True
+                }
+            
+            base_data = {
+                'detected': True,
+                'base_high': base_high,
+                'base_low': cand['stop_loss'],
+                'current_price': current_bar['close']
+            }
+            
+            avwap_data = {
+                'calculated': True,
+                'current_avwap': avwap_price,
+                'distance_to_avwap_pct': (avwap_price - current_bar['close']) / current_bar['close']
+            }
+            
+            # Calculate Trend: Compare current price vs SMA20 AND SMA20 vs SMA50 (mismo criterio que screener)
+            sma_20 = df['close'].rolling(window=20).mean().iloc[-1] if len(df) >= 20 else current_bar['close']
+            sma_50 = df['close'].rolling(window=50).mean().iloc[-1] if len(df) >= 50 else current_bar['close']
+            
+            # Uptrend estricto: Price > SMA20 AND SMA20 > SMA50
+            is_uptrend = (current_bar['close'] > sma_20) and (sma_20 > sma_50)
+            trend_status = 'Uptrend' if is_uptrend else 'Weak'
+            
+            # Calculate avg_volume_20 for context (not for RVOL, that comes from screener)
+            prior_bars = df[df.index < today]
+            if len(prior_bars) >= 20:
+                avg_volume_20 = prior_bars['volume'].tail(20).mean()
+            else:
+                avg_volume_20 = current_bar['volume']
+            
+            market_context = {
+                'trend_sma': trend_status,
+                'sma_20': sma_20,
+                'current_price': current_bar['close'],
+                'rvol': cand.get('rvol', 0),  # Ya viene del screener
+                'avg_volume_20': avg_volume_20
+            }
+
+            # Run Strategy
+            signal = self.triad_strategy.analyze(
+                base_data=base_data,
+                avwap_data=avwap_data,
+                vwap_data=vwap_data,
+                gap_data=gap_data,
+                market_context=market_context,
+                adr=cand.get('adr_pct', 2.0)/100 * current_bar['close']
+            )
+            
+            if signal.action == 'BUY_STOP':
+                # Use Strategy Signals
+                cand['signal_type'] = signal.camino.name
+                cand['entry_trigger'] = signal.entry_price
+                cand['stop_loss'] = signal.stop_loss
+                cand['reason'] = signal.reasoning
+                refined_candidates.append(cand)
+            elif signal.action == 'WAIT' and signal.camino == Camino.SAFETY_CHECK:
+                 pass
+                 
+        return refined_candidates
 
     def _prepare_orders(self, today, candidates, equity):
         for cand in candidates:
@@ -386,15 +753,42 @@ class DailyBacktestEngine:
                         earnings_note = f"EARNINGS_RISK ({days_to_earning}d away) - Size reduced 75% ({original_shares}->{sizing['shares']})"
                         # If size becomes 0, we effectively "NO ENTER"
             
+            # --- HIGH VOLATILITY CHECK (ADR) ---
+            # Rule: If ADR > 5-6%, reduce position to 1/3 or 1/4 of normal
+            adr_note = ""
+            if adr_pct > 5.0:  # ADR threshold
+                if adr_pct > 6.0:
+                    # Very high volatility: reduce to 1/4
+                    reduction_factor = 0.25
+                    reduction_desc = "1/4 (75% reduction)"
+                else:
+                    # High volatility: reduce to 1/3
+                    reduction_factor = 0.33
+                    reduction_desc = "1/3 (67% reduction)"
+                
+                original_shares = sizing['shares']
+                sizing['shares'] = int(original_shares * reduction_factor)
+                adr_note = f"HIGH_VOLATILITY (ADR {adr_pct:.1f}%) - Size reduced to {reduction_desc} ({original_shares}->{sizing['shares']})"
+            
             # Combine notes
-            final_note = " | ".join(filter(None, [risk_note, earnings_note]))
+            final_note = " | ".join(filter(None, [risk_note, earnings_note, adr_note, cand.get('reason', '')]))
+            
+            # Capture Context Data for Analysis
+            context = {
+                'adr_pct': adr_pct,
+                'avg_volume': avg_volume,
+                'rvol': cand.get('rvol', 0),  # Tomar RVOL del screener
+                'trend_sma': 'Uptrend' if trigger_price > symbol_data['sma_20'].iloc[-1] else 'Weak' if symbol_data is not None else 'Unknown'
+            }
 
             if sizing['shares'] > 0:
                 self.pending_orders.append(PendingOrder(
                     symbol=cand['symbol'], order_type='BUY_STOP', limit_price=trigger_price,
                     stop_loss_initial=stop_price, shares=sizing['shares'],
                     valid_date=today + pd.tseries.offsets.BusinessDay(1),
-                    note=final_note
+                    note=final_note,
+                    signal_type=cand.get('signal_type', 'UNKNOWN'),
+                    context_data=context
                 ))
 
     def _update_equity(self, today):

@@ -2,18 +2,23 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import os
 import subprocess
 import time
 import sys
 from pathlib import Path
+import calendar
+import plotly.figure_factory as ff
+import random
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from src.backtest.dashboard import InteractiveDashboard
+from src.backtest.visualizer import BacktestVisualizer
+from src.data.openbb_data import OpenBBData
 from config.universe_presets import LIQUID_MID_CAPS
 
 # Función para cargar/guardar watchlist
@@ -34,7 +39,7 @@ def run_backtest_with_progress(start_date, end_date, stop_loss_pct=None,
                                equity=100000, risk_pct=0.5, max_exp_pct=25,
                                min_mcap_b=2.0, max_mcap_b=20.0, 
                                min_vol_k=300, min_adr=1.5, min_price=5.0, min_dollar_m=15,
-                               watchlist_path='config/watchlist.json', skip_filters=False):
+                               min_rvol=1.5, watchlist_path='config/watchlist.json', skip_filters=False):
     progress_bar = st.progress(0)
     status_text = st.empty()
     log_area = st.empty()
@@ -53,7 +58,8 @@ def run_backtest_with_progress(start_date, end_date, stop_loss_pct=None,
         "--min_volume", str(int(min_vol_k * 1000)),
         "--min_adr", str(min_adr),
         "--min_price", str(min_price),
-        "--min_dollar_vol", str(int(min_dollar_m * 1e6))
+        "--min_dollar_vol", str(int(min_dollar_m * 1e6)),
+        "--min_rvol", str(min_rvol)
     ]
     
     if skip_filters:
@@ -122,8 +128,35 @@ st.title("📈 Momentum V2 - Institutional Risk Dashboard")
 st.sidebar.header("⚙️ Configuración del Sistema")
 
 with st.sidebar.expander("📅 Fechas y Filtros Universo", expanded=True):
-    run_start_date = st.date_input("Fecha Inicio", value=datetime(2024, 1, 1))
-    run_end_date = st.date_input("Fecha Fin", value=datetime.now())
+    # Initialize session state for dates if not exists
+    if 'start_date' not in st.session_state:
+        st.session_state.start_date = datetime(2024, 1, 1)
+    if 'end_date' not in st.session_state:
+        st.session_state.end_date = datetime.now()
+
+    # Random Date Button
+    if st.button("🎲 Rango Aleatorio (Backtest)", use_container_width=True):
+        # Random start between 2020 and 6 months ago
+        end_year_limit = datetime.now().year
+        start_year = random.randint(2020, max(2020, end_year_limit - 1))
+        start_month = random.randint(1, 12)
+        start_day = random.randint(1, 28)
+        random_start = datetime(start_year, start_month, start_day)
+        
+        # Duration: 3 to 8 months
+        duration_days = random.randint(90, 240)
+        random_end = min(random_start + timedelta(days=duration_days), datetime.now())
+        
+        st.session_state.start_date = random_start
+        st.session_state.end_date = random_end
+        st.rerun()
+
+    run_start_date = st.date_input("Fecha Inicio", value=st.session_state.start_date, max_value=datetime.now())
+    run_end_date = st.date_input("Fecha Fin", value=st.session_state.end_date, max_value=datetime.now())
+    
+    # Sync session state
+    st.session_state.start_date = run_start_date
+    st.session_state.end_date = run_end_date
     
     st.markdown("---")
     # Checkbox para forzar calidad institucional
@@ -145,6 +178,7 @@ with st.sidebar.expander("📅 Fechas y Filtros Universo", expanded=True):
     in_min_vol = st.number_input("Min Volumen Diario (k)", value=def_vol, step=50, disabled=use_inst_quality)
     in_min_dollar_m = st.number_input("Min Dollar Volume ($M)", value=def_dvol, step=5, disabled=use_inst_quality)
     in_min_adr = st.number_input("Min ADR 20 (%)", value=1.5, step=0.1, format="%.1f")
+    in_min_rvol = st.number_input("Min RVOL (x)", value=1.5, step=0.1, format="%.1f", help="Relative Volume: Volumen actual vs promedio 20 días")
     
     # Stop Loss Config
     use_custom_stop = st.checkbox("Forzar Stop Loss Fijo (%)")
@@ -174,7 +208,7 @@ if st.sidebar.button("🚀 EJECUTAR BACKTEST", use_container_width=True):
         
         if run_backtest_with_progress(run_start_date, run_end_date, sl_val, in_equity, in_risk, in_max_exp, 
                                       in_min_mcap, in_max_mcap, in_min_vol, in_min_adr, in_min_price, in_min_dollar_m,
-                                      watchlist_path=temp_watchlist_path, skip_filters=True):
+                                      in_min_rvol, watchlist_path=temp_watchlist_path, skip_filters=True):
             st.rerun()
     else:
         st.sidebar.error("Escribe al menos un símbolo para testear.")
@@ -185,16 +219,33 @@ st.sidebar.markdown("---")
 @st.cache_data
 def load_data():
     try:
+        main_df = pd.DataFrame()
+        partial_df = pd.DataFrame()
+        
         if os.path.exists('backtest_results.csv'):
-            df = pd.read_csv('backtest_results.csv')
-            df['entry_date'] = pd.to_datetime(df['entry_date'])
-            df['exit_date'] = pd.to_datetime(df['exit_date'])
-            return df
-        return pd.DataFrame()
+            main_df = pd.read_csv('backtest_results.csv')
+            main_df['entry_date'] = pd.to_datetime(main_df['entry_date'])
+            main_df['exit_date'] = pd.to_datetime(main_df['exit_date'])
+            main_df['trade_type'] = 'FULL_EXIT'  # Marcar como cierre completo
+        
+        # Cargar salidas parciales si existen
+        if os.path.exists('partial_exits.csv'):
+            partial_df = pd.read_csv('partial_exits.csv')
+            partial_df['entry_date'] = pd.to_datetime(partial_df['entry_date'])
+            partial_df['exit_date'] = pd.to_datetime(partial_df['exit_date'])
+            partial_df['trade_type'] = partial_df['phase']  # FASE_1 o FASE_2
+            
+            # Renombrar columnas para compatibilidad con main_df
+            partial_df = partial_df.rename(columns={
+                'shares_sold': 'shares',
+                'pct_sold': 'exit_pct'
+            })
+        
+        return main_df, partial_df
     except Exception as e:
-        return pd.DataFrame()
+        return pd.DataFrame(), pd.DataFrame()
 
-df_raw = load_data()
+df_raw, df_partial_raw = load_data()
 
 # --- Formulario de Filtros (Solo visualización) ---
 with st.sidebar.form("filtros_form"):
@@ -211,181 +262,1133 @@ with st.sidebar.form("filtros_form"):
 
 # Lógica Principal
 if not df_raw.empty:
-    df_filtered = df_raw.copy()
-    if f_symbol != 'Todos': df_filtered = df_filtered[df_filtered['symbol'] == f_symbol]
-    if f_signal != 'Todos': df_filtered = df_filtered[df_filtered['signal_type'] == f_signal]
+    # --- TABS PRINCIPALES ---
+    tab_dashboard, tab_calendar = st.tabs(["📊 Dashboard General", "📅 PnL Calendar"])
 
-    df_filtered = df_filtered.sort_values('exit_date')
-    
-    if 'shares' in df_filtered.columns:
-        df_filtered['Result'] = (df_filtered['exit_price'] - df_filtered['entry_price']) * df_filtered['shares']
-        # Ajuste para PnL parciales
-        df_filtered['Result'] = df_filtered['position_value'] * (df_filtered['returns_pct'] / 100)
+    # ==========================================
+    # TAB 1: DASHBOARD GENERAL (Original)
+    # ==========================================
+    with tab_dashboard:
+        df_filtered = df_raw.copy()
+        if f_symbol != 'Todos': df_filtered = df_filtered[df_filtered['symbol'] == f_symbol]
+        if f_signal != 'Todos': df_filtered = df_filtered[df_filtered['signal_type'] == f_signal]
+
+        df_filtered = df_filtered.sort_values('exit_date')
         
+        # Usar PnL total (incluye salidas parciales) si existe, sino calcularlo
+        if 'pnl' in df_filtered.columns:
+            df_filtered['Result'] = df_filtered['pnl']
+        elif 'shares' in df_filtered.columns:
+            df_filtered['Result'] = (df_filtered['exit_price'] - df_filtered['entry_price']) * df_filtered['shares']
+        else:
+            df_filtered['Result'] = 0.0
+        
+        # Calcular R-multiple
         if 'monetary_risk' in df_filtered.columns:
             df_filtered['r_multiple'] = df_filtered['Result'] / df_filtered['monetary_risk']
         else:
             df_filtered['r_multiple'] = 0.0
-    else:
-        df_filtered['Result'] = 0.0
-        df_filtered['r_multiple'] = 0.0
 
-    df_filtered['Running_Capital'] = in_equity + df_filtered['Result'].cumsum()
+        df_filtered['Running_Capital'] = in_equity + df_filtered['Result'].cumsum()
 
-    # Métricas
-    total_trades = len(df_filtered)
-    winners = df_filtered[df_filtered['Result'] > 0]
-    losers = df_filtered[df_filtered['Result'] <= 0]
-    win_rate = (len(winners) / total_trades * 100) if total_trades > 0 else 0
-    closed_pnl = df_filtered['Result'].sum()
-    
-    # UI
-    st.markdown("### 📊 Performance Institucional")
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Equity Final", f"${(in_equity + closed_pnl):,.2f}")
-    c2.metric("Total PnL", f"${closed_pnl:,.2f}", delta=f"{(closed_pnl/in_equity)*100:.1f}%")
-    c3.metric("Win Rate", f"{win_rate:.1f}%")
-    c4.metric("Trades", total_trades)
-
-    c5, c6, c7, c8 = st.columns(4)
-    avg_risk = df_filtered['monetary_risk'].mean() if 'monetary_risk' in df_filtered.columns else 0
-    c5.metric("Avg Risk per Trade", f"${avg_risk:,.0f}")
-    c6.metric("Total R", f"{df_filtered['r_multiple'].sum():.1f}R")
-    c7.metric("Expectancy", f"{df_filtered['r_multiple'].mean() if total_trades > 0 else 0:.2f}R")
-    
-    gross_loss = abs(losers['Result'].sum())
-    profit_factor = (winners['Result'].sum() / gross_loss) if gross_loss > 0 else 0.0
-    c8.metric("Profit Factor", f"{profit_factor:.2f}")
-
-    st.markdown("---")
-    
-    # Charts
-    col1, col2 = st.columns(2)
-    with col1:
-        fig = px.line(df_filtered, x='exit_date', y='Running_Capital', title='Equity Curve (Real Risk Adjusted)')
-        st.plotly_chart(fig, use_container_width=True)
-    with col2:
-        if 'shares' in df_filtered.columns:
-            fig = px.scatter(df_filtered, x='entry_date', y='position_value', 
-                             color='is_profitable', size='shares',
-                             title='Position Sizing Impact (Size = Shares, Y = Capital Alloc)')
-            st.plotly_chart(fig, use_container_width=True)
-
-    #Tabla
-    st.markdown("### 📋 Trade Log (Institutional)")
-    df_disp = df_filtered.copy()
-    if 'shares' in df_disp.columns:
-        # Calculate days held
-        df_disp['days_held'] = (df_filtered['exit_date'] - df_filtered['entry_date']).dt.days
+        # --- CUSTOM METRICS SECTION ---
+        st.markdown("### 📊 Performance Overview")
         
-        cols = ['symbol', 'entry_date', 'days_held', 'signal_type', 'shares', 'position_value', 'monetary_risk', 'returns_pct', 'r_multiple', 'Result']
+        # Calculate advanced metrics
+        total_trades = len(df_filtered)
+        winners = df_filtered[df_filtered['Result'] > 0]
+        losers = df_filtered[df_filtered['Result'] <= 0]
         
-        # Usar column_config para formatear sin perder tipos numéricos
-        st.dataframe(
-            df_disp[cols].sort_values('entry_date', ascending=False),
-            use_container_width=True,
-            hide_index=True,
-            column_config={
+        closed_pnl = df_filtered['Result'].sum()
+        win_rate = (len(winners) / total_trades * 100) if total_trades > 0 else 0.0
+        
+        # R-Multiples
+        if 'r_multiple' in df_filtered.columns:
+            total_r = df_filtered['r_multiple'].sum()
+            avg_r = df_filtered['r_multiple'].mean() if total_trades > 0 else 0
+        else:
+            total_r = 0.0
+            avg_r = 0.0
+            
+        # Profit Factor
+        gross_win = winners['Result'].sum()
+        gross_loss = abs(losers['Result'].sum())
+        profit_factor = (gross_win / gross_loss) if gross_loss > 0 else 0.0
+        
+        # Avg Risk/Reward
+        avg_win_amt = winners['Result'].mean() if not winners.empty else 0
+        avg_loss_amt = abs(losers['Result'].mean()) if not losers.empty else 0
+        rr_ratio = (avg_win_amt / avg_loss_amt) if avg_loss_amt > 0 else 0.0
+        
+        general_perf_pct = (closed_pnl / in_equity) * 100
+
+        # Row 1
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            st.metric("General Performance (%)", f"{general_perf_pct:+.2f}%")
+            st.metric("Available Capital", f"${(in_equity + closed_pnl):,.2f}")
+        with c2:
+            st.metric("Cash - Invested Capital", f"${(in_equity + closed_pnl):,.2f}") 
+            st.metric("Open Trades PnL", "$0.00") 
+        with c3:
+            st.metric("Closed Trades PnL", f"${closed_pnl:,.2f}", delta=f"{general_perf_pct:.1f}%")
+            st.metric("Win Rate (%)", f"{win_rate:.1f}%")
+        with c4:
+            st.metric("Total Trades", total_trades)
+            st.metric("Winners / Losers", f"{len(winners)} / {len(losers)}")
+
+        st.markdown("---")
+        
+        # Row 2 (Risk Metrics)
+        d1, d2, d3, d4 = st.columns(4)
+        d1.metric("Risk/Reward Ratio", f"{rr_ratio:.2f}")
+        d2.metric("Total R", f"{total_r:.2f}R")
+        d3.metric("Profit Factor", f"{profit_factor:.2f}")
+        d4.metric("Expectancy (R)", f"{avg_r:.2f}R")
+
+        st.markdown("---")
+        
+        # Charts
+        col1, col2 = st.columns(2)
+        with col1:
+            fig = px.line(df_filtered, x='exit_date', y='Running_Capital', title='Equity Curve (Real Risk Adjusted)')
+            st.plotly_chart(fig, use_container_width=True, key="equity_curve_chart")
+        with col2:
+            if 'shares' in df_filtered.columns:
+                fig = px.scatter(df_filtered, x='entry_date', y='position_value', 
+                                 color='is_profitable', size='shares',
+                                 title='Position Sizing Impact (Size = Shares, Y = Capital Alloc)')
+                st.plotly_chart(fig, use_container_width=True, key="position_sizing_chart")
+
+        #Tabla
+        st.markdown("### 📋 Trade Log (Institutional)")
+        df_disp = df_filtered.copy()
+        if 'shares' in df_disp.columns:
+            df_disp['days_held'] = (df_filtered['exit_date'] - df_filtered['entry_date']).dt.days
+            
+            cols = ['symbol', 'entry_date', 'days_held', 'signal_type', 'shares', 'position_value', 'monetary_risk', 'returns_pct', 'r_multiple', 'Result']
+            
+            # Add context columns if available
+            if 'context_rvol' in df_disp.columns:
+                cols.insert(4, 'context_rvol')  # Add after signal_type
+            if 'context_trend' in df_disp.columns:
+                cols.insert(5, 'context_trend')  # Add after rvol
+            
+            column_config = {
                 "symbol": st.column_config.TextColumn("Symbol", width="small"),
                 "entry_date": st.column_config.DateColumn("Entry Date", format="YYYY-MM-DD"),
                 "days_held": st.column_config.NumberColumn("Days", format="%d"),
                 "signal_type": st.column_config.TextColumn("Signal"),
+                "context_rvol": st.column_config.NumberColumn("RVOL", format="%.2fx"),
+                "context_trend": st.column_config.TextColumn("Trend", width="small"),
                 "shares": st.column_config.NumberColumn("Shares", format="%.2f"),
-                "position_value": st.column_config.NumberColumn("Position", format="$%,.0f"),
-                "monetary_risk": st.column_config.NumberColumn("Risk", format="$%,.0f"),
-                "returns_pct": st.column_config.NumberColumn("Return %", format="%+.2f%%"),
+                "position_value": st.column_config.NumberColumn("Position", format="$%.0f"),
+                "monetary_risk": st.column_config.NumberColumn("Risk", format="$%.0f"),
+                "returns_pct": st.column_config.NumberColumn("Return %", format="%+.2f%%",), 
                 "r_multiple": st.column_config.NumberColumn("R Multiple", format="%+.2f R"),
-                "Result": st.column_config.NumberColumn("P/L", format="$%,.2f")
+                "Result": st.column_config.NumberColumn("P/L", format="$%.2f")
             }
-        )
-    else:
-        st.dataframe(df_filtered)
-
-    # --- 🔬 TRADE ANALYSIS SECTION ---
-    st.markdown("---")
-    st.header("🔬 Análisis Detallado de Operaciones")
-    
-    if not df_filtered.empty:
-        # Create a selection list
-        df_analysis = df_filtered.sort_values('entry_date', ascending=False)
-        trade_options = []
-        trade_map = {}
+            
+            st.dataframe(
+                df_disp[cols].sort_values('entry_date', ascending=False),
+                use_container_width=True,
+                hide_index=True,
+                column_config=column_config
+            )
+        else:
+            st.dataframe(df_filtered)
         
-        for idx, row in df_analysis.iterrows():
-            sym = row['symbol']
-            date = row['entry_date'].strftime('%Y-%m-%d')
-            pnl = row['Result'] if 'Result' in row else 0
-            label = f"{date} | {sym} | PnL: ${pnl:,.2f}"
-            trade_options.append(label)
-            trade_map[label] = row
+        # --- 📊 ALL EXITS TABLE (Incluye Fase 1, 2 y 3) ---
+        if not df_partial_raw.empty:
+            st.markdown("---")
+            st.markdown("### 📤 Detalle de Salidas Escalonadas (Todas las Fases)")
+            st.caption("📊 Registro completo de cada salida: Fase 1 (Risk-Free), Fase 2 (Resistance), Fase 3 (Runner)")
             
-        selected_trade_label = st.selectbox("Selecciona una operación para analizar:", trade_options)
-        
-        if selected_trade_label:
-            trade_data = trade_map[selected_trade_label]
+            # Filtrar partial exits según los filtros aplicados
+            df_partial_filtered = df_partial_raw.copy()
+            if f_symbol != 'Todos':
+                df_partial_filtered = df_partial_filtered[df_partial_filtered['symbol'] == f_symbol]
+            if f_signal != 'Todos':
+                df_partial_filtered = df_partial_filtered[df_partial_filtered['signal_type'] == f_signal]
             
-            # Init Dashboard Logic (Lazy load)
-            if 'dashboard_engine' not in st.session_state:
-                 # Ensure results file exists or use df directly if we could modify dashboard.py, 
-                 # but for now we rely on the CSV being there from the run
-                 if os.path.exists('backtest_results.csv'):
-                     st.session_state['dashboard_engine'] = InteractiveDashboard('backtest_results.csv')
-                 else:
-                     st.warning("⚠️ No se encontró backtest_results.csv")
-            
-            if 'dashboard_engine' in st.session_state:
-                db = st.session_state['dashboard_engine']
+            if not df_partial_filtered.empty:
+                df_partial_disp = df_partial_filtered.copy()
+                df_partial_disp['days_to_exit'] = (df_partial_disp['exit_date'] - df_partial_disp['entry_date']).dt.days
                 
-                # Prepare signal data for chart
+                partial_cols = ['symbol', 'phase', 'exit_date', 'days_to_exit', 'exit_price', 
+                               'shares', 'exit_pct', 'pnl', 'return_pct', 'reason']
+                
+                partial_config = {
+                    "symbol": st.column_config.TextColumn("Symbol", width="small"),
+                    "phase": st.column_config.TextColumn("Fase", width="small"),
+                    "exit_date": st.column_config.DateColumn("Exit Date", format="YYYY-MM-DD"),
+                    "days_to_exit": st.column_config.NumberColumn("Days", format="%d"),
+                    "exit_price": st.column_config.NumberColumn("Exit Price", format="$%.2f"),
+                    "shares": st.column_config.NumberColumn("Shares Sold", format="%d"),
+                    "exit_pct": st.column_config.NumberColumn("% Sold", format="%.0f%%"),
+                    "pnl": st.column_config.NumberColumn("P&L", format="$%.2f"),
+                    "return_pct": st.column_config.NumberColumn("Return %", format="%+.2f%%"),
+                    "reason": st.column_config.TextColumn("Reason"),
+                }
+                
+                st.dataframe(
+                    df_partial_disp[partial_cols].sort_values('exit_date', ascending=False),
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config=partial_config
+                )
+                
+                # Estadísticas rápidas de partial exits
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    total_partial_pnl = df_partial_disp['pnl'].sum()
+                    st.metric("Total P&L Parciales", f"${total_partial_pnl:,.2f}")
+                with col2:
+                    fase1_count = len(df_partial_disp[df_partial_disp['phase'] == 'FASE_1'])
+                    st.metric("Fase 1 Ejecutadas", fase1_count)
+                with col3:
+                    fase2_count = len(df_partial_disp[df_partial_disp['phase'] == 'FASE_2'])
+                    st.metric("Fase 2 Ejecutadas", fase2_count)
+                with col4:
+                    avg_days = df_partial_disp['days_to_exit'].mean()
+                    st.metric("Días Promedio", f"{avg_days:.1f}")
+            else:
+                st.info("No hay salidas parciales que coincidan con los filtros aplicados.")
+
+        # --- 🔬 TRADE ANALYSIS SECTION ---
+        st.markdown("---")
+        st.header("🔬 Análisis Detallado de Operaciones")
+        
+        if not df_filtered.empty:
+            df_analysis = df_filtered.sort_values('entry_date', ascending=False)
+            trade_options = []
+            trade_map = {}
+            
+            for idx, row in df_analysis.iterrows():
+                sym = row['symbol']
+                date = row['entry_date'].strftime('%Y-%m-%d')
+                pnl = row['Result'] if 'Result' in row else 0
+                sig_type = row.get('signal_type', 'N/A').replace('Camino.', '')
+                label = f"{date} | {sym} | {sig_type} | PnL: ${pnl:,.2f}"
+                trade_options.append(label)
+                trade_map[label] = row
+                
+            selected_trade_label = st.selectbox("Selecciona una operación para analizar:", trade_options)
+            
+            if selected_trade_label:
+                trade_data = trade_map[selected_trade_label]
+                
+                # --- VISUALIZATION TABS ---
+                tab_static, tab_interactive = st.tabs(["📸 Gráfico Detallado (Masterclass)", "🖱️ Gráfico Interactivo"])
+                
                 signal_data = {
                     'camino': trade_data.get('signal_type', 'N/A'),
                     'entry_price': trade_data['entry_price'],
-                    'stop_loss': trade_data.get('entry_price', 0) * 0.95, # Fallback if not saved
+                    'stop_loss': trade_data.get('entry_price', 0) * 0.95,
                     'exit_price': trade_data['exit_price'],
                     'outcome': 'WIN' if trade_data.get('is_profitable') else 'LOSS',
                     'return_pct': trade_data['returns_pct'],
-                    'hold_days': (trade_data['exit_date'] - trade_data['entry_date']).days
+                    'hold_days': (trade_data['exit_date'] - trade_data['entry_date']).days,
+                    'monetary_risk': trade_data.get('monetary_risk', 0)
                 }
-                
-                # Generate Chart
-                try:
-                    with st.spinner(f"Generando gráfico para {trade_data['symbol']}..."):
-                        fig = db.create_trade_chart(
-                            trade_data['symbol'], 
-                            trade_data['entry_date'].strftime('%Y-%m-%d'), 
-                            signal_data
+
+                with tab_static:
+                    st.info("💡 Este gráfico muestra el ciclo de vida del trade con temporalidad ajustable.")
+                    
+                    # Timeframe selector
+                    col_tf1, col_tf2 = st.columns([1, 3])
+                    with col_tf1:
+                        timeframe = st.selectbox(
+                            "⏱️ Temporalidad",
+                            options=["5m", "15m", "30m", "1h", "1d"],
+                            index=0,  # Default to 5m
+                            key=f"tf_{trade_data['symbol']}_{trade_data['entry_date'].strftime('%Y%m%d')}"
                         )
-                        st.plotly_chart(fig, use_container_width=True)
-                except Exception as e:
-                    st.error(f"Error generando gráfico: {e}")
+                    
+                    with col_tf2:
+                        entry_date_pd = pd.to_datetime(trade_data['entry_date']).tz_localize(None)
+                        days_ago = (datetime.now() - entry_date_pd).days
+                        
+                        if days_ago > 59:
+                            st.warning(f"⚠️ Trade de hace {days_ago} días. Datos intraday no disponibles en APIs gratuitas (límite ~60 días). Solo disponible: 1d")
+                        else:
+                            st.caption(f"📊 Mostrando velas de **{timeframe}** para análisis intraday del ciclo de vida del trade.")
+                    
+                    entry_date_str = trade_data['entry_date'].strftime('%Y-%m-%d')
+                    
+                    # Initialize dashboard engine
+                    if 'dashboard_engine' not in st.session_state:
+                        if os.path.exists('backtest_results.csv'):
+                            st.session_state['dashboard_engine'] = InteractiveDashboard('backtest_results.csv')
+                    
+                    if 'dashboard_engine' in st.session_state:
+                        db = st.session_state['dashboard_engine']
+                        
+                        with st.spinner(f"Cargando gráfico {timeframe}..."):
+                            try:
+                                # Use intraday chart with selected timeframe
+                                if timeframe == "1d":
+                                    # Use daily chart
+                                    fig = db.create_trade_chart(trade_data['symbol'], entry_date_str, signal_data)
+                                else:
+                                    # Use intraday chart
+                                    entry_date_pd = pd.to_datetime(entry_date_str).tz_localize(None)
+                                    days_diff = (datetime.now() - entry_date_pd).days
+                                    
+                                    intraday_df = None
+                                    
+                                    # Try YFinance first (if <60 days)
+                                    if days_diff <= 59:
+                                        try:
+                                            intraday_df = db.data_provider.get_intraday_data(trade_data['symbol'], interval=timeframe, days=days_diff+5)
+                                        except:
+                                            pass
+                                    
+                                    # If YFinance failed or trade too old, try OpenBB
+                                    if intraday_df is None or intraday_df.empty:
+                                        st.info(f"📡 Intentando obtener datos históricos intraday vía OpenBB...")
+                                        try:
+                                            openbb_provider = OpenBBData()
+                                            # Calculate date range for OpenBB
+                                            start_date = (entry_date_pd - timedelta(days=1)).strftime('%Y-%m-%d')
+                                            end_date = (entry_date_pd + timedelta(days=1)).strftime('%Y-%m-%d')
+                                            
+                                            intraday_df = openbb_provider.get_intraday_data(
+                                                symbol=trade_data['symbol'],
+                                                start_date=start_date,
+                                                end_date=end_date,
+                                                interval=timeframe
+                                            )
+                                            
+                                            if intraday_df is not None and not intraday_df.empty:
+                                                st.success("✅ Datos históricos obtenidos exitosamente vía OpenBB!")
+                                        except Exception as openbb_error:
+                                            st.warning(f"⚠️ OpenBB tampoco pudo obtener datos: {openbb_error}")
+                                            intraday_df = None
+                                    
+                                    if intraday_df is not None and not intraday_df.empty:
+                                        # Filter for entry date
+                                        target_day_str = entry_date_pd.strftime('%Y-%m-%d')
+                                        day_data = intraday_df[intraday_df.index.strftime('%Y-%m-%d') == target_day_str].copy()
+                                        
+                                        if not day_data.empty:
+                                            # Normalize column names (OpenBB uses lowercase, YFinance uses Title case)
+                                            day_data.columns = [col.capitalize() if col.lower() in ['open', 'high', 'low', 'close', 'volume'] else col for col in day_data.columns]
+                                            
+                                            # Calculate VWAP
+                                            day_data['TP'] = (day_data['High'] + day_data['Low'] + day_data['Close']) / 3
+                                            day_data['CumVol'] = day_data['Volume'].cumsum()
+                                            day_data['CumVolPrice'] = (day_data['TP'] * day_data['Volume']).cumsum()
+                                            day_data['VWAP'] = day_data['CumVolPrice'] / day_data['CumVol']
+                                            
+                                            # Create figure
+                                            fig = go.Figure()
+                                            
+                                            # Candlesticks
+                                            fig.add_trace(go.Candlestick(
+                                                x=day_data.index,
+                                                open=day_data['Open'],
+                                                high=day_data['High'],
+                                                low=day_data['Low'],
+                                                close=day_data['Close'],
+                                                name=f'Price {timeframe}'
+                                            ))
+                                            
+                                            # VWAP Line
+                                            fig.add_trace(go.Scatter(
+                                                x=day_data.index,
+                                                y=day_data['VWAP'],
+                                                mode='lines',
+                                                line=dict(color='orange', width=2),
+                                                name='Intraday VWAP'
+                                            ))
+                                            
+                                            # Entry Level
+                                            fig.add_hline(y=signal_data['entry_price'], line_dash="dash", 
+                                                        line_color="cyan", annotation_text="Entry")
+                                            
+                                            # Exit Level
+                                            fig.add_hline(y=signal_data['exit_price'], line_dash="dash", 
+                                                        line_color="green" if signal_data['outcome'] == 'WIN' else "red", 
+                                                        annotation_text="Exit")
+                                            
+                                            # Stop Loss
+                                            fig.add_hline(y=signal_data['stop_loss'], line_dash="dot", 
+                                                        line_color="red", annotation_text="Stop")
+                                            
+                                            fig.update_layout(
+                                                title=f"<b>🔍 Ciclo de Vida del Trade - {trade_data['symbol']}</b><br><sup>{timeframe} | {target_day_str} | {signal_data['camino']}</sup>",
+                                                yaxis_title="Price ($)",
+                                                xaxis_title="Time",
+                                                template='plotly_white',
+                                                height=600,
+                                                xaxis_rangeslider_visible=False
+                                            )
+                                        else:
+                                            st.warning(f"No hay datos {timeframe} para la fecha específica {entry_date_str}.")
+                                            fig = None
+                                    else:
+                                        st.warning(f"⚠️ No se pudieron obtener datos {timeframe}. Mostrando gráfico diario.")
+                                        fig = db.create_trade_chart(trade_data['symbol'], entry_date_str, signal_data)
+                                
+                                if fig:
+                                    st.plotly_chart(fig, use_container_width=True, key=f"intraday_chart_{trade_data['symbol']}_{entry_date_str}_{timeframe}")
+                                else:
+                                    st.info("Mostrando gráfico estático como respaldo...")
+                                    viz = BacktestVisualizer()
+                                    viz.visualize_trade(trade_data['symbol'], entry_date_str, signal_data)
+                                    chart_filename = f"{trade_data['symbol']}_{entry_date_str}_{signal_data['camino']}.png"
+                                    chart_path = Path("backtest_charts") / chart_filename
+                                    if chart_path.exists():
+                                        st.image(str(chart_path), caption=f"Análisis Técnico: {trade_data['symbol']}", use_container_width=True)
+                                        
+                            except Exception as e:
+                                st.error(f"Error cargando gráfico: {e}")
+                                st.info("Mostrando gráfico estático como respaldo...")
+                                viz = BacktestVisualizer()
+                                viz.visualize_trade(trade_data['symbol'], entry_date_str, signal_data)
+                                chart_filename = f"{trade_data['symbol']}_{entry_date_str}_{signal_data['camino']}.png"
+                                chart_path = Path("backtest_charts") / chart_filename
+                                if chart_path.exists():
+                                    st.image(str(chart_path), caption=f"Análisis Técnico: {trade_data['symbol']}", use_container_width=True)
+                    else:
+                        st.warning("Dashboard engine no disponible. Ejecuta un backtest primero.")
+
+                with tab_interactive:
+                    if 'dashboard_engine' not in st.session_state:
+                         if os.path.exists('backtest_results.csv'):
+                             st.session_state['dashboard_engine'] = InteractiveDashboard('backtest_results.csv')
+                    
+                    if 'dashboard_engine' in st.session_state:
+                        db = st.session_state['dashboard_engine']
+                        try:
+                            fig = db.create_trade_chart(trade_data['symbol'], entry_date_str, signal_data)
+                            st.plotly_chart(fig, use_container_width=True, key=f"interactive_chart_{trade_data['symbol']}_{entry_date_str}")
+                        except Exception as e:
+                            st.error(f"Error generando gráfico interactivo: {e}")
+
+                # --- ANATOMÍA DEL TRADE ---
+                st.markdown("### 🏫 Anatomía del Trade (Explicación Paso a Paso)")
+                st.info("Esta sección desglosa la operación para que puedas mecanizar el proceso mental.")
                 
-                # Trade Story/Log
-                c1, c2 = st.columns([1, 2])
-                with c1:
-                    st.subheader("📊 Métricas Clave")
+                sig_type = trade_data.get('signal_type', '')
+                is_reclaim = 'VWAP_RECLAIM' in sig_type
+                is_blue_sky = 'BLUE_SKY' in sig_type
+                
+                # Card 1: El Contexto - FULL WIDTH
+                st.markdown("#### 1️⃣ Selección (El 'Qué')")
+                
+                # Extract Context Data
+                vol_raw = trade_data.get('context_vol', 0)
+                vol_str = f"{vol_raw/1e6:.1f}M" if vol_raw > 1e6 else f"{vol_raw/1e3:.0f}k" if vol_raw > 0 else "N/A"
+                
+                trend_str = trade_data.get('context_trend', 'N/A')
+                adr_val = trade_data.get('context_adr', 0)
+                rvol_val = trade_data.get('context_rvol', 0)
+                
+                # Tooltips educativos
+                rvol_status = "✅ ACEPTADO" if rvol_val >= 1.0 else "❌ RECHAZADO"
+                rvol_explanation = ""
+                if is_blue_sky:
+                    rvol_explanation = f"Blue Sky requiere RVOL ≥ 1.5x. Valor: {rvol_val:.2f}x {'✅' if rvol_val >= 1.5 else '❌'}"
+                else:
+                    rvol_explanation = f"VWAP Reclaim requiere RVOL ≥ 1.0x. Valor: {rvol_val:.2f}x {'✅' if rvol_val >= 1.0 else '❌'}"
+                
+                trend_explanation = {
+                    'Uptrend': "✅ Precio por encima de SMA20 - Momentum alcista",
+                    'Weak': "⚠️ Precio cerca de SMA20 - Gestión conservadora requerida",
+                    'Downtrend': "❌ Precio debajo de SMA20 - Tendencia bajista"
+                }.get(trend_str, "Tendencia no definida")
+                
+                adr_explanation = f"Volatilidad diaria promedio: {adr_val:.1f}% - {'Alta' if adr_val > 5 else 'Media' if adr_val > 3 else 'Baja'} oportunidad de movimiento"
+                
+                filter_col1, filter_col2, filter_col3, filter_col4 = st.columns(4)
+                
+                with filter_col1:
+                    st.metric("📊 Volumen", vol_str)
+                    with st.expander("ℹ️ ¿Por qué importa?"):
+                        st.write("**Liquidez institucional.** Necesitamos volumen suficiente para entradas/salidas sin slippage.")
+                
+                with filter_col2:
+                    st.metric("🔥 RVOL", f"{rvol_val:.2f}x", delta=rvol_status)
+                    with st.expander("ℹ️ ¿Por qué importa?"):
+                        st.write(f"**{rvol_explanation}**")
+                        st.write("RVOL = Volumen actual vs promedio 20 días. Confirma interés institucional.")
+                
+                with filter_col3:
+                    st.metric("📈 Tendencia", trend_str)
+                    with st.expander("ℹ️ ¿Por qué importa?"):
+                        st.write(f"**{trend_explanation}**")
+                        if trend_str == "Weak":
+                            st.write("En tendencia débil operamos con **salidas escalonadas** (FASE 1→2→3) para protección de capital.")
+                        else:
+                            st.write("Preferimos Uptrend para maximizar probabilidad. El sistema permite Weak con gestión risk-free.")
+                
+                with filter_col4:
+                    st.metric("⚡ ADR", f"{adr_val:.1f}%")
+                    with st.expander("ℹ️ ¿Por qué importa?"):
+                        st.write(f"**{adr_explanation}**")
+                        st.write("Average Daily Range: Potencial de movimiento. Mínimo 3% para justificar el riesgo.")
+                
+                st.markdown("---")
+                
+                # Card 2, 3, 4 - En fila
+                step2, step3, step4 = st.columns(3)
+                
+                with step2:
+                    st.markdown("#### 2️⃣ El Patrón (El 'Por qué')")
+                    if is_reclaim:
+                        st.markdown("🛡️ **VWAP Reclaim:**")
+                        st.write("Trampa de Osos. Las instituciones defendieron el precio en apertura débil.")
+                    elif is_blue_sky:
+                        st.markdown("🚀 **Blue Sky Breakout:**")
+                        st.write("Rompimiento de máximos sin resistencia. Momentum puro.")
+                    else:
+                        st.markdown("Patrón del sistema.")
+
+                with step3:
+                    st.markdown("#### 3️⃣ La Ejecución (El 'Cómo')")
+                    if is_reclaim:
+                        st.markdown(f"""
+                        🔫 **Trigger:** Cruce VWAP  
+                        📍 **Entrada:** ${trade_data['entry_price']:.2f}  
+                        🛑 **Stop:** Min Día
+                        """)
+                    else:
+                        st.markdown(f"""
+                        🔫 **Trigger:** Base Break  
+                        📍 **Entrada:** ${trade_data['entry_price']:.2f}  
+                        🛑 **Stop:** Estructura
+                        """)
+
+                with step4:
+                    st.markdown("#### 4️⃣ El Resultado (La Nota)")
+                    r_mul = trade_data.get('r_multiple', 0)
+                    result_color = "green" if r_mul > 0 else "red"
                     st.markdown(f"""
-                    - **Entrada:** ${trade_data['entry_price']:.2f}
-                    - **Salida:** ${trade_data['exit_price']:.2f}
-                    - **Retorno:** {trade_data['returns_pct']:+.2f}%
-                    - **Días en Posición:** {(trade_data['exit_date'] - trade_data['entry_date']).days} días
+                    🏆 **Retorno:** :{result_color}[{trade_data['returns_pct']:+.2f}%]  
+                    ⚖️ **Ratio R:** :{result_color}[{r_mul:+.2f}R]
                     """)
                 
-                with c2:
-                    st.subheader("📝 Lógica de Ejecución")
-                    reason = trade_data.get('signal_reason', 'N/A')
-                    # Parse reason for better display if it has pipes
-                    if "|" in str(reason):
-                        parts = str(reason).split("|")
-                        main_reason = parts[0].strip()
-                        events = parts[1].strip() if len(parts) > 1 else ""
+                st.markdown("---")
+                
+                # --- PARTIAL EXITS BREAKDOWN (NUEVO) ---
+                # Buscar salidas parciales para este trade específico
+                if not df_partial_raw.empty:
+                    symbol = trade_data['symbol']
+                    entry_date = trade_data['entry_date']
+                    
+                    partial_for_trade = df_partial_raw[
+                        (df_partial_raw['symbol'] == symbol) & 
+                        (df_partial_raw['entry_date'] == entry_date)
+                    ].sort_values('exit_date')
+                    
+                    if not partial_for_trade.empty:
+                        # Verificar si realmente hubo salidas parciales (FASE_1 o FASE_2)
+                        has_partial_exits = any(partial_for_trade['phase'].isin(['FASE_1', 'FASE_2']))
                         
-                        st.info(f"**Señal:** {main_reason}")
-                        if events:
-                            st.write("**Eventos:**")
-                            for evt in events.split('+'):
-                                st.code(evt.strip())
+                        if has_partial_exits:
+                            st.markdown("### 📤 Progresión de Salidas Parciales")
+                            st.success("✅ Este trade ejecutó salidas escalonadas (Fase 1, Fase 2, Fase 3) - Sistema de Risk-Free")
+                        else:
+                            st.markdown("### 📤 Cierre de Posición")
+                            st.info("ℹ️ Este trade se cerró sin ejecutar salidas parciales (no alcanzó +1R para risk-free)")
+                        
+                        # Timeline visual - FULL WIDTH
+                        st.markdown("#### 📊 Timeline del Trade")
+                        
+                        # Calcular número de columnas: Entrada + Parciales (FASE_1, FASE_2) + Final
+                        partial_phases_count = len(partial_for_trade[partial_for_trade['phase'].isin(['FASE_1', 'FASE_2'])])
+                        num_phases = 1 + partial_phases_count + 1  # Entrada + Parciales + Final
+                        timeline_cols = st.columns(num_phases)
+                        
+                        # Entrada
+                        with timeline_cols[0]:
+                            st.markdown("##### 🟢 ENTRADA")
+                            entry_metrics = {
+                                "📅 Fecha": trade_data['entry_date'].strftime('%Y-%m-%d'),
+                                "💵 Precio": f"${trade_data['entry_price']:.2f}",
+                                "📊 Shares": trade_data.get('initial_shares', 'N/A'),
+                                "🎯 R inicial": f"${trade_data.get('R_inicial', 0):.2f}",
+                                "⚡ ADR": f"${trade_data.get('adr_valor', 0):.2f}"
+                            }
+                            for key, val in entry_metrics.items():
+                                st.write(f"**{key}:** {val}")
+                        
+                        # Cada salida parcial (FASE_1, FASE_2)
+                        partial_phases = partial_for_trade[partial_for_trade['phase'].isin(['FASE_1', 'FASE_2'])]
+                        for i, (idx, partial_row) in enumerate(partial_phases.iterrows()):
+                            with timeline_cols[i + 1]:
+                                phase_emoji = "🔵" if partial_row['phase'] == 'FASE_1' else "🟡"
+                                days_held = (partial_row['exit_date'] - partial_row['entry_date']).days
+                                
+                                # Explicación de la fase
+                                phase_explanation = ""
+                                if partial_row['phase'] == 'FASE_1':
+                                    phase_explanation = "⚡ Risk-Free Conversion\n🛡️ Stop → Breakeven"
+                                elif partial_row['phase'] == 'FASE_2':
+                                    phase_explanation = "💎 Resistance Exit\n📊 Booking Profits"
+                                
+                                st.markdown(f"##### {phase_emoji} {partial_row['phase']}")
+                                st.write(phase_explanation)
+                                st.write(f"**📅 Fecha:** {partial_row['exit_date'].strftime('%Y-%m-%d')}")
+                                st.write(f"**⏱️ Días:** {days_held}")
+                                st.write(f"**💵 Precio:** ${partial_row['exit_price']:.2f}")
+                                st.write(f"**📉 Vendido:** {int(partial_row['shares'])} sh ({partial_row.get('exit_pct', 0):.0f}%)")
+                                pnl_color = "green" if partial_row['pnl'] > 0 else "red"
+                                st.markdown(f"**💰 P&L:** :{pnl_color}[${partial_row['pnl']:.2f}]")
+                                st.markdown(f"**📈 Return:** :{pnl_color}[{partial_row['return_pct']:+.2f}%]")
+                        
+                        # Salida Final (Runner o Cierre Normal)
+                        with timeline_cols[-1]:
+                            if has_partial_exits:
+                                st.markdown("##### 🏁 FASE 3 (Runner)")
+                                st.write("🎯 Trailing Stop")
+                            else:
+                                st.markdown("##### 🔴 CIERRE")
+                                # Mostrar razón del cierre
+                                reason = trade_data.get('reason', 'N/A').split('|')[0].strip()
+                                st.write(f"⚠️ {reason}")
+                            
+                            st.write(f"**📅 Fecha:** {trade_data['exit_date'].strftime('%Y-%m-%d')}")
+                            # Calcular días totales desde entrada hasta salida final
+                            total_days_held = (trade_data['exit_date'] - trade_data['entry_date']).days
+                            st.write(f"**⏱️ Total Días:** {total_days_held}")
+                            st.write(f"**💵 Precio:** ${trade_data['exit_price']:.2f}")
+                            final_shares = trade_data.get('shares', 0)
+                            
+                            if has_partial_exits:
+                                st.write(f"**📉 Restante:** {int(final_shares)} sh")
+                            else:
+                                st.write(f"**📉 Shares:** {int(final_shares)} sh")
+                            
+                            # Calcular P&L del runner correctamente desde precio de entrada
+                            entry_price = trade_data['entry_price']
+                            exit_price = trade_data['exit_price']
+                            runner_pnl = (exit_price - entry_price) * final_shares
+                            runner_color = "green" if runner_pnl > 0 else "red"
+                            st.markdown(f"**💰 P&L:** :{runner_color}[${runner_pnl:.2f}]")
+                        
+                        st.markdown("---")
+                        
+                        # Tabla resumen - FULL WIDTH (solo si hay salidas parciales)
+                        if has_partial_exits:
+                            st.markdown("#### 📋 Resumen de Ejecución")
+                            
+                            summary_data = []
+                            total_pnl = 0
+                            
+                            # Solo incluir FASE_1 y FASE_2
+                            partial_phases = partial_for_trade[partial_for_trade['phase'].isin(['FASE_1', 'FASE_2'])]
+                            for _, row in partial_phases.iterrows():
+                                trigger_short = row['reason'].split(':')[1].strip() if ':' in row['reason'] else row['reason']
+                                summary_data.append({
+                                    '🎯 Fase': row['phase'],
+                                    '⚡ Trigger': trigger_short,
+                                    '💵 Exit Price': f"${row['exit_price']:.2f}",
+                                    '📊 Shares': int(row['shares']),
+                                    '📉 % Sold': f"{row.get('exit_pct', 0):.0f}%",
+                                    '💰 P&L': f"${row['pnl']:.2f}",
+                                    '📈 Return': f"{row['return_pct']:+.2f}%"
+                                })
+                                total_pnl += row['pnl']
+                            
+                            # Agregar salida final (Fase 3 - runner)
+                            entry_price = trade_data['entry_price']
+                            exit_price = trade_data['exit_price']
+                            final_shares = trade_data.get('shares', 0)
+                            final_pnl = (exit_price - entry_price) * final_shares
+                            final_trigger = trade_data.get('reason', 'N/A').split('|')[0].strip()
+                            summary_data.append({
+                                '🎯 Fase': 'FASE_3 (Runner)',
+                                '⚡ Trigger': final_trigger,
+                                '💵 Exit Price': f"${trade_data['exit_price']:.2f}",
+                                '📊 Shares': int(final_shares),
+                                '📉 % Sold': f"{trade_data.get('final_shares_pct', 0):.0f}%",
+                                '💰 P&L': f"${final_pnl:.2f}",
+                                '📈 Return': f"{trade_data['returns_pct']:+.2f}%"
+                            })
+                            
+                            summary_df = pd.DataFrame(summary_data)
+                            st.dataframe(summary_df, use_container_width=True, hide_index=True)
+                        else:
+                            # Trade sin parciales - mostrar solo resumen simple
+                            total_pnl = 0
+                            final_pnl = trade_data['pnl']  # PnL total ya está en el trade_data
+                        
+                        # Métricas totales - FULL WIDTH
+                        st.markdown("#### 🎯 Métricas Totales")
+                        col_t1, col_t2, col_t3, col_t4, col_t5 = st.columns(5)
+                        with col_t1:
+                            # Total P&L
+                            if has_partial_exits:
+                                total_result = total_pnl + final_pnl
+                            else:
+                                total_result = final_pnl
+                            total_color = "green" if total_result > 0 else "red"
+                            st.metric("💰 Total P&L", f"${total_result:.2f}", delta="Final")
+                        with col_t2:
+                            if has_partial_exits:
+                                st.metric("📊 Parciales P&L", f"${total_pnl:.2f}", delta="Fases 1-2")
+                            else:
+                                st.metric("📊 Parciales P&L", "$0.00", delta="No ejecutadas")
+                        with col_t3:
+                            if has_partial_exits:
+                                st.metric("🏃 Runner P&L", f"${final_pnl:.2f}", delta="Fase 3")
+                            else:
+                                st.metric("🏃 Cierre Directo", f"${final_pnl:.2f}", delta="Sin parciales")
+                        with col_t4:
+                            if has_partial_exits:
+                                fases_ejecutadas = len(partial_for_trade[partial_for_trade['phase'].isin(['FASE_1', 'FASE_2'])])
+                                st.metric("✅ Fases Ejecutadas", f"{fases_ejecutadas}/2", delta="Parciales")
+                            else:
+                                st.metric("✅ Fases Ejecutadas", "0/2", delta="Sin risk-free")
+                        with col_t5:
+                            # Recalcular R Multiple con PnL total correcto
+                            R_inicial = trade_data.get('R_inicial', 1)
+                            initial_shares = trade_data.get('initial_shares', trade_data.get('shares', 0))
+                            total_risk = R_inicial * initial_shares
+                            total_r = total_result / total_risk if total_risk > 0 else 0
+                            r_color = "normal" if total_r > 0 else "inverse"
+                            st.metric("⚖️ R Total", f"{total_r:+.2f}R", delta=None, delta_color=r_color)
+                        
+                        # Notas educativas
+                        with st.expander("📚 Notas Educativas - ¿Por qué funciona este sistema?"):
+                            st.markdown("""
+                            ### 🛡️ Sistema de Salidas Risk-Free
+                            
+                            **Fase 1 (40% @ +1R o +1ADR):**
+                            - ✅ Convierte el trade en inversión libre de riesgo
+                            - 🔒 Stop sube a Breakeven AUTOMÁTICAMENTE
+                            - 💡 Asegura ganancia mínima, nunca pierde después de aquí
+                            
+                            **Fase 2 (30% @ +2.5R o resistencia):**
+                            - 💎 Book profits en zona de resistencia técnica
+                            - 📊 Ya tienes 70% de capital recuperado + ganancias
+                            
+                            **Fase 3 (30% Runner con trailing stop):**
+                            - 🚀 Deja correr para capturar big movers (runners)
+                            - 📈 Protegido con EMA/SMA trailing stop
+                            - 🛡️ Stop NUNCA baja de Breakeven
+                            
+                            **Resultado:** 
+                            - ✅ Si sube: Maximizas ganancias
+                            - ✅ Si baja: Sales con ganancia de Fase 1
+                            - ❌ IMPOSIBLE perder después de Fase 1
+                            """)
+
+
+                st.markdown("---")
+
+                # --- MASTERCLASS CONTEXT ---
+                with st.expander("🎓 Contexto Educativo (Masterclass)", expanded=True):
+                    st.markdown("### 📚 Fundamentos del Setup")
+                    
+                    if 'VWAP_RECLAIM' in sig_type:
+                        st.markdown("#### 🛡️ VWAP Reclaim - Segunda Oportunidad")
+                        
+                        col_edu1, col_edu2 = st.columns(2)
+                        
+                        with col_edu1:
+                            st.markdown("""
+                            **🎯 El Concepto:**
+                            
+                            El VWAP Reclaim es un patrón de **recuperación institucional** después de una apertura débil.
+                            
+                            **¿Qué es VWAP?**
+                            - Volume Weighted Average Price
+                            - Precio promedio ponderado por volumen del día
+                            - **Línea de batalla** entre compradores y vendedores
+                            
+                            **La Psicología:**
+                            1. 🔻 Apertura débil (gap down o venta matutina)
+                            2. 🐻 Traders minoristas venden por pánico
+                            3. 🏦 Instituciones **compran la debilidad**
+                            4. ✅ Precio reclaim VWAP = Instituciones ganando
+                            
+                            **Señal de Confirmación:**
+                            - Cruce por encima de VWAP
+                            - RVOL ≥ 1.0x (volumen confirmando)
+                            - Stop: Low of Day (LOD)
+                            """)
+                        
+                        with col_edu2:
+                            st.markdown("""
+                            **📊 Criterios de Validación:**
+                            
+                            ✅ **ACEPTADO si:**
+                            - RVOL ≥ 1.0x (mínimo)
+                            - Precio cruza VWAP de abajo hacia arriba
+                            - Mercado general débil (SPY/QQQ gap down)
+                            - Tendencia general: Uptrend en timeframe mayor
+                            
+                            ❌ **RECHAZADO si:**
+                            - RVOL < 1.0x (sin instituciones)
+                            - Precio ya muy por encima de VWAP
+                            - Tendencia bajista en timeframe mayor
+                            - Stop loss muy amplio (>5% del precio)
+                            
+                            **💡 Trading Edge:**
+                            Este patrón funciona porque capturas el momento exacto 
+                            en que las instituciones "defienden" el precio después 
+                            de una trampa de osos.
+                            
+                            **🎲 Probabilidad:**
+                            - Win Rate: ~45-55%
+                            - Reward:Risk: 2:1 típico
+                            - Best con mercados débiles
+                            """)
+                        
+                    elif 'BLUE_SKY' in sig_type:
+                        st.markdown("#### 🚀 Blue Sky Breakout - Momentum Puro")
+                        
+                        col_edu1, col_edu2 = st.columns(2)
+                        
+                        with col_edu1:
+                            st.markdown("""
+                            **🎯 El Concepto:**
+                            
+                            Blue Sky Breakout es un rompimiento hacia **máximos históricos** sin resistencia superior.
+                            
+                            **¿Por qué funciona?**
+                            - No hay "bag holders" (compradores atrapados arriba)
+                            - Sin resistencia = menos vendedores
+                            - Momentum alcista fuerte
+                            - FOMO institucional activo
+                            
+                            **La Anatomía:**
+                            1. 📊 Base de consolidación (3-10 días)
+                            2. 📈 AVWAP convergiendo con base high
+                            3. 🔥 Volumen explosivo (RVOL > 1.5x)
+                            4. 🚀 Breakout con convicción
+                            
+                            **Señal de Entrada:**
+                            - Buy Stop 5¢ por encima del base high
+                            - AVWAP dentro de 2% del base high
+                            - Tendencia: Uptrend (precio > SMA20)
+                            """)
+                        
+                        with col_edu2:
+                            st.markdown("""
+                            **📊 Criterios de Validación:**
+                            
+                            ✅ **ACEPTADO si:**
+                            - RVOL ≥ 1.5x (instituciones activas)
+                            - AVWAP cerca del base high (<2% divergencia)
+                            - Tendencia: Uptrend confirmado
+                            - ADR ≥ 3% (volatilidad suficiente)
+                            - Base bien formada (3+ días)
+                            
+                            ❌ **RECHAZADO si:**
+                            - RVOL < 1.5x (sin volumen = trampa)
+                            - AVWAP muy por encima del precio actual
+                            - Tendencia: Weak o Downtrend
+                            - ADR < 3% (poco potencial)
+                            
+                            **💡 Trading Edge:**
+                            Este patrón captura el inicio de movimientos impulsivos
+                            cuando instituciones entran masivamente en un stock 
+                            que "rompe techos".
+                            
+                            **🎲 Probabilidad:**
+                            - Win Rate: ~40-50%
+                            - Reward:Risk: 3:1+ en runners
+                            - Best con mercados alcistas
+                            """)
                     else:
-                        st.info(str(reason))
+                        st.info("Selecciona un trade con señal VWAP_RECLAIM o BLUE_SKY para ver el contexto educativo completo.")
+                    
+                    # Glosario común
+                    st.markdown("---")
+                    st.markdown("#### 📖 Glosario de Términos")
+                    
+                    glossary_col1, glossary_col2, glossary_col3 = st.columns(3)
+                    
+                    with glossary_col1:
+                        st.markdown("""
+                        **RVOL (Relative Volume):**
+                        - Volumen actual vs promedio 20 días
+                        - 1.0x = volumen normal
+                        - >1.5x = instituciones activas
+                        - <1.0x = poco interés
+                        """)
+                        
+                    with glossary_col2:
+                        st.markdown("""
+                        **ADR (Average Daily Range):**
+                        - Rango diario promedio en %
+                        - Mide volatilidad
+                        - >5% = Alta volatilidad
+                        - 3-5% = Media (ideal)
+                        - <3% = Baja (poco potencial)
+                        """)
+                    
+                    with glossary_col3:
+                        st.markdown("""
+                        **R (Risk Multiple):**
+                        - Retorno vs riesgo inicial
+                        - 1R = ganaste tu riesgo inicial
+                        - 2R = ganaste 2x tu riesgo
+                        - -1R = perdiste tu stop completo
+                        - Objetivo: >2R promedio
+                        """)
+
+    # ==========================================
+    # TAB 2: PnL CALENDAR (NEW)
+    # ==========================================
+    with tab_calendar:
+        st.header("📅 PnL Calendar & Monthly Analysis")
+        
+        df_cal = df_raw.copy()
+        if 'shares' in df_cal.columns:
+            df_cal['Result'] = (df_cal['exit_price'] - df_cal['entry_price']) * df_cal['shares']
+            
+            # --- DATE SELECTION ---
+            # Calculate Monthly PnLs for the Selector
+            df_cal['month_key'] = df_cal['exit_date'].dt.to_period('M')
+            monthly_agg = df_cal.groupby('month_key')['Result'].sum().sort_index(ascending=False)
+            
+            month_options = []
+            month_map = {}
+            for period, pnl in monthly_agg.items():
+                start_of_month = period.start_time.date()
+                pnl_str = f"+${pnl:,.0f}" if pnl >= 0 else f"-${abs(pnl):,.0f}"
+                label = f"{start_of_month.strftime('%B %Y')} ({pnl_str})"
+                month_options.append(label)
+                month_map[label] = start_of_month
+
+            col_sel1, col_sel2 = st.columns([1, 2])
+            with col_sel1:
+                if month_options:
+                    selected_month_label = st.selectbox("📅 Seleccionar Mes", month_options)
+                    selected_date = month_map[selected_month_label]
+                else:
+                    selected_date = datetime.now().date().replace(day=1)
+                    st.warning("No hay datos mensuales disponibles.")
+            
+            # Filter Month
+            sel_month_start = selected_date # Already 1st of month
+
+            # Safe logic for next month first day
+            if sel_month_start.month == 12:
+                next_month = sel_month_start.replace(year=sel_month_start.year+1, month=1, day=1)
+            else:
+                next_month = sel_month_start.replace(month=sel_month_start.month+1, day=1)
+            
+            sel_month_end = next_month - timedelta(days=1)
+            
+            monthly_trades = df_cal[(df_cal['exit_date'].dt.date >= sel_month_start) & 
+                                  (df_cal['exit_date'].dt.date <= sel_month_end)]
+            monthly_pnl = monthly_trades['Result'].sum()
+            
+            with col_sel2:
+                # Generate Calendar Grid with Interactive Buttons and Custom Styling
+                cal = calendar.Calendar(firstweekday=6) # Sunday start
+                month_days = cal.monthdayscalendar(selected_date.year, selected_date.month)
+                
+                st.markdown(f"### 🗓️ {selected_date.strftime('%B %Y')}")
+                
+                # Initialize selected_day in session state
+                if 'selected_day' not in st.session_state:
+                    st.session_state.selected_day = selected_date
+                
+                # Custom CSS for calendar styling
+                st.markdown("""
+                <style>
+                .cal-day-header {
+                    text-align: center;
+                    font-weight: bold;
+                    font-size: 11px;
+                    color: #666;
+                    padding: 5px;
+                    background: #f0f2f6;
+                    border-radius: 5px;
+                    margin-bottom: 5px;
+                }
+                /* Override Streamlit button styles for calendar */
+                div[data-testid="column"] > div > div > button {
+                    font-size: 13px !important;
+                    padding: 10px 5px !important;
+                    min-height: 70px !important;
+                    white-space: pre-wrap !important;
+                    border-radius: 8px !important;
+                    font-weight: 500 !important;
+                }
+                /* Win buttons (primary) - Green theme */
+                div[data-testid="column"] > div > div > button[kind="primary"] {
+                    background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%) !important;
+                    color: #155724 !important;
+                    border: 2px solid #b1dfbb !important;
+                }
+                div[data-testid="column"] > div > div > button[kind="primary"]:hover {
+                    background: linear-gradient(135deg, #c3e6cb 0%, #b1dfbb 100%) !important;
+                    border-color: #28a745 !important;
+                    transform: scale(1.05) !important;
+                    box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3) !important;
+                }
+                /* Loss buttons (secondary) - Red theme */
+                div[data-testid="column"] > div > div > button[kind="secondary"] {
+                    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%) !important;
+                    color: #721c24 !important;
+                    border: 2px solid #f1b0b7 !important;
+                }
+                div[data-testid="column"] > div > div > button[kind="secondary"]:hover {
+                    background: linear-gradient(135deg, #f5c6cb 0%, #f1b0b7 100%) !important;
+                    border-color: #dc3545 !important;
+                    transform: scale(1.05) !important;
+                    box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3) !important;
+                }
+                /* Neutral days (tertiary) - Gray theme */
+                div[data-testid="column"] > div > div > button[kind="tertiary"] {
+                    background: #ffffff !important;
+                    color: #495057 !important;
+                    border: 1px solid #dee2e6 !important;
+                }
+                div[data-testid="column"] > div > div > button[kind="tertiary"]:hover {
+                    background: #f8f9fa !important;
+                    border-color: #adb5bd !important;
+                    transform: scale(1.02) !important;
+                }
+                </style>
+                """, unsafe_allow_html=True)
+                
+                days_header = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
+                
+                # Display calendar header
+                header_cols = st.columns(7)
+                for idx, day_name in enumerate(days_header):
+                    with header_cols[idx]:
+                        st.markdown(f'<div class="cal-day-header">{day_name}</div>', unsafe_allow_html=True)
+                
+                month_pnl_total = 0
+                
+                # Display calendar grid with interactive buttons
+                for week in month_days:
+                    week_cols = st.columns(7)
+                    for idx, day in enumerate(week):
+                        with week_cols[idx]:
+                            if day == 0:
+                                st.write("")  # Empty cell
+                            else:
+                                # Find PnL for this day
+                                current_dt = datetime(selected_date.year, selected_date.month, day).date()
+                                day_trades = df_cal[df_cal['exit_date'].dt.date == current_dt]
+                                
+                                pnl_val = day_trades['Result'].sum() if not day_trades.empty else 0
+                                
+                                pnl_str = ""
+                                button_type = "tertiary"  # neutral/no trades
+                                
+                                if pnl_val > 0: 
+                                    pnl_str = f"+${pnl_val:,.0f}"
+                                    month_pnl_total += pnl_val
+                                    button_type = "primary"  # Green for wins
+                                elif pnl_val < 0: 
+                                    pnl_str = f"-${abs(pnl_val):,.0f}"
+                                    month_pnl_total += pnl_val
+                                    button_type = "secondary"  # Red for losses
+                                
+                                # Button label with day and PnL
+                                label = f"**{day}**\n{pnl_str}" if pnl_str else f"{day}"
+                                
+                                # Highlight selected day
+                                is_selected = (current_dt == st.session_state.get('selected_day', selected_date))
+                                
+                                # Create button for each day
+                                if st.button(label, key=f"day_{selected_date.year}_{selected_date.month}_{day}", 
+                                           type=button_type, use_container_width=True):
+                                    st.session_state.selected_day = current_dt
+                
+                if monthly_trades.empty:
+                    st.caption("No trades closed this month.")
+                else:
+                    # Display monthly summary with color
+                    col_metric1, col_metric2 = st.columns(2)
+                    with col_metric1:
+                        pnl_delta = "📈" if month_pnl_total >= 0 else "📉"
+                        st.metric("Monthly PnL", f"${month_pnl_total:,.2f}", 
+                                delta=f"{pnl_delta} {len(monthly_trades)} Trades",
+                                delta_color="normal" if month_pnl_total >= 0 else "inverse")
+                    with col_metric2:
+                        win_trades = monthly_trades[monthly_trades['Result'] > 0]
+                        win_rate = len(win_trades) / len(monthly_trades) * 100 if len(monthly_trades) > 0 else 0
+                        st.metric("Win Rate", f"{win_rate:.1f}%", 
+                                delta=f"{len(win_trades)}W / {len(monthly_trades)-len(win_trades)}L")
+
+            st.markdown("---")
+            
+            # --- DAILY DETAIL VIEW ---
+            # Use the selected day from session state
+            display_date = st.session_state.get('selected_day', selected_date)
+            st.subheader(f"📆 Daily Snapshot: {display_date.strftime('%Y-%m-%d')}")
+            
+            # A. REALIZED PNL (Closed Today)
+            realized_today = df_cal[df_cal['exit_date'].dt.date == display_date]
+            
+            # B. ACTIVE POSITIONS (Active Today)
+            active_today = df_cal[(df_cal['entry_date'].dt.date <= display_date) & 
+                                (df_cal['exit_date'].dt.date > display_date)].copy()
+            
+            c_d1, c_d2 = st.columns([2, 1])
+            
+            with c_d1:
+                combined_rows = []
+                # Realized
+                for _, row in realized_today.iterrows():
+                    combined_rows.append({
+                        'Sym': row['symbol'], 'Pos': 0, 'Last': row['exit_price'],
+                        'PosAvg': row['entry_price'], '$Real': row['Result'], '$Value': 0.0, 'Type': 'Closed'
+                    })
+                # Active
+                for _, row in active_today.iterrows():
+                    combined_rows.append({
+                        'Sym': row['symbol'], 'Pos': row['shares'], 'Last': row['entry_price'], # Proxy
+                        'PosAvg': row['entry_price'], '$Real': 0.0, '$Value': row['shares'] * row['entry_price'], 'Type': 'Open'
+                    })
+                
+                df_day_view = pd.DataFrame(combined_rows)
+                
+                if not df_day_view.empty:
+                    st.dataframe(
+                        df_day_view,
+                        column_config={
+                            "Sym": st.column_config.TextColumn("Sym", width="small"),
+                            "Pos": st.column_config.NumberColumn("Pos", format="%.0f"),
+                            "Last": st.column_config.NumberColumn("Last (Ref)", format="$%.2f"),
+                            "PosAvg": st.column_config.NumberColumn("PosAvg", format="$%.2f"),
+                            "$Real": st.column_config.NumberColumn("$Real PnL", format="$%.2f"),
+                            "$Value": st.column_config.NumberColumn("$Alloc Value", format="$%.2f"),
+                        },
+                        use_container_width=True, hide_index=True
+                    )
+                    total_realized = df_day_view['$Real'].sum()
+                    st.markdown(f"**Total Realized Today:** :green[${total_realized:,.2f}]" if total_realized >= 0 else f"**Total Realized Today:** :red[${total_realized:,.2f}]")
+                else:
+                    st.info("No activity recorded for this date.")
+
+            with c_d2:
+                if not active_today.empty:
+                    fig_pie = px.pie(active_today, values='position_value', names='symbol', 
+                                   title=f"Portfolio Allocation ({display_date.strftime('%b %d')})", hole=0.4)
+                    st.plotly_chart(fig_pie, use_container_width=True, key=f"portfolio_pie_{display_date.strftime('%Y%m%d')}")
+                else:
+                    st.info("No open positions.")
+
+            # --- MONTHLY EQUITY CURVE ---
+            st.markdown("---")
+            st.subheader(f"📈 Monthly Performance: {selected_date.strftime('%B %Y')}")
+            
+            if not monthly_trades.empty:
+                monthly_trades = monthly_trades.sort_values('exit_date')
+                monthly_trades['cum_pnl'] = monthly_trades['Result'].cumsum()
+                fig_equity = px.area(monthly_trades, x='exit_date', y='cum_pnl',
+                                   title=f"Realized PnL Curve - {selected_date.strftime('%B')}",
+                                   labels={'cum_pnl': 'Cumulative PnL ($)', 'exit_date': 'Date'})
+                st.plotly_chart(fig_equity, use_container_width=True, key=f"monthly_equity_{selected_date.strftime('%Y%m')}")
+            else:
+                st.info("No trades closed in this month.")
+        else:
+            st.warning("Run backtest to see Calendar data.")
 
 else:
     st.info("👋 Bienvenido. Configura los parámetros de riesgo a la izquierda y pulsa 'EJECUTAR BACKTEST'.")
