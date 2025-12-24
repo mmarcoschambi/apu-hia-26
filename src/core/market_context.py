@@ -2,10 +2,12 @@
 Market Context Analyzer
 Determines if market conditions are favorable for momentum trades
 
-NEW FILTERS:
+ENHANCED FILTERS:
 - SPY > EMA 20 (trend confirmation)
 - Breadth improving (% stocks above SMA20 ascending)
 - GEX > 0 (Gamma Exposure positive - optional advanced)
+- VIX bajando o estable (<20)
+- Sector leadership analysis
 """
 import pandas as pd
 import numpy as np
@@ -22,13 +24,14 @@ class MarketContext:
     
     def analyze_indices(self, symbols: List[str] = ['SPY', 'QQQ']) -> dict:
         """
-        Analyze market indices with NEW regime filters
+        Analyze market indices with ENHANCED regime filters
         
         Returns context including:
-        - Gap down detection
-        - SPY trend (> EMA20)
+        - SPY/SPX trend (> EMA20)
         - Breadth direction
         - GEX regime estimation
+        - VIX analysis (bajando o estable <20)
+        - Sector leadership
         """
         context = {}
         
@@ -60,6 +63,19 @@ class MarketContext:
             context['breadth_improving'] = False
             context['positive_gex'] = False
         
+        # NEW: VIX Analysis (Volatility)
+        context['vix_favorable'] = self._analyze_vix()
+        
+        # NEW: Sector Leadership Analysis
+        context['sector_leaders'] = self._get_sector_leaders()
+        
+        
+        # NEW: VIX Analysis (Volatility)
+        context['vix_favorable'] = self._analyze_vix()
+        
+        # NEW: Sector Leadership Analysis
+        context['sector_leaders'] = self._get_sector_leaders()
+        
         # Original gap down detection
         for symbol in symbols:
             try:
@@ -90,15 +106,18 @@ class MarketContext:
             context.get('qqq_change_pct', 0) < -0.01
         ])
         
-        # NEW: Market favorable for longs
-        # SPY > EMA20 OR Breadth improving
-        context['market_favorable_for_longs'] = (
+        # ENHANCED: Market favorable for longs
+        # Requires: (SPY > EMA20 OR Breadth improving) AND VIX favorable
+        base_favorable = (
             context.get('spy_above_ema20', True) or 
             context.get('breadth_improving', False)
         )
+        context['market_favorable_for_longs'] = (
+            base_favorable and context.get('vix_favorable', True)
+        )
         
-        # NEW: Allow aggressive entries
-        # Market favorable AND positive GEX
+        # ENHANCED: Allow aggressive entries
+        # Requires: Market favorable AND positive GEX
         context['allow_aggressive_entries'] = (
             context.get('market_favorable_for_longs', False) and
             context.get('positive_gex', False)
@@ -171,3 +190,271 @@ class MarketContext:
         except Exception as e:
             logger.error(f"Error estimating GEX: {e}")
             return False
+    
+    def _analyze_vix(self) -> bool:
+        """
+        Analyze VIX (Volatility Index)
+        
+        Favorable conditions:
+        - VIX < 20 (low to normal volatility)
+        - VIX trending down or stable (last 5 days)
+        
+        Returns True if volatility conditions are favorable
+        """
+        try:
+            vix_data = self.data_provider.get_daily_data('VIX', period='1mo')
+            
+            if vix_data.empty or len(vix_data) < 5:
+                logger.warning("VIX data not available, assuming favorable")
+                return True  # Default to favorable if no data
+            
+            vix_current = vix_data['Close'].iloc[-1]
+            vix_5days_ago = vix_data['Close'].iloc[-5]
+            
+            # VIX < 20 (normal volatility)
+            vix_low = vix_current < 20
+            
+            # VIX declining or stable (not spiking)
+            vix_stable = vix_current <= vix_5days_ago * 1.1  # Allow 10% increase
+            
+            logger.info(f"VIX: {vix_current:.2f} | Below 20: {vix_low} | Stable: {vix_stable}")
+            
+            return vix_low and vix_stable
+        
+        except Exception as e:
+            logger.error(f"Error analyzing VIX: {e}")
+            return True  # Default to favorable if analysis fails
+    
+    def _get_sector_leaders(self) -> Dict[str, float]:
+        """
+        Identify sector leaders for the day
+        
+        Returns dictionary with sector ETFs and their daily performance
+        Sectors tracked: XLK (Tech), XLE (Energy), XLF (Finance), 
+                        XLV (Health), XLI (Industrial), XLY (Consumer Discr)
+        """
+        sector_etfs = {
+            'XLK': 'Technology',
+            'XLE': 'Energy', 
+            'XLF': 'Financial',
+            'XLV': 'Healthcare',
+            'XLI': 'Industrial',
+            'XLY': 'Consumer Discretionary',
+            'XLP': 'Consumer Staples',
+            'XLB': 'Materials',
+            'XLRE': 'Real Estate',
+            'XLU': 'Utilities'
+        }
+        
+        sector_performance = {}
+        
+        try:
+            for etf, name in sector_etfs.items():
+                try:
+                    data = self.data_provider.get_daily_data(etf, period='5d')
+                    if not data.empty and len(data) >= 2:
+                        # Calculate today's performance
+                        current = data['Close'].iloc[-1]
+                        previous = data['Close'].iloc[-2]
+                        pct_change = ((current - previous) / previous) * 100
+                        
+                        sector_performance[name] = {
+                            'symbol': etf,
+                            'change_pct': pct_change,
+                            'current': current
+                        }
+                except Exception as e:
+                    logger.warning(f"Could not fetch {etf}: {e}")
+                    continue
+            
+            # Sort by performance
+            sorted_sectors = sorted(
+                sector_performance.items(), 
+                key=lambda x: x[1]['change_pct'], 
+                reverse=True
+            )
+            
+            if sorted_sectors:
+                top_3 = sorted_sectors[:3]
+                logger.info(f"Top 3 Sectors Today:")
+                for sector, data in top_3:
+                    logger.info(f"  {sector}: {data['change_pct']:+.2f}%")
+            
+            return dict(sorted_sectors)
+        
+        except Exception as e:
+            logger.error(f"Error analyzing sectors: {e}")
+            return {}
+    
+    def get_stock_sector(self, symbol: str) -> str:
+        """
+        Determine which sector a stock belongs to
+        
+        This is a simple mapping. For production, use a proper
+        sector classification API (e.g., FinHub, Alpha Vantage)
+        """
+        # Common tech stocks
+        tech_stocks = ['AAPL', 'NVDA', 'MSFT', 'GOOGL', 'META', 'AMZN', 
+                       'TSLA', 'AMD', 'AVGO', 'ORCL', 'CRM', 'ADBE', 
+                       'NFLX', 'INTC', 'QCOM', 'CSCO', 'SMCI', 'PLTR']
+        
+        energy_stocks = ['XOM', 'CVX', 'SLB', 'COP', 'EOG', 'MPC', 'PSX', 'VLO']
+        
+        financial_stocks = ['JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'BLK', 'SCHW']
+        
+        healthcare_stocks = ['UNH', 'JNJ', 'LLY', 'ABBV', 'MRK', 'TMO', 'ABT', 'PFE']
+        
+        # Add more mappings as needed
+        
+        if symbol in tech_stocks:
+            return 'Technology'
+        elif symbol in energy_stocks:
+            return 'Energy'
+        elif symbol in financial_stocks:
+            return 'Financial'
+        elif symbol in healthcare_stocks:
+            return 'Healthcare'
+        else:
+            return 'Other'
+    
+    def is_sector_leading(self, symbol: str, sector_leaders: Dict) -> bool:
+        """
+        Check if the stock's sector is leading today
+        
+        Returns True if stock's sector is in top 3 performing sectors
+        """
+        if not sector_leaders:
+            return True  # If we can't determine, don't penalize
+        
+        stock_sector = self.get_stock_sector(symbol)
+        
+        if stock_sector == 'Other':
+            return True  # Unknown sector, give benefit of doubt
+        
+        # Get top 3 sectors
+        top_3_sectors = list(sector_leaders.keys())[:3]
+        
+        is_leading = stock_sector in top_3_sectors
+        
+        if is_leading:
+            performance = sector_leaders[stock_sector]['change_pct']
+            logger.info(f"{symbol} ({stock_sector}) is in leading sector: {performance:+.2f}%")
+        else:
+            logger.info(f"{symbol} ({stock_sector}) is NOT in top 3 sectors")
+        
+        return is_leading
+    
+    def analyze_indices_for_date(self, date):
+        """
+        Analiza índices para una fecha histórica específica
+        Usado en backtesting para no hacer future peeking
+        
+        Args:
+            date: datetime object para la fecha a analizar
+            
+        Returns:
+            dict con contexto del mercado en esa fecha
+        """
+        context = {}
+        
+        try:
+            # Usar period="3mo" que da suficiente historia
+            spy_daily = self.data_provider.get_daily_data('SPY', period='3mo')
+            qqq_daily = self.data_provider.get_daily_data('QQQ', period='3mo')
+            
+            # Filtrar hasta la fecha solicitada (simular que solo conocemos hasta ese día)
+            if not spy_daily.empty:
+                spy_daily = spy_daily[spy_daily.index <= date]
+            
+            if not qqq_daily.empty:
+                qqq_daily = qqq_daily[qqq_daily.index <= date]
+            
+            if not spy_daily.empty and len(spy_daily) >= 20:
+                # Calculate SPY EMA 20
+                spy_ema20 = spy_daily['Close'].ewm(span=20, adjust=False).mean().iloc[-1]
+                spy_current = spy_daily['Close'].iloc[-1]
+                context['spy_above_ema20'] = spy_current > spy_ema20
+                context['spy_ema20'] = spy_ema20
+                context['spy_price'] = spy_current
+                
+                # Estimate breadth trend
+                context['breadth_improving'] = self._estimate_breadth_trend(spy_daily, qqq_daily)
+                
+                # Estimate GEX regime
+                context['positive_gex'] = self._estimate_positive_gex(spy_daily)
+                
+                # VIX analysis (try to get historical VIX)
+                try:
+                    vix_data = self.data_provider.get_daily_data('VIX', period='1mo')
+                    
+                    # Filtrar hasta la fecha solicitada
+                    if not vix_data.empty:
+                        vix_data = vix_data[vix_data.index <= date]
+                    
+                    if not vix_data.empty and len(vix_data) >= 5:
+                        vix_current = vix_data['Close'].iloc[-1]
+                        vix_5days_ago = vix_data['Close'].iloc[-5] if len(vix_data) >= 5 else vix_current
+                        
+                        vix_low = vix_current < 20
+                        vix_stable = vix_current <= vix_5days_ago * 1.1
+                        
+                        context['vix_favorable'] = vix_low and vix_stable
+                    else:
+                        context['vix_favorable'] = True
+                except:
+                    context['vix_favorable'] = True
+                
+                # Market favorable for longs
+                base_favorable = (
+                    context.get('spy_above_ema20', True) or
+                    context.get('breadth_improving', False)
+                )
+                context['market_favorable_for_longs'] = (
+                    base_favorable and context.get('vix_favorable', True)
+                )
+                
+                # Calculate health score
+                health_score = 0
+                if context.get('spy_above_ema20', False):
+                    health_score += 2
+                if context.get('breadth_improving', False):
+                    health_score += 2
+                if context.get('positive_gex', False):
+                    health_score += 1
+                if context.get('vix_favorable', True):
+                    health_score += 1
+                
+                context['health_score'] = health_score
+                
+                # Max concurrent trades based on health
+                if health_score >= 6:
+                    context['max_concurrent_trades'] = 5
+                elif health_score >= 4:
+                    context['max_concurrent_trades'] = 3
+                elif health_score >= 2:
+                    context['max_concurrent_trades'] = 2
+                else:
+                    context['max_concurrent_trades'] = 0
+                
+                logger.info(f"Market Health for {end_date_str}: {health_score}/7")
+                logger.info(f"  Favorable: {context['market_favorable_for_longs']}")
+                logger.info(f"  Max trades: {context['max_concurrent_trades']}")
+            
+            else:
+                # Default values if not enough data
+                context['spy_above_ema20'] = True
+                context['breadth_improving'] = False
+                context['positive_gex'] = False
+                context['vix_favorable'] = True
+                context['market_favorable_for_longs'] = True
+                context['health_score'] = 3
+                context['max_concurrent_trades'] = 3
+        
+        except Exception as e:
+            logger.error(f"Error analyzing indices for {date}: {e}")
+            # Conservative defaults
+            context['market_favorable_for_longs'] = False
+            context['health_score'] = 0
+            context['max_concurrent_trades'] = 0
+        
+        return context

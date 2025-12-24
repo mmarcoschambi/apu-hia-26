@@ -108,13 +108,79 @@ class TriadStrategy:
         avwap_base_convergence = abs(avwap_price - base_high) / base_high
         
         if avwap_base_convergence <= self.avwap_tolerance:
+            # CRITICAL: Check trend strength for Blue Sky Breakouts
+            # Rule: "Never buy a Breakout if price is not being respected by SMA20"
+            trend = market_context.get('trend_sma', 'Unknown')
+            rvol = market_context.get('rvol', 0)
+            
+            # FILTER 1: Reject if Weak Trend
+            if trend == 'Weak':
+                # REJECT: Blue Sky with Weak trend is a trap
+                logger.info(f"🚫 REJECTED Blue Sky Breakout: Trend 'Weak' - Price below SMA20. "
+                           f"Base: {base_high:.2f}, AVWAP: {avwap_price:.2f}, "
+                           f"Current: {current_price:.2f}, SMA20: {market_context.get('sma_20', 'N/A')}")
+                return Signal(
+                    camino=None,
+                    action='NO_SETUP',
+                    entry_price=None,
+                    stop_loss=None,
+                    position_size_multiplier=0.0,
+                    reasoning=f"REJECTED Blue Sky: Trend is 'Weak' (price below SMA20). "
+                              f"Base ({base_high:.2f}) and AVWAP ({avwap_price:.2f}) converge, "
+                              f"but breakout is unreliable without SMA20 support. "
+                              f"Wait for price to recover above SMA20 and form new base.",
+                    context={
+                        'base_high': base_high,
+                        'base_low': base_data['base_low'],
+                        'avwap_price': avwap_price,
+                        'convergence_pct': avwap_base_convergence,
+                        'trend': trend,
+                        'rvol': rvol,
+                        'rejection_reason': 'Weak_Trend'
+                    }
+                )
+            
+            # FILTER 2: Reject if RVOL < 1.5x
+            # Rule: "¿El RVOL es mayor a 1.5x y la Tendencia es Fuerte? Si NO -> NO HAY TRADE"
+            if rvol < 1.5:
+                # REJECT: Blue Sky without institutional volume confirmation
+                logger.info(f"🚫 REJECTED Blue Sky Breakout: RVOL too low ({rvol:.2f}x < 1.5x). "
+                           f"Base: {base_high:.2f}, AVWAP: {avwap_price:.2f}, "
+                           f"Trend: {trend}. Need >1.5x volume for institutional confirmation.")
+                return Signal(
+                    camino=None,
+                    action='NO_SETUP',
+                    entry_price=None,
+                    stop_loss=None,
+                    position_size_multiplier=0.0,
+                    reasoning=f"REJECTED Blue Sky: RVOL ({rvol:.2f}x) is below 1.5x threshold. "
+                              f"Base ({base_high:.2f}) and AVWAP ({avwap_price:.2f}) converge, "
+                              f"Trend is '{trend}', but lack of volume indicates weak institutional interest. "
+                              f"Need RVOL > 1.5x (ideally > 2.0x) for confirmation.",
+                    context={
+                        'base_high': base_high,
+                        'base_low': base_data['base_low'],
+                        'avwap_price': avwap_price,
+                        'convergence_pct': avwap_base_convergence,
+                        'trend': trend,
+                        'rvol': rvol,
+                        'rejection_reason': 'Low_RVOL'
+                    }
+                )
+            
             # Perfect setup: Base and AVWAP eliminate resistance together
+            # AND price is respecting SMA20 (Uptrend)
+            # AND volume confirms institutional interest (RVOL > 1.5x)
             entry = base_high + self.blue_sky_offset
             stop = base_data['base_low']
             
             # Alternative stop: entry - 1 ADR
             stop_adr = entry - adr
             stop_loss = max(stop, stop_adr)  # Use the higher stop
+            
+            logger.info(f"✅ APPROVED Blue Sky Breakout: Trend '{trend}', RVOL {rvol:.2f}x. "
+                       f"Entry: {entry:.2f}, Stop: {stop_loss:.2f}, "
+                       f"Base: {base_high:.2f}, AVWAP: {avwap_price:.2f}")
             
             return Signal(
                 camino=Camino.BLUE_SKY,
@@ -123,12 +189,15 @@ class TriadStrategy:
                 stop_loss=stop_loss,
                 position_size_multiplier=1.0,
                 reasoning=f"Blue Sky Breakout: Base ({base_high:.2f}) and AVWAP ({avwap_price:.2f}) "
-                          f"converge within {avwap_base_convergence*100:.1f}%. Clear path above.",
+                          f"converge within {avwap_base_convergence*100:.1f}%. "
+                          f"Trend: {trend}. RVOL: {rvol:.2f}x. Clear path above with SMA20 support and volume confirmation.",
                 context={
                     'base_high': base_high,
                     'base_low': base_data['base_low'],
                     'avwap_price': avwap_price,
                     'convergence_pct': avwap_base_convergence,
+                    'trend': trend,
+                    'rvol': rvol,
                     'adr': adr
                 }
             )
@@ -147,6 +216,23 @@ class TriadStrategy:
             # We're in Camino 2 territory
             # Wait for VWAP reclaim (cross up)
             
+            # RVOL filter: VWAP Reclaim requires institutional volume
+            rvol = market_context.get('rvol', 0)
+            if rvol < 1.0:
+                return Signal(
+                    camino=None,
+                    action='NO_SETUP',
+                    entry_price=None,
+                    stop_loss=None,
+                    position_size_multiplier=1.0,
+                    reasoning=f"REJECTED VWAP Reclaim: RVOL ({rvol:.2f}x) below 1.0x. "
+                              f"Need institutional volume to confirm recovery.",
+                    context={
+                        'rvol': rvol,
+                        'vwap': vwap_data['current_vwap']
+                    }
+                )
+            
             if vwap_data.get('crossed_up', False):
                 # Price just crossed above VWAP - entry signal
                 entry = current_price
@@ -159,12 +245,13 @@ class TriadStrategy:
                     stop_loss=stop,
                     position_size_multiplier=0.5,  # Reduced size (0.25-0.40% risk)
                     reasoning=f"VWAP Reclaim: Weak open, price reclaimed VWAP at {entry:.2f}. "
-                              f"Institutions defending position.",
+                              f"Institutions defending position. RVOL: {rvol:.2f}x",
                     context={
                         'vwap': vwap_data['current_vwap'],
                         'session_low': vwap_data['session_low'],
                         'session_open': vwap_data['session_open'],
-                        'gap_pct': gap_data.get('gap_pct', 0)
+                        'gap_pct': gap_data.get('gap_pct', 0),
+                        'rvol': rvol
                     }
                 )
             else:

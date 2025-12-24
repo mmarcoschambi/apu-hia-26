@@ -286,7 +286,7 @@ class InteractiveDashboard:
                 annotation_position="right"
             )
         
-        # Add Stop Loss
+        # Add Stop Loss / Session Low
         if signal_data.get('stop_loss'):
             fig.add_hline(
                 y=signal_data['stop_loss'],
@@ -296,6 +296,35 @@ class InteractiveDashboard:
                 annotation_text=f"Stop: ${signal_data['stop_loss']:.2f}",
                 annotation_position="right"
             )
+            # Explicit Session Low Annotation for Masterclass feel
+            fig.add_annotation(
+                x=entry_date_pd,
+                y=signal_data['stop_loss'],
+                text="Session Low (Risk)",
+                showarrow=True,
+                arrowhead=2,
+                arrowcolor="red",
+                ax=0,
+                ay=40
+            )
+
+        # GAP DOWN Detection (Masterclass feature)
+        if signal_data.get('camino') == 'VWAP_RECLAIM' and entry_idx > 0:
+            prev_close = daily_df['Close'].iloc[entry_idx - 1]
+            curr_open = daily_df['Open'].iloc[entry_idx]
+            
+            if curr_open < prev_close:
+                gap_mid = (prev_close + curr_open) / 2
+                fig.add_annotation(
+                    x=entry_date_pd,
+                    y=gap_mid,
+                    text="Gap Down",
+                    showarrow=True,
+                    arrowhead=1,
+                    arrowcolor="red",
+                    ax=-40,
+                    ay=0
+                )
         
         # Entry point
         if signal_data.get('entry_price'):
@@ -344,6 +373,80 @@ class InteractiveDashboard:
                     dict(bounds=["sat", "mon"]), # Hide weekends
                 ]
             )
+        )
+        
+        return fig
+    
+    def create_intraday_chart(self, symbol: str, entry_date: str, signal_data: dict):
+        """Create interactive 5m intraday chart for VWAP Reclaim"""
+        entry_date_pd = pd.to_datetime(entry_date).tz_localize(None)
+        
+        # Check if date is within last 60 days for YFinance limits
+        days_diff = (datetime.now() - entry_date_pd).days
+        if days_diff > 59:
+            fig = go.Figure()
+            fig.add_annotation(text="Intraday data not available for >60 days old trades (API Limit)",
+                              xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+            fig.update_layout(title=f"Intraday 5m - {symbol} (Data Unavailable)")
+            return fig
+
+        # Fetch 5m data
+        intraday_df = self.data_provider.get_intraday_data(symbol, interval="5m", days=days_diff+5)
+        
+        if intraday_df.empty:
+            return None
+
+        # Filter for entry date
+        target_day_str = entry_date_pd.strftime('%Y-%m-%d')
+        day_data = intraday_df[intraday_df.index.strftime('%Y-%m-%d') == target_day_str].copy()
+        
+        if day_data.empty:
+            return None
+
+        # Calculate VWAP
+        day_data['TP'] = (day_data['High'] + day_data['Low'] + day_data['Close']) / 3
+        day_data['CumVol'] = day_data['Volume'].cumsum()
+        day_data['CumVolPrice'] = (day_data['TP'] * day_data['Volume']).cumsum()
+        day_data['VWAP'] = day_data['CumVolPrice'] / day_data['CumVol']
+
+        fig = go.Figure()
+
+        # Candlesticks
+        fig.add_trace(go.Candlestick(
+            x=day_data.index,
+            open=day_data['Open'],
+            high=day_data['High'],
+            low=day_data['Low'],
+            close=day_data['Close'],
+            name='Price 5m'
+        ))
+
+        # VWAP Line
+        fig.add_trace(go.Scatter(
+            x=day_data.index,
+            y=day_data['VWAP'],
+            mode='lines',
+            line=dict(color='orange', width=2),
+            name='Intraday VWAP'
+        ))
+
+        # Entry Level
+        entry_price = signal_data.get('entry_price')
+        if entry_price:
+            fig.add_hline(y=entry_price, line_dash="dash", line_color="cyan", annotation_text="Entry Level")
+
+        # Session Low / Stop
+        stop_loss = signal_data.get('stop_loss')
+        if stop_loss:
+             fig.add_hline(y=stop_loss, line_dash="dot", line_color="red", annotation_text="Session Low (Stop)")
+
+        fig.update_layout(
+            title=f"<b>🔍 Intraday 5m Zoom - {symbol}</b><br><sup>VWAP Defense Analysis | {target_day_str}</sup>",
+            yaxis_title="Price ($)",
+            xaxis_title="Time",
+            template='plotly_white',
+            height=500,
+            xaxis_rangeslider_visible=False
         )
         
         return fig
@@ -699,6 +802,7 @@ class InteractiveDashboard:
             html_content += f'            <button class="nav-tab" onclick="showTab(\'{symbol}\')">{symbol}</button>\n'
         
         html_content += """            <button class="nav-tab" onclick="showTab('trades')">Best/Worst Trades</button>
+            <button class="nav-tab" onclick="showTab('masterclass')">🎓 Masterclass</button>
         </div>
         
         <div id="overview" class="tab-content active">
@@ -707,6 +811,38 @@ class InteractiveDashboard:
         
         html_content += f"            {overview_fig.to_html(full_html=False, include_plotlyjs=False)}\n"
         html_content += "        </div>\n"
+        
+        # Add masterclass content
+        html_content += """
+        <div id="masterclass" class="tab-content">
+            <div class="section-title">🎓 The Lifecycle of a Trade (Masterclass)</div>
+            <div class="section" style="line-height: 1.6; color: #333;">
+                <h3>1. The Setup (Entry Logic)</h3>
+                <p><strong>Camino 1: Blue Sky Breakout</strong><br>
+                Buying strength. We enter when price breaks the "Base High" + 0.05c.<br>
+                <em>Stop Loss:</em> Automatically set to the higher of [Structure Low] or [Entry - 1 ADR].</p>
+                
+                <p><strong>Camino 2: VWAP Reclaim (The "Zoom In" Chart)</strong><br>
+                Buying weakness that recovers. We enter when a gap-down stock crosses back ABOVE its Intraday VWAP.<br>
+                <em>Stop Loss:</em> Strictly set to the Session Low.</p>
+                
+                <hr>
+                
+                <h3>2. The Execution Engine (Risk Management)</h3>
+                <p>Once inside, the <strong>"State Machine"</strong> manages the trade automatically:</p>
+                <ul>
+                    <li><strong>Phase A (Protection):</strong> Hard Stop. If price hits the stop, we exit immediately (-1R).</li>
+                    <li><strong>Phase B (TP1 - Risk Off):</strong> At <strong>1.5R</strong> profit, we sell 40% and move Stop to <strong>Breakeven</strong>.</li>
+                    <li><strong>Phase C (Momentum):</strong> After 4 days, we sell another 30% to capture short-term burst.</li>
+                    <li><strong>Phase D (Runner):</strong> The last 30% trails with the EMA 8. We exit when EMA 8 crosses below EMA 21.</li>
+                </ul>
+                
+                <div style="background: #e3f2fd; padding: 15px; border-left: 5px solid #2196f3; margin-top: 20px;">
+                    <strong>💡 Pro Tip:</strong> Check the "Zoom" charts for VWAP Reclaim trades to see the specific 5-minute candle where institutions stepped in.
+                </div>
+            </div>
+        </div>
+"""
         
         # Add symbol tabs content
         for symbol, fig in symbol_figs.items():

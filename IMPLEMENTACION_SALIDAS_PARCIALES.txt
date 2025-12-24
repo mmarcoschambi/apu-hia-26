@@ -1,0 +1,204 @@
+═══════════════════════════════════════════════════════════════════════
+  ✅ SISTEMA DE SALIDAS PARCIALES - IMPLEMENTACIÓN COMPLETA
+═══════════════════════════════════════════════════════════════════════
+
+FECHA: 2025-12-22
+SISTEMA: Momentum V2 - Institutional Risk Dashboard
+FEATURE: Sistema de Salidas Escalonadas (3 Fases)
+
+═══════════════════════════════════════════════════════════════════════
+
+📋 ESTADO PREVIO:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+El sistema tenía:
+✅ Fase 1 implementada (50% en +1.5R, stop a BE)
+✅ Fase 3 implementada (Runner con EMA 8/21)
+❌ Fase 2 NO implementada (sin toma de beneficios en resistencia/ADR)
+⚠️  Triggers subóptimos (TP1 en +1.5R en vez de +1R)
+
+═══════════════════════════════════════════════════════════════════════
+
+🎯 ESPECIFICACIÓN IMPLEMENTADA:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ FASE 1: CONVERSIÓN A RISK-FREE                                      │
+├─────────────────────────────────────────────────────────────────────┤
+│ Trigger:    Precio HIGH >= (Entry + 1.0R)                          │
+│             AND Close <= (Entry + 1.5R)                             │
+│ Acción:     Vender 50% de posición original                        │
+│ Stop:       Mover a Entry (Breakeven exacto)                       │
+│ Resultado:  Posición RISK-FREE, no puede perder dinero            │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ FASE 2: TOMA DE BENEFICIOS EN RESISTENCIA/ADR                      │
+├─────────────────────────────────────────────────────────────────────┤
+│ Condición:  TP1 ya ejecutado (posición risk-free)                  │
+│ Trigger A:  Precio HIGH >= (Entry + 2.5R)                          │
+│      OR                                                              │
+│ Trigger B:  Movimiento del día >= 80% del ADR promedio            │
+│ Acción:     Vender 30% de posición ORIGINAL                        │
+│ Resultado:  80% del capital asegurado, 20% para runner            │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ FASE 3: RUNNER CON TRAILING STOP DINÁMICO                          │
+├─────────────────────────────────────────────────────────────────────┤
+│ Condición:  TP1 ejecutado, quedan shares                           │
+│ Mantiene:   Mientras EMA 8 > EMA 21                               │
+│ Sale:       Cuando EMA 8 cruza bajo EMA 21                        │
+│ Fallback:   Si no hay EMAs, sale cuando Close < SMA 20            │
+│ Resultado:  Captura movimientos extendidos, salida limpia         │
+└─────────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════
+
+🛠️ CAMBIOS EN CÓDIGO:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. ESTRUCTURA Position (daily_engine.py, líneas 28-44)
+   ────────────────────────────────────────────────────
+   + tp2_hit: bool = False           # Flag Fase 2
+   + initial_shares: int = 0         # Posición original
+   + R_inicial: float = 0.0          # Entry - Stop
+   + adr_valor: float = 0.0          # ADR del símbolo
+
+2. INICIALIZACIÓN DE POSICIÓN (líneas 225-254)
+   ────────────────────────────────────────────
+   + Calcular R_inicial en entrada
+   + Calcular ADR (promedio high-low últimos 20 días)
+   + Guardar initial_shares
+   + TP1 trigger cambiado de +1.5R a +1.0R
+
+3. SISTEMA DE 3 FASES (líneas 323-378)
+   ────────────────────────────────────
+   FASE 1: (+1R a +1.5R)
+     • Trigger: high >= +1R AND close <= +1.5R
+     • Vende: 50% de initial_shares
+     • Stop: mueve a entry_price
+     • Flag: tp1_hit = True
+     • Log: "✅ FASE 1: {symbol} - 50% vendido..."
+
+   FASE 2: (+2.5R o ADR)
+     • Condición: tp1_hit == True
+     • Trigger A: high >= +2.5R
+     • Trigger B: |close - open| >= 80% ADR
+     • Vende: 30% de initial_shares
+     • Flag: tp2_hit = True
+     • Log: "✅ FASE 2: {symbol} - 30% vendido..."
+
+   FASE 3: (Trailing Stop)
+     • Condición: tp1_hit == True AND shares > 0
+     • Exit: ema_8 < ema_21
+     • Fallback: close < sma_20
+     • Cierra: 100% de shares restantes
+     • Reason: "FASE_3_EMA_CROSS" o "FASE_3_MA20_BREACH"
+
+4. TRACKING EN TRADE RECORD (líneas 381-415)
+   ──────────────────────────────────────────
+   + initial_shares           # Posición original
+   + tp1_executed: bool       # Si ejecutó Fase 1
+   + tp2_executed: bool       # Si ejecutó Fase 2
+   + final_shares_pct         # % que cerró (20/50/100%)
+
+═══════════════════════════════════════════════════════════════════════
+
+📊 EJEMPLO DE TRADE CON 3 FASES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Symbol: AAPL
+Entry:  $100.00
+Stop:   $95.00
+R:      $5.00
+Shares: 100
+
+┌──────────┬──────────┬──────────┬──────────┬───────────────────────┐
+│ Fase     │ Trigger  │ Precio   │ Vende    │ Estado               │
+├──────────┼──────────┼──────────┼──────────┼───────────────────────┤
+│ ENTRADA  │ -        │ $100.00  │ -        │ 100 shares, Stop $95 │
+│ FASE 1   │ +1R      │ $105.00  │ 50 sh    │ 50 sh, Stop → $100   │
+│ FASE 2   │ +2.5R    │ $112.50  │ 30 sh    │ 20 sh restantes      │
+│ FASE 3   │ EMA 8<21 │ $118.00  │ 20 sh    │ CERRADO COMPLETO     │
+└──────────┴──────────┴──────────┴──────────┴───────────────────────┘
+
+Cálculo P&L:
+  • Fase 1: 50 sh × ($105 - $100) = +$250
+  • Fase 2: 30 sh × ($112.50 - $100) = +$375
+  • Fase 3: 20 sh × ($118 - $100) = +$360
+  • TOTAL: +$985 (9.85% sobre $10,000 inicial)
+
+Trade Record:
+  entry_price:     $100.00
+  exit_price:      $118.00 (última salida)
+  initial_shares:  100
+  shares:          20 (al cierre final)
+  tp1_executed:    True
+  tp2_executed:    True
+  final_shares_pct: 20.0%
+  return_pct:      +18.0% (basado en entry vs exit)
+
+═══════════════════════════════════════════════════════════════════════
+
+🧪 VALIDACIÓN Y TESTING:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Ejecutar backtest completo:
+   $ python3 daily_backtest_runner.py --start 2023-01-01 --end 2024-12-31
+
+2. Verificar logs de ejecución:
+   $ grep "FASE" logs/*.log
+   
+   Esperado:
+   ✅ FASE 1: AAPL - 50% vendido en +1R ($105.23), Stop → BE
+   ✅ FASE 2: AAPL - 30% vendido en resistencia/ADR ($112.87)
+   🏁 FASE 3: AAPL - cerrado por EMA_CROSS
+
+3. Validar CSV exportado (backtest_results.csv):
+   Columnas nuevas:
+   • initial_shares
+   • tp1_executed
+   • tp2_executed
+   • final_shares_pct
+
+4. Revisar distribución de salidas:
+   • ¿Cuántos trades llegaron a TP1? (tp1_executed = True)
+   • ¿Cuántos trades llegaron a TP2? (tp2_executed = True)
+   • ¿Cuántos runners completos? (final_shares_pct = 20%)
+
+5. Comparar métricas vs. sistema anterior:
+   Métricas esperadas:
+   ↑ Win Rate (TP1 más fácil de alcanzar en +1R)
+   ↑ Profit Factor (mix de quick wins + runners)
+   ↓ Max Drawdown (stop a BE elimina pérdidas)
+   ↔ Avg Hold Time (varía según fase de salida)
+
+═══════════════════════════════════════════════════════════════════════
+
+📚 ARCHIVOS MODIFICADOS/CREADOS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+MODIFICADOS:
+  • src/backtest/daily_engine.py
+    - Position dataclass (líneas 28-44)
+    - Inicialización posición (líneas 225-254)
+    - Sistema 3 fases (líneas 323-378)
+    - Trade record tracking (líneas 381-415)
+
+CREADOS:
+  • PARTIAL_EXITS_SYSTEM.md
+    - Especificación técnica completa
+    - Ejemplos y configuración
+    - Flujo de ejecución detallado
+
+  • IMPLEMENTACION_SALIDAS_PARCIALES.txt
+    - Este archivo de resumen
+    - Estado previo vs. actual
+    - Guía de validación
+
+═══════════════════════════════════════════════════════════════════════
+
+✨ IMPLEMENTACIÓN COMPLETA Y LISTA PARA TESTING
+
+═══════════════════════════════════════════════════════════════════════

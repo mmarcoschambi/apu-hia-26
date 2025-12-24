@@ -1,0 +1,70 @@
+═══════════════════════════════════════════════════════════════════════════
+                 SOPORTE DE ACCIONES FRACCIONADAS IMPLEMENTADO
+═══════════════════════════════════════════════════════════════════════════
+
+✅ PROBLEMA RESUELTO:
+   Cuentas pequeñas no podían comprar acciones caras porque el cálculo
+   redondeaba a 0 shares.
+
+✅ SOLUCIÓN:
+   Soporte de acciones fraccionadas (3 decimales) para cuentas < $25k
+
+═══════════════════════════════════════════════════════════════════════════
+
+📊 EJEMPLO:
+
+   Cuenta: $5,000
+   Riesgo: 1% = $50
+   
+   Acción: $800 (stop $760 = $40 riesgo/share)
+   
+   ANTES: 0 shares ❌ (no trade posible)
+   AHORA: 1.25 shares ✅ ($1,000 capital, 20% cuenta)
+
+═══════════════════════════════════════════════════════════════════════════
+
+🔧 CARACTERÍSTICAS:
+
+• Cuentas < $25k: Fracciones automáticas (3 decimales)
+• Cuentas ≥ $25k: Solo acciones enteras
+• Mínimo de posición: $25
+• Todos los constraints respetan fracciones
+• Plan de ejecución 50/50 funciona con fracciones
+
+═══════════════════════════════════════════════════════════════════════════
+
+💻 USO:
+
+from src.utils.risk_manager import RiskManager
+
+# Cuenta pequeña (fracciones automáticas)
+rm = RiskManager(
+    account_equity=5000,
+    allow_fractional_shares=True  # Activado por defecto
+)
+
+result = rm.calculate_position_size(
+    entry_price=800.0,
+    stop_price=760.0,
+    adr_percent=4.5,
+    avg_daily_volume=1000000
+)
+
+print(f"Shares: {result['shares']}")        # 1.25
+print(f"Fractional: {result['is_fractional']}")  # True
+print(f"Value: ${result['position_value']}")     # $1,000
+
+═══════════════════════════════════════════════════════════════════════════
+
+🧪 TESTS:
+
+python3 test_fractional_shares.py     → 5 tests ✅
+python3 test_institutional_risk.py    → 4 tests ✅
+
+═══════════════════════════════════════════════════════════════════════════
+
+📚 DOCUMENTACIÓN:
+
+Ver: INSTITUTIONAL_RISK_MANAGER.md (sección 4 - Acciones Fraccionadas)
+
+═══════════════════════════════════════════════════════════════════════════

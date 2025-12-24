@@ -12,6 +12,7 @@ from pathlib import Path
 import calendar
 import plotly.figure_factory as ff
 import random
+import pickle
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -33,6 +34,53 @@ def load_watchlist_json():
 def save_watchlist_json(data):
     with open(WATCHLIST_FILE, 'w') as f:
         json.dump(data, f, indent=4)
+
+def get_cache_date_range():
+    """
+    Obtiene el rango de fechas real disponible en el cache
+    Returns: (min_date, max_date) as datetime objects
+    """
+    import pickle
+    
+    cache_dir = 'data/cache'
+    min_date = None
+    max_date = None
+    
+    if not os.path.exists(cache_dir):
+        # Default fallback
+        return datetime(2020, 1, 1), datetime.now()
+    
+    try:
+        for file in os.listdir(cache_dir):
+            # Only process daily data files
+            if file.endswith('_daily.pkl'):
+                try:
+                    with open(os.path.join(cache_dir, file), 'rb') as f:
+                        data = pickle.load(f)
+                        if not data.empty:
+                            dates = data.index
+                            file_min = dates.min()
+                            file_max = dates.max()
+                            
+                            if min_date is None or file_min < min_date:
+                                min_date = file_min
+                            if max_date is None or file_max > max_date:
+                                max_date = file_max
+                except:
+                    continue
+    except:
+        pass
+    
+    # Convert to datetime if necessary
+    if min_date is not None and max_date is not None:
+        if hasattr(min_date, 'to_pydatetime'):
+            min_date = min_date.to_pydatetime()
+        if hasattr(max_date, 'to_pydatetime'):
+            max_date = max_date.to_pydatetime()
+        return min_date, max_date
+    
+    # Default fallback
+    return datetime(2020, 1, 1), datetime.now()
 
 # Función para ejecutar el backtest con UI de progreso y parámetros de riesgo
 def run_backtest_with_progress(start_date, end_date, stop_loss_pct=None, 
@@ -128,35 +176,61 @@ st.title("📈 Momentum V2 - Institutional Risk Dashboard")
 st.sidebar.header("⚙️ Configuración del Sistema")
 
 with st.sidebar.expander("📅 Fechas y Filtros Universo", expanded=True):
+    # Get actual date range from cache
+    cache_min_date, cache_max_date = get_cache_date_range()
+    
     # Initialize session state for dates if not exists
     if 'start_date' not in st.session_state:
-        st.session_state.start_date = datetime(2024, 1, 1)
+        # Default to last year if available
+        default_start = max(cache_min_date, cache_max_date - timedelta(days=365))
+        st.session_state.start_date = default_start
     if 'end_date' not in st.session_state:
-        st.session_state.end_date = datetime.now()
+        st.session_state.end_date = cache_max_date
+    
+    # Show cache info
+    st.info(f"📦 Datos disponibles: {cache_min_date.strftime('%Y-%m-%d')} a {cache_max_date.strftime('%Y-%m-%d')}")
 
     # Random Date Button
     if st.button("🎲 Rango Aleatorio (Backtest)", use_container_width=True):
-        # Random start between 2020 and 6 months ago
-        end_year_limit = datetime.now().year
-        start_year = random.randint(2020, max(2020, end_year_limit - 1))
-        start_month = random.randint(1, 12)
-        start_day = random.randint(1, 28)
-        random_start = datetime(start_year, start_month, start_day)
-        
-        # Duration: 3 to 8 months
-        duration_days = random.randint(90, 240)
-        random_end = min(random_start + timedelta(days=duration_days), datetime.now())
-        
-        st.session_state.start_date = random_start
-        st.session_state.end_date = random_end
-        st.rerun()
+        # Random start within available cache range
+        days_available = (cache_max_date - cache_min_date).days
+        if days_available > 365:
+            # Random start between cache_min and 6 months before cache_max
+            start_offset = random.randint(0, max(0, days_available - 180))
+            random_start = cache_min_date + timedelta(days=start_offset)
+            
+            # Duration: 3 to 8 months
+            duration_days = random.randint(90, 240)
+            random_end = min(random_start + timedelta(days=duration_days), cache_max_date)
+            
+            st.session_state.start_date = random_start
+            st.session_state.end_date = random_end
+            st.rerun()
 
-    run_start_date = st.date_input("Fecha Inicio", value=st.session_state.start_date, max_value=datetime.now())
-    run_end_date = st.date_input("Fecha Fin", value=st.session_state.end_date, max_value=datetime.now())
+    run_start_date = st.date_input(
+        "Fecha Inicio", 
+        value=st.session_state.start_date,
+        min_value=cache_min_date.date(),
+        max_value=cache_max_date.date()
+    )
+    run_end_date = st.date_input(
+        "Fecha Fin", 
+        value=st.session_state.end_date,
+        min_value=cache_min_date.date(),
+        max_value=cache_max_date.date()
+    )
     
     # Sync session state
     st.session_state.start_date = run_start_date
     st.session_state.end_date = run_end_date
+    
+    # Show warning if dates are outside cache range
+    if run_start_date < cache_min_date.date() or run_end_date > cache_max_date.date():
+        st.warning("⚠️ Fechas seleccionadas fuera del rango del cache. Se descargarán datos adicionales.")
+    
+    # Show days selected
+    days_selected = (run_end_date - run_start_date).days
+    st.caption(f"📊 Rango: {days_selected} días ({days_selected/365:.1f} años)")
     
     st.markdown("---")
     # Checkbox para forzar calidad institucional
@@ -195,6 +269,51 @@ with st.sidebar.expander("🛡️ Institutional Risk Manager", expanded=True):
 st.sidebar.markdown("---")
 st.sidebar.header("🚀 Ejecución Rápida")
 direct_symbols = st.sidebar.text_area("Símbolos a Testear (separados por coma)", value="APP, PLTR", help="Escribe los tickers que quieras probar, ej: AAPL, TSLA, NVDA")
+
+# Cache Check Button
+if st.sidebar.button("🔍 Verificar Cache de Símbolos", use_container_width=True):
+    if direct_symbols:
+        symbols_list = [s.strip().upper() for s in direct_symbols.split(',') if s.strip()]
+        
+        with st.sidebar:
+            st.markdown("### 📦 Estado del Cache")
+            
+            for symbol in symbols_list:
+                # Check for both formats: TICKER.pkl and TICKER_daily.pkl
+                cache_file = f"data/cache/{symbol}_daily.pkl"
+                cache_file_alt = f"data/cache/{symbol}.pkl"
+                
+                file_to_check = None
+                if os.path.exists(cache_file):
+                    file_to_check = cache_file
+                elif os.path.exists(cache_file_alt):
+                    file_to_check = cache_file_alt
+                
+                if file_to_check:
+                    try:
+                        with open(file_to_check, 'rb') as f:
+                            data = pickle.load(f)
+                            if not data.empty:
+                                min_d = data.index.min()
+                                max_d = data.index.max()
+                                days = (max_d - min_d).days
+                                
+                                # Check if covers selected range
+                                covers_range = (min_d.date() <= run_start_date and 
+                                              max_d.date() >= run_end_date)
+                                
+                                if covers_range:
+                                    st.success(f"✅ **{symbol}**: {min_d.strftime('%Y-%m-%d')} → {max_d.strftime('%Y-%m-%d')} ({days} días)")
+                                else:
+                                    st.warning(f"⚠️ **{symbol}**: Datos incompletos para rango seleccionado")
+                            else:
+                                st.error(f"❌ **{symbol}**: Cache vacío")
+                    except:
+                        st.error(f"❌ **{symbol}**: Error leyendo cache")
+                else:
+                    st.info(f"📥 **{symbol}**: No en cache (se descargará)")
+    else:
+        st.sidebar.warning("Ingresa símbolos primero")
 
 if st.sidebar.button("🚀 EJECUTAR BACKTEST", use_container_width=True):
     sl_val = stop_loss_input if use_custom_stop else None
@@ -259,6 +378,123 @@ with st.sidebar.form("filtros_form"):
     f_symbol = st.selectbox("Símbolo", syms)
     f_signal = st.selectbox("Señal", sig_types)
     submitted = st.form_submit_button("Actualizar Vista")
+
+# --- MARKET HEALTH CHECK (Siempre visible) ---
+st.header("🛡️ Market Health Check")
+
+try:
+    from src.data.market_data import MarketDataProvider
+    from src.core.market_context import MarketContext
+    
+    with st.spinner("Analizando condiciones del mercado..."):
+        provider = MarketDataProvider()
+        mc = MarketContext(provider)
+        context = mc.analyze_indices()
+    
+    # Extract metrics
+    spy_price = context.get('spy_price', 0)
+    spy_ema20 = context.get('spy_ema20', 0)
+    spy_above_ema20 = context.get('spy_above_ema20', False)
+    breadth_improving = context.get('breadth_improving', False)
+    positive_gex = context.get('positive_gex', False)
+    vix_favorable = context.get('vix_favorable', True)
+    sector_leaders = context.get('sector_leaders', {})
+    market_favorable = context.get('market_favorable_for_longs', False)
+    
+    # Calculate health score
+    health_score = 0
+    if spy_above_ema20:
+        health_score += 2
+    if breadth_improving:
+        health_score += 2
+    if positive_gex:
+        health_score += 1
+    if vix_favorable:
+        health_score += 1
+    if sector_leaders:
+        health_score += 1
+    
+    # Display in columns
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(
+            "SPY Trend",
+            f"${spy_price:.2f}",
+            f"{((spy_price - spy_ema20) / spy_ema20 * 100):+.2f}%" if spy_ema20 else "N/A",
+            delta_color="normal"
+        )
+        if spy_above_ema20:
+            st.success("✅ Above EMA20")
+        else:
+            st.error("❌ Below EMA20")
+    
+    with col2:
+        st.metric("Breadth", "Improving" if breadth_improving else "Declining")
+        if breadth_improving:
+            st.success("✅ Strong")
+        else:
+            st.warning("⚠️ Weak")
+    
+    with col3:
+        st.metric("Volatility", "Favorable" if vix_favorable else "Elevated")
+        if vix_favorable:
+            st.success("✅ VIX < 20")
+        else:
+            st.error("⚠️ VIX High")
+    
+    with col4:
+        st.metric("GEX", "Positive" if positive_gex else "Neutral")
+        if positive_gex:
+            st.success("✅ Low Vol Grind")
+        else:
+            st.info("⚪ Normal")
+    
+    # Health Score and Verdict
+    st.markdown("---")
+    col_score, col_verdict = st.columns([1, 2])
+    
+    with col_score:
+        st.metric("Health Score", f"{health_score}/7", f"{(health_score/7*100):.0f}%")
+        # Progress bar
+        st.progress(health_score / 7)
+    
+    with col_verdict:
+        if not market_favorable:
+            st.error("❌ **NO TRADE MODE** - Market not favorable for longs")
+            st.caption("Go to cash or paper trade only")
+        elif health_score >= 6:
+            st.success("🚀 **AGGRESSIVE MODE** - Excellent conditions")
+            st.caption("Full size (2% risk), all 3 Caminos, focus on leading sectors")
+        elif health_score >= 4:
+            st.success("💪 **STANDARD MODE** - Good conditions")
+            st.caption("Standard size (1.5-2% risk), prefer Camino 1 in leading sectors")
+        else:
+            st.warning("⚠️ **DEFENSIVE MODE** - Be selective")
+            st.caption("Half size (0.5-1% risk), only perfect Blue Sky in top sectors")
+    
+    # Sector Leaders
+    if sector_leaders:
+        st.markdown("---")
+        st.subheader("🎯 Top Sectors Today")
+        top_3 = list(sector_leaders.items())[:3]
+        
+        col_s1, col_s2, col_s3 = st.columns(3)
+        for idx, (sector, data) in enumerate(top_3):
+            with [col_s1, col_s2, col_s3][idx]:
+                pct = data['change_pct']
+                st.metric(
+                    f"#{idx+1} {sector}",
+                    f"{data['symbol']}",
+                    f"{pct:+.2f}%",
+                    delta_color="normal"
+                )
+
+except Exception as e:
+    st.error(f"Error loading market health: {e}")
+    st.caption("Backtest data will still be available below")
+
+st.markdown("---")
 
 # Lógica Principal
 if not df_raw.empty:

@@ -1,0 +1,98 @@
+═══════════════════════════════════════════════════════════════════════
+  RESUMEN DE CAMBIOS: FILTRO RVOL PARA BLUE SKY BREAKOUTS
+═══════════════════════════════════════════════════════════════════════
+
+PROBLEMA:
+---------
+• Trade AGI (2023-11-28) entró con RVOL 1.39x < umbral mínimo 1.5x
+• El filtro existía pero tenía look-ahead bias en el cálculo
+
+SOLUCIÓN:
+---------
+
+📁 1. src/backtest/daily_engine.py (líneas 433-445)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   
+   ANTES:
+   ------
+   # Calculate RVOL: Current volume vs 20-day average
+   avg_volume_20 = df['volume'].rolling(window=20).mean().iloc[-1] if len(df) >= 20 else current_bar['volume']
+   rvol = current_bar['volume'] / avg_volume_20 if avg_volume_20 > 0 else 0
+   
+   PROBLEMA: .rolling() incluye la barra actual → Look-ahead bias
+   
+   DESPUÉS:
+   --------
+   # Calculate RVOL: Current volume vs 20-day average (EXCLUDING current bar to avoid look-ahead)
+   # Get historical data strictly before today
+   prior_bars = df[df.index < today]
+   if len(prior_bars) >= 20:
+       avg_volume_20 = prior_bars['volume'].tail(20).mean()
+       rvol = current_bar['volume'] / avg_volume_20 if avg_volume_20 > 0 else 0
+   else:
+       avg_volume_20 = current_bar['volume']
+       rvol = 0
+   
+   SOLUCIÓN: Solo usa datos ANTES del día de entrada → Sin look-ahead
+
+📁 2. app.py (líneas 342-373)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   
+   AGREGADO:
+   ---------
+   # Add context columns if available
+   if 'context_rvol' in df_disp.columns:
+       cols.insert(4, 'context_rvol')  # Add after signal_type
+   if 'context_trend' in df_disp.columns:
+       cols.insert(5, 'context_trend')  # Add after rvol
+   
+   column_config = {
+       ...
+       "context_rvol": st.column_config.NumberColumn("RVOL", format="%.2fx"),
+       "context_trend": st.column_config.TextColumn("Trend", width="small"),
+       ...
+   }
+   
+   RESULTADO: Ahora las exportaciones CSV incluyen RVOL y Trend
+
+📁 3. src/strategies/triad_protocol.py (líneas 143-169)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   
+   YA EXISTÍA (verificado):
+   ------------------------
+   # FILTER 2: Reject if RVOL < 1.5x
+   if rvol < 1.5:
+       return Signal(
+           camino=None,
+           action='NO_SETUP',
+           reasoning=f"REJECTED Blue Sky: RVOL ({rvol:.2f}x) is below 1.5x threshold. "
+                     f"Need RVOL > 1.5x (ideally > 2.0x) for confirmation.",
+           context={'rejection_reason': 'Low_RVOL', ...}
+       )
+
+═══════════════════════════════════════════════════════════════════════
+
+IMPACTO:
+--------
+
+ANTES DEL FIX:
+• AGI entra con RVOL "aparente" > 1.5x (con look-ahead)
+• Trade record muestra RVOL real = 1.39x (correcto)
+• Inconsistencia entre señal y registro
+
+DESPUÉS DEL FIX:
+• AGI es RECHAZADO porque RVOL real = 1.39x < 1.5x
+• Señal y registro son consistentes
+• Exportaciones muestran RVOL para auditoría
+
+═══════════════════════════════════════════════════════════════════════
+
+PRÓXIMOS PASOS:
+---------------
+
+1. Ejecutar nuevo backtest para verificar
+2. Verificar que AGI ya NO aparece en resultados
+3. Exportar CSV y confirmar columnas RVOL/Trend presentes
+4. Validar que todos los BLUE_SKY tengan RVOL >= 1.5x
+
+═══════════════════════════════════════════════════════════════════════

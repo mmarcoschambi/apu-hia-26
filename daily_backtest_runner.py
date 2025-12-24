@@ -43,6 +43,7 @@ def main():
     parser.add_argument('--min_adr', type=float, default=1.5) # New
     parser.add_argument('--min_price', type=float, default=5.0) # New
     parser.add_argument('--min_dollar_vol', type=float, default=15000000.0) # New
+    parser.add_argument('--min_rvol', type=float, default=1.5, help="Minimum Relative Volume (RVOL)")
     parser.add_argument('--skip_filters', action='store_true', help="Skip fundamental filters")
     
     args = parser.parse_args()
@@ -69,6 +70,7 @@ def main():
         min_adr=args.min_adr,
         min_price=args.min_price,
         min_dollar_vol=args.min_dollar_vol,
+        min_rvol=args.min_rvol,
         skip_filters=args.skip_filters
     )
     
@@ -80,7 +82,7 @@ def main():
         # Dashboard expects: entry_date, exit_date, entry_price, exit_price, returns_pct, is_profitable, signal_type, signal_reason, symbol, shares, position_value, monetary_risk
         
         trades_df['is_profitable'] = trades_df['pnl'] > 0
-        trades_df['signal_type'] = 'SCREENER_MATCH' # Simplified
+        # trades_df['signal_type'] is already populated by engine
         trades_df['signal_reason'] = trades_df['reason']
         trades_df['returns_pct'] = trades_df['return_pct']
         trades_df['position_value'] = trades_df['entry_price'] * trades_df['shares']

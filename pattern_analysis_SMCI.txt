@@ -1,0 +1,22 @@
+PATTERN ANALYSIS REPORT
+=============================================================
+Symbol: SMCI
+Analysis Date: 2025-12-19
+Price: $31.11
+
+PATTERNS DETECTED: 1
+------------------------------------------------------------
+
+1. POCKET_PIVOT
+   Confidence: 55.0%
+   Reasoning: Pocket Pivot detected! Volume > down days, Volume 1.5x down days, Strong gain: 5.1%
+   Entry: $31.11
+   Stop: $28.62
+   Risk: 8.0%
+   Characteristics:
+     - current_volume: 39753300.00
+     - volume_ratio: 1.55
+     - volume_vs_avg: 1.88
+     - daily_gain_pct: 5.14
+     - num_down_days: 7
+

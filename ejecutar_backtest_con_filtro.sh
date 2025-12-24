@@ -1,0 +1,56 @@
+#!/bin/bash
+# Script para ejecutar un backtest limpio con el nuevo filtro de tendencia
+
+echo "════════════════════════════════════════════════════════"
+echo "🚀 EJECUTANDO BACKTEST CON FILTRO DE TENDENCIA"
+echo "════════════════════════════════════════════════════════"
+echo ""
+echo "📋 Configuración:"
+echo "   • Filtro: Blue Sky RECHAZADO si Tendencia = Weak"
+echo "   • Solo se ejecutan trades con precio > SMA20"
+echo ""
+echo "⏳ Iniciando backtest..."
+echo ""
+
+# Backup del backtest anterior
+if [ -f "backtest_results.csv" ]; then
+    mv backtest_results.csv "backtest_results_old_$(date +%Y%m%d_%H%M%S).csv"
+    echo "✅ Backtest anterior respaldado"
+fi
+
+# Ejecutar backtest desde la app de Streamlit
+# O puedes ejecutarlo manualmente con los parámetros que prefieras
+echo ""
+echo "════════════════════════════════════════════════════════"
+echo "✨ INSTRUCCIONES:"
+echo "════════════════════════════════════════════════════════"
+echo ""
+echo "1. Abre la aplicación Streamlit:"
+echo "   streamlit run app.py"
+echo ""
+echo "2. En el sidebar, configura:"
+echo "   - Período de fechas (ej: 2020-12-01 a 2021-03-01)"
+echo "   - Risk % = 1%"
+echo "   - Max Positions = 5"
+echo ""
+echo "3. Presiona 'EJECUTAR BACKTEST'"
+echo ""
+echo "4. En los logs verás mensajes como:"
+echo "   🚫 REJECTED Blue Sky Breakout: Trend 'Weak'"
+echo "   ✅ APPROVED Blue Sky Breakout: Trend 'Uptrend'"
+echo ""
+echo "5. Los resultados ya NO incluirán Blue Sky con Weak trend"
+echo ""
+echo "════════════════════════════════════════════════════════"
+echo "📊 VALIDACIÓN"
+echo "════════════════════════════════════════════════════════"
+echo ""
+echo "Para validar que el filtro funciona:"
+echo ""
+echo "# Ver trades de Blue Sky en el nuevo backtest"
+echo "grep BLUE_SKY backtest_results.csv | cut -d',' -f1,2,10"
+echo ""
+echo "# Ver trends de los trades (columna context_trend)"
+echo "# Ninguno debería tener 'Weak' en Blue Sky"
+echo ""
+echo "════════════════════════════════════════════════════════"

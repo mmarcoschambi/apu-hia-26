@@ -1,0 +1,391 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                🚀 MOMENTUM TRIAD - LIVE TRADING SYSTEM ��                   ║
+║                                                                              ║
+║              Del Backtest al Trading Real - Guía Completa                    ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+
+📋 TABLA DE CONTENIDOS
+═══════════════════════
+
+1. Setup Inicial (5 minutos)
+2. Tu Primera Mañana
+3. Herramientas Disponibles
+4. Flujo Diario Completo
+5. Gestión de Riesgo
+6. Preguntas Frecuentes
+
+
+══════════════════════════════════════════════════════════════════════════════
+🎯 1. SETUP INICIAL (5 MINUTOS)
+══════════════════════════════════════════════════════════════════════════════
+
+Paso 1: Ejecutar setup automático
+----------------------------------
+$ ./setup_live_trading.sh
+
+Esto creará:
+✅ acciones_activas.csv (tu watchlist)
+✅ active_positions.json (tracking de posiciones)
+✅ closed_trades.csv (historial de trades)
+
+
+Paso 2: Personalizar tu watchlist
+----------------------------------
+$ nano acciones_activas.csv
+
+Añadir tus tickers favoritos (ejemplo):
+    Ticker
+    AAPL
+    NVDA
+    TSLA
+    META
+    GOOGL
+    SMCI
+    PLTR
+
+Criterios:
+• Alta liquidez (> 5M shares/día)
+• Volatilidad apropiada (ATR > 2%)
+• Actualizar semanalmente
+
+
+Paso 3: Verificar que funciona
+-------------------------------
+$ python market_health_check.py --help
+$ python live_trading_scanner.py --help
+$ python position_tracker.py --help
+
+Si ves el help text → ¡Todo listo! ✅
+
+
+══════════════════════════════════════════════════════════════════════════════
+🌅 2. TU PRIMERA MAÑANA (SÚPER FÁCIL)
+══════════════════════════════════════════════════════════════════════════════
+
+🕗 8:00 AM - Ejecuta UN SOLO comando:
+--------------------------------------
+$ python morning_workflow.py
+
+Este comando hará TODO por ti:
+
+    ✅ Verificará si el mercado está favorable (SPY > EMA20, breadth, GEX)
+    ✅ Revisará tus posiciones abiertas
+    ✅ Escaneará tu watchlist buscando setups
+    ✅ Te generará un plan de acción específico
+
+OUTPUT EJEMPLO:
+    
+    🛡️  MARKET HEALTH CHECK
+    ========================
+    SPY: $605.50 (EMA20: $600.20) ✅
+    Breadth: ✅ Improving
+    GEX: ✅ Positive
+    
+    🎯 VERDICT: AGGRESSIVE MODE
+    Max positions: 5 | Risk per trade: 2%
+    
+    📍 NEW SETUPS FOUND: 2
+    
+    1. AAPL - Camino 1 (Blue Sky)
+       Entry: $150.50 | Stop: $145.20
+       Action: Place BUY STOP order
+    
+    2. TSLA - Camino 2 (VWAP Reclaim)
+       Action: Set alert for VWAP cross
+    
+    📋 ACTION PLAN:
+    • 9:20 AM: Place orders in broker
+    • 9:30 AM: Monitor fills
+    • 10:30 AM: Cancel unfilled orders
+
+
+🕘 9:20 AM - Coloca tus órdenes
+--------------------------------
+En tu broker (IB, TD Ameritrade, etc.):
+
+    Order Type: Buy Stop Limit
+    Symbol: AAPL
+    Stop Price: $150.50
+    Limit Price: $151.00  (stop + $0.50 slippage)
+    Quantity: [Calculado según tu risk]
+    Duration: DAY
+
+
+🕤 9:30 AM - Apertura del mercado
+----------------------------------
+$ python position_tracker.py --update
+
+Esto actualiza precios en tiempo real.
+
+Si tu orden se ejecutó → Registrarla:
+$ python position_tracker.py --add AAPL 150.50 145.20 100 Camino1
+
+
+🕧 12:00 PM - Mid-day check
+----------------------------
+$ python daily_workflow.py mid-day
+
+Review rápido de cómo van tus trades.
+
+
+🕓 4:00 PM - Cierre del mercado
+--------------------------------
+$ python daily_workflow.py market-close
+
+Review completo + journal prompts.
+
+Si cerraste algún trade:
+$ python position_tracker.py --close AAPL 155.00
+
+
+══════════════════════════════════════════════════════════════════════════════
+🛠️  3. HERRAMIENTAS DISPONIBLES
+══════════════════════════════════════════════════════════════════════════════
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Herramienta                │ Uso                    │ Cuándo Usar         │
+├──────────────────────────────────────────────────────────────────────────┤
+│ morning_workflow.py        │ Rutina completa        │ 8:00 AM diario      │
+│ market_health_check.py     │ Solo health check      │ Antes de escanear   │
+│ live_trading_scanner.py    │ Escanear watchlist     │ Pre-market          │
+│ position_tracker.py        │ Gestionar posiciones   │ Durante el día      │
+│ daily_workflow.py          │ Workflows por hora     │ Market open/close   │
+└──────────────────────────────────────────────────────────────────────────┘
+
+
+CHEAT SHEET - Comandos Más Usados:
+───────────────────────────────────
+
+# Morning routine (TODO EN UNO)
+$ python morning_workflow.py
+
+# Solo health check
+$ python market_health_check.py
+
+# Ver posiciones
+$ python position_tracker.py
+
+# Actualizar precios
+$ python position_tracker.py --update
+
+# Añadir posición
+$ python position_tracker.py --add SYMBOL ENTRY STOP SHARES CAMINO
+
+# Cerrar posición
+$ python position_tracker.py --close SYMBOL EXIT_PRICE
+
+# Ver historial
+$ python position_tracker.py --history
+
+
+══════════════════════════════════════════════════════════════════════════════
+📅 4. FLUJO DIARIO COMPLETO
+══════════════════════════════════════════════════════════════════════════════
+
+┌────────────┬─────────────────────────────────────────────────────────────┐
+│   HORA     │                    ACTIVIDAD                                │
+├────────────┼─────────────────────────────────────────────────────────────┤
+│  8:00 AM   │ ☕ python morning_workflow.py                               │
+│            │    → Health check + Scan + Action plan                      │
+├────────────┼─────────────────────────────────────────────────────────────┤
+│  9:20 AM   │ 📝 Colocar órdenes en broker                                │
+│            │    → Buy stops + Alertas                                    │
+├────────────┼─────────────────────────────────────────────────────────────┤
+│  9:30 AM   │ 🔔 Market open - Monitor fills                              │
+│            │    → python position_tracker.py --update                    │
+├────────────┼─────────────────────────────────────────────────────────────┤
+│ 10:30 AM   │ 🗑️  Cancelar órdenes no ejecutadas                          │
+│            │    → Si no se llenó en 1h = no es para hoy                 │
+├────────────┼─────────────────────────────────────────────────────────────┤
+│ 12:00 PM   │ 📊 Mid-day review                                           │
+│            │    → python daily_workflow.py mid-day                       │
+├────────────┼─────────────────────────────────────────────────────────────┤
+│  3:30 PM   │ 🎯 Preparar para cierre                                     │
+│            │    → Decisión: ¿mantener overnight?                        │
+├────────────┼─────────────────────────────────────────────────────────────┤
+│  4:00 PM   │ 🌆 Market close review                                      │
+│            │    → python daily_workflow.py market-close                  │
+├────────────┼─────────────────────────────────────────────────────────────┤
+│  4:30 PM   │ 📝 Trading journal                                          │
+│            │    → Responder prompts, analizar trades                    │
+└────────────┴─────────────────────────────────────────────────────────────┘
+
+
+══════════════════════════════════════════════════════════════════════════════
+💰 5. GESTIÓN DE RIESGO (MUY IMPORTANTE)
+══════════════════════════════════════════════════════════════════════════════
+
+Reglas NO NEGOCIABLES:
+──────────────────────
+
+✅ Risk por trade: 1-2% máximo
+   Ejemplo: Cuenta $25,000 → Risk $500 por trade
+
+✅ Max posiciones simultáneas: 3-5
+   No sobrecargar el portfolio
+
+✅ Max loss diario: 6%
+   Si pierdes $1,500 en el día → STOP trading
+
+✅ Stop loss SIEMPRE definido ANTES de entrar
+   Sin excepciones. Nunca.
+
+✅ Position sizing basado en risk:
+   Shares = (Account × Risk%) / (Entry - Stop)
+
+✅ Partial exits a +3R:
+   Vender 50% → Asegurar ganancia
+
+
+Matriz de Ajuste por Market Health:
+────────────────────────────────────
+
+╔══════════════╦═══════════╦══════════════╦════════════╗
+║ Market Mode  ║ Risk/Trade║ Max Positions║  Setups    ║
+╠══════════════╬═══════════╬══════════════╬════════════╣
+║ 🚀 Aggressive║    2%     ║      5       ║ All 3      ║
+║ 💪 Standard  ║   1.5%    ║     3-4      ║ Prefer C1  ║
+║ ⚠️  Defensive║    1%     ║     1-2      ║ Only C1    ║
+║ ❌ No Trade  ║    0%     ║      0       ║ CASH       ║
+╚══════════════╩═══════════╩══════════════╩════════════╝
+
+
+PRE-REQUISITOS para Operar Ese Día:
+────────────────────────────────────
+
+SOLO opera si AL MENOS UNO es TRUE:
+    ☑️  SPY > EMA20 (tendencia alcista)
+    ☑️  Breadth mejorando (internos fuertes)
+
+Si AMBOS son FALSE → NO OPERAR (sin excepciones)
+
+
+Señales de Advertencia (NO operar):
+────────────────────────────────────
+    🚨 SPY gap down > 1%
+    🚨 VIX > 25
+    🚨 Breadth en declive
+    🚨 Noticias macro importantes (Fed, CPI)
+
+
+══════════════════════════════════════════════════════════════════════════════
+❓ 6. PREGUNTAS FRECUENTES
+══════════════════════════════════════════════════════════════════════════════
+
+P: ¿Necesito conectar mi broker a la herramienta?
+R: NO es obligatorio. Puedes:
+   • Usar las herramientas para análisis
+   • Colocar órdenes manualmente en tu broker
+   • Registrar trades en el position_tracker
+   
+   Para automatización completa (opcional):
+   • Interactive Brokers API (ib_insync)
+   • Alpaca API (alpaca-trade-api)
+
+
+P: ¿Cuánto capital necesito?
+R: Mínimo recomendado: $10,000
+   • Permite diversificación (3-5 posiciones)
+   • Risk management adecuado
+   • Puede empezar con menos en paper trading
+
+
+P: ¿Cuántos trades haré por semana?
+R: Variable, pero típicamente:
+   • 2-5 nuevos setups por semana
+   • El sistema es SELECTIVO
+   • Mejor calidad que cantidad
+
+
+P: ¿Qué hago si no hay setups?
+R: ¡NADA! Esto es normal y BUENO.
+   • No forzar trades
+   • Paciencia = parte del edge
+   • Usa el tiempo para estudiar charts
+
+
+P: ¿Debo operar todos los días?
+R: NO. Solo cuando:
+   ✅ Market health check PASA
+   ✅ Hay setups de alta calidad
+   ✅ Te sientes mentalmente preparado
+
+
+P: ¿Qué pasa si el scanner no encuentra setups?
+R: Es completamente normal. El sistema espera:
+   • Patrones de alta probabilidad
+   • Condiciones de mercado favorables
+   • Timing perfecto
+   
+   NO HAY SETUPS = NO HAY TRADES (disciplina!)
+
+
+P: ¿Cómo sé si estoy listo para live trading?
+R: Checklist:
+   ☑️  Backtest validado (win rate > 50%)
+   ☑️  Entiendes los 3 Caminos perfectamente
+   ☑️  2 semanas de paper trading exitosas
+   ☑️  Plan de risk management definido
+   ☑️  Mentalmente preparado para pérdidas
+   
+   Si 5/5 → LISTO. Si no → MÁS PRÁCTICA.
+
+
+══════════════════════════════════════════════════════════════════════════════
+📚 DOCUMENTACIÓN COMPLETA
+══════════════════════════════════════════════════════════════════════════════
+
+Para profundizar más, lee estos documentos (en orden):
+
+1. QUICK_START_LIVE.md
+   → Guía rápida con ejemplos concretos
+
+2. LIVE_TRADING_GUIDE.md
+   → Guía completa y exhaustiva (40+ páginas)
+
+3. MARKET_FILTERS.md
+   → Entender los filtros de salud del mercado
+
+4. TRADE_LIFECYCLE_MASTERCLASS.md
+   → Cómo se gestiona un trade de inicio a fin
+
+5. PATTERN_DETECTION_GUIDE.md
+   → Cómo el sistema detecta los 3 Caminos
+
+
+══════════════════════════════════════════════════════════════════════════════
+✅ SIGUIENTE PASO
+══════════════════════════════════════════════════════════════════════════════
+
+1. Si aún no lo has hecho:
+   $ ./setup_live_trading.sh
+
+2. Prueba el morning workflow (aunque el mercado esté cerrado):
+   $ python morning_workflow.py
+
+3. Lee QUICK_START_LIVE.md para ver un ejemplo día completo
+
+4. Practica con paper trading 2 semanas mínimo
+
+5. Cuando estés listo → ¡A tradear! 🚀
+
+
+══════════════════════════════════════════════════════════════════════════════
+
+💡 RECUERDA: El backtest te da confianza en el SISTEMA.
+             El live trading te enseña DISCIPLINE y EMOTIONAL CONTROL.
+
+🎯 OBJETIVO: No es tradear todos los días, sino tradear los MEJORES días.
+
+🛡️  REGLA ORO: When in doubt, sit it out.
+
+══════════════════════════════════════════════════════════════════════════════
+
+¡ÉXITO EN TU TRADING! 🚀
+
+Trade safe. Trade smart. Trade the plan.
+
+══════════════════════════════════════════════════════════════════════════════

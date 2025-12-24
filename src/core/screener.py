@@ -5,8 +5,9 @@ Filters candidates based on:
 1. Volatility: ADR(20) > threshold (default 1.5%)
 2. Liquidity: Avg Volume > 300k AND Avg Dollar Volume > $15M
 3. Quality: Price > $5
-4. Relative Strength: Outperforming SPY (50 days)
-5. Structure: Base Breakout
+4. Relative Volume: RVOL > threshold (default 1.5x)
+5. Relative Strength: Outperforming SPY (50 days)
+6. Structure: Base Breakout
 """
 
 import pandas as pd
@@ -19,12 +20,14 @@ class InstitutionalScreener:
                  min_price: float = 5.0,
                  min_avg_vol: int = 300000,
                  min_dollar_vol: float = 15000000.0,
-                 rs_window: int = 50):
+                 rs_window: int = 50,
+                 min_rvol: float = 1.5):
         self.adr_threshold = adr_threshold
         self.min_price = min_price
         self.min_avg_vol = min_avg_vol
         self.min_dollar_vol = min_dollar_vol
         self.rs_window = rs_window
+        self.min_rvol = min_rvol
 
     def scan(self, symbol: str, df: pd.DataFrame, spy_df: pd.DataFrame, date: pd.Timestamp) -> Optional[Dict]:
         """
@@ -69,6 +72,18 @@ class InstitutionalScreener:
             if avg_dollar_vol < self.min_dollar_vol:
                 return None, f"Low $Vol: ${avg_dollar_vol/1e6:.1f}M < ${self.min_dollar_vol/1e6:.1f}M"
 
+            # --- FILTER 3B: RVOL (RELATIVE VOLUME) ---
+            # Calculate RVOL: Current volume vs 20-day average (excluding current bar)
+            if len(hist) >= 21:
+                prior_bars = hist.iloc[:-1]  # Exclude current bar
+                avg_vol_20 = prior_bars['volume'].tail(20).mean()
+                rvol = current['volume'] / avg_vol_20 if avg_vol_20 > 0 else 0
+                if rvol < self.min_rvol:
+                    return None, f"Low RVOL: {rvol:.2f}x < {self.min_rvol}x"
+            else:
+                rvol = 0
+                return None, "Insufficient history for RVOL calculation"
+
             # --- FILTER 4: RELATIVE STRENGTH ---
             if not spy_hist.empty and len(spy_hist) >= self.rs_window:
                 stock_perf = (current['close'] / hist.iloc[-self.rs_window]['close']) - 1
@@ -105,6 +120,7 @@ class InstitutionalScreener:
                 'adr_pct': adr_pct,
                 'avg_vol': avg_vol,
                 'avg_dollar_vol': avg_dollar_vol,
+                'rvol': rvol,
                 'rs_value': 0.0, # Placeholder or calc above
                 'entry_trigger': current['high'],
                 'stop_loss': current['low']

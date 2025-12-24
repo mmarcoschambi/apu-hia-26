@@ -145,11 +145,21 @@ class TriadOpenBB:
             monetary_risk = risk_per_share
             
             if risk_manager:
+                # Calcular ADR (Average Daily Range) de últimos 20 días
+                recent_data = data.iloc[max(0, idx_entry-20):idx_entry+1]
+                if len(recent_data) > 1:
+                    adr_pct = ((recent_data['high'] - recent_data['low']) / recent_data['close'] * 100).mean()
+                    avg_volume = int(recent_data['volume'].mean())
+                else:
+                    adr_pct = 4.0  # Default conservador
+                    avg_volume = 1000000  # Default 1M shares
+                
                 sizing = risk_manager.calculate_position_size(
                     entry_price=entry_price,
                     stop_price=stop_loss,
-                    market_regime_factor=1.0, # Default for now, could be dynamic
-                    adr_pct=0.0 # Could calculate if needed
+                    adr_percent=adr_pct,
+                    avg_daily_volume=avg_volume,
+                    market_regime_factor=1.0  # Default for now, could be dynamic
                 )
                 shares = sizing['shares']
                 position_value = sizing['position_value']

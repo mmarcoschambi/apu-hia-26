@@ -15,36 +15,187 @@ logger = logging.getLogger(__name__)
 class TriadIndicators:
     
     @staticmethod
-    def detect_base(df: pd.DataFrame, lookback: int = 20) -> dict:
+    def detect_base(df: pd.DataFrame, lookback: int = 20, 
+                   min_prior_advance: float = 0.30,
+                   max_base_range: float = 0.15,
+                   tightness_days: int = 5) -> dict:
         """
-        Detect consolidation base (El Mapa)
-        Returns base high/low and compression metrics
-        """
-        if df.empty or len(df) < lookback:
-            return {'detected': False}
+        Detect professional consolidation base (El Mapa)
         
+        Criterios institucionales:
+        1. Tendencia Previa: Subida de al menos 30% antes de la base
+        2. Volumen en la Base: Volumen seco (bajo) en días rojos
+        3. Tightness: Últimas velas apretadas antes de ruptura
+        4. Medias Móviles: Ordenadas correctamente (10>20>50>200)
+        
+        Args:
+            lookback: Días de consolidación a analizar
+            min_prior_advance: % mínimo de subida previa requerida (default 30%)
+            max_base_range: % máximo de rango de la base (default 15%)
+            tightness_days: Días finales para verificar apretamiento
+        """
+        if df.empty or len(df) < lookback + 60:  # Need history for prior advance
+            return {'detected': False, 'reason': 'Insufficient data'}
+        
+        # =================================================================
+        # 1. TENDENCIA PREVIA: ¿Subió al menos 30% antes de la base?
+        # =================================================================
+        # Buscar el punto bajo antes de la base (últimos 60 días antes del lookback)
+        prior_period = df.iloc[-(lookback + 60):-lookback]
+        if len(prior_period) < 20:
+            return {'detected': False, 'reason': 'Insufficient prior data'}
+        
+        prior_low = prior_period['Low'].min()
+        base_start_price = df.iloc[-lookback]['Close']
+        prior_advance = (base_start_price - prior_low) / prior_low
+        
+        has_prior_advance = prior_advance >= min_prior_advance
+        
+        # =================================================================
+        # 2. ANÁLISIS DE LA BASE
+        # =================================================================
         recent = df.tail(lookback)
         
-        # Calculate range compression
         range_high = recent['High'].max()
         range_low = recent['Low'].min()
         range_pct = (range_high - range_low) / range_low
         
-        # Detect if we're near the highs (compression at top)
         current_price = df['Close'].iloc[-1]
         distance_from_high = (range_high - current_price) / current_price
         
-        # Base is valid if range is tight and price is near highs
-        is_compressed = range_pct < 0.15  # Within 15% range
+        is_compressed = range_pct <= max_base_range
         near_highs = distance_from_high < 0.03  # Within 3% of base high
         
+        # =================================================================
+        # 3. VOLUMEN EN LA BASE: ¿Se secó en días rojos?
+        # =================================================================
+        recent_with_vol = recent.copy()
+        recent_with_vol['is_red'] = recent_with_vol['Close'] < recent_with_vol['Open']
+        recent_with_vol['is_green'] = recent_with_vol['Close'] >= recent_with_vol['Open']
+        
+        red_days = recent_with_vol[recent_with_vol['is_red']]
+        green_days = recent_with_vol[recent_with_vol['is_green']]
+        
+        if len(red_days) > 0 and len(green_days) > 0:
+            avg_red_volume = red_days['Volume'].mean()
+            avg_green_volume = green_days['Volume'].mean()
+            
+            # Volumen en rojos debe ser menor que en verdes (idealmente 50-70% menos)
+            volume_dry_ratio = avg_red_volume / avg_green_volume if avg_green_volume > 0 else 1.0
+            volume_dried_up = volume_dry_ratio < 0.75  # Rojos tienen <75% del volumen de verdes
+        else:
+            volume_dry_ratio = 1.0
+            volume_dried_up = False
+        
+        # =================================================================
+        # 4. TIGHTNESS: ¿Últimas velas son apretadas?
+        # =================================================================
+        last_days = recent.tail(tightness_days)
+        
+        # Calcular rango promedio de las últimas velas
+        last_days_ranges = (last_days['High'] - last_days['Low']) / last_days['Low']
+        avg_recent_range = last_days_ranges.mean()
+        
+        # Comparar con rango promedio de toda la base
+        all_ranges = (recent['High'] - recent['Low']) / recent['Low']
+        avg_base_range = all_ranges.mean()
+        
+        # Las últimas velas deben ser más apretadas (menor rango)
+        is_tight = avg_recent_range < avg_base_range * 0.8  # 20% más apretadas
+        
+        # =================================================================
+        # 5. MEDIAS MÓVILES: ¿Están ordenadas? (10>20>50>200)
+        # =================================================================
+        # Calcular EMAs
+        df_calc = df.copy()
+        df_calc['EMA10'] = df_calc['Close'].ewm(span=10, adjust=False).mean()
+        df_calc['EMA20'] = df_calc['Close'].ewm(span=20, adjust=False).mean()
+        df_calc['SMA50'] = df_calc['Close'].rolling(window=50).mean()
+        df_calc['SMA200'] = df_calc['Close'].rolling(window=200).mean()
+        
+        current_emas = df_calc.iloc[-1]
+        
+        # Verificar orden (con tolerancia de 1% para evitar rechazos por decimales)
+        ema10 = current_emas['EMA10']
+        ema20 = current_emas['EMA20']
+        sma50 = current_emas['SMA50']
+        sma200 = current_emas['SMA200']
+        
+        # Permitir que estén muy cerca (dentro de 1%)
+        mas_aligned = (
+            ema10 >= ema20 * 0.99 and
+            ema20 >= sma50 * 0.99 and
+            sma50 >= sma200 * 0.99
+        )
+        
+        # Además, precio debe estar sobre EMA20 (mínimo)
+        price_above_ema20 = current_price >= ema20 * 0.98
+        
+        # =================================================================
+        # DECISIÓN FINAL: ¿Es una base válida?
+        # =================================================================
+        # Criterios OBLIGATORIOS:
+        # 1. Subida previa de 30%+
+        # 2. Rango comprimido (<15%)
+        # 3. Precio cerca de los altos
+        
+        # Criterios DESEABLES (mejoran calidad):
+        # 4. Volumen seco en rojos
+        # 5. Tightness en últimos días
+        # 6. MAs alineadas
+        
+        # Base detectada si cumple obligatorios + al menos 2 de 3 deseables
+        mandatory_met = has_prior_advance and is_compressed and near_highs
+        quality_score = sum([volume_dried_up, is_tight, mas_aligned and price_above_ema20])
+        
+        is_valid_base = mandatory_met and quality_score >= 2
+        
+        # Determinar razón si falla
+        if not is_valid_base:
+            reasons = []
+            if not has_prior_advance:
+                reasons.append(f"No prior advance (only {prior_advance*100:.1f}%, need {min_prior_advance*100:.0f}%)")
+            if not is_compressed:
+                reasons.append(f"Range too wide ({range_pct*100:.1f}% > {max_base_range*100:.0f}%)")
+            if not near_highs:
+                reasons.append(f"Price too far from high ({distance_from_high*100:.1f}%)")
+            if not volume_dried_up:
+                reasons.append(f"Volume not dried (ratio {volume_dry_ratio:.2f})")
+            if not is_tight:
+                reasons.append("Not tight enough")
+            if not mas_aligned:
+                reasons.append("MAs not aligned")
+            if not price_above_ema20:
+                reasons.append("Price below EMA20")
+            
+            reason = " | ".join(reasons) if reasons else "Unknown"
+        else:
+            reason = "Valid base detected"
+        
         return {
-            'detected': is_compressed and near_highs,
+            'detected': is_valid_base,
+            'reason': reason,
+            # Base metrics
             'base_high': range_high,
             'base_low': range_low,
             'compression_pct': range_pct,
             'distance_from_high_pct': distance_from_high,
-            'current_price': current_price
+            'current_price': current_price,
+            # Quality metrics
+            'prior_advance_pct': prior_advance,
+            'has_prior_advance': has_prior_advance,
+            'volume_dry_ratio': volume_dry_ratio,
+            'volume_dried_up': volume_dried_up,
+            'is_tight': is_tight,
+            'avg_recent_range_pct': avg_recent_range,
+            'mas_aligned': mas_aligned,
+            'price_above_ema20': price_above_ema20,
+            'quality_score': quality_score,
+            # Moving averages
+            'ema10': ema10,
+            'ema20': ema20,
+            'sma50': sma50,
+            'sma200': sma200
         }
     
     @staticmethod

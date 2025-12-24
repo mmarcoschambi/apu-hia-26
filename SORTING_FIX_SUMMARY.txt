@@ -1,0 +1,62 @@
+═══════════════════════════════════════════════════════════════════════════
+              FIX: STREAMLIT TABLE SORTING - COLUMNAS NUMÉRICAS
+═══════════════════════════════════════════════════════════════════════════
+
+✅ PROBLEMA RESUELTO:
+   Columnas con valores positivos/negativos no se ordenaban correctamente
+
+✅ CAUSA:
+   Conversión prematura de números a strings (.map(format))
+
+✅ SOLUCIÓN:
+   Usar st.column_config para formatear sin convertir tipos
+
+═══════════════════════════════════════════════════════════════════════════
+
+📊 COLUMNAS ARREGLADAS:
+
+   • position_value  → Ordena por valor monetario ✅
+   • monetary_risk   → Ordena por riesgo ✅
+   • returns_pct     → Ordena +/- correctamente ✅
+   • r_multiple      → Ordena mejor/peor trade ✅
+   • Result (P/L)    → Ordena ganancia/pérdida ✅
+
+═══════════════════════════════════════════════════════════════════════════
+
+💻 CAMBIO TÉCNICO:
+
+ANTES (Incorrecto):
+   df['r_multiple'] = df['r_multiple'].map('{:+.2f}R'.format)
+   st.dataframe(df)  # Datos son strings
+
+DESPUÉS (Correcto):
+   st.dataframe(df, column_config={
+       "r_multiple": st.column_config.NumberColumn(
+           "R Multiple", format="%+.2f R"
+       )
+   })  # Datos siguen siendo numéricos
+
+═══════════════════════════════════════════════════════════════════════════
+
+🧪 TESTING:
+
+   streamlit run app.py
+   
+   Hacer click en columnas:
+   ✅ Symbol (alfabético)
+   ✅ Entry Date (cronológico)
+   ✅ Position Value (numérico)
+   ✅ Risk (numérico)
+   ✅ Return % (numérico +/-)
+   ✅ R Multiple (numérico +/-)
+   ✅ P/L (numérico +/-)
+
+═══════════════════════════════════════════════════════════════════════════
+
+📁 ARCHIVO:
+   app.py (líneas 284-300)
+
+📚 DOCUMENTACIÓN:
+   STREAMLIT_TABLE_SORTING_FIX.md
+
+═══════════════════════════════════════════════════════════════════════════

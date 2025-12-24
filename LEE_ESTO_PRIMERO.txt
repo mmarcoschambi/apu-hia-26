@@ -1,0 +1,166 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                     ⚠️  IMPORTANTE: LEE ESTO PRIMERO                        ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+🔴 POR QUÉ SIGUES VIENDO TRADES CON "WEAK" TREND:
+═══════════════════════════════════════════════════════════════════════════════
+
+Los trades que ves con "Tendencia: Weak" son del archivo:
+  📄 backtest_results.csv (Fecha: 2025-12-22 03:12:11)
+
+Este archivo se generó ANTES de que implementáramos los filtros.
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                     ✅ LOS FILTROS SÍ ESTÁN IMPLEMENTADOS                   ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Verificado en el código:
+
+✅ src/strategies/triad_protocol.py (línea 117)
+   if trend == 'Weak':
+       return REJECTED
+
+✅ src/strategies/triad_protocol.py (línea 145)
+   if rvol < 1.5:
+       return REJECTED
+
+✅ src/backtest/daily_engine.py (líneas 434-447)
+   Cálculo de trend_status y rvol en market_context
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                     🚀 CÓMO VER LOS FILTROS EN ACCIÓN                       ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+PASO 1: Ejecutar Streamlit
+───────────────────────────
+$ streamlit run app.py
+
+PASO 2: Configurar en Sidebar
+──────────────────────────────
+• Start Date: 2020-12-01
+• End Date: 2021-03-01
+• Risk %: 1
+• Max Positions: 5
+
+PASO 3: Click "EJECUTAR BACKTEST"
+──────────────────────────────────
+El botón está en el sidebar
+
+PASO 4: Observar los Logs en la Terminal
+─────────────────────────────────────────
+Verás mensajes como estos:
+
+🚫 REJECTED Blue Sky Breakout: Trend 'Weak' - Price below SMA20.
+   Base: 82.54, AVWAP: 82.30, Current: 81.20, SMA20: 83.50
+
+🚫 REJECTED Blue Sky Breakout: RVOL too low (1.19x < 1.5x).
+   Base: 86.16, AVWAP: 85.90, Trend: Uptrend. Need >1.5x volume.
+
+✅ APPROVED Blue Sky Breakout: Trend 'Uptrend', RVOL 2.35x.
+   Entry: 195.75, Stop: 193.20, Base: 195.50, AVWAP: 195.30
+
+PASO 5: Validar Resultados
+───────────────────────────
+$ python3 validate_blue_sky_filters.py
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                     📊 QUÉ ESPERAR DEL NUEVO BACKTEST                       ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+ANTES (archivo actual del 2025-12-22 03:12):
+────────────────────────────────────────────
+• Total Blue Sky: 12 trades
+• Con Weak trend: 7 trades ❌
+• Con RVOL < 1.5x: 6 trades ❌
+• Muchos perdedores
+
+DESPUÉS (nuevo backtest con filtros):
+─────────────────────────────────────
+• Total Blue Sky: ~4-5 trades (60% rechazados)
+• Con Weak trend: 0 trades ✅
+• Con RVOL < 1.5x: 0 trades ✅
+• Solo trades de calidad
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                     🔍 EJEMPLO: MU (2021-01-08)                             ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+BACKTEST ANTERIOR (sin filtros):
+────────────────────────────────
+Symbol: MU
+Date: 2021-01-08
+Signal: BLUE_SKY ✓
+Trend: Weak ❌
+RVOL: 1.08x ❌
+→ Trade EJECUTADO
+→ Resultado: -5.44% (-$736.36) 💸
+
+NUEVO BACKTEST (con filtros):
+─────────────────────────────
+Symbol: MU
+Date: 2021-01-08
+Signal: BLUE_SKY ✓
+Trend: Weak ❌ → FILTRO 1 FALLA
+RVOL: 1.08x ❌ → FILTRO 2 FALLA
+→ Trade RECHAZADO ✅
+→ Log: "🚫 REJECTED Blue Sky: Trend is 'Weak'"
+→ Pérdida evitada: $736.36 🎉
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                     ❓ PREGUNTAS FRECUENTES                                 ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+P: ¿Los filtros están activos?
+R: SÍ, están en el código desde hace varias horas
+
+P: ¿Por qué sigo viendo trades con Weak?
+R: Porque estás viendo el backtest ANTERIOR
+
+P: ¿Cómo sé que funcionan?
+R: Ejecuta un NUEVO backtest y verás los logs de rechazo
+
+P: ¿Puedo modificar los umbrales?
+R: Sí, en src/strategies/triad_protocol.py:
+   - Línea 145: if rvol < 1.5  (cambiar a 2.0 para ser más estricto)
+   - Línea 117: if trend == 'Weak' (dejar como está)
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                     ✅ CHECKLIST DE VERIFICACIÓN                            ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Antes de reportar un problema, verifica:
+
+□ ¿Ejecuté un NUEVO backtest desde Streamlit?
+□ ¿Vi los logs de REJECTED/APPROVED en la terminal?
+□ ¿El archivo backtest_results.csv es NUEVO (fecha reciente)?
+□ ¿Ejecuté python3 validate_blue_sky_filters.py?
+
+Si todos son ✅ y aún ves trades con Weak, entonces hay un bug.
+Si alguno es ❌, ejecuta el nuevo backtest primero.
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                     📝 RESUMEN EJECUTIVO                                    ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+ESTADO ACTUAL:
+• Filtros: ✅ Implementados en código
+• Backtest: ❌ Archivo antiguo (sin filtros)
+• Dashboard: ❌ Mostrando datos antiguos
+
+ACCIÓN REQUERIDA:
+1. streamlit run app.py
+2. Configurar fechas y parámetros
+3. Click "EJECUTAR BACKTEST"
+4. Observar logs de rechazos
+5. Validar con: python3 validate_blue_sky_filters.py
+
+RESULTADO ESPERADO:
+• Cero trades Blue Sky con Weak trend
+• Cero trades Blue Sky con RVOL < 1.5x
+• Mejor win rate y menos pérdidas
+
+═══════════════════════════════════════════════════════════════════════════════
+
+Archivo respaldado en: backtest_results_OLD_20251222_032450.csv
+
+═══════════════════════════════════════════════════════════════════════════════
