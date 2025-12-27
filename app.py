@@ -20,7 +20,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from src.backtest.dashboard import InteractiveDashboard
 from src.backtest.visualizer import BacktestVisualizer
 from src.data.openbb_data import OpenBBData
+from src.data.ticker_cache import TickerCache
 from config.universe_presets import LIQUID_MID_CAPS
+
+# Initialize TickerCache
+ticker_cache = TickerCache()
 
 # Función para cargar/guardar watchlist
 WATCHLIST_FILE = 'config/watchlist.json'
@@ -37,57 +41,68 @@ def save_watchlist_json(data):
 
 def get_cache_date_range():
     """
-    Obtiene el rango de fechas real disponible en el cache
+    Obtiene el rango de fechas real disponible en el cache (tanto .pkl como SQLite)
     Returns: (min_date, max_date) as datetime objects
     """
-    import pickle
-    
-    cache_dir = 'data/cache'
     min_date = None
     max_date = None
     
-    if not os.path.exists(cache_dir):
-        # Default fallback
+    # 1. Check SQLite Cache
+    try:
+        cursor = ticker_cache.conn.execute("SELECT MIN(date), MAX(date) FROM ohlcv_cache")
+        sqlite_min, sqlite_max = cursor.fetchone()
+        if sqlite_min and sqlite_max:
+            min_date = datetime.strptime(sqlite_min, '%Y-%m-%d')
+            max_date = datetime.strptime(sqlite_max, '%Y-%m-%d')
+    except Exception as e:
+        pass
+
+    # 2. Check Legacy .pkl Cache
+    cache_dir = 'data/cache'
+    if os.path.exists(cache_dir):
+        try:
+            for file in os.listdir(cache_dir):
+                # Only process daily data files
+                if file.endswith('_daily.pkl'):
+                    try:
+                        with open(os.path.join(cache_dir, file), 'rb') as f:
+                            data = pickle.load(f)
+                            if not data.empty:
+                                file_min = data.index.min()
+                                file_max = data.index.max()
+                                
+                                if hasattr(file_min, 'to_pydatetime'):
+                                    file_min = file_min.to_pydatetime()
+                                if hasattr(file_max, 'to_pydatetime'):
+                                    file_max = file_max.to_pydatetime()
+
+                                if min_date is None or file_min < min_date:
+                                    min_date = file_min
+                                if max_date is None or file_max > max_date:
+                                    max_date = file_max
+                    except:
+                        continue
+        except:
+            pass
+    
+    # Default fallback if nothing found
+    if min_date is None or max_date is None:
         return datetime(2020, 1, 1), datetime.now()
     
-    try:
-        for file in os.listdir(cache_dir):
-            # Only process daily data files
-            if file.endswith('_daily.pkl'):
-                try:
-                    with open(os.path.join(cache_dir, file), 'rb') as f:
-                        data = pickle.load(f)
-                        if not data.empty:
-                            dates = data.index
-                            file_min = dates.min()
-                            file_max = dates.max()
-                            
-                            if min_date is None or file_min < min_date:
-                                min_date = file_min
-                            if max_date is None or file_max > max_date:
-                                max_date = file_max
-                except:
-                    continue
-    except:
-        pass
+    # Cap max_date to today (no future dates)
+    today = datetime.now()
+    if max_date > today:
+        max_date = today
     
-    # Convert to datetime if necessary
-    if min_date is not None and max_date is not None:
-        if hasattr(min_date, 'to_pydatetime'):
-            min_date = min_date.to_pydatetime()
-        if hasattr(max_date, 'to_pydatetime'):
-            max_date = max_date.to_pydatetime()
-        return min_date, max_date
-    
-    # Default fallback
-    return datetime(2020, 1, 1), datetime.now()
+    return min_date, max_date
 
 # Función para ejecutar el backtest con UI de progreso y parámetros de riesgo
 def run_backtest_with_progress(start_date, end_date, stop_loss_pct=None, 
                                equity=100000, risk_pct=0.5, max_exp_pct=25,
                                min_mcap_b=2.0, max_mcap_b=20.0, 
                                min_vol_k=300, min_adr=1.5, min_price=5.0, min_dollar_m=15,
-                               min_rvol=1.5, watchlist_path='config/watchlist.json', skip_filters=False):
+                               min_rvol=1.5, watchlist_path='config/watchlist.json', skip_filters=False,
+                               source='file', sector=None, offline=False, max_symbols=None, sort_by='liquidity'):
     progress_bar = st.progress(0)
     status_text = st.empty()
     log_area = st.empty()
@@ -107,14 +122,27 @@ def run_backtest_with_progress(start_date, end_date, stop_loss_pct=None,
         "--min_adr", str(min_adr),
         "--min_price", str(min_price),
         "--min_dollar_vol", str(int(min_dollar_m * 1e6)),
-        "--min_rvol", str(min_rvol)
+        "--min_rvol", str(min_rvol),
+        "--source", str(source)
     ]
+    
+    if sector:
+        cmd.extend(["--sector", str(sector)])
+    
+    if offline:
+        cmd.append("--offline")
     
     if skip_filters:
         cmd.append("--skip_filters")
     
     if stop_loss_pct is not None and stop_loss_pct > 0:
         cmd.extend(["--stop_loss", str(stop_loss_pct)])
+    
+    if max_symbols:
+        cmd.extend(["--max_symbols", str(max_symbols)])
+    
+    if sort_by:
+        cmd.extend(["--sort_by", str(sort_by)])
     
     try:
         process = subprocess.Popen(
@@ -234,7 +262,8 @@ with st.sidebar.expander("📅 Fechas y Filtros Universo", expanded=True):
     
     st.markdown("---")
     # Checkbox para forzar calidad institucional
-    use_inst_quality = st.checkbox("🛡️ Modo Calidad Institucional", value=True, help="Fuerza filtros mínimos: Mcap > 2B, Precio > $5, Volumen > 300k, $Vol > 15M")
+    use_inst_quality = st.checkbox("🛡️ Modo Calidad Institucional", value=True, 
+                                   help="Fuerza filtros mínimos: Mcap > $2B (sin límite superior), Precio > $5, Volumen > 300k, $Vol > $15M")
     
     # Logic to set defaults based on checkbox
     def_mcap = 2.0 if use_inst_quality else 0.5
@@ -245,7 +274,7 @@ with st.sidebar.expander("📅 Fechas y Filtros Universo", expanded=True):
     st.markdown("**Filtros de Calidad**")
     c1, c2 = st.columns(2)
     in_min_mcap = c1.number_input("Min Mcap ($B)", value=def_mcap, step=0.5, disabled=use_inst_quality)
-    in_max_mcap = c2.number_input("Max Mcap ($B)", value=20.0, step=1.0)
+    in_max_mcap = c2.number_input("Max Mcap ($B)", value=5000.0, step=100.0, help="Default: $5T (permite mega-caps)")
     in_min_price = st.number_input("Precio Mínimo ($)", value=def_price, step=1.0, disabled=use_inst_quality)
     
     st.markdown("**Filtros de Liquidez y Volatilidad**")
@@ -260,6 +289,14 @@ with st.sidebar.expander("📅 Fechas y Filtros Universo", expanded=True):
     if use_custom_stop:
         stop_loss_input = st.number_input("Stop Loss %", value=3.0, step=0.5)
 
+    st.markdown("---")
+    st.markdown("**Mantenimiento del Universo**")
+    if st.button("🔄 Actualizar Universo (SQLite)", help="Descarga lista fresca de tickers (S&P500, Nasdaq, Dow)"):
+        with st.spinner("Actualizando universo..."):
+            ticker_cache.update_universe(force=True)
+            st.success("¡Universo actualizado!")
+            st.rerun()
+
 with st.sidebar.expander("🛡️ Institutional Risk Manager", expanded=True):
     in_equity = st.number_input("Equity ($)", value=100000.0, step=10000.0)
     in_risk = st.number_input("Risk per Trade (%)", value=0.5, step=0.1, format="%.2f")
@@ -268,10 +305,28 @@ with st.sidebar.expander("🛡️ Institutional Risk Manager", expanded=True):
 # --- Nueva Entrada Directa de Símbolos ---
 st.sidebar.markdown("---")
 st.sidebar.header("🚀 Ejecución Rápida")
-direct_symbols = st.sidebar.text_area("Símbolos a Testear (separados por coma)", value="APP, PLTR", help="Escribe los tickers que quieras probar, ej: AAPL, TSLA, NVDA")
 
-# Cache Check Button
-if st.sidebar.button("🔍 Verificar Cache de Símbolos", use_container_width=True):
+# Scan Mode Selection
+scan_mode = st.sidebar.radio(
+    "Fuente del Universo",
+    ["📝 Lista Manual", "🌎 Todo el Mercado (SQLite)", "🏗️ Por Sector"],
+    help="Elige qué tickers escanear"
+)
+
+selected_sector = None
+if scan_mode == "🏗️ Por Sector":
+    # Get available sectors from DB
+    try:
+        cursor = ticker_cache.conn.execute("SELECT DISTINCT sector FROM universe WHERE sector != '' ORDER BY sector")
+        sectors = [row[0] for row in cursor.fetchall()]
+        selected_sector = st.sidebar.selectbox("Selecciona Sector", sectors)
+    except:
+        st.sidebar.warning("No se pudieron cargar sectores")
+
+direct_symbols = st.sidebar.text_area("Tu Lista (Referencia o Escaneo)", value="APP, PLTR", help="Si eliges 'Todo el Mercado', esta lista se usará para resaltar oportunidades que NO tenías en el radar.")
+
+# Cache Check Button (Only relevant for manual list)
+if scan_mode == "📝 Lista Manual" and st.sidebar.button("🔍 Verificar Cache de Símbolos", use_container_width=True):
     if direct_symbols:
         symbols_list = [s.strip().upper() for s in direct_symbols.split(',') if s.strip()]
         
@@ -279,58 +334,120 @@ if st.sidebar.button("🔍 Verificar Cache de Símbolos", use_container_width=Tr
             st.markdown("### 📦 Estado del Cache")
             
             for symbol in symbols_list:
-                # Check for both formats: TICKER.pkl and TICKER_daily.pkl
+                # Check SQLite first
+                cursor = ticker_cache.conn.execute(
+                    "SELECT MIN(date), MAX(date) FROM ohlcv_cache WHERE ticker = ?", (symbol,)
+                )
+                sqlite_res = cursor.fetchone()
+                
+                # Check .pkl legacy
                 cache_file = f"data/cache/{symbol}_daily.pkl"
                 cache_file_alt = f"data/cache/{symbol}.pkl"
                 
-                file_to_check = None
-                if os.path.exists(cache_file):
-                    file_to_check = cache_file
-                elif os.path.exists(cache_file_alt):
-                    file_to_check = cache_file_alt
+                found = False
+                if sqlite_res and sqlite_res[0]:
+                    st.write(f"✅ **{symbol}**: SQLite Cache ({sqlite_res[0]} a {sqlite_res[1]})")
+                    found = True
                 
-                if file_to_check:
-                    try:
-                        with open(file_to_check, 'rb') as f:
-                            data = pickle.load(f)
-                            if not data.empty:
-                                min_d = data.index.min()
-                                max_d = data.index.max()
-                                days = (max_d - min_d).days
-                                
-                                # Check if covers selected range
-                                covers_range = (min_d.date() <= run_start_date and 
-                                              max_d.date() >= run_end_date)
-                                
-                                if covers_range:
-                                    st.success(f"✅ **{symbol}**: {min_d.strftime('%Y-%m-%d')} → {max_d.strftime('%Y-%m-%d')} ({days} días)")
-                                else:
-                                    st.warning(f"⚠️ **{symbol}**: Datos incompletos para rango seleccionado")
-                            else:
-                                st.error(f"❌ **{symbol}**: Cache vacío")
-                    except:
-                        st.error(f"❌ **{symbol}**: Error leyendo cache")
-                else:
-                    st.info(f"📥 **{symbol}**: No en cache (se descargará)")
+                if not found:
+                    file_to_check = None
+                    if os.path.exists(cache_file):
+                        file_to_check = cache_file
+                    elif os.path.exists(cache_file_alt):
+                        file_to_check = cache_file_alt
+                    
+                    if file_to_check:
+                        try:
+                            with open(file_to_check, 'rb') as f:
+                                data = pickle.load(f)
+                                if not data.empty:
+                                    min_d = data.index.min()
+                                    max_d = data.index.max()
+                                    st.write(f"✅ **{symbol}**: Pickle Cache ({min_d.strftime('%Y-%m-%d')} a {max_d.strftime('%Y-%m-%d')})")
+                                    found = True
+                        except:
+                            pass
+                
+                if not found:
+                    st.write(f"❌ **{symbol}**: Sin datos en cache")
     else:
         st.sidebar.warning("Ingresa símbolos primero")
 
+# Offline Mode Checkbox
+offline_mode = st.sidebar.checkbox("💾 Modo Offline (Solo Cache)", value=False, help="No descargar datos nuevos, usar solo lo disponible localmente.")
+
+# Universe Size Limiter (for SQLite mode)
+max_symbols_limit = None
+selection_strategy = 'liquidity'  # Default
+
+if scan_mode == "🌎 Todo el Mercado (SQLite)":
+    st.sidebar.warning("⚠️ Universo completo = 5600+ tickers. Puede tardar mucho.")
+    limit_universe = st.sidebar.checkbox("🎯 Limitar Universo", value=True, help="Recomendado para pruebas rápidas")
+    if limit_universe:
+        max_symbols_limit = st.sidebar.number_input("Máximo de Símbolos", value=500, min_value=50, max_value=5000, step=50)
+        
+        # Selection strategy
+        st.sidebar.markdown("**Estrategia de Selección**")
+        selection_strategy = st.sidebar.radio(
+            "Cómo elegir símbolos:",
+            ['liquidity', 'random', 'alphabetical'],
+            format_func=lambda x: {
+                'liquidity': '💎 Por Liquidez (recomendado)',
+                'random': '🎲 Aleatorio',
+                'alphabetical': '🔤 Alfabético (A-Z)'
+            }[x],
+            help="Liquidez = tickers con mayor volumen en dólares"
+        )
+
 if st.sidebar.button("🚀 EJECUTAR BACKTEST", use_container_width=True):
+    # Validate dates
+    if run_end_date > cache_max_date.date():
+        st.sidebar.error(f"❌ Fecha Fin no puede ser mayor que {cache_max_date.date().strftime('%Y-%m-%d')}")
+        st.stop()
+    
+    if run_start_date > run_end_date:
+        st.sidebar.error("❌ Fecha Inicio debe ser anterior a Fecha Fin")
+        st.stop()
+    
     sl_val = stop_loss_input if use_custom_stop else None
     
-    # Crear lista temporal basada en la entrada directa
+    # Logic for source
+    source_arg = "file"
+    sector_arg = None
+    temp_watchlist_path = 'temp_backtest_list.json'
+    
+    # Save manual list anyway for highlighting or usage
+    manual_list = []
     if direct_symbols:
-        symbols_list = [s.strip().upper() for s in direct_symbols.split(',') if s.strip()]
-        temp_watchlist_path = 'temp_backtest_list.json'
-        with open(temp_watchlist_path, 'w') as f:
-            json.dump({"DIRECT_INPUT": symbols_list}, f)
+        manual_list = [s.strip().upper() for s in direct_symbols.split(',') if s.strip()]
         
-        if run_backtest_with_progress(run_start_date, run_end_date, sl_val, in_equity, in_risk, in_max_exp, 
-                                      in_min_mcap, in_max_mcap, in_min_vol, in_min_adr, in_min_price, in_min_dollar_m,
-                                      in_min_rvol, watchlist_path=temp_watchlist_path, skip_filters=True):
-            st.rerun()
-    else:
-        st.sidebar.error("Escribe al menos un símbolo para testear.")
+        # Guardar en base de datos si son nuevos
+        if len(manual_list) > 0:
+            added_count = ticker_cache.add_tickers(manual_list)
+            if added_count > 0:
+                st.toast(f"✅ Se agregaron {added_count} nuevos tickers a la base de datos.", icon="💾")
+        
+        with open(temp_watchlist_path, 'w') as f:
+            json.dump({"DIRECT_INPUT": manual_list}, f)
+    
+    if scan_mode == "🌎 Todo el Mercado (SQLite)":
+        source_arg = "sqlite"
+        st.sidebar.info("Escaneando todo el mercado... esto puede tardar.")
+    elif scan_mode == "🏗️ Por Sector":
+        source_arg = "sqlite_sector"
+        sector_arg = selected_sector
+        st.sidebar.info(f"Escaneando sector: {selected_sector}")
+    
+    # Run
+    # Skip filters when using Manual List (allow any ticker regardless of mcap/volume)
+    skip_fundamental_filters = (scan_mode == "📝 Lista Manual")
+    
+    if run_backtest_with_progress(run_start_date, run_end_date, sl_val, in_equity, in_risk, in_max_exp, 
+                                  in_min_mcap, in_max_mcap, in_min_vol, in_min_adr, in_min_price, in_min_dollar_m,
+                                  in_min_rvol, watchlist_path=temp_watchlist_path, skip_filters=skip_fundamental_filters, 
+                                  source=source_arg, sector=sector_arg, offline=offline_mode, 
+                                  max_symbols=max_symbols_limit, sort_by=selection_strategy):
+        st.rerun()
 
 st.sidebar.markdown("---")
 
@@ -366,6 +483,25 @@ def load_data():
 
 df_raw, df_partial_raw = load_data()
 
+# --- Highlight New Opportunities ---
+if not df_raw.empty and os.path.exists('temp_backtest_list.json'):
+    try:
+        with open('temp_backtest_list.json', 'r') as f:
+            data = json.load(f)
+            if "DIRECT_INPUT" in data:
+                manual_set = set(data["DIRECT_INPUT"])
+                # Add 'source' column
+                df_raw['source'] = df_raw['symbol'].apply(lambda x: '📝 Manual' if x in manual_set else '💡 Discovery')
+                
+                # If we have discovery items, show a notification
+                discovery_count = len(df_raw[df_raw['source'] == '💡 Discovery'])
+                if discovery_count > 0:
+                    st.success(f"✨ ¡Se encontraron {discovery_count} oportunidades fuera de tu lista manual!")
+            else:
+                df_raw['source'] = 'N/A'
+    except:
+        pass
+
 # --- Formulario de Filtros (Solo visualización) ---
 with st.sidebar.form("filtros_form"):
     st.header("🔍 Filtros de Visualización")
@@ -379,127 +515,138 @@ with st.sidebar.form("filtros_form"):
     f_signal = st.selectbox("Señal", sig_types)
     submitted = st.form_submit_button("Actualizar Vista")
 
-# --- MARKET HEALTH CHECK (Siempre visible) ---
-st.header("🛡️ Market Health Check")
+# --- MARKET HEALTH CHECK (Only show if no backtest results or user wants it) ---
+# For backtesting, this shows TODAY's market conditions which is irrelevant for historical analysis
+# Only useful for live trading or when no backtest results exist
 
-try:
-    from src.data.market_data import MarketDataProvider
-    from src.core.market_context import MarketContext
+show_market_health = df_raw.empty  # Only show if no backtest results
+
+if show_market_health:
+    st.header("🛡️ Market Health Check")
+    st.caption("📅 Condiciones actuales del mercado (útil para trading en vivo)")
     
-    with st.spinner("Analizando condiciones del mercado..."):
-        provider = MarketDataProvider()
-        mc = MarketContext(provider)
-        context = mc.analyze_indices()
-    
-    # Extract metrics
-    spy_price = context.get('spy_price', 0)
-    spy_ema20 = context.get('spy_ema20', 0)
-    spy_above_ema20 = context.get('spy_above_ema20', False)
-    breadth_improving = context.get('breadth_improving', False)
-    positive_gex = context.get('positive_gex', False)
-    vix_favorable = context.get('vix_favorable', True)
-    sector_leaders = context.get('sector_leaders', {})
-    market_favorable = context.get('market_favorable_for_longs', False)
-    
-    # Calculate health score
-    health_score = 0
-    if spy_above_ema20:
-        health_score += 2
-    if breadth_improving:
-        health_score += 2
-    if positive_gex:
-        health_score += 1
-    if vix_favorable:
-        health_score += 1
-    if sector_leaders:
-        health_score += 1
-    
-    # Display in columns
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric(
-            "SPY Trend",
-            f"${spy_price:.2f}",
-            f"{((spy_price - spy_ema20) / spy_ema20 * 100):+.2f}%" if spy_ema20 else "N/A",
-            delta_color="normal"
-        )
-        if spy_above_ema20:
-            st.success("✅ Above EMA20")
-        else:
-            st.error("❌ Below EMA20")
-    
-    with col2:
-        st.metric("Breadth", "Improving" if breadth_improving else "Declining")
-        if breadth_improving:
-            st.success("✅ Strong")
-        else:
-            st.warning("⚠️ Weak")
-    
-    with col3:
-        st.metric("Volatility", "Favorable" if vix_favorable else "Elevated")
-        if vix_favorable:
-            st.success("✅ VIX < 20")
-        else:
-            st.error("⚠️ VIX High")
-    
-    with col4:
-        st.metric("GEX", "Positive" if positive_gex else "Neutral")
-        if positive_gex:
-            st.success("✅ Low Vol Grind")
-        else:
-            st.info("⚪ Normal")
-    
-    # Health Score and Verdict
-    st.markdown("---")
-    col_score, col_verdict = st.columns([1, 2])
-    
-    with col_score:
-        st.metric("Health Score", f"{health_score}/7", f"{(health_score/7*100):.0f}%")
-        # Progress bar
-        st.progress(health_score / 7)
-    
-    with col_verdict:
-        if not market_favorable:
-            st.error("❌ **NO TRADE MODE** - Market not favorable for longs")
-            st.caption("Go to cash or paper trade only")
-        elif health_score >= 6:
-            st.success("🚀 **AGGRESSIVE MODE** - Excellent conditions")
-            st.caption("Full size (2% risk), all 3 Caminos, focus on leading sectors")
-        elif health_score >= 4:
-            st.success("💪 **STANDARD MODE** - Good conditions")
-            st.caption("Standard size (1.5-2% risk), prefer Camino 1 in leading sectors")
-        else:
-            st.warning("⚠️ **DEFENSIVE MODE** - Be selective")
-            st.caption("Half size (0.5-1% risk), only perfect Blue Sky in top sectors")
-    
-    # Sector Leaders
-    if sector_leaders:
-        st.markdown("---")
-        st.subheader("🎯 Top Sectors Today")
-        top_3 = list(sector_leaders.items())[:3]
+    try:
+        from src.data.market_data import MarketDataProvider
+        from src.core.market_context import MarketContext
         
-        col_s1, col_s2, col_s3 = st.columns(3)
-        for idx, (sector, data) in enumerate(top_3):
-            with [col_s1, col_s2, col_s3][idx]:
-                pct = data['change_pct']
-                st.metric(
-                    f"#{idx+1} {sector}",
-                    f"{data['symbol']}",
-                    f"{pct:+.2f}%",
-                    delta_color="normal"
-                )
+        with st.spinner("Analizando condiciones del mercado..."):
+            provider = MarketDataProvider()
+            mc = MarketContext(provider)
+            context = mc.analyze_indices()
+        
+        # Extract metrics
+        spy_price = context.get('spy_price', 0)
+        spy_ema20 = context.get('spy_ema20', 0)
+        spy_above_ema20 = context.get('spy_above_ema20', False)
+        breadth_improving = context.get('breadth_improving', False)
+        positive_gex = context.get('positive_gex', False)
+        vix_favorable = context.get('vix_favorable', True)
+        sector_leaders = context.get('sector_leaders', {})
+        market_favorable = context.get('market_favorable_for_longs', False)
+        
+        # Calculate health score
+        health_score = 0
+        if spy_above_ema20:
+            health_score += 2
+        if breadth_improving:
+            health_score += 2
+        if positive_gex:
+            health_score += 1
+        if vix_favorable:
+            health_score += 1
+        if sector_leaders:
+            health_score += 1
+        
+        # Display in columns
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric(
+                "SPY Trend",
+                f"${spy_price:.2f}",
+                f"{((spy_price - spy_ema20) / spy_ema20 * 100):+.2f}%" if spy_ema20 else "N/A",
+                delta_color="normal"
+            )
+            if spy_above_ema20:
+                st.success("✅ Above EMA20")
+            else:
+                st.error("❌ Below EMA20")
+        
+        with col2:
+            st.metric("Breadth", "Improving" if breadth_improving else "Declining")
+            if breadth_improving:
+                st.success("✅ Strong")
+            else:
+                st.warning("⚠️ Weak")
+        
+        with col3:
+            st.metric("Volatility", "Favorable" if vix_favorable else "Elevated")
+            if vix_favorable:
+                st.success("✅ VIX < 20")
+            else:
+                st.error("⚠️ VIX High")
+        
+        with col4:
+            st.metric("GEX", "Positive" if positive_gex else "Neutral")
+            if positive_gex:
+                st.success("✅ Low Vol Grind")
+            else:
+                st.info("⚪ Normal")
+        
+        # Health Score and Verdict
+        st.markdown("---")
+        col_score, col_verdict = st.columns([1, 2])
+        
+        with col_score:
+            st.metric("Health Score", f"{health_score}/7", f"{(health_score/7*100):.0f}%")
+            # Progress bar
+            st.progress(health_score / 7)
+        
+        with col_verdict:
+            if not market_favorable:
+                st.error("❌ **NO TRADE MODE** - Market not favorable for longs")
+                st.caption("Go to cash or paper trade only")
+            elif health_score >= 6:
+                st.success("🚀 **AGGRESSIVE MODE** - Excellent conditions")
+                st.caption("Full size (2% risk), all 3 Caminos, focus on leading sectors")
+            elif health_score >= 4:
+                st.success("💪 **STANDARD MODE** - Good conditions")
+                st.caption("Standard size (1.5-2% risk), prefer Camino 1 in leading sectors")
+            else:
+                st.warning("⚠️ **DEFENSIVE MODE** - Be selective")
+                st.caption("Half size (0.5-1% risk), only perfect Blue Sky in top sectors")
+        
+        # Sector Leaders
+        if sector_leaders:
+            st.markdown("---")
+            st.subheader("🎯 Top Sectors Today")
+            top_3 = list(sector_leaders.items())[:3]
+            
+            col_s1, col_s2, col_s3 = st.columns(3)
+            for idx, (sector, data) in enumerate(top_3):
+                with [col_s1, col_s2, col_s3][idx]:
+                    pct = data['change_pct']
+                    st.metric(
+                        f"#{idx+1} {sector}",
+                        f"{data['symbol']}",
+                        f"{pct:+.2f}%",
+                        delta_color="normal"
+                    )
 
-except Exception as e:
-    st.error(f"Error loading market health: {e}")
-    st.caption("Backtest data will still be available below")
+    except Exception as e:
+        st.error(f"Error loading market health: {e}")
+        st.caption("Backtest data will still be available below")
 
 st.markdown("---")
 
 # Lógica Principal
 if not df_raw.empty:
     # --- TABS PRINCIPALES ---
-    tab_dashboard, tab_calendar = st.tabs(["📊 Dashboard General", "📅 PnL Calendar"])
+    tab_dashboard, tab_calendar, tab_live_scanner = st.tabs([
+        "📊 Dashboard Backtest", 
+        "📅 PnL Calendar",
+        "📡 Live Market Scanner"
+    ])
 
     # ==========================================
     # TAB 1: DASHBOARD GENERAL (Original)
@@ -1625,6 +1772,164 @@ if not df_raw.empty:
                 st.info("No trades closed in this month.")
         else:
             st.warning("Run backtest to see Calendar data.")
+    
+    # ==========================================
+    # TAB 3: LIVE MARKET SCANNER
+    # ==========================================
+    with tab_live_scanner:
+        st.header("📡 Live Market Scanner")
+        st.caption("🔴 Condiciones del mercado en TIEMPO REAL (no histórico)")
+        
+        try:
+            from src.data.market_data import MarketDataProvider
+            from src.core.market_context import MarketContext
+            
+            with st.spinner("Analizando condiciones del mercado..."):
+                provider = MarketDataProvider()
+                mc = MarketContext(provider)
+                context = mc.analyze_indices()
+            
+            # Extract metrics
+            spy_price = context.get('spy_price', 0)
+            spy_ema20 = context.get('spy_ema20', 0)
+            spy_above_ema20 = context.get('spy_above_ema20', False)
+            breadth_improving = context.get('breadth_improving', False)
+            positive_gex = context.get('positive_gex', False)
+            vix_favorable = context.get('vix_favorable', True)
+            sector_leaders = context.get('sector_leaders', {})
+            market_favorable = context.get('market_favorable_for_longs', False)
+            
+            # Calculate health score
+            health_score = 0
+            if spy_above_ema20:
+                health_score += 2
+            if breadth_improving:
+                health_score += 2
+            if positive_gex:
+                health_score += 1
+            if vix_favorable:
+                health_score += 1
+            if sector_leaders:
+                health_score += 1
+            
+            # Display in columns
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric(
+                    "SPY Trend",
+                    f"${spy_price:.2f}",
+                    f"{((spy_price - spy_ema20) / spy_ema20 * 100):+.2f}%" if spy_ema20 else "N/A",
+                    delta_color="normal"
+                )
+                if spy_above_ema20:
+                    st.success("✅ Above EMA20")
+                else:
+                    st.error("❌ Below EMA20")
+            
+            with col2:
+                st.metric("Breadth", "Improving" if breadth_improving else "Declining")
+                if breadth_improving:
+                    st.success("✅ Strong")
+                else:
+                    st.warning("⚠️ Weak")
+            
+            with col3:
+                st.metric("Volatility", "Favorable" if vix_favorable else "Elevated")
+                if vix_favorable:
+                    st.success("✅ VIX < 20")
+                else:
+                    st.error("⚠️ VIX High")
+            
+            with col4:
+                st.metric("GEX", "Positive" if positive_gex else "Neutral")
+                if positive_gex:
+                    st.success("✅ Low Vol Grind")
+                else:
+                    st.info("⚪ Normal")
+            
+            # Health Score and Verdict
+            st.markdown("---")
+            col_score, col_verdict = st.columns([1, 2])
+            
+            with col_score:
+                st.metric("Health Score", f"{health_score}/7", f"{(health_score/7*100):.0f}%")
+                st.progress(health_score / 7)
+            
+            with col_verdict:
+                if not market_favorable:
+                    st.error("❌ **NO TRADE MODE** - Market not favorable for longs")
+                    st.caption("Go to cash or paper trade only")
+                elif health_score >= 6:
+                    st.success("🚀 **AGGRESSIVE MODE** - Excellent conditions")
+                    st.caption("Full size (2% risk), all 3 Caminos, focus on leading sectors")
+                elif health_score >= 4:
+                    st.success("💪 **STANDARD MODE** - Good conditions")
+                    st.caption("Standard size (1.5-2% risk), prefer Camino 1 in leading sectors")
+                else:
+                    st.warning("⚠️ **DEFENSIVE MODE** - Be selective")
+                    st.caption("Half size (0.5-1% risk), only perfect Blue Sky in top sectors")
+            
+            # Sector Leaders
+            if sector_leaders:
+                st.markdown("---")
+                st.subheader("🎯 Top Performing Sectors (Today)")
+                
+                st.info("💡 **Trading Tip**: Focus on leading sectors for mejor probabilidad de éxito. Evita sectores débiles.")
+                
+                # Top 3 in columns
+                top_3 = list(sector_leaders.items())[:3]
+                col_s1, col_s2, col_s3 = st.columns(3)
+                for idx, (sector, data) in enumerate(top_3):
+                    with [col_s1, col_s2, col_s3][idx]:
+                        pct = data['change_pct']
+                        st.metric(
+                            f"#{idx+1} {sector}",
+                            f"{data['symbol']}",
+                            f"{pct:+.2f}%",
+                            delta_color="normal"
+                        )
+                
+                # Full sector table
+                st.markdown("### 📊 All Sectors Performance")
+                sector_df = pd.DataFrame([
+                    {
+                        'Sector': sector,
+                        'ETF': data['symbol'],
+                        'Change %': data['change_pct'],
+                        'Trend': '🟢 Strong' if data['change_pct'] > 0.5 else '🟡 Neutral' if data['change_pct'] > 0 else '🔴 Weak'
+                    }
+                    for sector, data in sector_leaders.items()
+                ]).sort_values('Change %', ascending=False)
+                
+                st.dataframe(
+                    sector_df,
+                    column_config={
+                        "Change %": st.column_config.NumberColumn("Change %", format="%.2f%%"),
+                    },
+                    use_container_width=True,
+                    hide_index=True
+                )
+                
+                # Action recommendations
+                st.markdown("---")
+                st.subheader("🎯 Recommended Actions")
+                
+                top_sector = list(sector_leaders.items())[0]
+                worst_sector = list(sector_leaders.items())[-1]
+                
+                col_rec1, col_rec2 = st.columns(2)
+                with col_rec1:
+                    st.success(f"**✅ FOCUS ON**: {top_sector[0]}")
+                    st.caption(f"Leading with {top_sector[1]['change_pct']:+.2f}%. Busca setups en este sector.")
+                
+                with col_rec2:
+                    st.error(f"**❌ AVOID**: {worst_sector[0]}")
+                    st.caption(f"Lagging with {worst_sector[1]['change_pct']:+.2f}%. Skip este sector hoy.")
+
+        except Exception as e:
+            st.error(f"Error loading market health: {e}")
+            st.caption("Intenta recargar la página")
 
 else:
     st.info("👋 Bienvenido. Configura los parámetros de riesgo a la izquierda y pulsa 'EJECUTAR BACKTEST'.")

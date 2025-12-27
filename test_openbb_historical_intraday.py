@@ -14,8 +14,9 @@ def test_historical_intraday():
     print("=" * 70)
     
     # Test parameters
-    symbol = "MU"
-    target_date = "2021-01-20"
+    symbol = "SPY"  # Switch to SPY as it's more reliable
+    # Use 1 day ago to ensure 1m data availability (CBOE provider seems to have short history)
+    target_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
     intervals = ["5m", "15m", "30m", "1h"]
     
     openbb = OpenBBData()

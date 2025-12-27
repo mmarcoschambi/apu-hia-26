@@ -46,9 +46,72 @@ def main():
     parser.add_argument('--min_rvol', type=float, default=1.5, help="Minimum Relative Volume (RVOL)")
     parser.add_argument('--skip_filters', action='store_true', help="Skip fundamental filters")
     
+    # New arguments for Universe Source
+    parser.add_argument('--source', choices=['file', 'sqlite', 'sqlite_sector'], default='file', help="Source of the ticker universe")
+    parser.add_argument('--sector', type=str, default=None, help="Sector to filter by (if source is sqlite_sector)")
+    parser.add_argument('--offline', action='store_true', help="Use only cached data, do not download")
+    parser.add_argument('--max_symbols', type=int, default=None, help="Limit universe size (useful for testing large datasets)")
+    parser.add_argument('--sort_by', choices=['alphabetical', 'liquidity', 'random'], default='liquidity', 
+                        help="How to select symbols when limiting: alphabetical, liquidity (recommended), or random")
+    
     args = parser.parse_args()
     
-    universe = load_watchlist(args.watchlist)
+    # Load Universe based on source
+    universe = []
+    if args.source == 'file':
+        universe = load_watchlist(args.watchlist)
+    elif args.source.startswith('sqlite'):
+        try:
+            from src.data.ticker_cache import TickerCache
+            cache = TickerCache()
+            
+            filters = {}
+            if args.source == 'sqlite_sector' and args.sector:
+                print(f"Loading universe from SQLite (Sector: {args.sector})...")
+                filters['sector'] = args.sector
+            else:
+                print("Loading full universe from SQLite...")
+            
+            # Use the improved method with sort_by and limit
+            if args.max_symbols:
+                print(f"📊 Selection Strategy: {args.sort_by.upper()}")
+                # Si estamos usando 'liquidity' y hay fechas de backtest, usar filtro por fecha
+                if args.sort_by == 'liquidity' and args.start and args.end:
+                    # Para cada fecha del backtest, filtrar por liquidez en esa fecha específica
+                    # Buscar la primera fecha válida después del start (por si es feriado/fin de semana)
+                    cursor = cache.conn.execute(
+                        "SELECT MIN(date) FROM ohlcv_cache WHERE date >= ?",
+                        (args.start,)
+                    )
+                    first_valid_date = cursor.fetchone()[0]
+                    
+                    if first_valid_date:
+                        print(f"📅 Usando fecha de referencia: {first_valid_date}")
+                        universe = cache.get_active_tickers(
+                            filters=filters,
+                            sort_by=args.sort_by,
+                            limit=args.max_symbols,
+                            date_filter=first_valid_date,  # Usar primera fecha válida
+                            min_price=args.min_price,
+                            min_rolling_dollar_vol=args.min_dollar_vol
+                        )
+                    else:
+                        print("⚠️ No hay datos para el rango especificado, usando método sin fecha")
+                        universe = cache.get_active_tickers(filters=filters, sort_by=args.sort_by, limit=args.max_symbols)
+                else:
+                    universe = cache.get_active_tickers(filters=filters, sort_by=args.sort_by, limit=args.max_symbols)
+            else:
+                universe = cache.get_active_tickers(filters=filters, sort_by=args.sort_by)
+            
+            cache.close()
+            
+            # Remove duplicates just in case
+            universe = list(set(universe))
+                
+        except Exception as e:
+            print(f"Error loading from SQLite: {e}")
+            universe = []
+
     print(f"Loaded Universe: {len(universe)} symbols")
     
     # Initialize Risk Manager
@@ -71,7 +134,8 @@ def main():
         min_price=args.min_price,
         min_dollar_vol=args.min_dollar_vol,
         min_rvol=args.min_rvol,
-        skip_filters=args.skip_filters
+        skip_filters=args.skip_filters,
+        offline=args.offline
     )
     
     print("Running Daily Simulation (this may take a moment to preload data)...")

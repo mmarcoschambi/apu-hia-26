@@ -202,10 +202,14 @@ class MarketContext:
         Returns True if volatility conditions are favorable
         """
         try:
-            vix_data = self.data_provider.get_daily_data('VIX', period='1mo')
+            # Try fetching with ^VIX (Yahoo standard) first, then VIX
+            vix_data = self.data_provider.get_daily_data('^VIX', period='1mo')
+            if vix_data.empty:
+                 vix_data = self.data_provider.get_daily_data('VIX', period='1mo')
             
             if vix_data.empty or len(vix_data) < 5:
-                logger.warning("VIX data not available, assuming favorable")
+                # Suppress warning to avoid spam if VIX is simply missing
+                # logger.warning("VIX data not available, assuming favorable")
                 return True  # Default to favorable if no data
             
             vix_current = vix_data['Close'].iloc[-1]

@@ -64,6 +64,7 @@ class OpenBBData:
     ) -> Optional[pd.DataFrame]:
         """
         Obtener datos intradiarios de un símbolo usando OpenBB
+        Si el intervalo no es soportado nativamente (ej: 5m), se descarga 1m y se resamplea.
         """
         try:
             if end_date is None:
@@ -71,12 +72,21 @@ class OpenBBData:
             
             logger.info(f"Obteniendo datos intradiarios para {symbol} desde {start_date} hasta {end_date}")
             
+            # Determine supported interval and resampling need
+            # OpenBB v4+ validation often only supports 1m or 1d for historical
+            fetch_interval = interval
+            should_resample = False
+            
+            if interval not in ["1m", "1d"]:
+                fetch_interval = "1m"
+                should_resample = True
+            
             # Obtener datos intradiarios usando OpenBB
             result = obb.equity.price.historical(
                 symbol=symbol,
                 start_date=start_date,
                 end_date=end_date,
-                interval=interval
+                interval=fetch_interval
             )
             
             if result and hasattr(result, 'to_df'):
@@ -84,6 +94,26 @@ class OpenBBData:
                 if not df.empty:
                     # Asegurar que el índice sea datetime
                     df.index = pd.to_datetime(df.index)
+                    
+                    # Resample if needed
+                    if should_resample:
+                        # Convert interval format (e.g., "5m" -> "5min")
+                        # Pandas understands "min" or "T" for minutes
+                        resample_rule = interval.replace("m", "min") if "m" in interval else interval
+                        
+                        # Define aggregation logic
+                        agg_dict = {
+                            'open': 'first',
+                            'high': 'max',
+                            'low': 'min',
+                            'close': 'last',
+                            'volume': 'sum'
+                        }
+                        # Only include columns that exist
+                        agg_dict = {k: v for k, v in agg_dict.items() if k in df.columns}
+                        
+                        df = df.resample(resample_rule).agg(agg_dict).dropna()
+
                     return df
                 else:
                     logger.warning(f"No se encontraron datos intradiarios para {symbol}")

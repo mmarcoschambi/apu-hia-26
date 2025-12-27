@@ -10,6 +10,7 @@ from pathlib import Path
 import pickle
 import logging
 from config.settings import DATA_SOURCE, OPENBB_PROVIDER
+from src.data.ticker_cache import TickerCache
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ class MarketDataProvider:
         self.cache_dir = cache_dir or Path("./data/cache")
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.data_source = DATA_SOURCE
+        self.sqlite_cache = TickerCache()
 
     def get_intraday_data(self, symbol: str, interval: str = "5m", days: int = 5) -> pd.DataFrame:
         """
@@ -37,6 +39,11 @@ class MarketDataProvider:
         if self.data_source == "openbb":
             logger.info(f"Fetching {symbol} intraday data from OpenBB")
             df = self._get_intraday_data_openbb(symbol, interval, days)
+            
+            # Fallback to YFinance if OpenBB fails or returns empty data
+            if df.empty:
+                logger.warning(f"OpenBB returned no data for {symbol}, falling back to Yahoo Finance")
+                df = self._get_intraday_data_yfinance(symbol, interval, days)
         else:
             logger.info(f"Fetching {symbol} intraday data from Yahoo Finance")
             df = self._get_intraday_data_yfinance(symbol, interval, days)
@@ -115,19 +122,38 @@ class MarketDataProvider:
 
         return df
 
-    def get_daily_data(self, symbol: str, period: str = "1y") -> pd.DataFrame:
+    def get_daily_data(self, symbol: str, period: str = "1y", start_date: str = None, end_date: str = None, offline: bool = False) -> pd.DataFrame:
         """
         Get daily data for base analysis and ATH detection
         period: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max
         """
+        # If dates are provided, use SQLite cache directly
+        if start_date and end_date:
+            df = self.sqlite_cache.get_ohlcv(symbol, start_date, end_date, offline=offline)
+            if df is not None and not df.empty:
+                return df
+            if offline:
+                return pd.DataFrame()
+
+        # Otherwise use period-based logic
         cache_file = self.cache_dir / f"{symbol}_daily.pkl"
 
-        # Check cache (valid for 1 day)
+        # Check legacy cache (valid for 1 day)
         if cache_file.exists():
             cache_time = datetime.fromtimestamp(cache_file.stat().st_mtime)
-            if datetime.now() - cache_time < timedelta(hours=24):
-                logger.info(f"Loading {symbol} daily data from cache")
-                return pickle.load(open(cache_file, "rb"))
+            # If offline, ignore expiration time
+            if offline or (datetime.now() - cache_time < timedelta(hours=24)):
+                if not offline:
+                    logger.info(f"Loading {symbol} daily data from legacy cache")
+                df = pickle.load(open(cache_file, "rb"))
+                # Also save to SQLite if it's there
+                if not df.empty:
+                    # Update SQLite in background (simplified)
+                    # For now just return
+                    return df
+        
+        if offline:
+            return pd.DataFrame()
 
         if self.data_source == "openbb":
             logger.info(f"Fetching {symbol} daily data from OpenBB")
@@ -140,8 +166,27 @@ class MarketDataProvider:
             logger.warning(f"No daily data found for {symbol}")
             return pd.DataFrame()
 
-        # Cache the data
+        # Cache the data in legacy format
         pickle.dump(df, open(cache_file, "wb"))
+        
+        # ALSO Cache in SQLite
+        try:
+            for date, row in df.iterrows():
+                self.sqlite_cache.conn.execute('''
+                    INSERT OR REPLACE INTO ohlcv_cache
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    symbol,
+                    date.strftime('%Y-%m-%d'),
+                    float(row['Open']),
+                    float(row['High']),
+                    float(row['Low']),
+                    float(row['Close']),
+                    int(row['Volume'])
+                ))
+            self.sqlite_cache.conn.commit()
+        except Exception as e:
+            logger.error(f"Error saving {symbol} to SQLite cache: {e}")
 
         return df
 
