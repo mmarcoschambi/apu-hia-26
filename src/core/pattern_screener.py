@@ -231,7 +231,7 @@ def export_pattern_analysis(symbol: str, df: pd.DataFrame,
         f.write(f"={'='*60}\n")
         f.write(f"Symbol: {symbol}\n")
         f.write(f"Analysis Date: {df.index[-1]}\n")
-        f.write(f"Price: ${df['close'].iloc[-1]:.2f}\n")
+        f.write(f"Price: ${df['Close'].iloc[-1]:.2f}\n")
         f.write(f"\n")
         
         if not patterns:

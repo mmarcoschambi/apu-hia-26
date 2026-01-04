@@ -27,7 +27,7 @@ class FilterOptimizer:
         
     def run_backtest(self, adr, max_exp, min_vol=300, min_dollar_vol=15):
         """Ejecuta un backtest con parámetros específicos"""
-        temp_watchlist = 'temp_optimize.json'
+        temp_watchlist = 'outputs/temp_optimize.json'
         with open(temp_watchlist, 'w') as f:
             json.dump({"OPTIMIZE": self.symbols}, f)
         
@@ -49,8 +49,8 @@ class FilterOptimizer:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
             
             # Leer resultados
-            if os.path.exists('backtest_results.csv'):
-                df = pd.read_csv('backtest_results.csv')
+            if os.path.exists('outputs/backtests/backtest_results.csv'):
+                df = pd.read_csv('outputs/backtests/backtest_results.csv')
                 if not df.empty:
                     return self._calculate_metrics(df)
             return None

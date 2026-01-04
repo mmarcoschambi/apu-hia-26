@@ -4,7 +4,7 @@ LIVE TRADING SCANNER - Pre-Market & Intraday
 Daily scanner que ejecutas cada mañana antes de la apertura
 
 Usage:
-    python live_trading_scanner.py                    # Scan acciones_activas.csv
+    python live_trading_scanner.py                    # Scan outputs/backtests/acciones_activas.csv
     python live_trading_scanner.py AAPL NVDA TSLA     # Scan símbolos específicos
     python live_trading_scanner.py --monitor          # Monitor continuo durante RTH
 """
@@ -206,7 +206,7 @@ class LiveTradingScanner:
 
 def load_watchlist_from_file() -> List[str]:
     """Load watchlist from acciones_activas.csv or default"""
-    watchlist_file = project_root / "acciones_activas.csv"
+    watchlist_file = project_root / "outputs/backtests/acciones_activas.csv"
     
     if watchlist_file.exists():
         try:

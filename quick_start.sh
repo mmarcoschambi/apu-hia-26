@@ -184,10 +184,15 @@ while true; do
             echo ""
             read -p "Ver algún archivo? (nombre o ENTER para volver): " doc_file
             if [ ! -z "$doc_file" ]; then
-                if [ -f "$doc_file" ]; then
+                # Check direct match
+                if [ -f "docs/$doc_file" ]; then
+                    less "docs/$doc_file"
+                elif [ -f "docs/guides/$doc_file" ]; then
+                    less "docs/guides/$doc_file"
+                elif [ -f "$doc_file" ]; then
                     less "$doc_file"
                 else
-                    echo "❌ Archivo no encontrado"
+                    echo "❌ Archivo no encontrado en docs/ ni docs/guides/"
                 fi
             fi
             ;;

@@ -1,163 +1,92 @@
-# Triad Momentum Protocol v2
+# 🚀 Momentum Trading V2
 
-Sistema de trading institucional basado en el protocolo "Triad" - tres vectores de fuerza para capturar breakouts de momentum.
-
-## Filosofía
-
-**No perseguimos precios; capturamos la liberación de energía cuando la oferta desaparece.**
-
-## Los 3 Vectores
-
-1. **La Base (El Mapa)** - Dónde se acumula la energía
-2. **AVWAP de Máximos (El Peaje)** - Dónde están atrapados los vendedores
-3. **VWAP Intradía (El Pedal)** - Confirmación de flujo institucional
-
-## Los 3 Caminos (Entry Logic)
-
-### Camino 1: Blue Sky Breakout
-El "Combo Perfecto". Base + AVWAP convergen → resistencia cero arriba.
-- **Trigger**: Buy Stop en Base High + $0.05
-- **Ejemplo**: RDDT - ruptura explosiva
-
-### Camino 2: VWAP Reclaim
-La "Segunda Oportunidad". Gap down → instituciones defienden → recuperación.
-- **Trigger**: Manual al cruzar VWAP intradía
-- **Ejemplo**: CEG - trampa para osos
-
-### Camino 3: Safety Filter
-El "Filtro de Seguridad". Evita Anticipation Breakouts.
-- **Trigger**: Espera hasta romper AVWAP (no la base pequeña)
-- **Protección**: Evita comprar antes del muro de vendedores
-
-## Instalación
-
-```bash
-# Clonar el repositorio
-cd momentum-v2
-
-# Crear entorno virtual (recomendado)
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# o
-venv\Scripts\activate  # Windows
-
-# Instalar dependencias
-pip install -r requirements.txt
-```
-
-## Uso
-
-### Scanner Principal
-
-```bash
-python src/core/scanner.py
-```
-
-Edita el watchlist en `scanner.py`:
-
-```python
-watchlist = ['RDDT', 'CEG', 'AAPL', 'NVDA', 'TSLA']
-```
-
-### Salida Ejemplo
-
-```
-============================================================
-SIGNAL FOR RDDT
-============================================================
-Camino: BLUE_SKY
-Action: BUY_STOP
-Entry Price: $100.05
-Stop Loss: $95.20
-Risk: 4.85%
-Position Size: 100% of standard
-
-Reasoning: Blue Sky Breakout: Base ($100.00) and AVWAP ($100.15) 
-converge within 0.2%. Clear path above.
-============================================================
-```
-
-## Estructura del Proyecto
-
-```
-momentum-v2/
-├── config/
-│   └── settings.py          # Configuración del sistema
-├── src/
-│   ├── core/
-│   │   ├── scanner.py       # Scanner principal
-│   │   └── market_context.py # Análisis SPY/QQQ
-│   ├── data/
-│   │   └── market_data.py   # Provider de datos (Yahoo Finance)
-│   ├── indicators/
-│   │   └── triad.py         # Los 3 indicadores
-│   └── strategies/
-│       └── triad_protocol.py # Lógica de los 3 Caminos
-├── data/
-│   └── cache/               # Cache de datos
-├── logs/                    # Logs del sistema
-└── requirements.txt
-```
-
-## Configuración
-
-Ajusta parámetros en `config/settings.py`:
-
-```python
-RISK_PER_TRADE = 0.005  # 0.5% riesgo estándar
-RISK_PER_TRADE_REDUCED = 0.0025  # 0.25% para Camino 2
-BLUE_SKY_OFFSET = 0.05  # Offset del Buy Stop
-AVWAP_TOLERANCE = 0.02  # Tolerancia de convergencia
-```
-
-## Gestión de Riesgo
-
-| Camino | Stop Loss | Tamaño Posición |
-|--------|-----------|-----------------|
-| Blue Sky | Base Low o Entry - 1 ADR | 100% (0.5% riesgo) |
-| VWAP Reclaim | Low of Day (LOD) | 50% (0.25% riesgo) |
-| Safety | Entry - 1 ADR | 100% (0.5% riesgo) |
-
-## Checklist Pre-Trade
-
-Antes de ejecutar:
-
-1. **¿Dónde está el AVWAP del ATH?**
-   - En precio actual → Camino 1
-   - 5-10% arriba → Camino 3 (espera)
-
-2. **¿Cómo está el mercado (SPY/QQQ)?**
-   - Gap Down o rojo → Camino 2
-
-3. **¿Ha habido un Flush?**
-   - Caída matutina + volumen bajo → Camino 2
-
-## Logs y Debugging
-
-Los logs se guardan en `logs/triad_YYYYMMDD.log` con información detallada de cada scan.
-
-## Datos de Mercado
-
-El sistema usa **Yahoo Finance** (gratis) via `yfinance`:
-- **Intraday**: Hasta 60 días de datos M1/M5/M15
-- **Daily**: Histórico completo para ATH y bases
-- **Cache**: 5 min para intraday, 24h para daily
-
-## Próximos Pasos
-
-- [x] Integración completa de datos (Yahoo Finance)
-- [x] **Backtesting con visualización gráfica** ✨ NUEVO
-- [x] Position sizing calculator
-- [x] Market context analyzer
-- [ ] Integración con broker (IBKR/Alpaca)
-- [ ] Dashboard web interactivo
-- [ ] Alertas por Telegram/Discord
-- [ ] Backtesting avanzado con métricas detalladas
-
-## Disclaimer
-
-Este sistema es para **uso educacional**. No constituye asesoramiento financiero. Opera bajo tu propio riesgo.
+Sistema de trading institucional automatizado basado en el protocolo "Triad" (Base + AVWAP + VWAP). Diseñado para capturar breakouts de momentum con gestión de riesgo profesional.
 
 ---
 
-**"Respetamos al Jefe Final (AVWAP ATH)"**
+## ⚡ Inicio Rápido
+
+### 1. Comandos Principales (Lo único que necesitas saber)
+
+| Acción | Comando | Descripción |
+|--------|---------|-------------|
+| **Dashboard** | `streamlit run app.py` | Tu centro de comando. Ve gráficos, señales y corre backtests visuales. |
+| **Scanner** | `python3 live_scanner.py` | Escanea el mercado en tiempo real buscando setups. |
+| **Backtest** | `python3 backtest_dynamic_universe.py --start 2024-01-01 --end 2024-12-31` | Simula trading histórico (1 año recomendado). |
+| **Universo** | `python3 manage_universe.py --info` | Gestiona tus tickers y el cache. |
+
+### 2. Workflow Diario
+
+1.  **Pre-Market (9:00 AM):** Ejecuta `python3 morning_workflow.py`. Verifica la salud del mercado y busca setups.
+2.  **Market Open (9:30 AM):** Abre el dashboard con `streamlit run app.py` para monitorear.
+3.  **Post-Market (4:00 PM):** Ejecuta `python3 position_tracker.py` para revisar tus posiciones.
+
+---
+
+## 📂 Estructura del Proyecto
+
+```
+momentum-v2/
+├── app.py                     # 🖥️ Dashboard principal (Streamlit)
+├── live_scanner.py            # 📡 Escáner de mercado en tiempo real
+├── backtest_dynamic_universe.py # 🔬 Motor de Backtesting
+├── manage_universe.py         # ⚙️ Gestor de tickers y descargas
+│
+├── data/
+│   ├── cache/                 # 💾 Datos históricos (No borrar para velocidad)
+│   └── universe/              # 📋 Listas de tickers (json)
+│
+├── docs/                      # 📚 Documentación detallada
+│   ├── guides/                # Guías específicas (Backtesting, Filtros, etc.)
+│   └── archive/               # Logs y notas antiguas
+│
+├── outputs/                   # 📊 Resultados generados
+│   ├── backtests/             # CSVs de backtests
+│   └── logs/                  # Logs de ejecución
+│
+└── src/                       # 🧠 Código fuente del núcleo
+    ├── strategies/            # Lógica de compra/venta (Triad Protocol)
+    ├── backtest/              # Motores de simulación
+    └── data/                  # Gestores de datos
+```
+
+---
+
+## 🛠️ Herramientas de Mantenimiento
+
+### Cache y Datos
+Si necesitas regenerar datos o arreglar gráficos:
+*   `python3 populate_historical_cache.py`: Descarga historial completo (lento, pero exhaustivo).
+*   `python3 inspect_cache.py`: Diagnostica el estado de tus datos.
+*   `python3 quick_populate_cache.py`: Versión rápida para últimos 10 años.
+
+### Gestión de Tickers
+*   **Ver info:** `python3 manage_universe.py --info`
+*   **Agregar:** `python3 manage_universe.py --add "TICKER1, TICKER2"`
+*   **Refrescar índices:** `python3 add_major_indices.py` (Agrega S&P500 y NASDAQ100)
+
+---
+
+## 🧠 Lógica del Sistema (Resumen)
+
+El sistema opera bajo 3 "Caminos" de entrada:
+
+1.  **Camino 1 (Blue Sky):** Rompimiento de máximos históricos o bases claras sin resistencia cercana. Requiere **RVOL > 1.5x**.
+2.  **Camino 2 (VWAP Reclaim):** Recuperación del VWAP intradía tras una caída (Flush).
+3.  **Camino 3 (Safety):** Entradas conservadoras esperando confirmación de tendencia.
+
+**Filtros de Mercado (Market Health):**
+El sistema NO opera si:
+*   SPY está debajo de SMA20 (Tendencia bajista).
+*   VIX > 25 (Alta volatilidad).
+
+---
+
+## 📚 Documentación Adicional
+Toda la documentación detallada se ha movido a la carpeta `docs/`:
+*   `docs/guides/BACKTESTING_GUIDE.md`: Detalles profundos sobre cómo simular.
+*   `docs/guides/LIVE_TRADING_GUIDE.md`: Protocolo para operar con dinero real.
+*   `docs/guides/MARKET_FILTERS.md`: Explicación matemática de los filtros.
+
+---
+*Momentum V2 - Última actualización: Diciembre 2025*

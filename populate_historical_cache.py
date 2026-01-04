@@ -13,7 +13,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 import time
 
-def populate_historical_data(years_back=10, batch_size=50, delay=0.5):
+def populate_historical_data(years_back=20, batch_size=50, delay=0.5):
     """
     Descarga datos históricos para todos los tickers en universe
     
@@ -147,7 +147,7 @@ if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description='Poblar cache con datos históricos')
-    parser.add_argument('--years', type=int, default=10, help='Años de histórico (default: 10)')
+    parser.add_argument('--years', type=int, default=20, help='Años de histórico (default: 20)')
     parser.add_argument('--batch', type=int, default=50, help='Batch size (default: 50)')
     parser.add_argument('--delay', type=float, default=0.5, help='Delay entre requests (default: 0.5s)')
     parser.add_argument('--test', action='store_true', help='Solo procesar primeros 10 tickers (test)')

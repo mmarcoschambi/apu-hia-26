@@ -549,7 +549,7 @@ class InteractiveDashboard:
         
         return fig
     
-    def generate_html_report(self, output_file: str = "backtest_dashboard.html"):
+    def generate_html_report(self, output_file: str = "outputs/backtests/backtest_dashboard.html"):
         """Generate complete HTML report with all charts"""
         
         print("\n📊 Generating Interactive Dashboard...")
@@ -905,7 +905,7 @@ def main():
     
     parser = argparse.ArgumentParser(description='Generate Interactive Dashboard')
     parser.add_argument('results_csv', help='Path to backtest results CSV')
-    parser.add_argument('--output', default='backtest_dashboard.html', help='Output HTML file')
+    parser.add_argument('--output', default='outputs/backtests/backtest_dashboard.html', help='Output HTML file')
     parser.add_argument('--no-browser', action='store_true', help='Don\'t open browser automatically')
     
     args = parser.parse_args()

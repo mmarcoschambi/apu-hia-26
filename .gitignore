@@ -17,3 +17,5 @@ data/cache/
 *.swo
 .idea/
 .vscode/
+data/ticker_cache.db
+data/ticker_cache.db.backup

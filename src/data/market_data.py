@@ -171,10 +171,20 @@ class MarketDataProvider:
         
         # ALSO Cache in SQLite
         try:
+            # Calcular métricas faltantes para la DB
+            if 'dollar_volume' not in df.columns:
+                df['dollar_volume'] = df['Close'] * df['Volume']
+            if 'rolling_dollar_vol_20' not in df.columns:
+                df['rolling_dollar_vol_20'] = df['dollar_volume'].rolling(window=20, min_periods=1).mean()
+
             for date, row in df.iterrows():
+                # Safe extraction
+                d_vol = row['dollar_volume'] if pd.notna(row['dollar_volume']) else 0.0
+                rd_vol = row['rolling_dollar_vol_20'] if pd.notna(row['rolling_dollar_vol_20']) else 0.0
+                
                 self.sqlite_cache.conn.execute('''
                     INSERT OR REPLACE INTO ohlcv_cache
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     symbol,
                     date.strftime('%Y-%m-%d'),
@@ -182,7 +192,9 @@ class MarketDataProvider:
                     float(row['High']),
                     float(row['Low']),
                     float(row['Close']),
-                    int(row['Volume'])
+                    int(row['Volume']),
+                    float(d_vol),
+                    float(rd_vol)
                 ))
             self.sqlite_cache.conn.commit()
         except Exception as e:
@@ -206,7 +218,7 @@ class MarketDataProvider:
             elif period == "1mo":
                 start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
             elif period == "max":
-                start_date = (datetime.now() - timedelta(days=365*5)).strftime('%Y-%m-%d') # 5 years
+                start_date = (datetime.now() - timedelta(days=365*20)).strftime('%Y-%m-%d') # 20 years
             else:
                 start_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')  # default to 1 year
 

@@ -47,6 +47,12 @@ class InstitutionalScreener:
             idx = df.index.get_loc(date)
             if idx < self.rs_window: return None, "Not Enough History"
             
+            # Handle both lowercase and uppercase column names
+            close_col = 'close' if 'close' in df.columns else 'Close'
+            high_col = 'high' if 'high' in df.columns else 'High'
+            low_col = 'low' if 'low' in df.columns else 'Low'
+            volume_col = 'volume' if 'volume' in df.columns else 'Volume'
+            
             # Slice history up to 'today'
             hist = df.iloc[:idx+1]
             spy_hist = spy_df.iloc[:spy_df.index.get_loc(date)+1] if date in spy_df.index else pd.DataFrame()
@@ -55,20 +61,20 @@ class InstitutionalScreener:
             recent_20 = hist.tail(20)
             
             # --- FILTER 1: PRICE ---
-            if current['close'] < self.min_price:
-                return None, f"Price ${current['close']:.2f} < ${self.min_price}"
+            if current[close_col] < self.min_price:
+                return None, f"Price ${current[close_col]:.2f} < ${self.min_price}"
 
             # --- FILTER 2: ADR (20) ---
-            adr_pct = ((recent_20['high'] - recent_20['low']) / recent_20['low']).mean() * 100
+            adr_pct = ((recent_20[high_col] - recent_20[low_col]) / recent_20[low_col]).mean() * 100
             if adr_pct < self.adr_threshold:
                 return None, f"Low ADR: {adr_pct:.2f}% < {self.adr_threshold}%"
 
             # --- FILTER 3: LIQUIDITY ---
-            avg_vol = recent_20['volume'].mean()
+            avg_vol = recent_20[volume_col].mean()
             if avg_vol < self.min_avg_vol:
                 return None, f"Low Vol: {avg_vol/1000:.0f}k < {self.min_avg_vol/1000:.0f}k"
                 
-            avg_dollar_vol = (recent_20['close'] * recent_20['volume']).mean()
+            avg_dollar_vol = (recent_20[close_col] * recent_20[volume_col]).mean()
             if avg_dollar_vol < self.min_dollar_vol:
                 return None, f"Low $Vol: ${avg_dollar_vol/1e6:.1f}M < ${self.min_dollar_vol/1e6:.1f}M"
 
@@ -76,8 +82,8 @@ class InstitutionalScreener:
             # Calculate RVOL: Current volume vs 20-day average (excluding current bar)
             if len(hist) >= 21:
                 prior_bars = hist.iloc[:-1]  # Exclude current bar
-                avg_vol_20 = prior_bars['volume'].tail(20).mean()
-                rvol = current['volume'] / avg_vol_20 if avg_vol_20 > 0 else 0
+                avg_vol_20 = prior_bars[volume_col].tail(20).mean()
+                rvol = current[volume_col] / avg_vol_20 if avg_vol_20 > 0 else 0
                 if rvol < self.min_rvol:
                     return None, f"Low RVOL: {rvol:.2f}x < {self.min_rvol}x"
             else:
@@ -85,9 +91,10 @@ class InstitutionalScreener:
                 return None, "Insufficient history for RVOL calculation"
 
             # --- FILTER 4: RELATIVE STRENGTH ---
+            spy_close_col = 'close' if 'close' in spy_hist.columns else 'Close'
             if not spy_hist.empty and len(spy_hist) >= self.rs_window:
-                stock_perf = (current['close'] / hist.iloc[-self.rs_window]['close']) - 1
-                spy_perf = (spy_hist['close'].iloc[-1] / spy_hist.iloc[-self.rs_window]['close']) - 1
+                stock_perf = (current[close_col] / hist.iloc[-self.rs_window][close_col]) - 1
+                spy_perf = (spy_hist[spy_close_col].iloc[-1] / spy_hist.iloc[-self.rs_window][spy_close_col]) - 1
                 relative_strength = stock_perf - spy_perf
                 if relative_strength < 0:
                     return None, f"Weak RS: {relative_strength:.4f} vs SPY"
@@ -96,15 +103,15 @@ class InstitutionalScreener:
 
             # --- FILTER 5: STRUCTURE (BREAKOUT) ---
             # Trend Check
-            is_trending = current['close'] > current['sma_20'] and current['sma_20'] > current['sma_50']
+            is_trending = current[close_col] > current['sma_20'] and current['sma_20'] > current['sma_50']
             if not is_trending:
                 return None, "Not in Uptrend (Price < SMA20 or SMA20 < SMA50)"
 
             # Breakout Check
-            base_high = hist.iloc[-21:-1]['high'].max()
-            is_breakout = current['close'] > base_high
+            base_high = hist.iloc[-21:-1][high_col].max()
+            is_breakout = current[close_col] > base_high
             # Volume confirmation
-            vol_confirm = current['volume'] > current['sma_volume_20']
+            vol_confirm = current[volume_col] > current['sma_volume_20']
             
             if not is_breakout:
                 return None, "No Breakout (Price < 20d High)"
@@ -116,14 +123,14 @@ class InstitutionalScreener:
                 'symbol': symbol,
                 'date': date,
                 'setup': 'INSTITUTIONAL_BREAKOUT',
-                'price': current['close'],
+                'price': current[close_col],
                 'adr_pct': adr_pct,
                 'avg_vol': avg_vol,
                 'avg_dollar_vol': avg_dollar_vol,
                 'rvol': rvol,
                 'rs_value': 0.0, # Placeholder or calc above
-                'entry_trigger': current['high'],
-                'stop_loss': current['low']
+                'entry_trigger': current[high_col],
+                'stop_loss': current[low_col]
             }, "OK"
 
         except Exception as e:

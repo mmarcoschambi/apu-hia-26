@@ -96,8 +96,8 @@ class PositionTracker:
     """Gestiona el portfolio de posiciones activas"""
     
     def __init__(self, positions_file: Path = None):
-        self.positions_file = positions_file or project_root / "active_positions.json"
-        self.closed_trades_file = project_root / "closed_trades.csv"
+        self.positions_file = positions_file or project_root / "outputs/active_positions.json"
+        self.closed_trades_file = project_root / "outputs/backtests/closed_trades.csv"
         self.data_provider = MarketDataProvider()
         self.positions: Dict[str, Position] = {}
         self._load_positions()

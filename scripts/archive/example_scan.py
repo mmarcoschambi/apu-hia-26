@@ -21,7 +21,7 @@ def main():
     scanner = TriadScanner()
 
     # Try to read from acciones_activas.csv if it exists, otherwise use default list
-    watchlist_file = project_root / "acciones_activas.csv"
+    watchlist_file = project_root / "outputs/backtests/acciones_activas.csv"
     if watchlist_file.exists():
         try:
             df = pd.read_csv(watchlist_file)

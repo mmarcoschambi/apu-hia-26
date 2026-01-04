@@ -5,10 +5,13 @@ echo "🚀 MOMENTUM TRIAD - LIVE TRADING SETUP"
 echo "========================================"
 echo ""
 
+# Create outputs directories if they don't exist
+mkdir -p outputs/backtests
+
 # Check if watchlist exists
-if [ ! -f "acciones_activas.csv" ]; then
+if [ ! -f "outputs/backtests/acciones_activas.csv" ]; then
     echo "📋 Creating sample watchlist..."
-    cat > acciones_activas.csv << 'EOF'
+    cat > outputs/backtests/acciones_activas.csv << 'EOF'
 Ticker
 AAPL
 NVDA
@@ -21,20 +24,20 @@ AVGO
 SMCI
 PLTR
 EOF
-    echo "✅ Created acciones_activas.csv with 10 sample tickers"
+    echo "✅ Created outputs/backtests/acciones_activas.csv with 10 sample tickers"
 else
-    echo "✅ Watchlist already exists: acciones_activas.csv"
+    echo "✅ Watchlist already exists: outputs/backtests/acciones_activas.csv"
 fi
 
 # Create empty tracking files if they don't exist
-if [ ! -f "active_positions.json" ]; then
-    echo "{}" > active_positions.json
-    echo "✅ Created active_positions.json"
+if [ ! -f "outputs/active_positions.json" ]; then
+    echo "{}" > outputs/active_positions.json
+    echo "✅ Created outputs/active_positions.json"
 fi
 
-if [ ! -f "closed_trades.csv" ]; then
-    echo "symbol,entry_date,exit_date,camino,entry_price,exit_price,shares,stop_loss,pnl,pnl_pct,r_multiple,notes" > closed_trades.csv
-    echo "✅ Created closed_trades.csv"
+if [ ! -f "outputs/backtests/closed_trades.csv" ]; then
+    echo "symbol,entry_date,exit_date,camino,entry_price,exit_price,shares,stop_loss,pnl,pnl_pct,r_multiple,notes" > outputs/backtests/closed_trades.csv
+    echo "✅ Created outputs/backtests/closed_trades.csv"
 fi
 
 echo ""

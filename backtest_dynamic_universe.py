@@ -107,12 +107,13 @@ class ProgressUI:
         filled = int(bar_width * pct / 100)
         bar = '█' * filled + '░' * (bar_width - filled)
         
-        # Stats line
-        print(f"\rProgress: [{bar}] {pct:.1f}% | "
-              f"Days: {days}/{total} | "
+        # Stats line con información más clara
+        elapsed_str = self._format_time(elapsed)
+        print(f"\r🚀 BACKTEST: [{bar}] {pct:.1f}% | "
+              f"Day {days}/{total} | "
               f"Setups: {self.stats['setups_found']} | "
               f"Trades: {self.stats['trades_entered']} | "
-              f"ETA: {eta_str}", end='', flush=True)
+              f"⏱ {elapsed_str} | ETA: {eta_str}    ", end='', flush=True)
     
     def print_summary(self, final_equity, initial_capital):
         """Muestra resumen final"""
@@ -265,10 +266,10 @@ class DynamicUniverseScanner:
         setups = []
         total = len(self.universo_base)
         
-        # Progress bar para el escaneo
-        with tqdm(total=total, desc="Scanning universe", 
-                  bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]',
-                  ncols=100) as pbar:
+        # Progress bar para el escaneo - más compacta y silenciosa
+        with tqdm(total=total, desc=f"  Scanning {date.strftime('%Y-%m-%d')}", 
+                  bar_format='{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt}',
+                  ncols=90, leave=False, disable=False) as pbar:
             
             for ticker in self.universo_base:
                 try:
@@ -280,7 +281,9 @@ class DynamicUniverseScanner:
                         pbar.set_postfix({'setups': len(setups)})
                 
                 except Exception as e:
-                    logger.debug(f"Error analyzing {ticker}: {e}")
+                    # Silenciar errores comunes de datos no disponibles
+                    if "No results found" not in str(e) and "Empty" not in str(e):
+                        logger.debug(f"Error analyzing {ticker}: {e}")
                 
                 pbar.update(1)
         

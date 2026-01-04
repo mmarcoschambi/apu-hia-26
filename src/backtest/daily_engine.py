@@ -158,6 +158,9 @@ class DailyBacktestEngine:
             self.spy_data = self.data_provider.get_daily_data('SPY', start_date=fetch_start, end_date=fetch_end, offline=self.offline)
             if self.spy_data.empty:
                 print("Warning: Could not load SPY data.")
+            else:
+                # Normalize SPY columns to lowercase
+                self.spy_data.columns = [c.lower() for c in self.spy_data.columns]
         except:
             print("Warning: Could not load SPY data.")
 
@@ -167,8 +170,9 @@ class DailyBacktestEngine:
         
         for i, symbol in enumerate(self.universe):
             # Progress indicator for large universes
-            if i % 50 == 0 or i == total_symbols - 1:
-                print(f"📊 Loading data: {i+1}/{total_symbols} ({valid_data_count} valid so far)")
+            if i % 10 == 0 or i == total_symbols - 1:
+                # print(f"📊 Loading data: {i+1}/{total_symbols} ({valid_data_count} valid so far)")
+                print(f"__PROGRESS__{i+1}/{total_symbols}__Loading {symbol}...", flush=True)
             
             try:
                 # Use centralized data provider with cache/offline support
@@ -187,7 +191,12 @@ class DailyBacktestEngine:
                     df.index = pd.to_datetime(df.index)
                     
                     # --- Institutional Quality & Liquidity Filters ---
-                    recent_tail = df.tail(20)
+                    # Filter data up to backtest end date to avoid look-ahead bias
+                    df_in_range = df[df.index <= self.end_date]
+                    if len(df_in_range) < 20:
+                        print(f"Skipping {symbol}: Insufficient data in backtest range")
+                        continue
+                    recent_tail = df_in_range.tail(20)
 
                     # A. Average Volume
                     if 'volume' in recent_tail.columns:
@@ -202,16 +211,16 @@ class DailyBacktestEngine:
                             print(f"Skipping {symbol}: Low Dollar Vol (${avg_dollar_vol/1e6:.1f}M < ${self.min_dollar_vol/1e6:.1f}M)")
                             continue
 
-                        # C. Minimum Price (Current)
-                        current_price = df['close'].iloc[-1]
+                        # C. Minimum Price (at end of period)
+                        current_price = df_in_range['close'].iloc[-1]
                         if current_price < self.min_price:
                             print(f"Skipping {symbol}: Low Price (${current_price:.2f} < ${self.min_price})")
                             continue
 
                         # D. Rolling Dollar Volume 20 (NEW - More Accurate Liquidity Filter)
-                        if 'rolling_dollar_vol_20' in df.columns:
+                        if 'rolling_dollar_vol_20' in df_in_range.columns:
                             # Check if the most recent rolling value meets our threshold
-                            rolling_dollar_vol = df['rolling_dollar_vol_20'].iloc[-1] if not pd.isna(df['rolling_dollar_vol_20'].iloc[-1]) else 0
+                            rolling_dollar_vol = df_in_range['rolling_dollar_vol_20'].iloc[-1] if not pd.isna(df_in_range['rolling_dollar_vol_20'].iloc[-1]) else 0
                             if rolling_dollar_vol < self.min_dollar_vol:
                                 print(f"Skipping {symbol}: Low Rolling Dollar Vol (${rolling_dollar_vol/1e6:.1f}M < ${self.min_dollar_vol/1e6:.1f}M)")
                                 continue
@@ -262,8 +271,8 @@ class DailyBacktestEngine:
         # Guardar partial_exits por separado para análisis
         if self.portfolio.partial_exits:
             partial_df = pd.DataFrame(self.portfolio.partial_exits)
-            partial_df.to_csv('partial_exits.csv', index=False)
-            print(f"📊 Salidas parciales guardadas: {len(partial_df)} registros en partial_exits.csv")
+            partial_df.to_csv('outputs/backtests/partial_exits.csv', index=False)
+            print(f"📊 Salidas parciales guardadas: {len(partial_df)} registros en outputs/backtests/partial_exits.csv")
         
         return trades_df
 
@@ -862,5 +871,7 @@ class DailyBacktestEngine:
         open_pnl = 0
         for symbol, pos in self.portfolio.positions.items():
             if symbol in self.market_data and today in self.market_data[symbol].index:
-                open_pnl += (self.market_data[symbol].loc[today]['close'] - pos.entry_price) * pos.shares
+                df = self.market_data[symbol]
+                close_col = 'close' if 'close' in df.columns else 'Close'
+                open_pnl += (df.loc[today][close_col] - pos.entry_price) * pos.shares
         self.portfolio.equity_curve.append({'date': today, 'equity': self.portfolio.cash + open_pnl})

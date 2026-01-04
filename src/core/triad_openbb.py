@@ -34,15 +34,20 @@ class TriadOpenBB:
             
             if hist_data.empty: return None
             
-            if 'volume' in hist_data.columns and hist_data['volume'].sum() > 0:
-                hist_data['close_volume'] = hist_data['close'] * hist_data['volume']
-                avwap = hist_data['close_volume'].sum() / hist_data['volume'].sum()
-            else:
-                avwap = hist_data['close'].mean()
+            # Handle both lowercase and uppercase column names
+            close_col = 'close' if 'close' in hist_data.columns else 'Close'
+            high_col = 'high' if 'high' in hist_data.columns else 'High'
+            volume_col = 'volume' if 'volume' in hist_data.columns else 'Volume'
             
-            ath = hist_data['high'].max()
-            ath_date = hist_data['high'].idxmax()
-            current_price = hist_data['close'].iloc[-1]
+            if volume_col in hist_data.columns and hist_data[volume_col].sum() > 0:
+                hist_data['close_volume'] = hist_data[close_col] * hist_data[volume_col]
+                avwap = hist_data['close_volume'].sum() / hist_data[volume_col].sum()
+            else:
+                avwap = hist_data[close_col].mean()
+            
+            ath = hist_data[high_col].max()
+            ath_date = hist_data[high_col].idxmax()
+            current_price = hist_data[close_col].iloc[-1]
             ath_distance = (current_price - ath) / ath * 100
             
             result = {
@@ -67,29 +72,33 @@ class TriadOpenBB:
         
         df = self._calculate_indicators(df)
         
+        # Handle both lowercase and uppercase column names
+        close_col = 'close' if 'close' in df.columns else 'Close'
+        volume_col = 'volume' if 'volume' in df.columns else 'Volume'
+        
         for i in range(20, len(df)):
             current = df.iloc[i]
             prev = df.iloc[i-1]
             
             # Camino 1: Momentum
-            if (current['close'] > current['sma_20'] and 
+            if (current[close_col] > current['sma_20'] and 
                 current['rsi'] < 70 and current['rsi'] > 50 and
-                current['close'] > prev['close'] and
-                current['volume'] > current['sma_volume_20']):
-                signals.append({'date': current.name, 'type': 'camino_1', 'price': current['close'], 'reason': 'momentum_1'})
+                current[close_col] > prev[close_col] and
+                current[volume_col] > current['sma_volume_20']):
+                signals.append({'date': current.name, 'type': 'camino_1', 'price': current[close_col], 'reason': 'momentum_1'})
             
             # Camino 2: Pullback
-            elif (current['close'] < current['sma_20'] and 
-                  current['close'] > current['sma_50'] and
+            elif (current[close_col] < current['sma_20'] and 
+                  current[close_col] > current['sma_50'] and
                   current['rsi'] > 30 and current['rsi'] < 50 and
-                  current['close'] > prev['close']):
-                signals.append({'date': current.name, 'type': 'camino_2', 'price': current['close'], 'reason': 'pullback_2'})
+                  current[close_col] > prev[close_col]):
+                signals.append({'date': current.name, 'type': 'camino_2', 'price': current[close_col], 'reason': 'pullback_2'})
             
             # Camino 3: Breakout
-            elif (current['close'] > current['upper_bb'] and
+            elif (current[close_col] > current['upper_bb'] and
                   current['rsi'] < 80 and current['rsi'] > 50 and
-                  current['volume'] > current['sma_volume_20'] * 1.5):
-                signals.append({'date': current.name, 'type': 'camino_3', 'price': current['close'], 'reason': 'breakout_3'})
+                  current[volume_col] > current['sma_volume_20'] * 1.5):
+                signals.append({'date': current.name, 'type': 'camino_3', 'price': current[close_col], 'reason': 'breakout_3'})
         
         return signals
 
@@ -125,13 +134,18 @@ class TriadOpenBB:
             entry_price = signal['price']
             entry_date = signal['date']
             
+            # Handle both lowercase and uppercase column names
+            close_col = 'close' if 'close' in data.columns else 'Close'
+            high_col = 'high' if 'high' in data.columns else 'High'
+            low_col = 'low' if 'low' in data.columns else 'Low'
+            
             # Stop Loss Inicial:
             if stop_loss_pct is not None and stop_loss_pct > 0:
                 # Usar porcentaje fijo si se provee
                 stop_loss = entry_price * (1 - (stop_loss_pct / 100))
             else:
                 # Lógica por defecto: Mínimo del día de señal (Swing Low proxy)
-                low_of_day = data.iloc[idx_entry]['low']
+                low_of_day = data.iloc[idx_entry][low_col]
                 stop_loss = low_of_day
                 if (entry_price - stop_loss) / entry_price < 0.01:
                     stop_loss = entry_price * 0.97
@@ -148,8 +162,8 @@ class TriadOpenBB:
                 # Calcular ADR (Average Daily Range) de últimos 20 días
                 recent_data = data.iloc[max(0, idx_entry-20):idx_entry+1]
                 if len(recent_data) > 1:
-                    adr_pct = ((recent_data['high'] - recent_data['low']) / recent_data['close'] * 100).mean()
-                    avg_volume = int(recent_data['volume'].mean())
+                    adr_pct = ((recent_data[high_col] - recent_data[low_col]) / recent_data[close_col] * 100).mean()
+                    avg_volume = int(recent_data['Volume'].mean())
                 else:
                     adr_pct = 4.0  # Default conservador
                     avg_volume = 1000000  # Default 1M shares
@@ -189,7 +203,7 @@ class TriadOpenBB:
                 curr_idx = idx_entry + i
                 if curr_idx >= len(data):
                     # Fin de datos: cerrar todo lo que queda
-                    close_price = data.iloc[-1]['close']
+                    close_price = data.iloc[-1]['Close']
                     realized_pnl_pct += ((close_price - entry_price) / entry_price) * position_pct
                     exit_reasons.append("End of Data")
                     final_exit_date = data.index[-1]
@@ -200,7 +214,7 @@ class TriadOpenBB:
                 curr_date = data.index[curr_idx]
                 
                 # A. VERIFICAR STOP LOSS / HARD EXIT
-                if row['low'] <= stop_loss:
+                if row['Low'] <= stop_loss:
                     # SL Ejecutado al precio de Stop
                     loss_pct = ((stop_loss - entry_price) / entry_price) * position_pct
                     realized_pnl_pct += loss_pct
@@ -215,7 +229,7 @@ class TriadOpenBB:
                 # --- ESTADO: ENTRY ---
                 if state == "ENTRY":
                     # TP1 Check: 1.5R alcanzado (High >= Target)
-                    if row['high'] >= target_1_5r:
+                    if row['High'] >= target_1_5r:
                         # ACCIÓN: Vender 40% (TP1 - Risk Off)
                         exit_price_tp1 = target_1_5r
                         gain_pct = ((exit_price_tp1 - entry_price) / entry_price) * 0.40
@@ -233,7 +247,7 @@ class TriadOpenBB:
                     # TP2 Check: Momentum (4 días tras entrada)
                     if i >= 4:
                         # ACCIÓN: Vender 30% adicional
-                        exit_price_tp2 = row['close']
+                        exit_price_tp2 = row['Close']
                         gain_pct = ((exit_price_tp2 - entry_price) / entry_price) * 0.30
                         realized_pnl_pct += gain_pct
                         position_pct -= 0.30
@@ -247,12 +261,12 @@ class TriadOpenBB:
                     # "Condición de salida final: Runner activo con trailing stop dinámico (8/21 cross)"
                     if row['ema_8'] < row['ema_21']:
                         # ACCIÓN: Cerrar Runner (restante ~30%)
-                        exit_price_runner = row['close']
+                        exit_price_runner = row['Close']
                         gain_pct = ((exit_price_runner - entry_price) / entry_price) * position_pct
                         realized_pnl_pct += gain_pct
                         
                         final_exit_date = curr_date
-                        final_exit_price = row['close']
+                        final_exit_price = row['Close']
                         exit_reasons.append("Runner Exit (EMA 8/21 Cross)")
                         state = "FULL_EXIT"
                         break
@@ -260,7 +274,7 @@ class TriadOpenBB:
             # --- 4. COMPILACIÓN DE RESULTADOS ---
             # Si el bucle termina y aún hay posición (ej. runner nunca tocó EMA10 en 60 días)
             if state != "FULL_EXIT" and position_pct > 0:
-                close_price = data.iloc[curr_idx]['close'] # Último precio iterado
+                close_price = data.iloc[curr_idx]['Close'] # Último precio iterado
                 realized_pnl_pct += ((close_price - entry_price) / entry_price) * position_pct
                 final_exit_date = data.index[curr_idx]
                 final_exit_price = close_price
@@ -286,26 +300,30 @@ class TriadOpenBB:
 
     def _calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         """Indicadores necesarios para la lógica Quant"""
-        df['sma_20'] = df['close'].rolling(window=20).mean()
-        df['sma_50'] = df['close'].rolling(window=50).mean()
+        # Handle both lowercase and uppercase column names
+        close_col = 'close' if 'close' in df.columns else 'Close'
+        volume_col = 'volume' if 'volume' in df.columns else 'Volume'
+        
+        df['sma_20'] = df[close_col].rolling(window=20).mean()
+        df['sma_50'] = df[close_col].rolling(window=50).mean()
         
         # EMAs para el Runner Trailing Stop (8 y 21)
-        df['ema_8'] = df['close'].ewm(span=8, adjust=False).mean()
-        df['ema_21'] = df['close'].ewm(span=21, adjust=False).mean()
+        df['ema_8'] = df[close_col].ewm(span=8, adjust=False).mean()
+        df['ema_21'] = df[close_col].ewm(span=21, adjust=False).mean()
         
         # SMA Volumen para confirmación
-        df['sma_volume_20'] = df['volume'].rolling(window=20).mean()
+        df['sma_volume_20'] = df[volume_col].rolling(window=20).mean()
         
         # RSI
-        delta = df['close'].diff()
+        delta = df[close_col].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         rs = gain / loss
         df['rsi'] = 100 - (100 / (1 + rs))
         
         # Bandas Bollinger (para Camino 3)
-        df['middle_bb'] = df['close'].rolling(window=20).mean()
-        bb_std = df['close'].rolling(window=20).std()
+        df['middle_bb'] = df[close_col].rolling(window=20).mean()
+        bb_std = df[close_col].rolling(window=20).std()
         df['upper_bb'] = df['middle_bb'] + (bb_std * 2)
         df['lower_bb'] = df['middle_bb'] - (bb_std * 2)
         

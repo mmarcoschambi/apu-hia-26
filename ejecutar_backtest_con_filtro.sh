@@ -13,8 +13,8 @@ echo "⏳ Iniciando backtest..."
 echo ""
 
 # Backup del backtest anterior
-if [ -f "backtest_results.csv" ]; then
-    mv backtest_results.csv "backtest_results_old_$(date +%Y%m%d_%H%M%S).csv"
+if [ -f "outputs/backtests/backtest_results.csv" ]; then
+    mv outputs/backtests/backtest_results.csv "outputs/backtests/backtest_results_old_$(date +%Y%m%d_%H%M%S).csv"
     echo "✅ Backtest anterior respaldado"
 fi
 
@@ -48,7 +48,7 @@ echo ""
 echo "Para validar que el filtro funciona:"
 echo ""
 echo "# Ver trades de Blue Sky en el nuevo backtest"
-echo "grep BLUE_SKY backtest_results.csv | cut -d',' -f1,2,10"
+echo "grep BLUE_SKY outputs/backtests/backtest_results.csv | cut -d',' -f1,2,10"
 echo ""
 echo "# Ver trends de los trades (columna context_trend)"
 echo "# Ninguno debería tener 'Weak' en Blue Sky"

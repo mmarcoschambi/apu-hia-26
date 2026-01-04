@@ -85,7 +85,7 @@ def run_test_backtest():
             print("\n⚠️  No trades executed in this period")
             
         print()
-        print("💾 Results saved to: backtest_results.csv")
+        print("💾 Results saved to: outputs/backtests/backtest_results.csv")
         
     except Exception as e:
         print(f"\n❌ Error running backtest: {e}")

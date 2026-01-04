@@ -44,24 +44,7 @@ class HistoricalBacktester:
             print(f"❌ No data for {symbol}")
             return pd.DataFrame()
         
-        # ═══════════════════════════════════════════════════════════════
-        # STOCK QUALITY FILTERS (NEW)
-        # ═══════════════════════════════════════════════════════════════
-        print("Checking stock quality filters...")
-        filter_result = self.stock_filters.passes_all_filters(daily_df, symbol)
-        
-        if not filter_result['passed']:
-            print(f"❌ {symbol} FAILS quality filters:")
-            print(f"   {filter_result['details']}")
-            print(f"   Skipping backtest for this symbol.")
-            return pd.DataFrame()
-        
-        print(f"✅ {symbol} passes quality filters")
-        print(f"   Dollar Volume: ${filter_result['metrics']['dollar_volume']/1e6:.0f}M")
-        print(f"   ADR: {filter_result['metrics']['adr_pct']:.2f}%")
-        print(f"   Trend: Price ${filter_result['metrics']['price']:.2f} > SMA50 ${filter_result['metrics']['sma50']:.2f} > SMA200 ${filter_result['metrics']['sma200']:.2f}")
-        
-        # Filter by date range
+        # Filter by date range FIRST
         daily_df.index = pd.to_datetime(daily_df.index).tz_localize(None)
         start_dt = pd.to_datetime(start_date)
         end_dt = pd.to_datetime(end_date)
@@ -82,6 +65,35 @@ class HistoricalBacktester:
             print(f"❌ No data in range {start_date} to {end_date} for {symbol}")
             print(f"   Available range: {daily_df.index.min().date()} to {daily_df.index.max().date()}")
             return pd.DataFrame()
+        
+        # ═══════════════════════════════════════════════════════════════
+        # STOCK QUALITY FILTERS - Evaluate at END of backtest period
+        # ═══════════════════════════════════════════════════════════════
+        print("Checking stock quality filters at end of period...")
+        # Get data up to end_date + 200 days buffer for SMA200
+        filter_end_date = end_dt + pd.Timedelta(days=200)
+        filter_data = daily_df[daily_df.index <= filter_end_date]
+        
+        if len(filter_data) >= 200:
+            # Use smart filter that auto-detects cache availability
+            filter_result = self.stock_filters.passes_filters(
+                ticker=symbol,
+                date=end_date,
+                df=filter_data
+            )
+            
+            if not filter_result['passed']:
+                print(f"❌ {symbol} FAILS quality filters at {end_date}:")
+                print(f"   {filter_result['details']}")
+                print(f"   Skipping backtest for this symbol.")
+                return pd.DataFrame()
+            
+            print(f"✅ {symbol} passes quality filters at {end_date}")
+            print(f"   Dollar Volume: ${filter_result['metrics']['dollar_volume']/1e6:.0f}M")
+            print(f"   ADR: {filter_result['metrics']['adr_pct']:.2f}%")
+            print(f"   Trend: Price ${filter_result['metrics']['price']:.2f} > SMA50 ${filter_result['metrics']['sma50']:.2f} > SMA200 ${filter_result['metrics']['sma200']:.2f}")
+        else:
+            print(f"⚠️  Insufficient data for quality filters, proceeding anyway...")
         
         # Load SPY/QQQ for market regime filters
         print("Loading SPY/QQQ for market filters...")
@@ -136,7 +148,14 @@ class HistoricalBacktester:
             # Calculate indicators
             base_data = self.indicators.detect_base(historical_data, lookback=20)
             avwap_data = self.indicators.calculate_avwap_from_ath(historical_data)
-            adr = self._calculate_adr_at_date(daily_df, date, period=20)
+            
+            # Use pre-calculated ADR from cache if available, otherwise calculate
+            if 'adr_14' in daily_df.columns and date in daily_df.index:
+                adr = daily_df.loc[date, 'adr_14']
+                if pd.isna(adr):
+                    adr = self._calculate_adr_at_date(daily_df, date, period=20)
+            else:
+                adr = self._calculate_adr_at_date(daily_df, date, period=20)
             
             # Simple market context
             market_ctx = {'market_weak': False, 'spy_gap_down': False, 'qqq_gap_down': False}
@@ -330,13 +349,14 @@ class HistoricalBacktester:
         else:
             return pd.DataFrame()
     
-    def save_results(self, results_df: pd.DataFrame, output_file: str = "backtest_results.csv"):
+    def save_results(self, results_df: pd.DataFrame, output_file: str = "outputs/backtests/backtest_results.csv"):
         """Save backtest results"""
         if results_df.empty:
             print("No results to save")
             return
         
         output_path = Path(output_file)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         results_df.to_csv(output_path, index=False)
         print(f"\n✅ Results saved to {output_path}")
 
@@ -350,7 +370,7 @@ def main():
                        help='Symbols to backtest')
     parser.add_argument('--start', default='2024-01-01', help='Start date (YYYY-MM-DD)')
     parser.add_argument('--end', default='2024-12-01', help='End date (YYYY-MM-DD)')
-    parser.add_argument('--output', default='backtest_results.csv', help='Output CSV')
+    parser.add_argument('--output', default='outputs/backtests/backtest_results.csv', help='Output CSV')
     
     args = parser.parse_args()
     

@@ -13,6 +13,7 @@ import calendar
 import plotly.figure_factory as ff
 import random
 import pickle
+import shutil
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -164,13 +165,22 @@ def run_backtest_with_progress(start_date, end_date, stop_loss_pct=None,
                     parts = line.split("__")
                     if len(parts) >= 3:
                         progress_info = parts[2].split("/") # "1/10"
-                        symbol_name = parts[3] if len(parts) > 3 else ""
+                        info_text = parts[3] if len(parts) > 3 else ""
+                        
                         if len(progress_info) == 2:
-                            current = int(progress_info[0])
-                            total = int(progress_info[1])
-                            progress = float(current) / float(total)
-                            progress_bar.progress(progress)
-                            status_text.write(f"⏳ Procesando **{symbol_name}** ({current}/{total})...")
+                            try:
+                                current = int(progress_info[0])
+                                total = int(progress_info[1])
+                                progress = min(1.0, max(0.0, float(current) / float(total)))
+                                progress_bar.progress(progress)
+                                
+                                # Detectar fase basado en el texto
+                                if "Loading" in info_text:
+                                    status_text.markdown(f"📥 **Descargando/Verificando Datos**... \n\n`{info_text}` ({current}/{total})")
+                                else:
+                                    status_text.markdown(f"🔄 **Simulando Mercado**... \n\n`{info_text}` ({current}/{total} días)")
+                            except:
+                                pass
                 else:
                     logs.append(line)
                     log_text = "\n".join(logs[-10:])
@@ -178,7 +188,24 @@ def run_backtest_with_progress(start_date, end_date, stop_loss_pct=None,
         
         if process.returncode == 0:
             progress_bar.progress(1.0)
-            status_text.success("✅ Backtest completado!")
+            status_text.success("✅ Backtest completado exitosamente!")
+            st.toast("🚀 ¡Proceso Terminado!", icon="✅")
+            st.balloons()
+            
+            # System Notification (Linux / WSL2 Windows)
+            try:
+                # 1. Try Windows Notification via PowerShell (WSL2)
+                import shutil
+                if shutil.which("powershell.exe"):
+                    ps_cmd = "[reflection.assembly]::loadwithpartialname('System.Windows.Forms'); [reflection.assembly]::loadwithpartialname('System.Drawing'); $notify = new-object system.windows.forms.notifyicon; $notify.icon = [System.Drawing.SystemIcons]::Information; $notify.visible = $true; $notify.showballoontip(10, 'Momentum V2', '🚀 Backtest Finalizado Exitosamente', [system.windows.forms.tooltipicon]::None)"
+                    subprocess.run(['powershell.exe', '-Command', ps_cmd], check=False)
+                
+                # 2. Try Linux native notification (fallback or for Linux users)
+                if shutil.which("notify-send"):
+                    subprocess.run(['notify-send', '-u', 'normal', '-t', '5000', 'Momentum V2', '🚀 Backtest Finalizado Exitosamente'], check=False)
+            except Exception:
+                pass
+                
             time.sleep(1)
             st.cache_data.clear()
             return True
@@ -218,6 +245,28 @@ with st.sidebar.expander("📅 Fechas y Filtros Universo", expanded=True):
     # Show cache info
     st.info(f"📦 Datos disponibles: {cache_min_date.strftime('%Y-%m-%d')} a {cache_max_date.strftime('%Y-%m-%d')}")
 
+    # --- Selector de Años (Nuevo) ---
+    years_available = range(cache_min_date.year, cache_max_date.year + 1)
+    year_opts = ["Personalizado"] + sorted([str(y) for y in years_available], reverse=True)
+    
+    def on_year_change():
+        sel = st.session_state.year_selector
+        if sel != "Personalizado":
+            y = int(sel)
+            # Definir inicio y fin del año seleccionado
+            new_start = datetime(y, 1, 1)
+            new_end = datetime(y, 12, 31)
+            
+            # Ajustar a los límites reales del cache si es necesario
+            if new_start < cache_min_date: new_start = cache_min_date
+            if new_end > cache_max_date: new_end = cache_max_date
+            
+            st.session_state.start_date = new_start
+            st.session_state.end_date = new_end
+
+    st.selectbox("📅 Año Completo (Rápido)", year_opts, key="year_selector", on_change=on_year_change)
+    # --------------------------------
+
     # Random Date Button
     if st.button("🎲 Rango Aleatorio (Backtest)", use_container_width=True):
         # Random start within available cache range
@@ -233,24 +282,39 @@ with st.sidebar.expander("📅 Fechas y Filtros Universo", expanded=True):
             
             st.session_state.start_date = random_start
             st.session_state.end_date = random_end
+            st.session_state.year_selector = "Personalizado" # Reset selector
             st.rerun()
 
+    # Preparar valores para date_input (asegurar que sean date objects)
+    curr_start = st.session_state.start_date
+    if isinstance(curr_start, datetime): curr_start = curr_start.date()
+    
+    curr_end = st.session_state.end_date
+    if isinstance(curr_end, datetime): curr_end = curr_end.date()
+
+    # INPUT FECHA INICIO
     run_start_date = st.date_input(
         "Fecha Inicio", 
-        value=st.session_state.start_date,
+        value=curr_start,
         min_value=cache_min_date.date(),
         max_value=cache_max_date.date()
     )
+
+    # INPUT FECHA FIN (Validado: min_value = start_date)
+    # Si el usuario avanza la fecha de inicio más allá de la fecha fin actual,
+    # debemos ajustar el value para evitar error de Streamlit.
+    final_end_value = max(curr_end, run_start_date)
+    
     run_end_date = st.date_input(
         "Fecha Fin", 
-        value=st.session_state.end_date,
-        min_value=cache_min_date.date(),
+        value=final_end_value,
+        min_value=run_start_date, # 🔒 Bloquea fechas anteriores a inicio
         max_value=cache_max_date.date()
     )
     
-    # Sync session state
-    st.session_state.start_date = run_start_date
-    st.session_state.end_date = run_end_date
+    # Sync session state (Convert back to datetime for internal consistency)
+    st.session_state.start_date = datetime.combine(run_start_date, datetime.min.time())
+    st.session_state.end_date = datetime.combine(run_end_date, datetime.min.time())
     
     # Show warning if dates are outside cache range
     if run_start_date < cache_min_date.date() or run_end_date > cache_max_date.date():
@@ -381,7 +445,7 @@ max_symbols_limit = None
 selection_strategy = 'liquidity'  # Default
 
 if scan_mode == "🌎 Todo el Mercado (SQLite)":
-    st.sidebar.warning("⚠️ Universo completo = 5600+ tickers. Puede tardar mucho.")
+    st.sidebar.warning("⚠️ Universo completo = 5600+ tickers. Puede tardar mucho, pero verás el progreso detallado.")
     limit_universe = st.sidebar.checkbox("🎯 Limitar Universo", value=True, help="Recomendado para pruebas rápidas")
     if limit_universe:
         max_symbols_limit = st.sidebar.number_input("Máximo de Símbolos", value=500, min_value=50, max_value=5000, step=50)
@@ -414,7 +478,7 @@ if st.sidebar.button("🚀 EJECUTAR BACKTEST", use_container_width=True):
     # Logic for source
     source_arg = "file"
     sector_arg = None
-    temp_watchlist_path = 'temp_backtest_list.json'
+    temp_watchlist_path = 'outputs/temp_backtest_list.json'
     
     # Save manual list anyway for highlighting or usage
     manual_list = []
@@ -458,15 +522,15 @@ def load_data():
         main_df = pd.DataFrame()
         partial_df = pd.DataFrame()
         
-        if os.path.exists('backtest_results.csv'):
-            main_df = pd.read_csv('backtest_results.csv')
+        if os.path.exists('outputs/backtests/backtest_results.csv'):
+            main_df = pd.read_csv('outputs/backtests/backtest_results.csv')
             main_df['entry_date'] = pd.to_datetime(main_df['entry_date'])
             main_df['exit_date'] = pd.to_datetime(main_df['exit_date'])
             main_df['trade_type'] = 'FULL_EXIT'  # Marcar como cierre completo
         
         # Cargar salidas parciales si existen
-        if os.path.exists('partial_exits.csv'):
-            partial_df = pd.read_csv('partial_exits.csv')
+        if os.path.exists('outputs/backtests/partial_exits.csv'):
+            partial_df = pd.read_csv('outputs/backtests/partial_exits.csv')
             partial_df['entry_date'] = pd.to_datetime(partial_df['entry_date'])
             partial_df['exit_date'] = pd.to_datetime(partial_df['exit_date'])
             partial_df['trade_type'] = partial_df['phase']  # FASE_1 o FASE_2
@@ -483,10 +547,60 @@ def load_data():
 
 df_raw, df_partial_raw = load_data()
 
+# --- 📚 Backtest History Loader ---
+st.sidebar.markdown("---")
+st.sidebar.header("📚 Historial de Backtests")
+
+history_file = 'outputs/backtests/backtest_history.csv'
+if os.path.exists(history_file):
+    history_df = pd.read_csv(history_file)
+    
+    if not history_df.empty:
+        # Formatear para display
+        history_df['display'] = history_df.apply(
+            lambda row: f"{row['start_date']} to {row['end_date']} | {row['trades']} trades | PnL: ${row['pnl']:,.0f}", 
+            axis=1
+        )
+        
+        selected_backtest = st.sidebar.selectbox(
+            "Cargar backtest guardado:",
+            options=['Actual (recién ejecutado)'] + history_df['display'].tolist(),
+            help="Selecciona un backtest anterior para analizar"
+        )
+        
+        if selected_backtest != 'Actual (recién ejecutado)':
+            # Cargar el backtest seleccionado
+            idx = history_df[history_df['display'] == selected_backtest].index[0]
+            
+            # Verificar si tiene archived_file
+            if 'archived_file' in history_df.columns and pd.notna(history_df.loc[idx, 'archived_file']):
+                archived_file = history_df.loc[idx, 'archived_file']
+                
+                if os.path.exists(archived_file):
+                    st.sidebar.success(f"✅ Cargando: {archived_file}")
+                    df_raw = pd.read_csv(archived_file)
+                    df_raw['entry_date'] = pd.to_datetime(df_raw['entry_date'])
+                    df_raw['exit_date'] = pd.to_datetime(df_raw['exit_date'])
+                    df_raw['trade_type'] = 'FULL_EXIT'
+                    
+                    # Mostrar info del backtest
+                    st.sidebar.info(f"""
+                    **Backtest Info:**
+                    - 📅 Periodo: {history_df.loc[idx, 'start_date']} → {history_df.loc[idx, 'end_date']}
+                    - 🎯 Trades: {history_df.loc[idx, 'trades']}
+                    - 💰 PnL: ${history_df.loc[idx, 'pnl']:,.2f}
+                    - 📊 Win Rate: {history_df.loc[idx, 'win_rate']:.1f}%
+                    - 🔥 Profit Factor: {history_df.loc[idx, 'profit_factor']:.2f}
+                    """)
+                else:
+                    st.sidebar.error(f"❌ Archivo no encontrado: {archived_file}")
+            else:
+                st.sidebar.warning("⚠️ Este backtest no tiene archivo archivado (ejecutado antes de la actualización)")
+
 # --- Highlight New Opportunities ---
-if not df_raw.empty and os.path.exists('temp_backtest_list.json'):
+if not df_raw.empty and os.path.exists('outputs/temp_backtest_list.json'):
     try:
-        with open('temp_backtest_list.json', 'r') as f:
+        with open('outputs/temp_backtest_list.json', 'r') as f:
             data = json.load(f)
             if "DIRECT_INPUT" in data:
                 manual_set = set(data["DIRECT_INPUT"])
@@ -731,11 +845,101 @@ if not df_raw.empty:
 
         st.markdown("---")
         
+        # === SPY BENCHMARK CALCULATION ===
+        def calculate_spy_benchmark(start_date, end_date, initial_capital):
+            """Calculate SPY buy & hold performance for comparison"""
+            try:
+                from src.data.market_data import MarketDataProvider
+                provider = MarketDataProvider()
+                spy_data = provider.get_daily_data('SPY', start_date=start_date, end_date=end_date, offline=False)
+                
+                if spy_data.empty:
+                    return None
+                
+                # Normalize columns
+                spy_data.columns = [c.lower() for c in spy_data.columns]
+                
+                # Calculate buy & hold returns
+                entry_price = spy_data['close'].iloc[0]
+                shares = initial_capital / entry_price
+                
+                spy_equity = []
+                for date, row in spy_data.iterrows():
+                    equity = shares * row['close']
+                    spy_equity.append({'date': date, 'equity': equity, 'returns_pct': ((equity - initial_capital) / initial_capital) * 100})
+                
+                return pd.DataFrame(spy_equity)
+            except Exception as e:
+                st.warning(f"No se pudo cargar SPY para comparación: {e}")
+                return None
+        
         # Charts
         col1, col2 = st.columns(2)
         with col1:
-            fig = px.line(df_filtered, x='exit_date', y='Running_Capital', title='Equity Curve (Real Risk Adjusted)')
-            st.plotly_chart(fig, use_container_width=True, key="equity_curve_chart")
+            # Get date range from backtest
+            if not df_filtered.empty and 'entry_date' in df_filtered.columns and 'exit_date' in df_filtered.columns:
+                backtest_start = df_filtered['entry_date'].min()
+                backtest_end = df_filtered['exit_date'].max()
+                
+                # Calculate SPY benchmark
+                spy_benchmark = calculate_spy_benchmark(backtest_start, backtest_end, in_equity)
+                
+                # Create comparative chart
+                fig = go.Figure()
+                
+                # Strategy equity curve
+                fig.add_trace(go.Scatter(
+                    x=df_filtered['exit_date'],
+                    y=df_filtered['Running_Capital'],
+                    mode='lines',
+                    name='Strategy',
+                    line=dict(color='#00D9FF', width=2),
+                    hovertemplate='<b>Strategy</b><br>Date: %{x}<br>Equity: $%{y:,.0f}<extra></extra>'
+                ))
+                
+                # SPY benchmark if available
+                if spy_benchmark is not None:
+                    fig.add_trace(go.Scatter(
+                        x=spy_benchmark['date'],
+                        y=spy_benchmark['equity'],
+                        mode='lines',
+                        name='SPY (Buy & Hold)',
+                        line=dict(color='#FFD700', width=2, dash='dash'),
+                        hovertemplate='<b>SPY</b><br>Date: %{x}<br>Equity: $%{y:,.0f}<extra></extra>'
+                    ))
+                
+                fig.update_layout(
+                    title='Equity Curve vs SPY Benchmark',
+                    xaxis_title='Date',
+                    yaxis_title='Portfolio Value ($)',
+                    hovermode='x unified',
+                    template='plotly_dark',
+                    showlegend=True,
+                    legend=dict(
+                        yanchor="top",
+                        y=0.99,
+                        xanchor="left",
+                        x=0.01
+                    )
+                )
+                
+                st.plotly_chart(fig, use_container_width=True, key="equity_curve_chart")
+                
+                # Show comparative metrics
+                if spy_benchmark is not None:
+                    final_strategy = df_filtered['Running_Capital'].iloc[-1]
+                    final_spy = spy_benchmark['equity'].iloc[-1]
+                    spy_return = spy_benchmark['returns_pct'].iloc[-1]
+                    
+                    col_a, col_b, col_c = st.columns(3)
+                    col_a.metric("Strategy Final", f"${final_strategy:,.0f}", f"{general_perf_pct:+.2f}%")
+                    col_b.metric("SPY Final", f"${final_spy:,.0f}", f"{spy_return:+.2f}%")
+                    col_c.metric("Alpha vs SPY", f"{(general_perf_pct - spy_return):.2f}%", 
+                                delta_color="normal" if general_perf_pct > spy_return else "inverse")
+            else:
+                # Fallback to simple chart
+                fig = px.line(df_filtered, x='exit_date', y='Running_Capital', title='Equity Curve (Real Risk Adjusted)')
+                st.plotly_chart(fig, use_container_width=True, key="equity_curve_chart")
         with col2:
             if 'shares' in df_filtered.columns:
                 fig = px.scatter(df_filtered, x='entry_date', y='position_value', 
@@ -798,10 +1002,18 @@ if not df_raw.empty:
                 df_partial_disp = df_partial_filtered.copy()
                 df_partial_disp['days_to_exit'] = (df_partial_disp['exit_date'] - df_partial_disp['entry_date']).dt.days
                 
-                partial_cols = ['symbol', 'phase', 'exit_date', 'days_to_exit', 'exit_price', 
+                # Ordenar por fase (FASE_1 primero) y luego alfabéticamente por símbolo
+                df_partial_disp = df_partial_disp.sort_values(['phase', 'symbol'], ascending=[True, True])
+                
+                # Agregar numeración de filas
+                df_partial_disp = df_partial_disp.reset_index(drop=True)
+                df_partial_disp.insert(0, '#', range(1, len(df_partial_disp) + 1))
+                
+                partial_cols = ['#', 'symbol', 'phase', 'exit_date', 'days_to_exit', 'exit_price', 
                                'shares', 'exit_pct', 'pnl', 'return_pct', 'reason']
                 
                 partial_config = {
+                    "#": st.column_config.NumberColumn("#", width="tiny"),
                     "symbol": st.column_config.TextColumn("Symbol", width="small"),
                     "phase": st.column_config.TextColumn("Fase", width="small"),
                     "exit_date": st.column_config.DateColumn("Exit Date", format="YYYY-MM-DD"),
@@ -815,11 +1027,28 @@ if not df_raw.empty:
                 }
                 
                 st.dataframe(
-                    df_partial_disp[partial_cols].sort_values('exit_date', ascending=False),
+                    df_partial_disp[partial_cols],
                     use_container_width=True,
                     hide_index=True,
                     column_config=partial_config
                 )
+                
+                # Fila de totales
+                st.markdown("**📊 Totales:**")
+                total_row_cols = st.columns([1, 2, 1, 2, 2, 2, 2, 2, 2, 2, 3])
+                with total_row_cols[0]:
+                    st.write(f"**{len(df_partial_disp)}**")
+                with total_row_cols[1]:
+                    st.write("**TOTAL**")
+                with total_row_cols[6]:
+                    st.write(f"**{df_partial_disp['shares'].sum():,.0f}**")
+                with total_row_cols[8]:
+                    st.write(f"**${df_partial_disp['pnl'].sum():,.2f}**")
+                with total_row_cols[9]:
+                    avg_return = df_partial_disp['return_pct'].mean()
+                    st.write(f"**{avg_return:+.2f}%** (avg)")
+                
+                st.markdown("---")
                 
                 # Estadísticas rápidas de partial exits
                 col1, col2, col3, col4 = st.columns(4)
@@ -901,8 +1130,8 @@ if not df_raw.empty:
                     
                     # Initialize dashboard engine
                     if 'dashboard_engine' not in st.session_state:
-                        if os.path.exists('backtest_results.csv'):
-                            st.session_state['dashboard_engine'] = InteractiveDashboard('backtest_results.csv')
+                        if os.path.exists('outputs/backtests/backtest_results.csv'):
+                            st.session_state['dashboard_engine'] = InteractiveDashboard('outputs/backtests/backtest_results.csv')
                     
                     if 'dashboard_engine' in st.session_state:
                         db = st.session_state['dashboard_engine']
@@ -1039,8 +1268,8 @@ if not df_raw.empty:
 
                 with tab_interactive:
                     if 'dashboard_engine' not in st.session_state:
-                         if os.path.exists('backtest_results.csv'):
-                             st.session_state['dashboard_engine'] = InteractiveDashboard('backtest_results.csv')
+                         if os.path.exists('outputs/backtests/backtest_results.csv'):
+                             st.session_state['dashboard_engine'] = InteractiveDashboard('outputs/backtests/backtest_results.csv')
                     
                     if 'dashboard_engine' in st.session_state:
                         db = st.session_state['dashboard_engine']

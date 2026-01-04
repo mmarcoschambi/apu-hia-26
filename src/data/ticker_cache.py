@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from pathlib import Path
 import logging
+from config.settings import DATA_SOURCE, OPENBB_PROVIDER
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,15 @@ class TickerCache:
                 dollar_volume REAL,
                 rolling_dollar_vol_20 REAL,
                 PRIMARY KEY (ticker, date)
+            )
+        ''')
+        
+        # Nueva tabla para guardar el Top 500 de cada mes y no recalcularlo
+        self.conn.execute('''
+            CREATE TABLE IF NOT EXISTS monthly_universe_cache (
+                year_month TEXT PRIMARY KEY,  -- Formato 'YYYY-MM'
+                tickers TEXT,                 -- JSON list
+                created_at DATE
             )
         ''')
         self.conn.commit()
@@ -264,9 +274,35 @@ class TickerCache:
 
             cursor = self.conn.execute(query, params)
             return [row[0] for row in cursor.fetchall()]
+    
+    def get_cached_month_universe(self, year_month):
+        """Recupera el universo guardado para un mes específico (YYYY-MM)"""
+        try:
+            import json
+            cursor = self.conn.execute(
+                "SELECT tickers FROM monthly_universe_cache WHERE year_month = ?", 
+                (year_month,)
+            )
+            row = cursor.fetchone()
+            if row:
+                return json.loads(row[0])
+        except Exception as e:
+            logger.error(f"Error reading monthly cache: {e}")
+        return None
 
-        else:
-            # Original alphabetical query
+    def save_cached_month_universe(self, year_month, tickers):
+        """Guarda el universo de un mes para uso futuro"""
+        try:
+            import json
+            self.conn.execute(
+                "INSERT OR REPLACE INTO monthly_universe_cache (year_month, tickers, created_at) VALUES (?, ?, ?)",
+                (year_month, json.dumps(tickers), datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+            )
+            self.conn.commit()
+        except Exception as e:
+            logger.error(f"Error saving monthly cache: {e}")
+
+    def get_ohlcv(self, ticker, start_date, end_date, offline=False):
             query = "SELECT ticker FROM universe WHERE 1=1"
             params = []
 
@@ -296,17 +332,28 @@ class TickerCache:
     
     def get_ohlcv(self, ticker, start_date, end_date, offline=False):
         """
-        Obtiene datos OHLCV, usa cache o descarga.
+        Obtiene datos OHLCV con todas las métricas calculadas, usa cache o descarga.
         If offline=True, never downloads, returns what is available.
+        
+        Returns DataFrame with columns:
+        - OHLCV básico: Open, High, Low, Close, Volume
+        - Métricas calculadas: dollar_volume, rolling_dollar_vol_20, avg_volume_20
+        - ADR: adr_14, adr_pct_14
+        - SMAs: sma_50, sma_200
+        - Trend flags: price_above_sma50, price_above_sma200, sma50_above_sma200, trend_aligned
+        - market_cap (si disponible)
         """
         if isinstance(start_date, datetime):
             start_date = start_date.strftime('%Y-%m-%d')
         if isinstance(end_date, datetime):
             end_date = end_date.strftime('%Y-%m-%d')
 
-        # Primero buscar en cache
+        # Primero buscar en cache con TODAS las columnas calculadas
         cursor = self.conn.execute('''
-            SELECT date, open, high, low, close, volume
+            SELECT date, open, high, low, close, volume,
+                   dollar_volume, rolling_dollar_vol_20, market_cap, avg_volume_20,
+                   adr_14, adr_pct_14, sma_50, sma_200,
+                   price_above_sma50, price_above_sma200, sma50_above_sma200, trend_aligned
             FROM ohlcv_cache
             WHERE ticker = ? AND date BETWEEN ? AND ?
             ORDER BY date
@@ -318,10 +365,22 @@ class TickerCache:
         if cached:
             df = pd.DataFrame(
                 cached, 
-                columns=['date', 'open', 'high', 'low', 'close', 'volume']
+                columns=['date', 'open', 'high', 'low', 'close', 'volume',
+                        'dollar_volume', 'rolling_dollar_vol_20', 'market_cap', 'avg_volume_20',
+                        'adr_14', 'adr_pct_14', 'sma_50', 'sma_200',
+                        'price_above_sma50', 'price_above_sma200', 'sma50_above_sma200', 'trend_aligned']
             )
             df['date'] = pd.to_datetime(df['date'])
             df.set_index('date', inplace=True)
+            
+            # Ensure proper capitalization for consistency (OHLCV básico)
+            df.rename(columns={
+                'open': 'Open',
+                'high': 'High', 
+                'low': 'Low',
+                'close': 'Close',
+                'volume': 'Volume'
+            }, inplace=True)
             
             if offline:
                 return df
@@ -336,10 +395,43 @@ class TickerCache:
         elif offline:
             return None
         
-        # Si no, descargar de Yahoo Finance
-        logger.info(f"Downloading {ticker} data from {start_date} to {end_date}...")
+        # Descargar usando la fuente configurada
+        logger.info(f"Downloading {ticker} data from {start_date} to {end_date} using {DATA_SOURCE}...")
         try:
-            df = yf.download(ticker, start=start_date, end=end_date, progress=False)
+            if DATA_SOURCE == "openbb":
+                from openbb import obb
+                result = obb.equity.price.historical(
+                    symbol=ticker,
+                    start_date=start_date,
+                    end_date=end_date,
+                    interval="1d",
+                    provider=OPENBB_PROVIDER
+                )
+                
+                if result and hasattr(result, 'to_df'):
+                    df = result.to_df()
+                    if df.empty:
+                        return None
+                    
+                    # Ensure DatetimeIndex
+                    if not isinstance(df.index, pd.DatetimeIndex):
+                        df.index = pd.to_datetime(df.index)
+                    
+                    # Normalize column names
+                    column_mapping = {
+                        'open': 'Open',
+                        'high': 'High',
+                        'low': 'Low',
+                        'close': 'Close',
+                        'volume': 'Volume'
+                    }
+                    for old_col, new_col in column_mapping.items():
+                        if old_col in df.columns:
+                            df.rename(columns={old_col: new_col}, inplace=True)
+                else:
+                    return None
+            else:
+                df = yf.download(ticker, start=start_date, end=end_date, progress=False)
             
             if df.empty:
                 return None
@@ -367,7 +459,8 @@ class TickerCache:
                 rolling_dollar_vol_val = row['rolling_dollar_vol_20']
 
                 self.conn.execute('''
-                    INSERT OR REPLACE INTO ohlcv_cache
+                    INSERT OR REPLACE INTO ohlcv_cache 
+                    (ticker, date, open, high, low, close, volume, dollar_volume, rolling_dollar_vol_20)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     ticker,
