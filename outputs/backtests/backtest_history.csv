@@ -1,8 +1,0 @@
-timestamp,start_date,end_date,pnl,win_rate,trades,profit_factor,min_adr,min_rvol,source,sort_by,archived_file
-2025-12-29 17:30:15,2018-01-01,2018-12-31,775.68,55.56,18,1.24,1.5,1.5,file,liquidity,
-2025-12-29 17:31:54,2020-01-01,2020-12-31,4712.05,62.07,29,2.49,1.5,1.5,file,liquidity,
-2025-12-29 19:28:40,2019-01-01,2019-12-31,2558.35,62.96,54,1.39,1.5,1.5,sqlite,liquidity,
-2025-12-29 21:56:57,2006-01-03,2020-12-31,68955.63,58.66,699,1.67,1.5,1.5,sqlite,liquidity,outputs/backtests/archive/backtest_20251229_215657.csv
-20251230_190130,2018-01-01,2018-12-31,-37.1,57.14,7,0.97,1.5,1.5,file,liquidity,outputs/backtests/archive/backtest_20251230_190130.csv
-20260103_235107,2023-01-01,2025-12-31,15083.91,70.37,27,7.79,1.5,1.5,file,liquidity,outputs/backtests/archive/backtest_20260103_235107.csv
-20260104_010325,2024-01-01,2024-12-31,8934.9,75.0,4,55.83,1.5,1.5,file,liquidity,outputs/backtests/archive/backtest_20260104_010325.csv

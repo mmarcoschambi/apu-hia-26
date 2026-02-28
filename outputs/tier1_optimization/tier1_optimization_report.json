@@ -1,0 +1,59 @@
+{
+  "timestamp": "2026-02-07T20:09:55.954367",
+  "method": "Tier1_Only_Optimization",
+  "trials": 100,
+  "tier1_optimized": {
+    "tp1_r": 2.0,
+    "tp2_r": 4.0,
+    "tp1_pct": 0.3,
+    "tp2_pct": 0.5,
+    "max_stop_pct": 0.06,
+    "risk_dollars": 250,
+    "runner_pct": 0.19999999999999996
+  },
+  "tier2_fixed": {
+    "min_rvol": 1.24,
+    "max_dist_sma20": 6.0,
+    "min_consolidation_days": 19,
+    "min_adr": 2.5,
+    "min_dollar_volume": 3000000,
+    "require_sector_strength": true,
+    "sector_top_percentile": 0.4,
+    "analysis_metadata": {
+      "trades_analyzed": 589,
+      "winners": 214,
+      "losers": 375,
+      "original_win_rate": 36.33276740237691,
+      "rvol_winners_avg": 1178619.8551957766,
+      "rvol_losers_avg": 1070270.718353702,
+      "dist_sma20_winners_avg": 3.852805298604172,
+      "dist_sma20_losers_avg": 4.019056080856829
+    }
+  },
+  "tier3_fixed": {
+    "rvol_danger": 3.0,
+    "rvol_warning": 2.0,
+    "rvol_danger_size": 0.3,
+    "rvol_warning_size": 0.65,
+    "adr_high": 6.0,
+    "adr_med": 5.0,
+    "adr_high_size": 0.25,
+    "adr_med_size": 0.4,
+    "max_exposure_pct": 0.35,
+    "max_position_pct": 0.25,
+    "earnings_days": 5,
+    "earnings_cushion": 2,
+    "max_stop_pct_hard": 0.08,
+    "risk_fraction": 0.005
+  },
+  "in_sample": {
+    "period": "2018-01-01 to 2021-12-31",
+    "metric": "sharpe",
+    "value": 0.0026515324268387144
+  },
+  "validation": {
+    "period": "2022-01-01 to 2023-12-31",
+    "sharpe": -0.8372348324280681,
+    "degradation_pct": -31675.50795734601
+  }
+}

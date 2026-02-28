@@ -91,7 +91,10 @@ class DailyBacktestEngine:
         self.portfolio = Portfolio(risk_manager.account_equity)
         self.pending_orders: List[PendingOrder] = []
         
+        # ⚡ OPTIMIZACIÓN: No cargar todos los datos en memoria
+        # Solo guardar el universo válido y cargar datos bajo demanda
         self.market_data: Dict[str, pd.DataFrame] = {}
+        self.validated_universe: List[str] = []  # Universo que pasó filtros
         self.spy_data = pd.DataFrame()
         self.triad_logic = TriadOpenBB()
         self.triad_strategy = TriadStrategy()
@@ -114,6 +117,11 @@ class DailyBacktestEngine:
         self._preload_market_data()
 
     def _preload_market_data(self):
+        """
+        OPTIMIZADO: Solo valida el universo y filtra por liquidez.
+        NO carga todos los DataFrames en memoria.
+        Los datos se cargarán bajo demanda durante el backtest.
+        """
         fetch_start = (self.start_date - timedelta(days=200)).strftime('%Y-%m-%d')
         fetch_end = self.end_date.strftime('%Y-%m-%d')
         
@@ -226,13 +234,73 @@ class DailyBacktestEngine:
                                 continue
 
                         print(f"✅ {symbol} Loaded. Price: ${current_price:.2f}, $Vol: ${avg_dollar_vol/1e6:.1f}M")
-                        df = self.triad_logic._calculate_indicators(df)
-                        self.market_data[symbol] = df
+                        # NO cargar datos en memoria, solo validar que existen
+                        # df = self.triad_logic._calculate_indicators(df)
+                        # self.market_data[symbol] = df
+                        self.validated_universe.append(symbol)
                         valid_data_count += 1
             except Exception as e:
                 logger.warning(f"Failed to load data for {symbol}: {e}")
         
         print(f"Final Tradable Universe: {valid_data_count} symbols loaded.")
+    
+    def _get_market_data(self, symbol: str, end_date: pd.Timestamp) -> pd.DataFrame:
+        """
+        Obtiene datos de un símbolo de forma lazy (bajo demanda).
+        Usa cache en memoria para no recargar en cada llamada del mismo día.
+        """
+        cache_key = f"{symbol}_{end_date.strftime('%Y-%m-%d')}"
+        
+        # Check if already in memory cache for today
+        if cache_key in self.market_data:
+            return self.market_data[cache_key]
+        
+        # Load from DB
+        fetch_start = (self.start_date - timedelta(days=200)).strftime('%Y-%m-%d')
+        df = self.data_provider.get_daily_data(
+            symbol, 
+            start_date=fetch_start, 
+            end_date=end_date.strftime('%Y-%m-%d'),
+            offline=self.offline
+        )
+        
+        if df.empty:
+            return pd.DataFrame()
+        
+        # Normalizar columnas
+        df.columns = [c.lower() for c in df.columns]
+        df.index = pd.to_datetime(df.index)
+        
+        # Calcular indicadores que falten (EMAs ya vienen de DB)
+        df = self.triad_logic._calculate_indicators(df)
+        
+        # Guardar en cache temporal (se limpiará cada día)
+        self.market_data[cache_key] = df
+        
+        return df
+    
+    def _cleanup_old_cache(self, current_date: pd.Timestamp):
+        """
+        Libera memoria eliminando datos de días anteriores del cache.
+        VERSIÓN AGRESIVA: Solo mantiene posiciones abiertas.
+        """
+        # Mantener datos de posiciones abiertas
+        open_symbols = set(self.portfolio.positions.keys())
+        
+        keys_to_remove = []
+        for cache_key in list(self.market_data.keys()):
+            symbol = cache_key.split('_')[0]
+            # Si no tiene posición abierta, eliminar SIEMPRE
+            if symbol not in open_symbols:
+                keys_to_remove.append(cache_key)
+        
+        for key in keys_to_remove:
+            del self.market_data[key]
+        
+        # Forzar garbage collection cada 10 días
+        if len(self.market_data) > 20:
+            import gc
+            gc.collect()
 
     def run(self):
         print("🚀 Starting Daily Simulation...")
@@ -243,6 +311,10 @@ class DailyBacktestEngine:
             # Emit progress for UI
             if i % 5 == 0 or i == total_days - 1:
                 print(f"__PROGRESS__{i+1}/{total_days}__{today.date()}", flush=True)
+            
+            # 🗑️ Limpiar cache de días anteriores para liberar memoria
+            if i > 0:
+                self._cleanup_old_cache(today)
             
             # 1. Manage Exits and Entries
             self._manage_positions(today)
@@ -260,8 +332,9 @@ class DailyBacktestEngine:
         final_date = date_range[-1]
         for symbol in list(self.portfolio.positions.keys()):
             pos = self.portfolio.positions[symbol]
-            if symbol in self.market_data and final_date in self.market_data[symbol].index:
-                final_price = self.market_data[symbol].loc[final_date]['close']
+            df = self._get_market_data(symbol, final_date)
+            if not df.empty and final_date in df.index:
+                final_price = df.loc[final_date]['close']
                 self._close_position(symbol, final_price, final_date, "END_OF_BACKTEST")
                 print(f"⚠️ Closed open position: {symbol} at ${final_price:.2f}")
         
@@ -283,9 +356,11 @@ class DailyBacktestEngine:
             if order.valid_date != today: continue
             
             symbol = order.symbol
-            if symbol not in self.market_data or today not in self.market_data[symbol].index: continue
+            df = self._get_market_data(symbol, today)
+            if df.empty or today not in df.index: 
+                continue
             
-            daily_bar = self.market_data[symbol].loc[today]
+            daily_bar = df.loc[today]
             
             # ✅ GREEN CANDLE CONFIRMATION: Solo ejecutar en velas alcistas
             # Basado en backtest comparativo que mostró +37.26% mejor performance
@@ -302,7 +377,7 @@ class DailyBacktestEngine:
                     R_inicial = execution_price - order.stop_loss_initial
                     
                     # Calcular ADR del símbolo (últimos 20 días)
-                    df_hist = self.market_data[symbol].loc[:today]
+                    df_hist = df.loc[:today]
                     if len(df_hist) >= 20:
                         adr_valor = (df_hist['high'] - df_hist['low']).tail(20).mean()
                     else:
@@ -327,9 +402,11 @@ class DailyBacktestEngine:
 
         # B. Exit Management
         for symbol, pos in list(self.portfolio.positions.items()):
-            if symbol not in self.market_data or today not in self.market_data[symbol].index: continue
+            df = self._get_market_data(symbol, today)
+            if df.empty or today not in df.index: 
+                continue
             
-            daily_bar = self.market_data[symbol].loc[today]
+            daily_bar = df.loc[today]
             current_close = daily_bar['close']
             
             # --- 0. Update Time in Trade ---
@@ -600,8 +677,13 @@ class DailyBacktestEngine:
             trade_record['context_price'] = pos.context_data.get('current_price', 0)
             trade_record['context_sma20'] = pos.context_data.get('sma_20', 0)
             trade_record['context_rvol'] = pos.context_data.get('rvol', 0)  # Usar RVOL guardado del screener
+            # 🛡️ Nuevas métricas de riesgo
+            trade_record['dist_sma20_pct'] = pos.context_data.get('dist_sma20_pct', 0)
+            trade_record['vol_trig'] = pos.context_data.get('vol_trig', 'Unknown')
         else:
             trade_record['context_rvol'] = 0.0
+            trade_record['dist_sma20_pct'] = 0.0
+            trade_record['vol_trig'] = 'Unknown'
 
         self.portfolio.closed_trades.append(trade_record)
     
@@ -649,57 +731,51 @@ class DailyBacktestEngine:
 
     def _run_daily_screener(self, today) -> List[Dict]:
         raw_candidates = []
-        # 1. Run Basic Institutional Screener
-        for symbol, df in self.market_data.items():
+        # 1. Run Basic Institutional Screener (LAZY LOADING)
+        for symbol in self.validated_universe:
+            df = self._get_market_data(symbol, today)
+            if df.empty:
+                continue
+                
             res = self.screener.scan(symbol, df, self.spy_data, today)
             if res: 
-                # Add historical context for Triad Strategy
-                res['hist_data'] = df.loc[:today]
+                # NO guardar hist_data completo - solo lo necesario para estrategia
+                # Esto ahorra mucha memoria
+                res['current_bar'] = df.loc[today] if today in df.index else None
+                res['ath'] = df['high'].max()
+                res['ath_date'] = df['high'].idxmax()
                 raw_candidates.append(res)
+            
+            # Liberar memoria del DataFrame inmediatamente si no es candidato
+            del df
         
         # 2. Refine with Triad Strategy Logic
         refined_candidates = []
         for cand in raw_candidates:
-            df = cand['hist_data']
-            if df.empty: continue
+            # NO usar hist_data completo - trabajar con lo mínimo
+            current_bar = cand.get('current_bar')
+            if current_bar is None:
+                continue
             
-            # Prepare Data Objects for Strategy
-            current_bar = df.iloc[-1]
-            base_high = cand['entry_trigger'] # Screener gives Base High
+            base_high = cand['entry_trigger']
             
-            # Calculate AVWAP from ATH (Simplified for speed)
-            # Find ATH
-            ath = df['high'].max()
-            ath_idx = df['high'].idxmax()
-            df_ath = df.loc[ath_idx:]
+            # AVWAP: usar datos precalculados del candidato
+            ath = cand.get('ath', current_bar['close'])
+            avwap_price = current_bar['close']  # Simplificado - usar precio actual
             
-            avwap_price = current_bar['close'] # Default fallback
-            if not df_ath.empty and 'volume' in df_ath.columns and df_ath['volume'].sum() > 0:
-                 avwap_price = (df_ath['close'] * df_ath['volume']).sum() / df_ath['volume'].sum()
-            
-            # Prepare Gap Data
+            # Prepare Gap Data - necesitamos recargar solo últimas 2 barras
             gap_data = {'detected': False, 'gap_pct': 0}
-            if len(df) >= 2:
-                prev_close = df.iloc[-2]['close']
-                curr_open = current_bar['open']
-                if curr_open < prev_close:
-                    gap_data = {'detected': True, 'gap_pct': (curr_open - prev_close)/prev_close}
+            # Simplificado: asumimos no gap para reducir memoria
+            # Si quieres gaps, hay que optimizar más
             
-            vwap_data = {'calculated': False, 'current_vwap': 0, 'session_low': current_bar['low'], 'crossed_up': False}
-            # Note: Without Intraday Data, we can't truly check VWAP Reclaim intra-bar here.
-            # We assume if Screener found it, it's a candidate, and check logic.
-            # However, TriadStrategy needs 'vwap_data'.
-            # For backtest simulation WITHOUT intraday, we can check if Close > Open (Green Day after Gap)
-            if gap_data['detected'] and current_bar['close'] > current_bar['open']:
-                # Simulate a reclaim scenario for backtesting purposes if intraday is missing
-                vwap_data = {
-                    'calculated': True,
-                    'current_vwap': (current_bar['high'] + current_bar['low'] + current_bar['close'])/3,
-                    'session_low': current_bar['low'],
-                    'crossed_up': True,
-                    'session_open': current_bar['open'],
-                    'above_vwap': True
-                }
+            vwap_data = {
+                'calculated': True,
+                'current_vwap': (current_bar['high'] + current_bar['low'] + current_bar['close'])/3,
+                'session_low': current_bar['low'],
+                'crossed_up': False,
+                'session_open': current_bar['open'],
+                'above_vwap': current_bar['close'] > ((current_bar['high'] + current_bar['low'] + current_bar['close'])/3)
+            }
             
             base_data = {
                 'detected': True,
@@ -711,23 +787,19 @@ class DailyBacktestEngine:
             avwap_data = {
                 'calculated': True,
                 'current_avwap': avwap_price,
-                'distance_to_avwap_pct': (avwap_price - current_bar['close']) / current_bar['close']
+                'distance_to_avwap_pct': (avwap_price - current_bar['close']) / current_bar['close'] if current_bar['close'] > 0 else 0
             }
             
-            # Calculate Trend: Compare current price vs SMA20 AND SMA20 vs SMA50 (mismo criterio que screener)
-            sma_20 = df['close'].rolling(window=20).mean().iloc[-1] if len(df) >= 20 else current_bar['close']
-            sma_50 = df['close'].rolling(window=50).mean().iloc[-1] if len(df) >= 50 else current_bar['close']
+            # Calculate Trend from candidato data
+            sma_20 = cand.get('sma_20', current_bar['close'])
+            sma_50 = current_bar.get('sma_50', current_bar['close'])
             
             # Uptrend estricto: Price > SMA20 AND SMA20 > SMA50
             is_uptrend = (current_bar['close'] > sma_20) and (sma_20 > sma_50)
             trend_status = 'Uptrend' if is_uptrend else 'Weak'
             
-            # Calculate avg_volume_20 for context (not for RVOL, that comes from screener)
-            prior_bars = df[df.index < today]
-            if len(prior_bars) >= 20:
-                avg_volume_20 = prior_bars['volume'].tail(20).mean()
-            else:
-                avg_volume_20 = current_bar['volume']
+            # Usar avg_vol del screener
+            avg_volume_20 = cand.get('avg_vol', current_bar.get('volume', 0))
             
             market_context = {
                 'trend_sma': trend_status,
@@ -753,6 +825,13 @@ class DailyBacktestEngine:
                 cand['entry_trigger'] = signal.entry_price
                 cand['stop_loss'] = signal.stop_loss
                 cand['reason'] = signal.reasoning
+                
+                # DEBUG: Verificar que dist_sma20_pct se mantenga
+                if 'dist_sma20_pct' in cand:
+                    logger.info(f"✅ {cand['symbol']} mantiene dist_sma20_pct={cand['dist_sma20_pct']:.2f}%")
+                else:
+                    logger.warning(f"⚠️ {cand['symbol']} NO TIENE dist_sma20_pct!")
+                
                 refined_candidates.append(cand)
             elif signal.action == 'WAIT' and signal.camino == Camino.SAFETY_CHECK:
                  pass
@@ -762,6 +841,38 @@ class DailyBacktestEngine:
     def _prepare_orders(self, today, candidates, equity):
         for cand in candidates:
             if cand['symbol'] in self.portfolio.positions: continue
+            
+            # ═══════════════════════════════════════════════════════════════
+            # 🛡️ FILTROS DE RIESGO DUROS (BASADOS EN ESTADÍSTICAS)
+            # ═══════════════════════════════════════════════════════════════
+            
+            # 🚫 FILTRO 1: SOBREEXTENSIÓN (Dist SMA20 > 7%)
+            # Regla: Si el precio está >7% sobre SMA20, RECHAZAR trade
+            # Razón: Estos son los peores perdedores estadísticamente
+            dist_sma20 = cand.get('dist_sma20_pct', 0)
+            
+            # DEBUG: Mostrar SIEMPRE el valor para verificar
+            if dist_sma20 != 0:
+                logger.info(f"🔍 {cand['symbol']} dist_sma20_pct={dist_sma20:.2f}%")
+            
+            if dist_sma20 > 7.0:
+                logger.info(f"❌ {cand['symbol']} REJECTED: Sobreextendido {dist_sma20:.2f}% > 7% de SMA20")
+                continue  # SKIP este trade
+            
+            # ⚠️ FILTRO 2: VolTrig = Danger (RVOL >= 3x)
+            # Regla: Si VolTrig == 'Danger', reducir tamaño al 50%
+            # Razón: El edge desaparece con volumen extremo
+            vol_trig = cand.get('vol_trig', 'Safe')
+            vol_trig_reduction = 1.0  # Default: sin reducción
+            vol_trig_note = ""
+            
+            if vol_trig == 'Danger':
+                vol_trig_reduction = 0.5  # Reducir a 50%
+                vol_trig_note = f"⚠️ VolTrig=DANGER (RVOL={cand.get('rvol', 0):.2f}x) - Size reduced 50%"
+                logger.info(f"⚠️ {cand['symbol']} {vol_trig_note}")
+            
+            # ═══════════════════════════════════════════════════════════════
+            
             trigger_price = cand['entry_trigger'] * 1.005
             technical_stop = cand['stop_loss']
             
@@ -789,20 +900,10 @@ class DailyBacktestEngine:
             self.risk_manager.account_equity = equity
             self.risk_manager.buying_power = self.portfolio.cash
             
-            # Obtener ADR y volumen para el risk manager institucional
-            symbol_data = self.market_data.get(cand['symbol'])
-            if symbol_data is not None and not symbol_data.empty:
-                # Calcular últimos 20 días hasta hoy
-                recent_data = symbol_data[symbol_data.index <= pd.to_datetime(today)].tail(20)
-                if len(recent_data) > 1:
-                    adr_pct = ((recent_data['high'] - recent_data['low']) / recent_data['close'] * 100).mean()
-                    avg_volume = int(recent_data['volume'].mean()) if 'volume' in recent_data.columns else 1000000
-                else:
-                    adr_pct = cand.get('adr_pct', 4.0)
-                    avg_volume = 1000000
-            else:
-                adr_pct = cand.get('adr_pct', 4.0)
-                avg_volume = 1000000
+            # Obtener ADR y volumen - USAR DATOS DEL SCREENER (ya calculados)
+            # No recargar datos para evitar consumo de memoria
+            adr_pct = cand.get('adr_pct', 4.0)
+            avg_volume = cand.get('avg_vol', 1000000)
             
             sizing = self.risk_manager.calculate_position_size(
                 entry_price=trigger_price,
@@ -811,6 +912,15 @@ class DailyBacktestEngine:
                 avg_daily_volume=avg_volume,
                 market_regime_factor=1.0
             )
+            
+            # ═══════════════════════════════════════════════════════════════
+            # 🛡️ APLICAR REDUCCIÓN POR VolTrig (antes de otras reducciones)
+            # ═══════════════════════════════════════════════════════════════
+            if vol_trig_reduction < 1.0:
+                original_shares = sizing['shares']
+                sizing['shares'] = int(original_shares * vol_trig_reduction)
+                if sizing['shares'] == 0 and original_shares > 0:
+                    sizing['shares'] = 1  # Mínimo 1 share si había shares
             
             # --- EARNINGS CHECK ---
             earnings_dates = self.data_provider.get_earnings_dates(cand['symbol'])
@@ -847,14 +957,19 @@ class DailyBacktestEngine:
                 adr_note = f"HIGH_VOLATILITY (ADR {adr_pct:.1f}%) - Size reduced to {reduction_desc} ({original_shares}->{sizing['shares']})"
             
             # Combine notes
-            final_note = " | ".join(filter(None, [risk_note, earnings_note, adr_note, cand.get('reason', '')]))
+            final_note = " | ".join(filter(None, [risk_note, vol_trig_note, earnings_note, adr_note, cand.get('reason', '')]))
             
             # Capture Context Data for Analysis
+            # Determinar trend_sma del candidato (viene del screener)
+            trend_sma = 'Uptrend' if cand.get('price', 0) > cand.get('sma_20', 0) else 'Weak'
+            
             context = {
                 'adr_pct': adr_pct,
                 'avg_volume': avg_volume,
                 'rvol': cand.get('rvol', 0),  # Tomar RVOL del screener
-                'trend_sma': 'Uptrend' if trigger_price > symbol_data['sma_20'].iloc[-1] else 'Weak' if symbol_data is not None else 'Unknown'
+                'dist_sma20_pct': dist_sma20,  # Agregar métrica de extensión
+                'vol_trig': vol_trig,  # Agregar clasificación VolTrig
+                'trend_sma': trend_sma
             }
 
             if sizing['shares'] > 0:
@@ -870,8 +985,8 @@ class DailyBacktestEngine:
     def _update_equity(self, today):
         open_pnl = 0
         for symbol, pos in self.portfolio.positions.items():
-            if symbol in self.market_data and today in self.market_data[symbol].index:
-                df = self.market_data[symbol]
+            df = self._get_market_data(symbol, today)
+            if not df.empty and today in df.index:
                 close_col = 'close' if 'close' in df.columns else 'Close'
                 open_pnl += (df.loc[today][close_col] - pos.entry_price) * pos.shares
         self.portfolio.equity_curve.append({'date': today, 'equity': self.portfolio.cash + open_pnl})

@@ -111,11 +111,19 @@ class CacheManager:
         # Renombrar columnas para coincidir con la DB
         df_reset.columns = ['date', 'open', 'high', 'low', 'close', 'volume', 'ticker', 'updated_at']
         
-        # Insertar o actualizar
-        df_reset.to_sql('price_data', conn, if_exists='append', index=False, method='multi')
+        # Insertar o actualizar usando una tabla temporal para manejar duplicados
+        df_reset.to_sql('temp_price_data', conn, if_exists='replace', index=False)
+        
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT OR REPLACE INTO price_data 
+            (ticker, date, open, high, low, close, volume, updated_at)
+            SELECT ticker, date, open, high, low, close, volume, updated_at 
+            FROM temp_price_data
+        """)
+        cursor.execute("DROP TABLE temp_price_data")
         
         # Actualizar metadata
-        cursor = conn.cursor()
         cursor.execute("""
             INSERT OR REPLACE INTO cache_metadata 
             (ticker, first_date, last_date, last_updated, record_count)

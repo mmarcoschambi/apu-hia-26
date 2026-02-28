@@ -1,0 +1,3681 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
+from datetime import datetime, timedelta
+import json
+import os
+import subprocess
+import time
+import sys
+from pathlib import Path
+import calendar
+import plotly.figure_factory as ff
+import random
+import pickle
+import shutil
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from src.backtest.dashboard import InteractiveDashboard
+from src.backtest.visualizer import BacktestVisualizer
+from src.data.openbb_data import OpenBBData
+from src.data.ticker_cache import TickerCache
+from config.universe_presets import LIQUID_MID_CAPS
+from src.analytics.quantstats_analyzer import QuantStatsAnalyzer, TradeGrouper
+
+# Initialize TickerCache
+ticker_cache = TickerCache()
+
+# Función para cargar/guardar watchlist
+WATCHLIST_FILE = 'config/watchlist.json'
+
+def load_watchlist_json():
+    if os.path.exists(WATCHLIST_FILE):
+        with open(WATCHLIST_FILE, 'r') as f:
+            return json.load(f)
+    return {}
+
+def save_watchlist_json(data):
+    with open(WATCHLIST_FILE, 'w') as f:
+        json.dump(data, f, indent=4)
+
+def get_cache_date_range():
+    """
+    Obtiene el rango de fechas real disponible en el cache (tanto .pkl como SQLite)
+    Returns: (min_date, max_date) as datetime objects
+    """
+    min_date = None
+    max_date = None
+    
+    # 1. Check SQLite Cache
+    try:
+        cursor = ticker_cache.conn.execute("SELECT MIN(date), MAX(date) FROM ohlcv_cache")
+        sqlite_min, sqlite_max = cursor.fetchone()
+        if sqlite_min and sqlite_max:
+            min_date = datetime.strptime(sqlite_min, '%Y-%m-%d')
+            max_date = datetime.strptime(sqlite_max, '%Y-%m-%d')
+    except Exception as e:
+        pass
+
+    # 2. Check Legacy .pkl Cache
+    cache_dir = 'data/cache'
+    if os.path.exists(cache_dir):
+        try:
+            for file in os.listdir(cache_dir):
+                # Only process daily data files
+                if file.endswith('_daily.pkl'):
+                    try:
+                        with open(os.path.join(cache_dir, file), 'rb') as f:
+                            data = pickle.load(f)
+                            if not data.empty:
+                                file_min = data.index.min()
+                                file_max = data.index.max()
+                                
+                                if hasattr(file_min, 'to_pydatetime'):
+                                    file_min = file_min.to_pydatetime()
+                                if hasattr(file_max, 'to_pydatetime'):
+                                    file_max = file_max.to_pydatetime()
+
+                                if min_date is None or file_min < min_date:
+                                    min_date = file_min
+                                if max_date is None or file_max > max_date:
+                                    max_date = file_max
+                    except:
+                        continue
+        except:
+            pass
+    
+    # Default fallback if nothing found
+    if min_date is None or max_date is None:
+        return datetime(2020, 1, 1), datetime.now()
+    
+    # Cap max_date to today (no future dates)
+    today = datetime.now()
+    if max_date > today:
+        max_date = today
+    
+    return min_date, max_date
+
+def get_educational_insight(trade):
+    """Genera una explicación educativa dinámica basada en el contexto del trade"""
+    insights = []
+    
+    # 1. Contexto de Mercado (El Clima)
+    regime = trade.get('market_regime', 'UNKNOWN') # BULLISH, SAFE, DANGER
+    vix = trade.get('vix_at_entry', 0)
+    
+    if regime == 'BULLISH':
+        insights.append(f"🟢 **Entorno de Mercado (Luz Verde):**\n"
+                        f"El mercado estaba fuerte (**BULLISH**). Con el VIX bajo ({vix:.1f}) y SPY en tendencia, "
+                        f"el sistema operó en modo agresivo: Stops más holgados (1.5x ATR) para aguantar la volatilidad "
+                        f"normal y Exposición máxima permitida.")
+    elif regime == 'SAFE':
+        insights.append(f"🟡 **Entorno de Mercado (Precaución):**\n"
+                        f"El mercado estaba **NEUTRAL** ('SAFE'). No había pánico, pero tampoco euforia. "
+                        f"El sistema redujo la exposición un 25% para proteger capital ante la incertidumbre.")
+    elif regime == 'DANGER':
+        insights.append(f"🔴 **Entorno de Mercado (Tormenta):**\n"
+                        f"El mercado estaba en modo **DANGER**. Probablemente el VIX estaba alto (>20) o el SPY bajo su media. "
+                        f"El sistema activó 'Protocolo de Emergencia': Stops muy ajustados (1.0x ATR) y posiciones reducidas a la mitad.")
+
+    # 2. Contexto Sectorial (El Viento)
+    sector = trade.get('sector', 'Unknown')
+    strength = trade.get('sector_strength', 0)
+    
+    if strength > 15:
+        insights.append(f"🚀 **Viento a Favor (Sector):**\n"
+                        f"El sector **{sector}** era uno de los líderes del mercado (RS: {strength:.1f}). "
+                        f"Regla de Oro: 'Comprar las acciones más fuertes de los sectores más fuertes'.")
+    elif strength > 0:
+         insights.append(f"✅ **Sector Saludable:**\n"
+                        f"El sector **{sector}** acompañaba al mercado (RS: {strength:.1f}). Un buen entorno para buscar oportunidades.")
+    elif strength < 0:
+        insights.append(f"⚠️ **Viento en Contra (Sector):**\n"
+                        f"Atención: Compramos **{sector}** aunque mostraba debilidad relativa (RS: {strength:.1f}). "
+                        f"Esto requiere un setup técnico perfecto para compensar la falta de apoyo institucional del sector.")
+
+    # 3. Gestión de la Salida (La Defensa)
+    exit_reason = trade.get('reason', trade.get('exit_phase', 'Unknown'))
+    adr = trade.get('context_adr', 0)
+    
+    if 'EMA10' in str(exit_reason):
+        insights.append(f"🛡️ **Por qué salimos (EMA10):**\n"
+                        f"La acción perdió su media móvil rápida (EMA10). Al ser una acción volátil (ADR {adr:.1f}%) "
+                        f"o estar en un mercado difícil, aplicamos la regla: 'Si parpadea, vendemos'. No damos espacio a que las ganancias se evaporen.")
+    elif 'SMA20' in str(exit_reason):
+        insights.append(f"📉 **Por qué salimos (SMA20):**\n"
+                        f"El precio cerró por debajo de la SMA20. Esta línea es el 'guardarraíl' de las tendencias a corto plazo. "
+                        f"Si se rompe, la inercia alcista suele haberse perdido.")
+    elif 'SMA50' in str(exit_reason):
+        insights.append(f"🛑 **Por qué salimos (SMA50):**\n"
+                        f"Se rompió la SMA50. Para posiciones de estilo inversión, esto indica un cambio de carácter mayor en la tendencia. Hora de salir.")
+    elif 'STOP' in str(exit_reason):
+        insights.append(f"🚫 **Stop Loss Ejecutado:**\n"
+                        f"El precio tocó nuestro nivel de invalidación. ¡Esto es bueno! Perder pequeño es parte del negocio. "
+                        f"Protegimos el capital para la siguiente oportunidad.")
+        
+    return insights
+
+# Función para ejecutar backtest con VectorBT (NUEVO - RÁPIDO)
+def run_vectorbt_backtest_ui(start_date, end_date, equity: float = 100000, risk_pct: float = 0.5, max_exp_pct: float = 25,
+                             tickers_list=None, max_symbols=0, risk_dollars=None,
+                             # Filter parameters
+                             max_dist_sma20=7.0, rvol_danger=3.0, rvol_warning=2.0,
+                             rvol_danger_size=25, rvol_warning_size=60,
+                              adr_high=6.0, adr_med=5.0, max_stop_pct=8.0,
+                              earnings_days=5, earnings_cushion=10.0,
+                              # New dynamic parameters
+                              min_rvol=1.0, min_adr=1.0, min_volume=300000, min_dollar_volume=15000000,
+                              # Market Regime parameters
+                              use_market_regime_filter=False, block_trades_in_stage3=True,
+                              block_trades_in_stage4=True, adjust_risk_by_regime=True,
+                              # Professional filters (NEW!)
+                              require_spy_above_sma50=True,  # SPY > SMA50 required
+                              min_consolidation_days=10,  # VCP quality (10+ days):
+    
+    Args:
+        max_symbols: 0 = usar TODOS los tickers con datos disponibles (recomendado con vectorbt)
+                     >0 = limitar a top N por liquidez (legacy, no necesario)
+        max_dist_sma20: Maximum % above SMA20 to allow entry (default 7%
+        rvol_danger: RVOL threshold for Danger classification (default 3x
+        rvol_warning: RVOL threshold for Warning classification (default 2x
+        rvol_danger_size: Size % when Danger (default 25% = 75% reduction)
+        rvol_warning_size: Size % when Warning (default 60% = 40% reduction)
+        adr_high: ADR threshold for high volatility size reduction (default 6%
+        adr_med: ADR threshold for medium volatility size reduction (default 5%
+        max_stop_pct: Maximum stop loss % (default 8%
+        earnings_days: Days before earnings to reduce size (default 5)
+        earnings_cushion: Minimum profit % to hold through earnings (default 10%
+    """
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    status_text.markdown("🚀 **Ejecutando con VectorBT Engine** (ultra-rápido)...")
+    progress_bar.progress(0.1)
+    
+    import time
+    start_time = time.time()
+    
+    try:
+        from src.backtest.vectorbt_engine_advanced import AdvancedVectorBTEngine
+        
+        # Build universe
+        if tickers_list and len(tickers_list) > 0:
+            universe = tickers_list
+        else:
+            # Get all tickers with sufficient data in the period
+            import sqlite3
+            from datetime import datetime, timedelta
+            
+            conn = sqlite3.connect('./data/ticker_cache.db')
+            
+            selection_start = str(start_date)
+            selection_end = str(end_date)
+            date_range_days = (end_date - start_date).days
+            
+            # Calcular días mínimos requeridos (al menos 40% de cobertura para rangos largos)
+            expected_trading_days = int(date_range_days * 0.7)  # ~70% de días calendario son trading days
+            min_required_days = max(100, int(expected_trading_days * 0.4))  # 40% mínimo
+            
+            # Decidir si usar todos los tickers o limitar por liquidez
+            if max_symbols == 0:
+                # MODO COMPLETO: Usar TODOS los tickers con datos suficientes
+                status_text.markdown(f"🔍 **Modo Universo Completo** - usando todos los tickers disponibles...")
+                query = """
+                SELECT ticker
+                FROM ohlcv_cache
+                WHERE date BETWEEN ? AND ?
+                GROUP BY ticker
+                HAVING COUNT(*) >= ?
+                ORDER BY ticker
+                """
+                cursor = conn.execute(query, (selection_start, selection_end, min_required_days))
+            else:
+                # MODO LIMITADO: Top N por liquidez (legacy)
+                status_text.markdown(f"🔍 **Modo Limitado** - top {max_symbols} por liquidez...")
+                query = """
+                SELECT ticker, AVG(dollar_volume) as avg_dv
+                FROM ohlcv_cache
+                WHERE date BETWEEN ? AND ?
+                AND dollar_volume IS NOT NULL
+                GROUP BY ticker
+                HAVING COUNT(*) >= ?
+                ORDER BY avg_dv DESC
+                LIMIT ?
+                """
+                cursor = conn.execute(query, (selection_start, selection_end, min_required_days, max_symbols))
+            
+            universe = [row[0] for row in cursor.fetchall()]
+            conn.close()
+            
+            status_text.caption(f"📊 Requiriendo mínimo {min_required_days} días (~{int(min_required_days/expected_trading_days*100)}% cobertura)")
+            
+            if not universe:
+                raise ValueError(f"No se encontraron tickers con al menos {min_required_days} días de datos entre {selection_start} y {selection_end}.")
+            
+            # Mostrar info del universo
+            status_text.success(f"✅ Universo cargado: {len(universe)} tickers")
+            if len(universe) > 0:
+                status_text.caption(f"Primeros 5 tickers: {', '.join(universe[:5])}")
+        
+        status_text.markdown(f"📊 **Cargando datos** para {len(universe)} tickers...")
+        status_text.caption(f"📅 Periodo del backtest: {start_date} a {end_date}")
+        progress_bar.progress(0.3)
+        
+        # Run backtest
+        engine = AdvancedVectorBTEngine(
+            universe=universe,
+            start_date=str(start_date),
+            end_date=str(end_date),
+            initial_capital=equity,
+            risk_pct=risk_pct / 100.0,
+            risk_dollars=risk_dollars,  # NEW: Fixed dollar risk parameter
+            max_exposure_pct=max_exp_pct / 100.0,
+            # Filter parameters
+            max_dist_sma20=max_dist_sma20,
+            min_rvol=min_rvol,          # DYNAMIC
+            min_adr=min_adr,            # DYNAMIC
+            min_volume=min_volume,      # DYNAMIC
+            min_dollar_volume=min_dollar_volume, # DYNAMIC
+            rvol_danger=rvol_danger,
+            rvol_warning=rvol_warning,
+            rvol_danger_size=rvol_danger_size,
+            rvol_warning_size=rvol_warning_size,
+            adr_high=adr_high,
+            adr_med=adr_med,
+            max_stop_pct=max_stop_pct,
+            earnings_days=earnings_days,
+            earnings_cushion=earnings_cushion,
+            # Market Regime Filter (NEW!)
+            use_market_regime_filter=use_market_regime_filter,
+            block_trades_in_stage3=block_trades_in_stage3,
+            block_trades_in_stage4=block_trades_in_stage4,
+            adjust_risk_by_regime=adjust_risk_by_regime,
+             # Dynamic Thresholds (NEW!)
+             use_dynamic_thresholds=use_dynamic_thresholds,
+             max_vix_threshold=max_vix_threshold,
+             # Professional filters (NEW!)
+             require_spy_above_sma50=True,  # SPY > SMA50 required
+             min_consolidation_days=10,  # VCP quality (10+ days)
+         )
+        
+        progress_bar.progress(0.5)
+        status_text.markdown(f"⚡ **Ejecutando backtest vectorizado**...")
+        
+        filter_msg = f"""🎛️ **Filtros activos:**
+- dist_sma20 < {max_dist_sma20}%
+- VolTrig: Danger≥{rvol_danger}x→{rvol_danger_size}%, Warning≥{rvol_warning}x→{rvol_warning_size}%, Safe→100%
+- ADR: High={adr_high}%, Med={adr_med}%
+- Stop cap: {max_stop_pct}%
+- Earnings: {earnings_days}d window, {earnings_cushion}% cushion"""
+
+        if use_dynamic_thresholds:
+            filter_msg += f"\n\n📊 **Umbrales Dinámicos (VIX):**\n- Min RVOL/ADR ajustados por volatilidad\n- SPY > SMA50 requerido\n- Max VIX: {max_vix_threshold}"
+
+        if use_market_regime_filter:
+            filter_msg += f"\n- 🌍 Market Regime: Stage 3 Block={block_trades_in_stage3}, Stage 4 Block={block_trades_in_stage4}, Adjust Risk={adjust_risk_by_regime}"
+        
+        status_text.caption(filter_msg)
+        
+        results = engine.run_backtest()
+        engine.cleanup()
+        
+        progress_bar.progress(0.9)
+        
+        # Save results in compatible format
+        trades = results['trades']
+        if len(trades) > 0:
+            # Convert to format expected by dashboard
+            # Note: AdvancedVectorBTEngine renames 'ticker'->'symbol', 'entry_signal'->'signal_type', 'exit_phase'->'trade_type'
+            output_df = pd.DataFrame({
+                'symbol': trades['symbol'],
+                'entry_date': pd.to_datetime(trades['entry_date']),
+                'exit_date': pd.to_datetime(trades['exit_date']),
+                'entry_price': trades['entry_price'],
+                'exit_price': trades['exit_price'],
+                'shares': trades['shares'],
+                'pnl': trades['pnl'],
+                'signal_type': trades['signal_type'],
+                'exit_phase': trades['trade_type'],
+                'bars_held': (pd.to_datetime(trades['exit_date']) - pd.to_datetime(trades['entry_date'])).dt.days,
+                # Context data
+                'context_adr': trades['context_adr'],
+                'context_rvol': trades['context_rvol'],
+                'context_trend': trades['context_trend'],
+                'context_vol': trades['context_vol'],
+                'context_dollar_vol': trades['context_dollar_vol'],
+                # Market Regime Data
+                'spx_vs_voltrig': trades.get('spx_vs_voltrig', False),
+                'spy_at_entry': trades.get('spy_at_entry', 0.0),
+                'vix_at_entry': trades.get('vix_at_entry', 0.0),
+                'spy_ema20_at_entry': trades.get('spy_ema20_at_entry', 0.0),
+                
+                # Hidden/Quality Columns
+                'time_since_earnings': trades.get('time_since_earnings', -1),
+                'sector_strength': trades.get('sector_strength', 0.0),
+                'dist_sma20_pct': trades.get('dist_sma20_pct', 0.0),
+                'consolidation_days': trades.get('consolidation_days', 0),
+                'is_vcp_pattern': trades.get('is_vcp_pattern', False),
+                # Position Sizing
+                'adjusted_risk_dollars': trades.get('adjusted_risk_dollars', 0.0),
+                'base_risk_dollars': trades.get('base_risk_dollars', 0.0)
+            })
+            
+            # Save main results
+            output_df.to_csv('outputs/backtests/backtest_results.csv', index=False)
+            
+            # Save equity curve
+            results['equity_curve'].to_csv('outputs/backtests/equity_curve.csv')
+            
+            # ✅ NUEVO: Save complete trade log for QuantStats (with ALL columns)
+            # This includes all context fields, position sizing details, etc.
+            trades_df_full = trades.copy()
+            
+            # Rename columns to match QuantStats expectations
+            column_mapping = {
+                'symbol': 'ticker',           # QuantStats expects 'ticker'
+                'trade_type': 'exit_phase',   # QuantStats expects 'exit_phase'
+                'signal_type': 'entry_signal' # QuantStats expects 'entry_signal'
+            }
+            
+            # Only rename if columns exist
+            for old_col, new_col in column_mapping.items():
+                if old_col in trades_df_full.columns and new_col not in trades_df_full.columns:
+                    trades_df_full.rename(columns={old_col: new_col}, inplace=True)
+            
+            # Ensure ticker column exists (fallback)
+            if 'ticker' not in trades_df_full.columns and 'symbol' in trades_df_full.columns:
+                trades_df_full['ticker'] = trades_df_full['symbol']
+            
+            # Save complete trade log with all columns
+            trades_df_full.to_csv('outputs/backtests/trade_log.csv', index=False)
+            
+            # Generar tabla de salidas parciales (para compatibilidad con visualización)
+            # Cada trade del motor VectorBT ya tiene 'exit_phase' (TP1, TP2, STOP)
+            partial_exits_df = output_df.copy()
+
+            # Agregar columnas que espera la UI pero no genera VectorBT
+            partial_exits_df['phase'] = partial_exits_df['exit_phase']  # Renombrar
+            partial_exits_df['return_pct'] = ((partial_exits_df['exit_price'] - partial_exits_df['entry_price']) / partial_exits_df['entry_price']) * 100
+
+            # Calcular porcentaje vendido basado en shares vendidas vs shares iniciales
+            # Usar initial_shares si está disponible, sino usar shares originales
+            if 'initial_shares' in partial_exits_df.columns:
+                partial_exits_df['exit_pct'] = (partial_exits_df['shares'] / partial_exits_df['initial_shares'] * 100).fillna(100.0)
+            else:
+                # Si no hay initial_shares, usar un valor estimado basado en la fase
+                # Primero mapear valores básicos
+                partial_exits_df['exit_pct'] = partial_exits_df['exit_phase'].map({
+                    'TP1': 40.0,  # TP1 vende ~40%
+                    'TP2': 30.0,  # TP2 vende ~30%
+                    'STOP': 100.0,  # STOP vende 100% (si no se alcanzó TP1/TP2)
+                    'STOP_BE': 100.0,  # STOP en breakeven vende 100% restante
+                    'RUNNER_STOP': 30.0  # RUNNER_STOP vende el 30% restante
+                }).fillna(100.0)
+
+                # Ajustar para fases específicas de runner
+                runner_mask = partial_exits_df['exit_phase'].str.contains('PHASE3_', na=False)
+                partial_exits_df.loc[runner_mask, 'exit_pct'] = 30.0  # Fase 3 vende ~30% restante
+
+            partial_exits_df['reason'] = partial_exits_df['exit_phase'].map({
+                'TP1': 'TP1: Take Profit 1 (+1.5R)',
+                'TP2': 'TP2: Take Profit 2 (+3R)',
+                'STOP': 'STOP: Stop Loss',
+                'STOP_BE': 'STOP: Stop Loss (Breakeven)',
+                'RUNNER_STOP': 'RUNNER: Trailing Stop Exit',
+                'PHASE3_SMA50_BREAK': 'PHASE3: SMA50 Break Exit'
+            }).fillna('UNKNOWN')
+            
+            partial_exits_df.to_csv('outputs/backtests/partial_exits.csv', index=False)
+        
+        elapsed = time.time() - start_time
+        
+        progress_bar.progress(1.0)
+        status_text.success(f"✅ **Completado en {elapsed:.1f}s** | Return: {results['total_return']*100:+.2f}% | Trades: {results['total_trades']}")
+        
+        st.balloons()
+        
+        # Recargar la app para mostrar los resultados nuevos (sin delay)
+        st.rerun()
+        
+        # System notification
+        try:
+            import shutil
+            if shutil.which("powershell.exe"):
+                ps_cmd = "[reflection.assembly]::loadwithpartialname('System.Windows.Forms'); $notify = new-object system.windows.forms.notifyicon; $notify.icon = [System.Drawing.SystemIcons]::Information; $notify.visible = $true; $notify.showballoontip(10, 'Momentum V2', '⚡ VectorBT Backtest Finalizado', [system.windows.forms.tooltipicon]::None)"
+                subprocess.run(['powershell.exe', '-Command', ps_cmd], check=False, capture_output=True)
+        except:
+            pass
+        
+        return True
+        
+    except Exception as e:
+        status_text.error(f"❌ Error: {str(e)}")
+        import traceback
+        st.code(traceback.format_exc())
+        return False
+
+# Función para ejecutar el backtest con UI de progreso y parámetros de riesgo (MOTOR ORIGINAL)
+def run_backtest_with_progress(start_date, end_date, stop_loss_pct=None, 
+                               equity: float = 100000, risk_pct: float = 0.5, max_exp_pct: float = 25,
+                               min_mcap_b=2.0, max_mcap_b=20.0, 
+                               min_vol_k=300, min_adr=1.5, min_price=5.0, min_dollar_m=15,
+                               min_rvol=1.5, watchlist_path='config/watchlist.json', skip_filters=False,
+                               source='file', sector=None, offline=False, max_symbols=None, sort_by='liquidity'):
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    log_area = st.empty()
+    logs = []
+
+    cmd = [
+        "python3", "daily_backtest_runner.py",
+        "--start", str(start_date),
+        "--end", str(end_date),
+        "--watchlist", watchlist_path,
+        "--equity", str(equity),
+        "--risk", str(risk_pct / 100.0),
+        "--max_exp", str(max_exp_pct / 100.0),
+        "--min_mcap", str(min_mcap_b * 1e9),
+        "--max_mcap", str(max_mcap_b * 1e9),
+        "--min_volume", str(int(min_vol_k * 1000)),
+        "--min_adr", str(min_adr),
+        "--min_price", str(min_price),
+        "--min_dollar_vol", str(int(min_dollar_m * 1e6)),
+        "--min_rvol", str(min_rvol),
+        "--source", str(source)
+    ]
+    
+    if sector:
+        cmd.extend(["--sector", str(sector)])
+    
+    if offline:
+        cmd.append("--offline")
+    
+    if skip_filters:
+        cmd.append("--skip_filters")
+    
+    if stop_loss_pct is not None and stop_loss_pct > 0:
+        cmd.extend(["--stop_loss", str(stop_loss_pct)])
+    
+    if max_symbols:
+        cmd.extend(["--max_symbols", str(max_symbols)])
+    
+    if sort_by:
+        cmd.extend(["--sort_by", str(sort_by)])
+    
+    try:
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            universal_newlines=True
+        )
+        
+        while True:
+            line = process.stdout.readline()
+            if not line and process.poll() is not None:
+                break
+            if line:
+                line = line.strip()
+                if "__PROGRESS__" in line:
+                    parts = line.split("__")
+                    if len(parts) >= 3:
+                        progress_info = parts[2].split("/") # "1/10"
+                        info_text = parts[3] if len(parts) > 3 else ""
+                        
+                        if len(progress_info) == 2:
+                            try:
+                                current = int(progress_info[0])
+                                total = int(progress_info[1])
+                                progress = min(1.0, max(0.0, float(current) / float(total)))
+                                progress_bar.progress(progress)
+                                
+                                # Detectar fase basado en el texto
+                                if "Loading" in info_text:
+                                    status_text.markdown(f"📥 **Descargando/Verificando Datos**... \n\n`{info_text}` ({current}/{total})")
+                                else:
+                                    status_text.markdown(f"🔄 **Simulando Mercado**... \n\n`{info_text}` ({current}/{total} días)")
+                            except:
+                                pass
+                else:
+                    logs.append(line)
+                    log_text = "\n".join(logs[-10:])
+                    log_area.code(log_text)
+        
+        if process.returncode == 0:
+            progress_bar.progress(1.0)
+            status_text.success("✅ Backtest completado exitosamente!")
+            st.toast("🚀 ¡Proceso Terminado!", icon="✅")
+            st.balloons()
+            
+            # System Notification (Linux / WSL2 Windows)
+            try:
+                # 1. Try Windows Notification via PowerShell (WSL2)
+                import shutil
+                if shutil.which("powershell.exe"):
+                    ps_cmd = "[reflection.assembly]::loadwithpartialname('System.Windows.Forms'); [reflection.assembly]::loadwithpartialname('System.Drawing'); $notify = new-object system.windows.forms.notifyicon; $notify.icon = [System.Drawing.SystemIcons]::Information; $notify.visible = $true; $notify.showballoontip(10, 'Momentum V2', '🚀 Backtest Finalizado Exitosamente', [system.windows.forms.tooltipicon]::None)"
+                    subprocess.run(['powershell.exe', '-Command', ps_cmd], check=False)
+                
+                # 2. Try Linux native notification (fallback or for Linux users)
+                if shutil.which("notify-send"):
+                    subprocess.run(['notify-send', '-u', 'normal', '-t', '5000', 'Momentum V2', '🚀 Backtest Finalizado Exitosamente'], check=False)
+            except Exception:
+                pass
+                
+            time.sleep(1)
+            st.cache_data.clear()
+            return True
+        else:
+            status_text.error("❌ Error en la ejecución.")
+            return False
+
+    except Exception as e:
+        status_text.error(f"Error inesperado: {e}")
+        return False
+
+# Configuración de la página
+st.set_page_config(
+    page_title="Momentum V2 - Institutional Risk Dashboard",
+    page_icon="📈",
+    layout="wide"
+)
+
+# Título y Descripción
+st.title("📈 Momentum V2 - Institutional Risk Dashboard")
+
+# --- Barra Lateral: Configuración del Backtest ---
+st.sidebar.header("⚙️ Configuración del Backtest")
+
+# ═══════════════════════════════════════════════════════════════
+# SECCIÓN 1: RANGO DE FECHAS
+# ═══════════════════════════════════════════════════════════════
+with st.sidebar.expander("📅 Rango de Fechas", expanded=True):
+    cache_min_date, cache_max_date = get_cache_date_range()
+    st.info(f"📦 Datos disponibles: {cache_min_date.strftime('%Y-%m-%d')} a {cache_max_date.strftime('%Y-%m-%d')}")
+    
+    # Initialize session state
+    if 'start_date' not in st.session_state:
+        st.session_state.start_date = max(cache_min_date, cache_max_date - timedelta(days=365))
+    if 'end_date' not in st.session_state:
+        st.session_state.end_date = cache_max_date
+    
+    # Quick Year Selection
+    years_available = range(cache_min_date.year, cache_max_date.year + 1)
+    year_opts = ["Personalizado"] + sorted([str(y) for y in years_available], reverse=True)
+    
+    def on_year_change():
+        sel = st.session_state.year_selector
+        if sel != "Personalizado":
+            y = int(sel)
+            new_start = datetime(y, 1, 1)
+            new_end = datetime(y, 12, 31)
+            if new_start < cache_min_date: new_start = cache_min_date
+            if new_end > cache_max_date: new_end = cache_max_date
+            st.session_state.start_date = new_start
+            st.session_state.end_date = new_end
+    
+    st.selectbox("📅 Año Completo", year_opts, key="year_selector", on_change=on_year_change)
+    
+    # Random Range Button
+    if st.button("🎲 Rango Aleatorio", use_container_width=True):
+        days_available = (cache_max_date - cache_min_date).days
+        if days_available > 365:
+            start_offset = random.randint(0, max(0, days_available - 180))
+            random_start = cache_min_date + timedelta(days=start_offset)
+            duration_days = random.randint(90, 240)
+            random_end = min(random_start + timedelta(days=duration_days), cache_max_date)
+            st.session_state.start_date = random_start
+            st.session_state.end_date = random_end
+            st.session_state.year_selector = "Personalizado"
+            st.rerun()
+    
+    # Date Inputs
+    curr_start = st.session_state.start_date
+    if isinstance(curr_start, datetime): curr_start = curr_start.date()
+    curr_end = st.session_state.end_date
+    if isinstance(curr_end, datetime): curr_end = curr_end.date()
+    
+    final_end_value = max(curr_end, curr_start)
+    
+    run_start_date = st.date_input("Fecha Inicio", value=curr_start, min_value=cache_min_date.date(), max_value=cache_max_date.date())
+    run_end_date = st.date_input("Fecha Fin", value=final_end_value, min_value=run_start_date, max_value=cache_max_date.date())
+    
+    st.session_state.start_date = datetime.combine(run_start_date, datetime.min.time())
+    st.session_state.end_date = datetime.combine(run_end_date, datetime.min.time())
+    
+    days_selected = (run_end_date - run_start_date).days
+    st.caption(f"📊 Rango: {days_selected} días ({days_selected/365:.1f} años)")
+    
+    if run_start_date < cache_min_date.date() or run_end_date > cache_max_date.date():
+        st.warning("⚠️ Fechas fuera del rango del cache")
+
+# ═══════════════════════════════════════════════════════════════
+# SECCIÓN 2: UNIVERSO Y MOTOR
+# ═══════════════════════════════════════════════════════════════
+with st.sidebar.expander("🌎 Universo", expanded=True):
+    scan_mode = st.radio("Fuente", ["📝 Lista Manual", "🌎 Todo el Mercado", "🏗️ Por Sector"], help="Fuente de tickers para el backtest")
+    
+    selected_sector = None
+    if scan_mode == "🏗️ Por Sector":
+        try:
+            cursor = ticker_cache.conn.execute("SELECT DISTINCT sector FROM universe WHERE sector != '' ORDER BY sector")
+            sectors = [row[0] for row in cursor.fetchall()]
+            selected_sector = st.selectbox("Sector", sectors)
+        except:
+            st.warning("No se pudieron cargar sectores")
+    
+    direct_symbols = st.text_area("Símbolos", value="APP, PLTR", help="Lista manual (separada por comas)")
+    
+    # Universe Limit (VectorBT puede manejar TODO, pero opcional limitar)
+    max_symbols_limit = 0
+    if scan_mode == "🌎 Todo el Mercado":
+        limit_universe = st.checkbox("Limitar universo", value=False)
+        if limit_universe:
+            max_symbols_limit = st.number_input("Máximo símbolos", value=500, min_value=50, max_value=5000, step=50)
+        else:
+            st.success("🚀 Usando todos los tickers disponibles")
+
+# ═══════════════════════════════════════════════════════════════
+# SECCIÓN 3: GESTIÓN DE RIESGO
+# ═══════════════════════════════════════════════════════════════
+with st.sidebar.expander("🛡️ Gestión de Riesgo", expanded=True):
+    in_equity = st.number_input("Equity ($)", value=100000.0, step=10000.0)
+    
+    risk_type = st.radio("Tipo de Riesgo", ["% del Equity", "$ Fijo"], horizontal=True)
+    
+    if risk_type == "% del Equity":
+        in_risk = st.number_input("Riesgo por Trade (%)", value=0.5, step=0.1, format="%.2f")
+        risk_dollars = None
+    else:
+        risk_dollars_input = st.number_input("Riesgo Fijo ($)", value=150.0, step=25.0, format="%.0f")
+        risk_dollars = risk_dollars_input
+        in_risk = (risk_dollars_input / in_equity) * 100
+    
+    in_max_exp = st.number_input("Exposición Máxima (%)", value=25.0, step=5.0, help="Máximo % del capital en posiciones simultáneas")
+
+# ═══════════════════════════════════════════════════════════════
+# SECCIÓN 4: FILTROS DE ENTRADA (VectorBT Engine)
+# ═══════════════════════════════════════════════════════════════
+with st.sidebar.expander("🎛️ Filtros de Entrada", expanded=False):
+    st.markdown("##### 📏 Filtros Técnicos")
+    
+    # Distancia SMA20
+    max_dist_sma20 = st.slider("Máx sobre SMA20 (%)", 0.0, 10.0, 2.5, 0.5, help="PROFESSIONAL: Rechazar si precio > X% sobre SMA20 (was 7.0)")
+
+    # RVOL (VolTrig)
+    st.markdown("##### 🌊 RVOL (VolTrig)")
+    rvol_danger = st.slider("RVOL Danger (x)", 2.0, 6.0, 4.0, 0.5, help="PROFESSIONAL: Size 25% si RVOL ≥ este valor (was 3.0)")
+    rvol_warning = st.slider("RVOL Warning (x)", 2.0, 4.0, 3.0, 0.25, help="PROFESSIONAL: Size 60% si RVOL ≥ este valor (was 2.0)")
+    rvol_danger_size = st.slider("Danger Size (%)", 10, 75, 25, 5)
+    rvol_warning_size = st.slider("Warning Size (%)", 50, 90, 60, 5)
+
+    # ADR
+    st.markdown("##### 📊 ADR")
+    adr_high = st.slider("ADR High (%)", 4.0, 10.0, 6.0, 0.5, help="Size 25% si ADR > este valor")
+    adr_med = st.slider("ADR Medium (%)", 3.0, 8.0, 5.0, 0.5, help="Size 33% si ADR > este valor")
+
+    # Stop Loss
+    max_stop_pct = st.slider("Stop Máximo (%)", 5.0, 10.0, 6.5, 0.5, help="PROFESSIONAL: Stop nunca mayor que este % (was 8.0)")
+
+    # Earnings
+    st.markdown("##### 📅 Earnings")
+    earnings_days = st.slider("Días antes de earnings", 1, 10, 5, 1)
+    earnings_cushion = st.slider("Cushión mínima (%)", 5.0, 20.0, 10.0, 2.5)
+
+    # Minimum Entry Requirements (formerly hardcoded)
+    st.markdown("##### 🚦 Requisitos Mínimos (Entrada)")
+    min_rvol = st.slider("Min RVOL (x)", 1.5, 4.0, 2.5, 0.1, help="PROFESSIONAL: Volumen Relativo mínimo requerido para entrar (was 1.0)")
+    min_adr = st.slider("Min ADR (%)", 3.0, 8.0, 5.0, 0.1, help="PROFESSIONAL: Volatilidad diaria mínima requerida (was 1.0)")
+    min_volume = st.number_input("Min Volumen Diario", 50000, 5000000, 300000, 50000, help="Volumen promedio 20d mínimo")
+    min_dollar_volume = st.number_input("Min Dollar Volume ($)", 1000000, 50000000, 5000000, 1000000, help="PROFESSIONAL: Liquidez en dólares diaria mínima (was $15M)")
+    
+    st.markdown("---")
+    
+    # Offline mode
+    offline_mode = st.checkbox("💾 Modo Offline", value=False, help="Usar solo datos en cache")
+
+# ═══════════════════════════════════════════════════════════════
+# SECCIÓN 5: MARKET REGIME FILTER
+# ═══════════════════════════════════════════════════════════════
+with st.sidebar.expander("🌍 Market Regime", expanded=False):
+    use_market_regime_filter = st.checkbox("Habilitar Market Regime", value=False, help="Ajustar agresividad según SPY/VIX")
+
+    use_dynamic_thresholds = st.checkbox("📊 Umbrales Dinámicos (VIX)", value=False,
+                                      help="Ajustar umbrales automáticamente según volatilidad del mercado")
+
+    if use_dynamic_thresholds:
+        st.markdown("### 🎯 Umbrales Dinámicos (VIX)")
+        st.caption("Los umbrales se ajustan automáticamente según el VIX:")
+        st.markdown("""
+        **VIX < 15 (Mercado tranquilo - Ej: 2019):**
+        • Min RVOL: 1.5x, Min ADR: 3.0%
+        • Max SMA20: 6.0%, Max Stop: 7%
+
+        **VIX 15-25 (Mercado normal - Ej: 2021):**
+        • Min RVOL: 1.8x, Min ADR: 3.5%
+        • Max SMA20: 5.5%, Max Stop: 6.5%
+
+        **VIX > 25 (Mercado volátil - Ej: 2020, 2022):**
+        • Min RVOL: 2.0x, Min ADR: 4.0%
+        • Max SMA20: 5.0%, Max Stop: 6%
+        """)
+
+        max_vix_threshold = st.slider("Max VIX para operar", 20.0, 50.0, 30.0, 1.0,
+                                     help="PROFESSIONAL: No operar si VIX > este valor (was 35.0)")
+
+        st.info("✅ Además, solo opera cuando SPY > SMA50 (Stage 1-2)")
+    else:
+        max_vix_threshold = 30.0
+
+    if use_market_regime_filter:
+        st.markdown("---")
+        st.markdown("### 🏛️ Market Stages (Clasificación)")
+        block_trades_in_stage3 = st.checkbox("Bloquear Stage 3 (Distribution)", value=True)
+        block_trades_in_stage4 = st.checkbox("Bloquear Stage 4 (Bear)", value=True)
+        adjust_risk_by_regime = st.checkbox("Ajustar riesgo por Stage", value=True)
+
+        st.markdown("**Market Stages:**")
+        st.caption("🚀 Stage 1: Bull (35% exp, 100% risk)")
+        st.caption("📊 Stage 2: Consolidation (25% exp, 75% risk)")
+        st.caption("⚠️ Stage 3: Distribution (10% exp, 50% risk)")
+        st.caption("❌ Stage 4: Bear (0% exp, 0% risk)")
+    else:
+        block_trades_in_stage3 = False
+        block_trades_in_stage4 = False
+        adjust_risk_by_regime = False
+
+# Initialize defaults if expander was never opened
+if 'use_market_regime_filter' not in locals():
+    use_market_regime_filter = False
+    block_trades_in_stage3 = False
+    block_trades_in_stage4 = False
+    adjust_risk_by_regime = False
+
+# ═══════════════════════════════════════════════════════════════
+# RESUMEN DE CONFIGURACIÓN
+# ═══════════════════════════════════════════════════════════════
+filter_summary = f"""CONFIGURACIÓN DE FILTROS:
+-------------------------
+ENTRADA (Requisitos Mínimos):
+• Min RVOL       : {min_rvol}x
+• Min ADR        : {min_adr}%
+• Min Volume     : {min_volume:,.0f}
+• Min $Volume    : ${min_dollar_volume:,.0f}
+• Max SMA20 Dist : {max_dist_sma20}%
+
+GESTIÓN DE POSICIÓN:
+• RVOL Danger    : >={rvol_danger}x (Size {rvol_danger_size}%)
+• RVOL Warning   : >={rvol_warning}x (Size {rvol_warning_size}%)
+• ADR High       : >{adr_high}%
+• ADR Medium     : >{adr_med}%
+• Max Stop Loss  : {max_stop_pct}%
+• Earnings Window: {earnings_days} days ({earnings_cushion}% cushion)"""
+
+if use_market_regime_filter:
+    filter_summary += f"\n\nMARKET REGIME:\n"
+    filter_summary += "• Block Stage 3  : YES\n" if block_trades_in_stage3 else "• Block Stage 3  : NO\n"
+    filter_summary += "• Block Stage 4  : YES\n" if block_trades_in_stage4 else "• Block Stage 4  : NO\n"
+    filter_summary += "• Adjust Risk    : YES" if adjust_risk_by_regime else "• Adjust Risk    : NO"
+
+st.sidebar.markdown("### 📋 Resumen de Configuración")
+st.sidebar.code(filter_summary, language="text")
+
+# ═══════════════════════════════════════════════════════════════
+# ACCIONES RÁPIDAS
+# ═══════════════════════════════════════════════════════════════
+st.sidebar.markdown("---")
+st.sidebar.markdown("### ⚡ Acciones Rápidas")
+
+if scan_mode == "📝 Lista Manual" and st.button("🔍 Verificar Cache", use_container_width=True):
+    if direct_symbols:
+        symbols_list = [s.strip().upper() for s in direct_symbols.split(',') if s.strip()]
+        st.markdown("### 📦 Estado del Cache")
+        for symbol in symbols_list:
+            cursor = ticker_cache.conn.execute("SELECT MIN(date), MAX(date) FROM ohlcv_cache WHERE ticker = ?", (symbol,))
+            sqlite_res = cursor.fetchone()
+            if sqlite_res and sqlite_res[0]:
+                st.write(f"✅ **{symbol}**: {sqlite_res[0]} a {sqlite_res[1]}")
+            else:
+                st.write(f"❌ **{symbol}**: Sin datos")
+    else:
+        st.warning("Ingresa símbolos primero")
+
+if st.button("🔄 Actualizar Universo", use_container_width=True):
+    with st.spinner("Actualizando universo..."):
+        ticker_cache.update_universe(force=True)
+        st.success("¡Universo actualizado!")
+        st.rerun()
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🚀 Motor")
+st.sidebar.success("⚡ VectorBT Engine")
+st.sidebar.caption("VCP detection • Partial exits • Risk filters")
+# ═══════════════════════════════════════════════════════════════
+
+# Universe Size Limiter (for SQLite mode)
+max_symbols_limit = None
+selection_strategy = 'liquidity'  # Default
+
+if scan_mode == "🌎 Todo el Mercado (SQLite)":
+    st.sidebar.success("🚀 VectorBT puede manejar 5600+ tickers en segundos!")
+    limit_universe = st.sidebar.checkbox("🎯 Limitar Universo", value=False, help="Con VectorBT ya no es necesario limitar")
+    if limit_universe:
+        max_symbols_limit = st.sidebar.number_input("Máximo de Símbolos", value=500, min_value=50, max_value=5000, step=50)
+        
+        # Selection strategy
+        st.sidebar.markdown("**Estrategia de Selección**")
+        selection_strategy = st.sidebar.radio(
+            "Cómo elegir símbolos:",
+            ['liquidity', 'random', 'alphabetical'],
+            format_func=lambda x: {
+                'liquidity': '💎 Por Liquidez (recomendado)',
+                'random': '🎲 Aleatorio',
+                'alphabetical': '🔤 Alfabético (A-Z)'
+            }[x],
+            help="Liquidez = tickers con mayor volumen en dólares"
+        )
+    else:
+        max_symbols_limit = 0  # 0 = TODOS los tickers
+        st.sidebar.info("📊 Se usarán TODOS los tickers con datos disponibles")
+
+if st.sidebar.button("🚀 EJECUTAR BACKTEST", use_container_width=True):
+    # Validate dates
+    if run_end_date > cache_max_date.date():
+        st.sidebar.error(f"❌ Fecha Fin no puede ser mayor que {cache_max_date.date().strftime('%Y-%m-%d')}")
+        st.stop()
+    
+    if run_start_date > run_end_date:
+        st.sidebar.error("❌ Fecha Inicio debe ser anterior a Fecha Fin")
+        st.stop()
+    
+    # Build manual list
+    manual_list = []
+    if scan_mode == "📝 Lista Manual" and direct_symbols:
+        manual_list = [s.strip().upper() for s in direct_symbols.split(',') if s.strip()]
+        
+        # Guardar en base de datos si son nuevos
+        if len(manual_list) > 0:
+            added_count = ticker_cache.add_tickers(manual_list)
+            if added_count > 0:
+                st.toast(f"✅ Se agregaron {added_count} nuevos tickers a la base de datos.", icon="💾")
+    
+    # VectorBT Engine (Fast)
+    # Si max_symbols = 0 (modo completo), ignorar lista manual
+    final_tickers = None if max_symbols_limit == 0 else (manual_list if manual_list else None)
+    
+    if scan_mode == "🌎 Todo el Mercado":
+        st.sidebar.info("Escaneando todo el mercado... esto puede tardar.")
+    elif scan_mode == "🏗️ Por Sector":
+        st.sidebar.info(f"Escaneando sector: {selected_sector}")
+    
+    if run_vectorbt_backtest_ui(
+        start_date=run_start_date,
+        end_date=run_end_date,
+        equity=float(in_equity),
+        risk_pct=float(in_risk),
+        max_exp_pct=float(in_max_exp),
+        risk_dollars=risk_dollars,
+        tickers_list=final_tickers,
+        max_symbols=max_symbols_limit if max_symbols_limit is not None else 0,
+        max_dist_sma20=max_dist_sma20,
+        rvol_danger=rvol_danger,
+        rvol_warning=rvol_warning,
+        rvol_danger_size=rvol_danger_size,
+        rvol_warning_size=rvol_warning_size,
+        adr_high=adr_high,
+        adr_med=adr_med,
+        max_stop_pct=max_stop_pct,
+        earnings_days=earnings_days,
+        earnings_cushion=earnings_cushion,
+        # Dynamic Filters
+        min_rvol=min_rvol,
+        min_adr=min_adr,
+        min_volume=min_volume,
+        min_dollar_volume=min_dollar_volume,
+        # Market Regime
+        use_market_regime_filter=use_market_regime_filter,
+        block_trades_in_stage3=block_trades_in_stage3,
+        block_trades_in_stage4=block_trades_in_stage4,
+        adjust_risk_by_regime=adjust_risk_by_regime
+    ):
+        st.rerun()
+
+st.sidebar.markdown("---")
+
+# --- Carga de datos (SIN CACHE para actualizaciones inmediatas) ---
+def load_data():
+    """Carga los resultados del backtest más reciente"""
+    try:
+        main_df = pd.DataFrame()
+        partial_df = pd.DataFrame()
+        
+        if os.path.exists('outputs/backtests/backtest_results.csv'):
+            main_df = pd.read_csv('outputs/backtests/backtest_results.csv')
+            main_df['entry_date'] = pd.to_datetime(main_df['entry_date'])
+            main_df['exit_date'] = pd.to_datetime(main_df['exit_date'])
+            main_df['trade_type'] = 'FULL_EXIT'  # Marcar como cierre completo
+            
+            # Calcular exit_price si no existe (compatibilidad con backtests viejos)
+            if 'exit_price' not in main_df.columns:
+                if 'pnl' in main_df.columns and 'entry_price' in main_df.columns and 'shares' in main_df.columns:
+                    main_df['exit_price'] = main_df['entry_price'] + (main_df['pnl'] / main_df['shares'])
+                else:
+                    main_df['exit_price'] = main_df['entry_price']  # Fallback
+            
+            # Calcular columnas derivadas si no existen
+            if 'returns_pct' not in main_df.columns:
+                main_df['returns_pct'] = ((main_df['exit_price'] - main_df['entry_price']) / main_df['entry_price']) * 100
+            
+            if 'is_profitable' not in main_df.columns:
+                main_df['is_profitable'] = main_df['pnl'] > 0
+            
+            if 'monetary_risk' not in main_df.columns:
+                # Calcular riesgo monetario (asumiendo stop loss 5% por debajo del entry)
+                main_df['monetary_risk'] = main_df['entry_price'] * 0.05 * main_df['shares']
+            
+            if 'position_value' not in main_df.columns:
+                # Valor de la posición al momento de entrada
+                main_df['position_value'] = main_df['entry_price'] * main_df['shares']
+        
+        # Cargar salidas parciales si existen
+        if os.path.exists('outputs/backtests/partial_exits.csv'):
+            partial_df = pd.read_csv('outputs/backtests/partial_exits.csv')
+            partial_df['entry_date'] = pd.to_datetime(partial_df['entry_date'])
+            partial_df['exit_date'] = pd.to_datetime(partial_df['exit_date'])
+            partial_df['trade_type'] = partial_df['phase']  # FASE_1 o FASE_2
+            
+            # Renombrar columnas para compatibilidad con main_df
+            partial_df = partial_df.rename(columns={
+                'shares_sold': 'shares',
+                'pct_sold': 'exit_pct'
+            })
+        
+        return main_df, partial_df
+    except Exception as e:
+        st.error(f"Error cargando datos: {e}")
+        return pd.DataFrame(), pd.DataFrame()
+
+# Cargar datos (sin cache - actualización inmediata)
+df_raw, df_partial_raw = load_data()
+
+# --- 📚 Backtest History Loader ---
+st.sidebar.markdown("---")
+st.sidebar.header("📚 Historial de Backtests")
+
+history_file = 'outputs/backtests/backtest_history.csv'
+if os.path.exists(history_file):
+    history_df = pd.read_csv(history_file)
+    
+    if not history_df.empty:
+        # Formatear para display
+        history_df['display'] = history_df.apply(
+            lambda row: f"{row['start_date']} to {row['end_date']} | {row['trades']} trades | PnL: ${row['pnl']:,.0f}", 
+            axis=1
+        )
+        
+        selected_backtest = st.sidebar.selectbox(
+            "Cargar backtest guardado:",
+            options=['Actual (recién ejecutado)'] + history_df['display'].tolist(),
+            help="Selecciona un backtest anterior para analizar"
+        )
+        
+        # Sección de gestión de backtests
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("**🗑️ Gestión de Backtests**")
+        
+        col_single, col_all = st.sidebar.columns(2)
+        
+        with col_single:
+            # Botón para eliminar el backtest seleccionado
+            if selected_backtest != 'Actual (recién ejecutado)':
+                if st.button("Eliminar Seleccionado", help="Eliminar este backtest", key="delete_single", use_container_width=True):
+                    idx = history_df[history_df['display'] == selected_backtest].index[0]
+                    
+                    # Eliminar archivo archivado si existe
+                    if 'archived_file' in history_df.columns and pd.notna(history_df.loc[idx, 'archived_file']):
+                        archived_file = history_df.loc[idx, 'archived_file']
+                        if os.path.exists(archived_file):
+                            try:
+                                os.remove(archived_file)
+                            except Exception as e:
+                                st.sidebar.error(f"❌ Error: {e}")
+                    
+                    # Eliminar del historial
+                    history_df = history_df.drop(idx).reset_index(drop=True)
+                    history_df.to_csv(history_file, index=False)
+                    st.sidebar.success("✅ Backtest eliminado")
+                    st.rerun()
+        
+        with col_all:
+            # Botón para limpiar TODOS los backtests
+            if st.button("🗑️ Limpiar Todo", help="Eliminar TODOS los backtests guardados", key="delete_all", use_container_width=True):
+                # Confirmar con un segundo botón
+                if 'confirm_delete_all' not in st.session_state:
+                    st.session_state.confirm_delete_all = False
+                
+                st.session_state.confirm_delete_all = True
+        
+        # Confirmación para eliminar todos
+        if st.session_state.get('confirm_delete_all', False):
+            st.sidebar.warning("⚠️ ¿Estás seguro? Esta acción no se puede deshacer.")
+            col_yes, col_no = st.sidebar.columns(2)
+            
+            with col_yes:
+                if st.button("✅ Sí", key="confirm_yes", use_container_width=True):
+                    deleted_count = 0
+                    # Eliminar todos los archivos archivados
+                    if 'archived_file' in history_df.columns:
+                        for archived_file in history_df['archived_file'].dropna():
+                            if os.path.exists(archived_file):
+                                try:
+                                    os.remove(archived_file)
+                                    deleted_count += 1
+                                except:
+                                    pass
+                    
+                    # Vaciar el historial
+                    pd.DataFrame(columns=history_df.columns).to_csv(history_file, index=False)
+                    st.sidebar.success(f"✅ {deleted_count} backtests eliminados")
+                    st.session_state.confirm_delete_all = False
+                    st.rerun()
+            
+            with col_no:
+                if st.button("❌ No", key="confirm_no", use_container_width=True):
+                    st.session_state.confirm_delete_all = False
+                    st.rerun()
+        
+        st.sidebar.markdown("---")
+        
+        if selected_backtest != 'Actual (recién ejecutado)':
+            # Cargar el backtest seleccionado
+            idx = history_df[history_df['display'] == selected_backtest].index[0]
+            
+            # Verificar si tiene archived_file
+            if 'archived_file' in history_df.columns and pd.notna(history_df.loc[idx, 'archived_file']):
+                archived_file = history_df.loc[idx, 'archived_file']
+                
+                if os.path.exists(archived_file):
+                    st.sidebar.success(f"✅ Cargando: {archived_file}")
+                    df_raw = pd.read_csv(archived_file)
+                    df_raw['entry_date'] = pd.to_datetime(df_raw['entry_date'])
+                    df_raw['exit_date'] = pd.to_datetime(df_raw['exit_date'])
+                    df_raw['trade_type'] = 'FULL_EXIT'
+                    
+                    # Mostrar info del backtest
+                    st.sidebar.info(f"""
+                    **Backtest Info:**
+                    - 📅 Periodo: {history_df.loc[idx, 'start_date']} → {history_df.loc[idx, 'end_date']}
+                    - 🎯 Trades: {history_df.loc[idx, 'trades']}
+                    - 💰 PnL: ${history_df.loc[idx, 'pnl']:,.2f}
+                    - 📊 Win Rate: {history_df.loc[idx, 'win_rate']:.1f}%
+                    - 🔥 Profit Factor: {history_df.loc[idx, 'profit_factor']:.2f}
+                    """)
+                else:
+                    st.sidebar.error(f"❌ Archivo no encontrado: {archived_file}")
+            else:
+                st.sidebar.warning("⚠️ Este backtest no tiene archivo archivado (ejecutado antes de la actualización)")
+
+# --- Highlight New Opportunities ---
+if not df_raw.empty and os.path.exists('outputs/temp_backtest_list.json'):
+    try:
+        with open('outputs/temp_backtest_list.json', 'r') as f:
+            data = json.load(f)
+            if "DIRECT_INPUT" in data:
+                manual_set = set(data["DIRECT_INPUT"])
+                # Add 'source' column
+                df_raw['source'] = df_raw['symbol'].apply(lambda x: '📝 Manual' if x in manual_set else '💡 Discovery')
+                
+                # If we have discovery items, show a notification
+                discovery_count = len(df_raw[df_raw['source'] == '💡 Discovery'])
+                if discovery_count > 0:
+                    st.success(f"✨ ¡Se encontraron {discovery_count} oportunidades fuera de tu lista manual!")
+            else:
+                df_raw['source'] = 'N/A'
+    except:
+        pass
+
+# --- Formulario de Filtros (Solo visualización) ---
+with st.sidebar.form("filtros_form"):
+    st.header("🔍 Filtros de Visualización")
+    if not df_raw.empty:
+        # Limpiar símbolos (eliminar NaN y convertir a string)
+        symbols_clean = df_raw['symbol'].dropna().astype(str).unique().tolist()
+        syms = ['Todos'] + sorted(symbols_clean)
+        sig_types = ['Todos'] + sorted(df_raw['signal_type'].unique().tolist())
+    else:
+        syms, sig_types = ['Todos'], ['Todos']
+
+    f_symbol = st.selectbox("Símbolo", syms)
+    f_signal = st.selectbox("Señal", sig_types)
+    submitted = st.form_submit_button("Actualizar Vista")
+
+# --- MARKET HEALTH CHECK (Only show if no backtest results or user wants it) ---
+# For backtesting, this shows TODAY's market conditions which is irrelevant for historical analysis
+# Only useful for live trading or when no backtest results exist
+
+show_market_health = df_raw.empty  # Only show if no backtest results
+
+if show_market_health:
+    st.header("🛡️ Market Health Check")
+    st.caption("📅 Condiciones actuales del mercado (útil para trading en vivo)")
+    
+    try:
+        from src.data.market_data import MarketDataProvider
+        from src.core.market_context import MarketContext
+        
+        with st.spinner("Analizando condiciones del mercado..."):
+            provider = MarketDataProvider()
+            mc = MarketContext(provider)
+            context = mc.analyze_indices()
+        
+        # Extract metrics
+        spy_price = context.get('spy_price', 0)
+        spy_ema20 = context.get('spy_ema20', 0)
+        spy_above_ema20 = context.get('spy_above_ema20', False)
+        breadth_improving = context.get('breadth_improving', False)
+        positive_gex = context.get('positive_gex', False)
+        vix_favorable = context.get('vix_favorable', True)
+        sector_leaders = context.get('sector_leaders', {})
+        market_favorable = context.get('market_favorable_for_longs', False)
+        
+        # Calculate health score
+        health_score = 0
+        if spy_above_ema20:
+            health_score += 2
+        if breadth_improving:
+            health_score += 2
+        if positive_gex:
+            health_score += 1
+        if vix_favorable:
+            health_score += 1
+        if sector_leaders:
+            health_score += 1
+        
+        # Display in columns
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric(
+                "SPY Trend",
+                f"${spy_price:.2f}",
+                f"{((spy_price - spy_ema20) / spy_ema20 * 100):+.2f}%" if spy_ema20 else "N/A",
+                delta_color="normal"
+            )
+            if spy_above_ema20:
+                st.success("✅ Above EMA20")
+            else:
+                st.error("❌ Below EMA20")
+        
+        with col2:
+            st.metric("Breadth", "Improving" if breadth_improving else "Declining")
+            if breadth_improving:
+                st.success("✅ Strong")
+            else:
+                st.warning("⚠️ Weak")
+        
+        with col3:
+            st.metric("Volatility", "Favorable" if vix_favorable else "Elevated")
+            if vix_favorable:
+                st.success("✅ VIX < 20")
+            else:
+                st.error("⚠️ VIX High")
+        
+        with col4:
+            st.metric("GEX", "Positive" if positive_gex else "Neutral")
+            if positive_gex:
+                st.success("✅ Low Vol Grind")
+            else:
+                st.info("⚪ Normal")
+        
+        # Health Score and Verdict
+        st.markdown("---")
+        col_score, col_verdict = st.columns([1, 2])
+        
+        with col_score:
+            st.metric("Health Score", f"{health_score}/7", f"{(health_score/7*100):.0f}%")
+            # Progress bar
+            st.progress(health_score / 7)
+        
+        with col_verdict:
+            if not market_favorable:
+                st.error("❌ **NO TRADE MODE** - Market not favorable for longs")
+                st.caption("Go to cash or paper trade only")
+            elif health_score >= 6:
+                st.success("🚀 **AGGRESSIVE MODE** - Excellent conditions")
+                st.caption("Full size (2% risk), all 3 Caminos, focus on leading sectors")
+            elif health_score >= 4:
+                st.success("💪 **STANDARD MODE** - Good conditions")
+                st.caption("Standard size (1.5-2% risk), prefer Camino 1 in leading sectors")
+            else:
+                st.warning("⚠️ **DEFENSIVE MODE** - Be selective")
+                st.caption("Half size (0.5-1% risk), only perfect Blue Sky in top sectors")
+        
+        # Sector Leaders
+        if sector_leaders:
+            st.markdown("---")
+            st.subheader("🎯 Top Sectors Today")
+            top_3 = list(sector_leaders.items())[:3]
+            
+            col_s1, col_s2, col_s3 = st.columns(3)
+            for idx, (sector, data) in enumerate(top_3):
+                with [col_s1, col_s2, col_s3][idx]:
+                    pct = data['change_pct']
+                    st.metric(
+                        f"#{idx+1} {sector}",
+                        f"{data['symbol']}",
+                        f"{pct:+.2f}%",
+                        delta_color="normal"
+                    )
+
+    except Exception as e:
+        st.error(f"Error loading market health: {e}")
+        st.caption("Backtest data will still be available below")
+
+st.markdown("---")
+
+# Lógica Principal
+if not df_raw.empty:
+    # --- TABS PRINCIPALES ---
+    tab_dashboard, tab_quantstats, tab_calendar, tab_live_scanner = st.tabs([
+        "📊 Dashboard Backtest",
+        "📈 QuantStats Analytics",
+        "📅 PnL Calendar",
+        "📡 Live Market Scanner"
+    ])
+
+    # ==========================================
+    # TAB 1: DASHBOARD GENERAL (Original)
+    # ==========================================
+    with tab_dashboard:
+        df_filtered = df_raw.copy()
+        if f_symbol != 'Todos': df_filtered = df_filtered[df_filtered['symbol'] == f_symbol]
+        if f_signal != 'Todos': df_filtered = df_filtered[df_filtered['signal_type'] == f_signal]
+
+        df_filtered = df_filtered.sort_values('exit_date')
+        
+        # Usar PnL total (incluye salidas parciales) si existe, sino calcularlo
+        if 'pnl' in df_filtered.columns:
+            df_filtered['Result'] = df_filtered['pnl']
+        elif 'shares' in df_filtered.columns:
+            df_filtered['Result'] = (df_filtered['exit_price'] - df_filtered['entry_price']) * df_filtered['shares']
+        else:
+            df_filtered['Result'] = 0.0
+        
+        # Calcular R-multiple
+        if 'monetary_risk' in df_filtered.columns:
+            # Evitar división por cero
+            df_filtered['r_multiple'] = df_filtered.apply(
+                lambda row: row['Result'] / row['monetary_risk'] if row['monetary_risk'] > 0 else 0, 
+                axis=1
+            )
+        else:
+            df_filtered['r_multiple'] = 0.0
+
+        df_filtered['Running_Capital'] = in_equity + df_filtered['Result'].cumsum()
+
+        # --- CUSTOM METRICS SECTION ---
+        st.markdown("### 📊 Performance Overview")
+        
+        # ═══════════════════════════════════════════════════════════════
+        # 🔧 AGRUPACIÓN DE TRADES COMPLETOS
+        # ═══════════════════════════════════════════════════════════════
+        # Explicación: TP1, TP2, RUNNER son salidas parciales del MISMO trade.
+        # Las métricas correctas deben agruparlos como 1 trade completo.
+        
+        # Check if we have the required columns for grouping
+        has_ticker = 'ticker' in df_filtered.columns or 'symbol' in df_filtered.columns
+        has_grouping_cols = has_ticker and 'entry_date' in df_filtered.columns and 'exit_phase' in df_filtered.columns
+        
+        if has_grouping_cols:
+            # Try to use TradeGrouper for correct metrics
+            try:
+                # Prepare dataframe for grouping
+                df_for_grouping = df_filtered.copy()
+                
+                # Ensure required columns exist with correct names
+                if 'symbol' in df_for_grouping.columns and 'ticker' not in df_for_grouping.columns:
+                    df_for_grouping['ticker'] = df_for_grouping['symbol']
+                if 'trade_type' in df_for_grouping.columns and 'exit_phase' not in df_for_grouping.columns:
+                    df_for_grouping['exit_phase'] = df_for_grouping['trade_type']
+                if 'signal_type' in df_for_grouping.columns and 'entry_signal' not in df_for_grouping.columns:
+                    df_for_grouping['entry_signal'] = df_for_grouping['signal_type']
+                
+                # Rename Result to pnl if needed
+                if 'Result' in df_for_grouping.columns and 'pnl' not in df_for_grouping.columns:
+                    df_for_grouping['pnl'] = df_for_grouping['Result']
+                
+                # Group trades
+                complete_trades = TradeGrouper.group_partial_trades(df_for_grouping)
+                
+                if not complete_trades.empty:
+                    # Calculate CORRECT metrics from complete trades
+                    total_complete_trades = len(complete_trades)
+                    complete_winners = complete_trades[complete_trades['total_pnl'] > 0]
+                    complete_losers = complete_trades[complete_trades['total_pnl'] <= 0]
+                    
+                    complete_pnl = complete_trades['total_pnl'].sum()
+                    complete_win_rate = (len(complete_winners) / total_complete_trades * 100) if total_complete_trades > 0 else 0.0
+                    
+                    # R-Multiples from complete trades
+                    if 'r_multiple' in complete_trades.columns:
+                        complete_total_r = complete_trades['r_multiple'].sum()
+                        complete_avg_r = complete_trades['r_multiple'].mean() if total_complete_trades > 0 else 0
+                    else:
+                        complete_total_r = 0.0
+                        complete_avg_r = 0.0
+                    
+                    # Profit Factor from complete trades
+                    complete_gross_win = complete_winners['total_pnl'].sum()
+                    complete_gross_loss = abs(complete_losers['total_pnl'].sum())
+                    complete_profit_factor = (complete_gross_win / complete_gross_loss) if complete_gross_loss > 0 else 0.0
+                    
+                    # Avg R/R from complete trades
+                    complete_avg_win = complete_winners['total_pnl'].mean() if not complete_winners.empty else 0
+                    complete_avg_loss = abs(complete_losers['total_pnl'].mean()) if not complete_losers.empty else 0
+                    complete_rr_ratio = (complete_avg_win / complete_avg_loss) if complete_avg_loss > 0 else 0.0
+                    
+                    use_complete_metrics = True
+                else:
+                    use_complete_metrics = False
+                    
+            except Exception as e:
+                st.warning(f"⚠️ No se pudieron agrupar trades completos: {e}")
+                use_complete_metrics = False
+        else:
+            use_complete_metrics = False
+        
+        # ═══════════════════════════════════════════════════════════════
+        # CALCULATE METRICS (Original way - counts partial exits separately)
+        # ═══════════════════════════════════════════════════════════════
+        total_trades = len(df_filtered)
+        winners = df_filtered[df_filtered['Result'] > 0]
+        losers = df_filtered[df_filtered['Result'] <= 0]
+        
+        closed_pnl = df_filtered['Result'].sum()
+        win_rate = (len(winners) / total_trades * 100) if total_trades > 0 else 0.0
+        
+        # R-Multiples
+        if 'r_multiple' in df_filtered.columns:
+            total_r = df_filtered['r_multiple'].sum()
+            avg_r = df_filtered['r_multiple'].mean() if total_trades > 0 else 0
+        else:
+            total_r = 0.0
+            avg_r = 0.0
+            
+        # Profit Factor
+        gross_win = winners['Result'].sum()
+        gross_loss = abs(losers['Result'].sum())
+        profit_factor = (gross_win / gross_loss) if gross_loss > 0 else 0.0
+        
+        # Avg Risk/Reward
+        avg_win_amt = winners['Result'].mean() if not winners.empty else 0
+        avg_loss_amt = abs(losers['Result'].mean()) if not losers.empty else 0
+        rr_ratio = (avg_win_amt / avg_loss_amt) if avg_loss_amt > 0 else 0.0
+        
+        general_perf_pct = (closed_pnl / in_equity) * 100
+        
+        # ═══════════════════════════════════════════════════════════════
+        # DISPLAY CORRECT METRICS (Use complete trades if available)
+        # ═══════════════════════════════════════════════════════════════
+        if use_complete_metrics:
+            st.info("✅ **Métricas Corregidas**: Mostrando trades completos (salidas parciales agrupadas)")
+            display_trades = total_complete_trades
+            display_win_rate = complete_win_rate
+            display_winners = len(complete_winners)
+            display_losers = len(complete_losers)
+            display_pnl = complete_pnl
+            display_total_r = complete_total_r
+            display_avg_r = complete_avg_r
+            display_profit_factor = complete_profit_factor
+            display_rr_ratio = complete_rr_ratio
+            display_perf_pct = (complete_pnl / in_equity) * 100
+        else:
+            st.warning("⚠️ **Métricas sin agrupar**: Contando salidas parciales (TP1, TP2, RUNNER) como trades separados. Métricas infladas.")
+            display_trades = total_trades
+            display_win_rate = win_rate
+            display_winners = len(winners)
+            display_losers = len(losers)
+            display_pnl = closed_pnl
+            display_total_r = total_r
+            display_avg_r = avg_r
+            display_profit_factor = profit_factor
+            display_rr_ratio = rr_ratio
+            display_perf_pct = general_perf_pct
+
+        # Row 1
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            st.metric("General Performance (%)", f"{display_perf_pct:+.2f}%")
+            st.metric("Available Capital", f"${(in_equity + display_pnl):,.2f}")
+        with c2:
+            st.metric("Cash - Invested Capital", f"${(in_equity + display_pnl):,.2f}") 
+            st.metric("Open Trades PnL", "$0.00") 
+        with c3:
+            st.metric("Closed Trades PnL", f"${display_pnl:,.2f}", delta=f"{display_perf_pct:.1f}%")
+            st.metric("Win Rate (%)", f"{display_win_rate:.1f}%")
+        with c4:
+            st.metric("Total Trades", display_trades)
+            st.metric("Winners / Losers", f"{display_winners} / {display_losers}")
+
+        st.markdown("---")
+        
+        # === PARTIAL EXITS BREAKDOWN (VectorBT) ===
+        if 'signal_type' in df_filtered.columns:
+            # Check if we have phase data (TP1, TP2, STOP)
+            phases = df_filtered['signal_type'].unique()
+            if any(p in ['TP1', 'TP2', 'STOP'] for p in phases):
+                st.markdown("### 🎯 Desglose de Salidas Parciales (VectorBT)")
+                st.caption("Sistema de 2 fases: TP1 (50% a 1.5R) + TP2 (50% a 3R)")
+
+                # Count exits by phase
+                tp1_trades = df_filtered[df_filtered['signal_type'] == 'TP1']
+                tp2_trades = df_filtered[df_filtered['signal_type'] == 'TP2']
+                stop_trades = df_filtered[df_filtered['signal_type'] == 'STOP']
+
+                # Calculate PnL by phase
+                tp1_pnl = tp1_trades['Result'].sum() if len(tp1_trades) > 0 else 0
+                tp2_pnl = tp2_trades['Result'].sum() if len(tp2_trades) > 0 else 0
+                stop_pnl = stop_trades['Result'].sum() if len(stop_trades) > 0 else 0
+
+                # Win rates by phase
+                tp1_wr = (len(tp1_trades[tp1_trades['Result'] > 0]) / len(tp1_trades) * 100) if len(tp1_trades) > 0 else 0
+                tp2_wr = (len(tp2_trades[tp2_trades['Result'] > 0]) / len(tp2_trades) * 100) if len(tp2_trades) > 0 else 0
+                stop_wr = (len(stop_trades[stop_trades['Result'] > 0]) / len(stop_trades) * 100) if len(stop_trades) > 0 else 0
+
+                # Display in columns
+                col_tp1, col_tp2, col_stop = st.columns(3)
+
+                with col_tp1:
+                    st.markdown("#### 🎯 TP1 (1.5R)")
+                    st.metric("Salidas", len(tp1_trades))
+                    st.metric("PnL", f"${tp1_pnl:,.2f}", delta=f"{tp1_wr:.0f}% WR")
+                    if tp1_pnl > 0:
+                        st.success(f"✅ Avg: ${tp1_pnl/len(tp1_trades):.2f}" if len(tp1_trades) > 0 else "")
+                    else:
+                        st.error(f"📉 Avg: ${tp1_pnl/len(tp1_trades):.2f}" if len(tp1_trades) > 0 else "")
+
+                with col_tp2:
+                    st.markdown("#### 🚀 TP2 (3R)")
+                    st.metric("Salidas", len(tp2_trades))
+                    st.metric("PnL", f"${tp2_pnl:,.2f}", delta=f"{tp2_wr:.0f}% WR")
+                    if tp2_pnl > 0:
+                        st.success(f"✅ Avg: ${tp2_pnl/len(tp2_trades):.2f}" if len(tp2_trades) > 0 else "")
+                    else:
+                        st.warning(f"⚠️ Avg: ${tp2_pnl/len(tp2_trades):.2f}" if len(tp2_trades) > 0 else "")
+
+                with col_stop:
+                    st.markdown("#### 🛑 Stops")
+                    st.metric("Salidas", len(stop_trades))
+                    st.metric("PnL", f"${stop_pnl:,.2f}", delta=f"{stop_wr:.0f}% WR")
+                    if stop_pnl >= 0:
+                        st.info(f"ℹ️ Avg: ${stop_pnl/len(stop_trades):.2f}" if len(stop_trades) > 0 else "")
+                    else:
+                        st.error(f"❌ Avg: ${stop_pnl/len(stop_trades):.2f}" if len(stop_trades) > 0 else "")
+
+                # Visual breakdown
+                if len(tp1_trades) + len(tp2_trades) + len(stop_trades) > 0:
+                    phase_data = pd.DataFrame({
+                        'Fase': ['TP1 (1.5R)', 'TP2 (3R)', 'Stops'],
+                        'Salidas': [len(tp1_trades), len(tp2_trades), len(stop_trades)],
+                        'PnL': [tp1_pnl, tp2_pnl, stop_pnl]
+                    })
+
+                    fig_phase = px.bar(phase_data, x='Fase', y='PnL',
+                                      title='PnL por Fase de Salida',
+                                      color='PnL',
+                                      color_continuous_scale=['red', 'yellow', 'green'])
+                    st.plotly_chart(fig_phase, use_container_width=True)
+
+                st.markdown("---")
+
+        # === CORRECTED METRICS: Counting Complete Trades Only ===
+        # Group trades by symbol and entry date to calculate true trade metrics
+        if 'signal_type' in df_filtered.columns and any(p in ['TP1', 'TP2', 'STOP'] for p in phases):
+            st.markdown("### 📊 Métricas Reales (Trades Completos)")
+            st.caption("Agrupación por trade completo: Cada entrada/salida total cuenta como 1 trade")
+
+            # Group by symbol and entry_date to aggregate all partial exits for each trade
+            grouped_df = df_filtered.groupby(['symbol', 'entry_date']).agg({
+                'exit_date': 'max',  # Latest exit date
+                'entry_price': 'first',  # Entry price
+                'exit_price': 'last',   # Final exit price
+                'shares': 'sum',  # Total shares traded (across all partial exits)
+                'pnl': 'sum',  # Total PnL (sum of all partial PnLs)
+                'returns_pct': 'last',  # Use the last returns_pct value (from final exit)
+                'signal_type': 'first',  # Original signal type
+                'bars_held': 'mean',  # Average bars held
+                'context_adr': 'first',
+                'context_rvol': 'first',
+                'context_trend': 'first',
+                'context_vol': 'first',
+                'context_dollar_vol': 'first',
+                'dist_sma20_pct': 'first',
+                'consolidation_days': 'first',
+                'sector': 'first',
+                'sector_strength': 'first',
+                'time_since_earnings': 'first',
+                'spx_vs_voltrig': 'first',
+                'spy_at_entry': 'first',
+                'vix_at_entry': 'first',
+                'spy_ema20_at_entry': 'first',
+                'base_risk_dollars': 'first',
+                'adjusted_risk_dollars': 'first',
+                'risk_reduction_factor': 'first',
+                'size_multipliers_applied': 'first',
+                'rvol_classification': 'first',
+                'price_vs_sma20': 'first',
+                'price_vs_sma50': 'first',
+                'volume_at_entry': 'first',
+                'avg_volume_20d': 'first',
+                'atr_at_entry': 'first',
+                'atr_pct_price': 'first',
+                'volatility_regime': 'first',
+                'consolidation_quality': 'first',
+                'is_vcp_pattern': 'first',
+                'days_to_next_earnings': 'first',
+                'earnings_risk_level': 'first',
+                'vix_regime': 'first',
+                'spy_above_ema20': 'first'
+            }).reset_index()
+
+            # Calculate returns percentage correctly for grouped trades
+            grouped_df['returns_pct'] = ((grouped_df['exit_price'] - grouped_df['entry_price']) / grouped_df['entry_price']) * 100
+            grouped_df['is_profitable'] = grouped_df['pnl'] > 0
+            grouped_df['Result'] = grouped_df['pnl']
+
+            # Calculate corrected metrics
+            total_grouped_trades = len(grouped_df)
+            grouped_winners = grouped_df[grouped_df['Result'] > 0]
+            grouped_losers = grouped_df[grouped_df['Result'] <= 0]
+
+            grouped_closed_pnl = grouped_df['Result'].sum()
+            grouped_win_rate = (len(grouped_winners) / total_grouped_trades * 100) if total_grouped_trades > 0 else 0.0
+
+            # R-Multiples for grouped trades
+            if 'monetary_risk' in grouped_df.columns:
+                # Calculate r_multiple for each grouped trade based on monetary risk
+                grouped_df['r_multiple'] = grouped_df.apply(
+                    lambda row: row['Result'] / row['monetary_risk'] if row['monetary_risk'] > 0 else 0,
+                    axis=1
+                )
+                grouped_total_r = grouped_df['r_multiple'].sum()
+                grouped_avg_r = grouped_df['r_multiple'].mean() if total_grouped_trades > 0 else 0
+            else:
+                # Calculate R based on ATR if monetary_risk not available
+                grouped_df['r_multiple'] = grouped_df.apply(
+                    lambda row: row['Result'] / row['atr_at_entry'] if row['atr_at_entry'] > 0 else 0,
+                    axis=1
+                )
+                grouped_total_r = grouped_df['r_multiple'].sum()
+                grouped_avg_r = grouped_df['r_multiple'].mean() if total_grouped_trades > 0 else 0
+
+            # Profit Factor for grouped trades
+            grouped_gross_win = grouped_winners['Result'].sum()
+            grouped_gross_loss = abs(grouped_losers['Result'].sum())
+            grouped_profit_factor = (grouped_gross_win / grouped_gross_loss) if grouped_gross_loss > 0 else 0.0
+
+            # Avg Risk/Reward for grouped trades
+            grouped_avg_win_amt = grouped_winners['Result'].mean() if not grouped_winners.empty else 0
+            grouped_avg_loss_amt = abs(grouped_losers['Result'].mean()) if not grouped_losers.empty else 0
+            grouped_rr_ratio = (grouped_avg_win_amt / grouped_avg_loss_amt) if grouped_avg_loss_amt > 0 else 0.0
+
+            grouped_general_perf_pct = (grouped_closed_pnl / in_equity) * 100
+
+            # Display corrected metrics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Performance (%)", f"{grouped_general_perf_pct:+.2f}%")
+                st.metric("Capital Total", f"${(in_equity + grouped_closed_pnl):,.2f}")
+            with col2:
+                st.metric("PnL Total", f"${grouped_closed_pnl:,.2f}", delta=f"{grouped_general_perf_pct:.1f}%")
+                st.metric("Win Rate (%)", f"{grouped_win_rate:.1f}%")
+            with col3:
+                st.metric("Trades Reales", total_grouped_trades)
+                st.metric("Winners / Losers", f"{len(grouped_winners)} / {len(grouped_losers)}")
+            with col4:
+                st.metric("R Total", f"{grouped_total_r:.2f}R")
+                st.metric("Profit Factor", f"{grouped_profit_factor:.2f}")
+
+            st.markdown("---")
+        
+        # Row 2 (Risk Metrics)
+        d1, d2, d3, d4 = st.columns(4)
+        d1.metric("Risk/Reward Ratio", f"{display_rr_ratio:.2f}")
+        d2.metric("Total R", f"{display_total_r:.2f}R")
+        d3.metric("Profit Factor", f"{display_profit_factor:.2f}")
+        d4.metric("Expectancy (R)", f"{display_avg_r:.2f}R")
+
+        st.markdown("---")
+        
+        # === SPY BENCHMARK CALCULATION ===
+        def calculate_spy_benchmark(start_date, end_date, initial_capital):
+            """Calculate SPY buy & hold performance for comparison"""
+            try:
+                from src.data.market_data import MarketDataProvider
+                provider = MarketDataProvider()
+                spy_data = provider.get_daily_data('SPY', start_date=start_date, end_date=end_date, offline=False)
+                
+                if spy_data.empty:
+                    return None
+                
+                # Normalize columns
+                spy_data.columns = [c.lower() for c in spy_data.columns]
+                
+                # Calculate buy & hold returns
+                entry_price = spy_data['close'].iloc[0]
+                shares = initial_capital / entry_price
+                
+                spy_equity = []
+                for date, row in spy_data.iterrows():
+                    equity = shares * row['close']
+                    spy_equity.append({'date': date, 'equity': equity, 'returns_pct': ((equity - initial_capital) / initial_capital) * 100})
+                
+                return pd.DataFrame(spy_equity)
+            except Exception as e:
+                st.warning(f"No se pudo cargar SPY para comparación: {e}")
+                return None
+        
+        # Charts
+        col1, col2 = st.columns(2)
+        with col1:
+            # Get date range from backtest
+            if not df_filtered.empty and 'entry_date' in df_filtered.columns and 'exit_date' in df_filtered.columns:
+                backtest_start = df_filtered['entry_date'].min()
+                backtest_end = df_filtered['exit_date'].max()
+                
+                # Calculate SPY benchmark
+                spy_benchmark = calculate_spy_benchmark(backtest_start, backtest_end, in_equity)
+                
+                # Create comparative chart
+                fig = go.Figure()
+                
+                # Strategy equity curve
+                fig.add_trace(go.Scatter(
+                    x=df_filtered['exit_date'],
+                    y=df_filtered['Running_Capital'],
+                    mode='lines',
+                    name='Strategy',
+                    line=dict(color='#00D9FF', width=2),
+                    hovertemplate='<b>Strategy</b><br>Date: %{x}<br>Equity: $%{y:,.0f}<extra></extra>'
+                ))
+                
+                # SPY benchmark if available
+                if spy_benchmark is not None:
+                    fig.add_trace(go.Scatter(
+                        x=spy_benchmark['date'],
+                        y=spy_benchmark['equity'],
+                        mode='lines',
+                        name='SPY (Buy & Hold)',
+                        line=dict(color='#FFD700', width=2, dash='dash'),
+                        hovertemplate='<b>SPY</b><br>Date: %{x}<br>Equity: $%{y:,.0f}<extra></extra>'
+                    ))
+                
+                fig.update_layout(
+                    title='Equity Curve vs SPY Benchmark',
+                    xaxis_title='Date',
+                    yaxis_title='Portfolio Value ($)',
+                    hovermode='x unified',
+                    template='plotly_dark',
+                    showlegend=True,
+                    legend=dict(
+                        yanchor="top",
+                        y=0.99,
+                        xanchor="left",
+                        x=0.01
+                    )
+                )
+                
+                st.plotly_chart(fig, use_container_width=True, key="equity_curve_chart")
+                
+                # Show comparative metrics
+                if spy_benchmark is not None:
+                    final_strategy = df_filtered['Running_Capital'].iloc[-1]
+                    final_spy = spy_benchmark['equity'].iloc[-1]
+                    spy_return = spy_benchmark['returns_pct'].iloc[-1]
+                    
+                    col_a, col_b, col_c = st.columns(3)
+                    col_a.metric("Strategy Final", f"${final_strategy:,.0f}", f"{general_perf_pct:+.2f}%")
+                    col_b.metric("SPY Final", f"${final_spy:,.0f}", f"{spy_return:+.2f}%")
+                    col_c.metric("Alpha vs SPY", f"{(general_perf_pct - spy_return):.2f}%", 
+                                delta_color="normal" if general_perf_pct > spy_return else "inverse")
+            else:
+                # Fallback to simple chart
+                fig = px.line(df_filtered, x='exit_date', y='Running_Capital', title='Equity Curve (Real Risk Adjusted)')
+                st.plotly_chart(fig, use_container_width=True, key="equity_curve_chart")
+        with col2:
+            if 'shares' in df_filtered.columns and 'entry_price' in df_filtered.columns:
+                # Calculate position_value if not exists
+                if 'position_value' not in df_filtered.columns:
+                    df_filtered['position_value'] = df_filtered['shares'] * df_filtered['entry_price']
+                
+                # Calculate is_profitable if not exists
+                if 'is_profitable' not in df_filtered.columns:
+                    df_filtered['is_profitable'] = df_filtered['Result'] > 0
+                
+                fig = px.scatter(df_filtered, x='entry_date', y='position_value', 
+                                 color='is_profitable', size='shares',
+                                 title='Position Sizing Impact (Size = Shares, Y = Capital Alloc)')
+                st.plotly_chart(fig, use_container_width=True, key="position_sizing_chart")
+
+        #Tabla
+        st.markdown("### 📋 Trade Log (Institutional)")
+        df_disp = df_filtered.copy()
+        if 'shares' in df_disp.columns:
+            df_disp['days_held'] = (df_filtered['exit_date'] - df_filtered['entry_date']).dt.days
+            
+            # Calculate missing columns if they don't exist
+            if 'monetary_risk' not in df_disp.columns:
+                # Calcular riesgo monetario si no existe (5% stop loss asumido)
+                df_disp['monetary_risk'] = df_disp['entry_price'] * 0.05 * df_disp['shares']
+            
+            if 'returns_pct' not in df_disp.columns and 'pnl' in df_disp.columns and 'position_value' in df_disp.columns:
+                df_disp['returns_pct'] = (df_disp['pnl'] / df_disp['position_value'] * 100).fillna(0)
+            elif 'returns_pct' not in df_disp.columns and 'entry_price' in df_disp.columns and 'exit_price' in df_disp.columns:
+                df_disp['returns_pct'] = ((df_disp['exit_price'] - df_disp['entry_price']) / df_disp['entry_price']) * 100
+            elif 'returns_pct' not in df_disp.columns:
+                df_disp['returns_pct'] = 0
+            
+            # Build columns list dynamically based on what exists
+            cols = ['symbol', 'entry_date', 'days_held', 'signal_type']
+            
+            # Add optional context columns if they exist
+            if 'context_rvol' in df_disp.columns:
+                cols.append('context_rvol')
+            if 'context_adr' in df_disp.columns:
+                cols.append('context_adr')
+            if 'context_trend' in df_disp.columns:
+                cols.append('context_trend')
+            
+            # NUEVAS COLUMNAS DE CALIDAD
+            if 'dist_sma20_pct' in df_disp.columns:
+                cols.append('dist_sma20_pct')
+            if 'consolidation_days' in df_disp.columns:
+                cols.append('consolidation_days')
+            if 'is_vcp_pattern' in df_disp.columns:
+                cols.append('is_vcp_pattern')
+            
+            # NUEVAS COLUMNAS (Earnings/Sector)
+            if 'time_since_earnings' in df_disp.columns:
+                cols.append('time_since_earnings')
+            if 'sector' in df_disp.columns:
+                cols.append('sector')
+            if 'sector_strength' in df_disp.columns:
+                cols.append('sector_strength')
+
+            # NUEVAS COLUMNAS DE REGIMEN DE MERCADO
+            if 'spx_vs_voltrig' in df_disp.columns:
+                # Crear columna visual
+                df_disp['VolTrig'] = df_disp['spx_vs_voltrig'].apply(lambda x: "✅ Safe" if x else "☔ Danger")
+                cols.append('VolTrig')
+            
+            cols.extend(['shares', 'position_value', 'monetary_risk', 'returns_pct', 'r_multiple', 'Result'])
+            
+            # Filter to only existing columns
+            cols = [c for c in cols if c in df_disp.columns]
+            
+            column_config = {
+                "symbol": st.column_config.TextColumn("Symbol", width="small"),
+                "entry_date": st.column_config.DateColumn("Entry Date", format="YYYY-MM-DD"),
+                "days_held": st.column_config.NumberColumn("Days", format="%d"),
+                "signal_type": st.column_config.TextColumn("Signal"),
+                "context_rvol": st.column_config.NumberColumn("RVOL", format="%.2fx"),
+                "context_adr": st.column_config.NumberColumn("ADR%", format="%.1f%%"),
+                "context_trend": st.column_config.TextColumn("Trend", width="small"),
+                # NUEVAS COLUMNAS
+                "dist_sma20_pct": st.column_config.NumberColumn("SMA20 Dist%", format="%.1f%%", help="% distance from SMA20 at entry. >15% = extended (risky)"),
+                "consolidation_days": st.column_config.NumberColumn("Consol Days", format="%d", help="Days consolidating in last 20d. >10 = tight base"),
+                "is_vcp_pattern": st.column_config.CheckboxColumn("VCP?", help="Volatility Contraction Pattern detected"),
+                "time_since_earnings": st.column_config.NumberColumn("Earn Days", format="%d", help="Days since last earnings (-1 if unknown)"),
+                "sector": st.column_config.TextColumn("Sector", width="small", help="Sector ETF: XLK=Tech, XLF=Finance, XLV=Health, XLY=ConsumerD, XLE=Energy, XLI=Industrial"),
+                "sector_strength": st.column_config.NumberColumn("Sect RS", format="%.2f", help="Sector Relative Strength vs SPY: >1.0=Strong, 0-1=Neutral, <0=Weak, 0.0=Unknown"),
+                "VolTrig": st.column_config.TextColumn("Mkt Regime", width="small", help="✅ Safe = SPY > EMA20 & VIX < 20\n☔ Danger = SPY < EMA20 OR VIX > 20"),
+                "shares": st.column_config.NumberColumn("Shares", format="%.2f"),
+                "position_value": st.column_config.NumberColumn("Position", format="$%.0f"),
+                "monetary_risk": st.column_config.NumberColumn("Risk", format="$%.0f"),
+                "returns_pct": st.column_config.NumberColumn("Return %", format="%+.2f%%",), 
+                "r_multiple": st.column_config.NumberColumn("R Multiple", format="%+.2f R"),
+                "Result": st.column_config.NumberColumn("P/L", format="$%.2f")
+            }
+            
+            st.dataframe(
+                df_disp[cols].sort_values('entry_date', ascending=False),
+                use_container_width=True,
+                hide_index=True,
+                column_config=column_config
+            )
+        else:
+            st.dataframe(df_filtered)
+        
+        # --- 📊 ALL EXITS TABLE (Incluye Fase 1, 2 y 3) ---
+        if not df_partial_raw.empty:
+            st.markdown("---")
+            st.markdown("### 📤 Detalle de Salidas Escalonadas (Todas las Fases)")
+            st.caption("📊 Registro completo de cada salida: Fase 1 (Risk-Free), Fase 2 (Resistance), Fase 3 (Runner)")
+            
+            # Filtrar partial exits según los filtros aplicados
+            df_partial_filtered = df_partial_raw.copy()
+            if f_symbol != 'Todos':
+                df_partial_filtered = df_partial_filtered[df_partial_filtered['symbol'] == f_symbol]
+            if f_signal != 'Todos':
+                df_partial_filtered = df_partial_filtered[df_partial_filtered['signal_type'] == f_signal]
+            
+            if not df_partial_filtered.empty:
+                df_partial_disp = df_partial_filtered.copy()
+                df_partial_disp['days_to_exit'] = (df_partial_disp['exit_date'] - df_partial_disp['entry_date']).dt.days
+                
+                # Ordenar por fase (FASE_1 primero) y luego alfabéticamente por símbolo
+                df_partial_disp = df_partial_disp.sort_values(['phase', 'symbol'], ascending=[True, True])
+                
+                # Agregar numeración de filas
+                df_partial_disp = df_partial_disp.reset_index(drop=True)
+                df_partial_disp.insert(0, '#', range(1, len(df_partial_disp) + 1))
+                
+                # Columnas esperadas (usar solo las que existen)
+                expected_cols = ['#', 'symbol', 'phase', 'exit_date', 'days_to_exit', 'exit_price', 
+                               'shares', 'exit_pct', 'pnl', 'return_pct', 'reason']
+                partial_cols = [col for col in expected_cols if col in df_partial_disp.columns]
+                
+                partial_config = {
+                    "#": st.column_config.NumberColumn("#", width="tiny"),
+                    "symbol": st.column_config.TextColumn("Symbol", width="small"),
+                    "phase": st.column_config.TextColumn("Fase", width="small"),
+                    "exit_date": st.column_config.DateColumn("Exit Date", format="YYYY-MM-DD"),
+                    "days_to_exit": st.column_config.NumberColumn("Days", format="%d"),
+                    "exit_price": st.column_config.NumberColumn("Exit Price", format="$%.2f"),
+                    "shares": st.column_config.NumberColumn("Shares Sold", format="%d"),
+                    "exit_pct": st.column_config.NumberColumn("% Sold", format="%.0f%%"),
+                    "pnl": st.column_config.NumberColumn("P&L", format="$%.2f"),
+                    "return_pct": st.column_config.NumberColumn("Return %", format="%+.2f%%"),
+                    "reason": st.column_config.TextColumn("Reason"),
+                }
+                
+                st.dataframe(
+                    df_partial_disp[partial_cols],
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config=partial_config
+                )
+                
+                # Fila de totales
+                st.markdown("**📊 Totales:**")
+                total_row_cols = st.columns([1, 2, 1, 2, 2, 2, 2, 2, 2, 2, 3])
+                with total_row_cols[0]:
+                    st.write(f"**{len(df_partial_disp)}**")
+                with total_row_cols[1]:
+                    st.write("**TOTAL**")
+                with total_row_cols[6]:
+                    st.write(f"**{df_partial_disp['shares'].sum():,.0f}**")
+                with total_row_cols[8]:
+                    st.write(f"**${df_partial_disp['pnl'].sum():,.2f}**")
+                with total_row_cols[9]:
+                    avg_return = df_partial_disp['return_pct'].mean()
+                    st.write(f"**{avg_return:+.2f}%** (avg)")
+                
+                st.markdown("---")
+                
+                # Estadísticas rápidas de partial exits
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    total_partial_pnl = df_partial_disp['pnl'].sum()
+                    st.metric("Total P&L Parciales", f"${total_partial_pnl:,.2f}")
+                with col2:
+                    fase1_count = len(df_partial_disp[df_partial_disp['phase'] == 'FASE_1'])
+                    st.metric("Fase 1 Ejecutadas", fase1_count)
+                with col3:
+                    fase2_count = len(df_partial_disp[df_partial_disp['phase'] == 'FASE_2'])
+                    st.metric("Fase 2 Ejecutadas", fase2_count)
+                with col4:
+                    avg_days = df_partial_disp['days_to_exit'].mean()
+                    st.metric("Días Promedio", f"{avg_days:.1f}")
+            else:
+                st.info("No hay salidas parciales que coincidan con los filtros aplicados.")
+
+        # --- 📊 ANÁLISIS DE CALIDAD DE SETUP ---
+        if not df_filtered.empty and 'dist_sma20_pct' in df_filtered.columns:
+            st.markdown("---")
+            st.markdown("### 🎯 Análisis de Calidad de Setup")
+            st.caption("Métricas para identificar qué hace que un trade sea ganador")
+            
+            # Crear categorías de resultado
+            df_quality = df_filtered.copy()
+            df_quality['outcome'] = df_quality['returns_pct'].apply(lambda x: 'Winner' if x > 0 else 'Loser')
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("#### 📏 Extensión desde SMA20")
+                st.caption("Distancia % del precio vs SMA20 al entrar")
+                
+                # Agrupar por outcome
+                if 'dist_sma20_pct' in df_quality.columns:
+                    # Clean infinite values for display
+                    df_clean = df_quality.replace([np.inf, -np.inf], np.nan)
+                    
+                    winners_dist = df_clean[df_clean['outcome'] == 'Winner']['dist_sma20_pct'].mean()
+                    losers_dist = df_clean[df_clean['outcome'] == 'Loser']['dist_sma20_pct'].mean()
+                    
+                    # Handle NaN if all were inf
+                    if pd.isna(winners_dist): winners_dist = 0.0
+                    if pd.isna(losers_dist): losers_dist = 0.0
+                    
+                    dist_col1, dist_col2, dist_col3 = st.columns(3)
+                    with dist_col1:
+                        st.metric("Winners", f"{winners_dist:.1f}%", 
+                                 help="Promedio de extensión en trades ganadores")
+                    with dist_col2:
+                        st.metric("Losers", f"{losers_dist:.1f}%",
+                                 help="Promedio de extensión en trades perdedores")
+                    with dist_col3:
+                        diff = winners_dist - losers_dist
+                        st.metric("Diferencia", f"{diff:.1f}%",
+                                 delta=f"{diff:.1f}%",
+                                 help="Winners compran más cerca de SMA20 = mejor")
+                    
+                    # Warning si hay muchos trades extendidos
+                    extended_trades = len(df_quality[df_quality['dist_sma20_pct'] > 15])
+                    if extended_trades > 0:
+                        st.warning(f"⚠️ {extended_trades} trades entraron >15% extendidos (FOMO risk)")
+            
+            with col2:
+                st.markdown("#### ⏱️ Días de Consolidación")
+                st.caption("Días con rango estrecho en últimos 20 días")
+                
+                if 'consolidation_days' in df_quality.columns:
+                    winners_consol = df_quality[df_quality['outcome'] == 'Winner']['consolidation_days'].mean()
+                    losers_consol = df_quality[df_quality['outcome'] == 'Loser']['consolidation_days'].mean()
+                    
+                    consol_col1, consol_col2, consol_col3 = st.columns(3)
+                    with consol_col1:
+                        st.metric("Winners", f"{winners_consol:.0f} días",
+                                 help="Promedio de consolidación en winners")
+                    with consol_col2:
+                        st.metric("Losers", f"{losers_consol:.0f} días",
+                                 help="Promedio de consolidación en losers")
+                    with consol_col3:
+                        diff_consol = winners_consol - losers_consol
+                        st.metric("Diferencia", f"{diff_consol:+.0f} días",
+                                 delta=f"{diff_consol:+.0f}",
+                                 help="Más consolidación = mejor setup")
+                    
+                    # Info sobre V-shapes
+                    vshape_trades = len(df_quality[df_quality['consolidation_days'] < 5])
+                    if vshape_trades > 0:
+                        st.warning(f"⚠️ {vshape_trades} trades con <5 días consolidación (V-shape risk)")
+            
+            # Tabla resumen
+            st.markdown("#### 📊 Resumen por Calidad de Setup")
+            
+            # Categorizar trades por calidad
+            def categorize_quality(row):
+                score = 0
+                # Bonus por consolidación
+                if row.get('consolidation_days', 0) >= 10:
+                    score += 2
+                elif row.get('consolidation_days', 0) >= 5:
+                    score += 1
+                
+                # Bonus por no estar extendido
+                if abs(row.get('dist_sma20_pct', 0)) <= 5:
+                    score += 2
+                elif abs(row.get('dist_sma20_pct', 0)) <= 10:
+                    score += 1
+                
+                # Penalty por extensión
+                if abs(row.get('dist_sma20_pct', 0)) > 15:
+                    score -= 1
+                
+                if score >= 3:
+                    return "A+ (Institutional)"
+                elif score >= 2:
+                    return "B (Good)"
+                elif score >= 1:
+                    return "C (Mediocre)"
+                else:
+                    return "D (FOMO)"
+            
+            df_quality['setup_grade'] = df_quality.apply(categorize_quality, axis=1)
+            
+            # Stats por grade
+            quality_stats = df_quality.groupby('setup_grade').agg({
+                'returns_pct': ['count', 'mean'],
+                'Result': 'sum'
+            }).round(2)
+            
+            if not quality_stats.empty:
+                quality_stats.columns = ['Trades', 'Avg Return %', 'Total P/L']
+                st.dataframe(
+                    quality_stats.sort_index(ascending=False),
+                    use_container_width=True,
+                    column_config={
+                        'Trades': st.column_config.NumberColumn("# Trades", format="%d"),
+                        'Avg Return %': st.column_config.NumberColumn("Avg Return", format="%.2f%%"),
+                        'Total P/L': st.column_config.NumberColumn("Total P/L", format="$%.2f")
+                    }
+                )
+                
+                st.info("💡 **Insight**: Trades con grado A+ (base sólida + no extendidos) tienen mejor performance")
+
+        # --- 🔬 TRADE ANALYSIS SECTION ---
+        st.markdown("---")
+        st.header("🔬 Análisis Detallado de Operaciones")
+        
+        if not df_filtered.empty:
+            df_analysis = df_filtered.sort_values('entry_date', ascending=False)
+            trade_options = []
+            trade_map = {}
+            
+            for idx, row in df_analysis.iterrows():
+                sym = row['symbol']
+                date = row['entry_date'].strftime('%Y-%m-%d')
+                pnl = row['Result'] if 'Result' in row else 0
+                sig_type = row.get('signal_type', 'N/A').replace('Camino.', '')
+                label = f"{date} | {sym} | {sig_type} | PnL: ${pnl:,.2f}"
+                trade_options.append(label)
+                trade_map[label] = row
+                
+            selected_trade_label = st.selectbox("Selecciona una operación para analizar:", trade_options)
+            
+            if selected_trade_label:
+                trade_data = trade_map[selected_trade_label]
+                
+                # --- VISUALIZATION TABS ---
+                tab_static, tab_interactive = st.tabs(["📸 Gráfico Detallado (Masterclass)", "🖱️ Gráfico Interactivo"])
+                
+                signal_data = {
+                    'camino': trade_data.get('signal_type', 'N/A'),
+                    'entry_price': trade_data.get('entry_price', 0),
+                    'stop_loss': trade_data.get('entry_price', 0) * 0.95,
+                    'exit_price': trade_data.get('exit_price', 0),
+                    'outcome': 'WIN' if trade_data.get('is_profitable', False) else 'LOSS',
+                    'return_pct': trade_data.get('returns_pct', 0),
+                    'hold_days': (trade_data['exit_date'] - trade_data['entry_date']).days if 'exit_date' in trade_data and 'entry_date' in trade_data else 0,
+                    'monetary_risk': trade_data.get('monetary_risk', 0)
+                }
+
+                with tab_static:
+                    st.info("💡 Este gráfico muestra el ciclo de vida del trade con temporalidad ajustable.")
+                    
+                    # Timeframe selector
+                    col_tf1, col_tf2 = st.columns([1, 3])
+                    with col_tf1:
+                        timeframe = st.selectbox(
+                            "⏱️ Temporalidad",
+                            options=["5m", "15m", "30m", "1h", "1d"],
+                            index=0,  # Default to 5m
+                            key=f"tf_{trade_data['symbol']}_{trade_data['entry_date'].strftime('%Y%m%d')}"
+                        )
+                    
+                    with col_tf2:
+                        entry_date_pd = pd.to_datetime(trade_data['entry_date']).tz_localize(None)
+                        days_ago = (datetime.now() - entry_date_pd).days
+                        
+                        if days_ago > 59:
+                            st.warning(f"⚠️ Trade de hace {days_ago} días. Datos intraday no disponibles en APIs gratuitas (límite ~60 días). Solo disponible: 1d")
+                        else:
+                            st.caption(f"📊 Mostrando velas de **{timeframe}** para análisis intraday del ciclo de vida del trade.")
+                    
+                    entry_date_str = trade_data['entry_date'].strftime('%Y-%m-%d')
+                    
+                    # Initialize dashboard engine
+                    if 'dashboard_engine' not in st.session_state:
+                        if os.path.exists('outputs/backtests/backtest_results.csv'):
+                            st.session_state['dashboard_engine'] = InteractiveDashboard('outputs/backtests/backtest_results.csv')
+                    
+                    if 'dashboard_engine' in st.session_state:
+                        db = st.session_state['dashboard_engine']
+                        
+                        with st.spinner(f"Cargando gráfico {timeframe}..."):
+                            try:
+                                # Use intraday chart with selected timeframe
+                                if timeframe == "1d":
+                                    # Use daily chart
+                                    fig = db.create_trade_chart(trade_data['symbol'], entry_date_str, signal_data)
+                                else:
+                                    # Use intraday chart
+                                    entry_date_pd = pd.to_datetime(entry_date_str).tz_localize(None)
+                                    days_diff = (datetime.now() - entry_date_pd).days
+                                    
+                                    intraday_df = None
+                                    
+                                    # Try YFinance first (if <60 days)
+                                    if days_diff <= 59:
+                                        try:
+                                            intraday_df = db.data_provider.get_intraday_data(trade_data['symbol'], interval=timeframe, days=days_diff+5)
+                                        except:
+                                            pass
+                                    
+                                    # If YFinance failed or trade too old, try OpenBB
+                                    if intraday_df is None or intraday_df.empty:
+                                        st.info(f"📡 Intentando obtener datos históricos intraday vía OpenBB...")
+                                        try:
+                                            openbb_provider = OpenBBData()
+                                            # Calculate date range for OpenBB
+                                            start_date = (entry_date_pd - timedelta(days=1)).strftime('%Y-%m-%d')
+                                            end_date = (entry_date_pd + timedelta(days=1)).strftime('%Y-%m-%d')
+                                            
+                                            intraday_df = openbb_provider.get_intraday_data(
+                                                symbol=trade_data['symbol'],
+                                                start_date=start_date,
+                                                end_date=end_date,
+                                                interval=timeframe
+                                            )
+                                            
+                                            if intraday_df is not None and not intraday_df.empty:
+                                                st.success("✅ Datos históricos obtenidos exitosamente vía OpenBB!")
+                                        except Exception as openbb_error:
+                                            st.warning(f"⚠️ OpenBB tampoco pudo obtener datos: {openbb_error}")
+                                            intraday_df = None
+                                    
+                                    if intraday_df is not None and not intraday_df.empty:
+                                        # Filter for entry date
+                                        target_day_str = entry_date_pd.strftime('%Y-%m-%d')
+                                        day_data = intraday_df[intraday_df.index.strftime('%Y-%m-%d') == target_day_str].copy()
+                                        
+                                        if not day_data.empty:
+                                            # Normalize column names (OpenBB uses lowercase, YFinance uses Title case)
+                                            day_data.columns = [col.capitalize() if col.lower() in ['open', 'high', 'low', 'close', 'volume'] else col for col in day_data.columns]
+                                            
+                                            # Calculate VWAP
+                                            day_data['TP'] = (day_data['High'] + day_data['Low'] + day_data['Close']) / 3
+                                            day_data['CumVol'] = day_data['Volume'].cumsum()
+                                            day_data['CumVolPrice'] = (day_data['TP'] * day_data['Volume']).cumsum()
+                                            day_data['VWAP'] = day_data['CumVolPrice'] / day_data['CumVol']
+                                            
+                                            # Create figure
+                                            fig = go.Figure()
+                                            
+                                            # Candlesticks
+                                            fig.add_trace(go.Candlestick(
+                                                x=day_data.index,
+                                                open=day_data['Open'],
+                                                high=day_data['High'],
+                                                low=day_data['Low'],
+                                                close=day_data['Close'],
+                                                name=f'Price {timeframe}'
+                                            ))
+                                            
+                                            # VWAP Line
+                                            fig.add_trace(go.Scatter(
+                                                x=day_data.index,
+                                                y=day_data['VWAP'],
+                                                mode='lines',
+                                                line=dict(color='orange', width=2),
+                                                name='Intraday VWAP'
+                                            ))
+                                            
+                                            # Entry Level
+                                            fig.add_hline(y=signal_data['entry_price'], line_dash="dash", 
+                                                        line_color="cyan", annotation_text="Entry")
+                                            
+                                            # Exit Level
+                                            fig.add_hline(y=signal_data['exit_price'], line_dash="dash", 
+                                                        line_color="green" if signal_data['outcome'] == 'WIN' else "red", 
+                                                        annotation_text="Exit")
+                                            
+                                            # Stop Loss
+                                            fig.add_hline(y=signal_data['stop_loss'], line_dash="dot", 
+                                                        line_color="red", annotation_text="Stop")
+                                            
+                                            fig.update_layout(
+                                                title=f"<b>🔍 Ciclo de Vida del Trade - {trade_data['symbol']}</b><br><sup>{timeframe} | {target_day_str} | {signal_data['camino']}</sup>",
+                                                yaxis_title="Price ($)",
+                                                xaxis_title="Time",
+                                                template='plotly_white',
+                                                height=600,
+                                                xaxis_rangeslider_visible=False
+                                            )
+                                        else:
+                                            st.warning(f"No hay datos {timeframe} para la fecha específica {entry_date_str}.")
+                                            fig = None
+                                    else:
+                                        st.warning(f"⚠️ No se pudieron obtener datos {timeframe}. Mostrando gráfico diario.")
+                                        fig = db.create_trade_chart(trade_data['symbol'], entry_date_str, signal_data)
+                                
+                                if fig:
+                                    st.plotly_chart(fig, use_container_width=True, key=f"intraday_chart_{trade_data['symbol']}_{entry_date_str}_{timeframe}")
+                                else:
+                                    st.info("Mostrando gráfico estático como respaldo...")
+                                    viz = BacktestVisualizer()
+                                    viz.visualize_trade(trade_data['symbol'], entry_date_str, signal_data)
+                                    chart_filename = f"{trade_data['symbol']}_{entry_date_str}_{signal_data['camino']}.png"
+                                    chart_path = Path("backtest_charts") / chart_filename
+                                    if chart_path.exists():
+                                        st.image(str(chart_path), caption=f"Análisis Técnico: {trade_data['symbol']}", use_container_width=True)
+                                        
+                            except Exception as e:
+                                st.error(f"Error cargando gráfico: {e}")
+                                st.info("Mostrando gráfico estático como respaldo...")
+                                viz = BacktestVisualizer()
+                                viz.visualize_trade(trade_data['symbol'], entry_date_str, signal_data)
+                                chart_filename = f"{trade_data['symbol']}_{entry_date_str}_{signal_data['camino']}.png"
+                                chart_path = Path("backtest_charts") / chart_filename
+                                if chart_path.exists():
+                                    st.image(str(chart_path), caption=f"Análisis Técnico: {trade_data['symbol']}", use_container_width=True)
+                    else:
+                        st.warning("Dashboard engine no disponible. Ejecuta un backtest primero.")
+
+                with tab_interactive:
+                    if 'dashboard_engine' not in st.session_state:
+                         if os.path.exists('outputs/backtests/backtest_results.csv'):
+                             st.session_state['dashboard_engine'] = InteractiveDashboard('outputs/backtests/backtest_results.csv')
+                    
+                    if 'dashboard_engine' in st.session_state:
+                        db = st.session_state['dashboard_engine']
+                        try:
+                            fig = db.create_trade_chart(trade_data['symbol'], entry_date_str, signal_data)
+                            st.plotly_chart(fig, use_container_width=True, key=f"interactive_chart_{trade_data['symbol']}_{entry_date_str}")
+                        except Exception as e:
+                            st.error(f"Error generando gráfico interactivo: {e}")
+
+                # --- ANATOMÍA DEL TRADE ---
+                st.markdown("### 🏫 Anatomía del Trade (Explicación Paso a Paso)")
+                st.info("Esta sección desglosa la operación para que puedas mecanizar el proceso mental.")
+                
+                sig_type = trade_data.get('signal_type', '')
+                is_reclaim = 'VWAP_RECLAIM' in sig_type
+                is_blue_sky = 'BLUE_SKY' in sig_type
+                
+                # Card 1: El Contexto - FULL WIDTH
+                st.markdown("#### 1️⃣ Selección (El 'Qué')")
+                
+                # Extract Context Data
+                vol_raw = trade_data.get('context_vol', 0)
+                vol_str = f"{vol_raw/1e6:.1f}M" if vol_raw > 1e6 else f"{vol_raw/1e3:.0f}k" if vol_raw > 0 else "N/A"
+                
+                trend_str = trade_data.get('context_trend', 'N/A')
+                adr_val = trade_data.get('context_adr', 0)
+                rvol_val = trade_data.get('context_rvol', 0)
+                
+                # Verificar si hay datos de contexto disponibles
+                has_context = rvol_val > 0 or adr_val > 0 or trend_str != 'N/A' or vol_raw > 0
+                
+                # Tooltips educativos
+                if rvol_val > 0:
+                    rvol_status = "✅ ACEPTADO" if rvol_val >= 1.0 else "❌ RECHAZADO"
+                    if is_blue_sky:
+                        rvol_explanation = f"Blue Sky requiere RVOL ≥ 1.5x. Valor: {rvol_val:.2f}x {'✅' if rvol_val >= 1.5 else '❌'}"
+                    else:
+                        rvol_explanation = f"VWAP Reclaim requiere RVOL ≥ 1.0x. Valor: {rvol_val:.2f}x {'✅' if rvol_val >= 1.0 else '❌'}"
+                else:
+                    rvol_status = "N/A"
+                    rvol_explanation = "⚠️ Datos de contexto no disponibles con motor vectorbt. Para análisis completo, usa el motor clásico."
+                
+                trend_explanation = {
+                    'Uptrend': "✅ Precio por encima de SMA20 - Momentum alcista",
+                    'Weak': "⚠️ Precio cerca de SMA20 - Gestión conservadora requerida",
+                    'Downtrend': "❌ Precio debajo de SMA20 - Tendencia bajista",
+                    'N/A': "⚠️ Datos no disponibles con motor vectorbt"
+                }.get(trend_str, "Tendencia no definida")
+                
+                if adr_val > 0:
+                    adr_explanation = f"Volatilidad diaria promedio: {adr_val:.1f}% - {'Alta' if adr_val > 5 else 'Media' if adr_val > 3 else 'Baja'} oportunidad de movimiento"
+                else:
+                    adr_explanation = "⚠️ Datos no disponibles con motor vectorbt"
+                
+                filter_col1, filter_col2, filter_col3, filter_col4 = st.columns(4)
+                
+                # Mostrar advertencia si no hay datos de contexto
+                if not has_context:
+                    st.warning("⚠️ **Datos de contexto no disponibles**: El motor VectorBT ultra-rápido no guarda RVOL, ADR, tendencia. Para análisis completo, usa el motor clásico.")
+                
+                with filter_col1:
+                    st.metric("📊 Volumen", vol_str)
+                    with st.expander("ℹ️ ¿Por qué importa?"):
+                        st.write("**Liquidez institucional.** Necesitamos volumen suficiente para entradas/salidas sin slippage.")
+                
+                with filter_col2:
+                    display_rvol = f"{rvol_val:.2f}x" if rvol_val > 0 else "N/A"
+                    st.metric("🔥 RVOL", display_rvol, delta=rvol_status if rvol_val > 0 else None)
+                    with st.expander("ℹ️ ¿Por qué importa?"):
+                        st.write(f"**{rvol_explanation}**")
+                        if rvol_val > 0:
+                            st.write("RVOL = Volumen actual vs promedio 20 días. Confirma interés institucional.")
+                
+                with filter_col3:
+                    st.metric("📈 Tendencia", trend_str)
+                    with st.expander("ℹ️ ¿Por qué importa?"):
+                        st.write(f"**{trend_explanation}**")
+                        if trend_str == "Weak":
+                            st.write("En tendencia débil operamos con **salidas escalonadas** (FASE 1→2→3) para protección de capital.")
+                        elif trend_str != "N/A":
+                            st.write("Preferimos Uptrend para maximizar probabilidad. El sistema permite Weak con gestión risk-free.")
+                
+                with filter_col4:
+                    display_adr = f"{adr_val:.1f}%" if adr_val > 0 else "N/A"
+                    st.metric("⚡ ADR", display_adr)
+                    with st.expander("ℹ️ ¿Por qué importa?"):
+                        st.write(f"**{adr_explanation}**")
+                        if adr_val > 0:
+                            st.write("Average Daily Range: Potencial de movimiento. Mínimo 3% para justificar el riesgo.")
+                
+                st.markdown("---")
+                
+                # Card 2, 3, 4 - En fila
+                step2, step3, step4 = st.columns(3)
+                
+                with step2:
+                    st.markdown("#### 2️⃣ El Patrón (El 'Por qué')")
+                    if is_reclaim:
+                        st.markdown("🛡️ **VWAP Reclaim:**")
+                        st.write("Trampa de Osos. Las instituciones defendieron el precio en apertura débil.")
+                    elif is_blue_sky:
+                        st.markdown("🚀 **Blue Sky Breakout:**")
+                        st.write("Rompimiento de máximos sin resistencia. Momentum puro.")
+                    else:
+                        st.markdown("Patrón del sistema.")
+
+                with step3:
+                    st.markdown("#### 3️⃣ La Ejecución (El 'Cómo')")
+                    if is_reclaim:
+                        st.markdown(f"""
+                        🔫 **Trigger:** Cruce VWAP  
+                        📍 **Entrada:** ${trade_data['entry_price']:.2f}  
+                        🛑 **Stop:** Min Día
+                        """)
+                    else:
+                        st.markdown(f"""
+                        🔫 **Trigger:** Base Break  
+                        📍 **Entrada:** ${trade_data['entry_price']:.2f}  
+                        🛑 **Stop:** Estructura
+                        """)
+
+                with step4:
+                    st.markdown("#### 4️⃣ El Resultado (La Nota)")
+                    r_mul = trade_data.get('r_multiple', 0)
+                    result_color = "green" if r_mul > 0 else "red"
+                    st.markdown(f"""
+                    🏆 **Retorno:** :{result_color}[{trade_data.get('returns_pct', 0):+.2f}%]  
+                    ⚖️ **Ratio R:** :{result_color}[{r_mul:+.2f}R]
+                    """)
+                
+                st.markdown("---")
+                
+                # --- PARTIAL EXITS BREAKDOWN (NUEVO) ---
+                # Buscar salidas parciales para este trade específico
+                if not df_partial_raw.empty:
+                    symbol = trade_data['symbol']
+                    entry_date = trade_data['entry_date']
+                    
+                    partial_for_trade = df_partial_raw[
+                        (df_partial_raw['symbol'] == symbol) & 
+                        (df_partial_raw['entry_date'] == entry_date)
+                    ].sort_values('exit_date')
+                    
+                    if not partial_for_trade.empty:
+                        # Verificar si realmente hubo salidas parciales (FASE_1 o FASE_2)
+                        has_partial_exits = any(partial_for_trade['phase'].isin(['FASE_1', 'FASE_2']))
+                        
+                        if has_partial_exits:
+                            st.markdown("### 📤 Progresión de Salidas Parciales")
+                            st.success("✅ Este trade ejecutó salidas escalonadas (Fase 1, Fase 2, Fase 3) - Sistema de Risk-Free")
+                        else:
+                            st.markdown("### 📤 Cierre de Posición")
+                            st.info("ℹ️ Este trade se cerró sin ejecutar salidas parciales (no alcanzó +1R para risk-free)")
+                        
+                        # Timeline visual - FULL WIDTH
+                        st.markdown("#### 📊 Timeline del Trade")
+                        
+                        # Calcular número de columnas: Entrada + Parciales (FASE_1, FASE_2) + Final
+                        partial_phases_count = len(partial_for_trade[partial_for_trade['phase'].isin(['FASE_1', 'FASE_2'])])
+                        num_phases = 1 + partial_phases_count + 1  # Entrada + Parciales + Final
+                        timeline_cols = st.columns(num_phases)
+                        
+                        # Entrada
+                        with timeline_cols[0]:
+                            st.markdown("##### 🟢 ENTRADA")
+                            entry_metrics = {
+                                "📅 Fecha": trade_data['entry_date'].strftime('%Y-%m-%d'),
+                                "💵 Precio": f"${trade_data['entry_price']:.2f}",
+                                "📊 Shares": trade_data.get('initial_shares', 'N/A'),
+                                "🎯 R inicial": f"${trade_data.get('R_inicial', 0):.2f}",
+                                "⚡ ADR": f"${trade_data.get('adr_valor', 0):.2f}"
+                            }
+                            for key, val in entry_metrics.items():
+                                st.write(f"**{key}:** {val}")
+                        
+                        # Cada salida parcial (FASE_1, FASE_2)
+                        partial_phases = partial_for_trade[partial_for_trade['phase'].isin(['FASE_1', 'FASE_2'])]
+                        for i, (idx, partial_row) in enumerate(partial_phases.iterrows()):
+                            with timeline_cols[i + 1]:
+                                phase_emoji = "🔵" if partial_row['phase'] == 'FASE_1' else "🟡"
+                                days_held = (partial_row['exit_date'] - partial_row['entry_date']).days
+                                
+                                # Explicación de la fase
+                                phase_explanation = ""
+                                if partial_row['phase'] == 'FASE_1':
+                                    phase_explanation = "⚡ Risk-Free Conversion\n🛡️ Stop → Breakeven"
+                                elif partial_row['phase'] == 'FASE_2':
+                                    phase_explanation = "💎 Resistance Exit\n📊 Booking Profits"
+                                
+                                st.markdown(f"##### {phase_emoji} {partial_row['phase']}")
+                                st.write(phase_explanation)
+                                st.write(f"**📅 Fecha:** {partial_row['exit_date'].strftime('%Y-%m-%d')}")
+                                st.write(f"**⏱️ Días:** {days_held}")
+                                st.write(f"**💵 Precio:** ${partial_row['exit_price']:.2f}")
+                                st.write(f"**📉 Vendido:** {int(partial_row['shares'])} sh ({partial_row.get('exit_pct', 0):.0f}%)")
+                                pnl_color = "green" if partial_row['pnl'] > 0 else "red"
+                                st.markdown(f"**💰 P&L:** :{pnl_color}[${partial_row['pnl']:.2f}]")
+                                st.markdown(f"**📈 Return:** :{pnl_color}[{partial_row['return_pct']:+.2f}%]")
+                        
+                        # Salida Final (Runner o Cierre Normal)
+                        with timeline_cols[-1]:
+                            if has_partial_exits:
+                                st.markdown("##### 🏁 FASE 3 (Runner)")
+                                st.write("🎯 Trailing Stop")
+                            else:
+                                st.markdown("##### 🔴 CIERRE")
+                                # Mostrar razón del cierre
+                                reason = trade_data.get('reason', 'N/A').split('|')[0].strip()
+                                st.write(f"⚠️ {reason}")
+                            
+                            st.write(f"**📅 Fecha:** {trade_data['exit_date'].strftime('%Y-%m-%d')}")
+                            # Calcular días totales desde entrada hasta salida final
+                            total_days_held = (trade_data['exit_date'] - trade_data['entry_date']).days
+                            st.write(f"**⏱️ Total Días:** {total_days_held}")
+                            st.write(f"**💵 Precio:** ${trade_data.get('exit_price', 0):.2f}")
+                            final_shares = trade_data.get('shares', 0)
+                            
+                            if has_partial_exits:
+                                st.write(f"**📉 Restante:** {int(final_shares)} sh")
+                            else:
+                                st.write(f"**📉 Shares:** {int(final_shares)} sh")
+                            
+                            # Calcular P&L del runner correctamente desde precio de entrada
+                            entry_price = trade_data.get('entry_price', 0)
+                            exit_price = trade_data.get('exit_price', 0)
+                            runner_pnl = (exit_price - entry_price) * final_shares
+                            runner_color = "green" if runner_pnl > 0 else "red"
+                            st.markdown(f"**💰 P&L:** :{runner_color}[${runner_pnl:.2f}]")
+                        
+                        st.markdown("---")
+                        
+                        # Tabla resumen - FULL WIDTH (solo si hay salidas parciales)
+                        if has_partial_exits:
+                            st.markdown("#### 📋 Resumen de Ejecución")
+                            
+                            summary_data = []
+                            total_pnl = 0
+                            
+                            # Solo incluir FASE_1 y FASE_2
+                            partial_phases = partial_for_trade[partial_for_trade['phase'].isin(['FASE_1', 'FASE_2'])]
+                            for _, row in partial_phases.iterrows():
+                                trigger_short = row['reason'].split(':')[1].strip() if ':' in row['reason'] else row['reason']
+                                summary_data.append({
+                                    '🎯 Fase': row['phase'],
+                                    '⚡ Trigger': trigger_short,
+                                    '💵 Exit Price': f"${row['exit_price']:.2f}",
+                                    '📊 Shares': int(row['shares']),
+                                    '📉 % Sold': f"{row.get('exit_pct', 0):.0f}%",
+                                    '💰 P&L': f"${row['pnl']:.2f}",
+                                    '📈 Return': f"{row['return_pct']:+.2f}%"
+                                })
+                                total_pnl += row['pnl']
+                            
+                            # Agregar salida final (Fase 3 - runner)
+                            entry_price = trade_data.get('entry_price', 0)
+                            exit_price = trade_data.get('exit_price', 0)
+                            final_shares = trade_data.get('shares', 0)
+                            final_pnl = (exit_price - entry_price) * final_shares
+                            final_trigger = trade_data.get('reason', 'N/A').split('|')[0].strip()
+                            summary_data.append({
+                                '🎯 Fase': 'FASE_3 (Runner)',
+                                '⚡ Trigger': final_trigger,
+                                '💵 Exit Price': f"${trade_data.get('exit_price', 0):.2f}",
+                                '📊 Shares': int(final_shares),
+                                '📉 % Sold': f"{trade_data.get('final_shares_pct', 0):.0f}%",
+                                '💰 P&L': f"${final_pnl:.2f}",
+                                '📈 Return': f"{trade_data.get('returns_pct', 0):+.2f}%"
+                            })
+                            
+                            summary_df = pd.DataFrame(summary_data)
+                            st.dataframe(summary_df, use_container_width=True, hide_index=True)
+                        else:
+                            # Trade sin parciales - mostrar solo resumen simple
+                            total_pnl = 0
+                            final_pnl = trade_data['pnl']  # PnL total ya está en el trade_data
+                        
+                        st.markdown("---")
+                        
+                        # --- NUEVO: ANÁLISIS DEL MENTOR ---
+                        st.markdown("### 🎓 Análisis del Mentor")
+                        
+                        insights = get_educational_insight(trade_data)
+                        
+                        if insights:
+                            for insight in insights:
+                                st.info(insight)
+                        else:
+                            st.info("ℹ️ No hay suficientes datos de contexto para generar un análisis educativo de este trade. (Ejecuta un nuevo backtest para ver los insights completos)")
+                        
+                        st.markdown("---")
+
+                        # Métricas totales - FULL WIDTH
+                        st.markdown("#### 🎯 Métricas Totales")
+                        col_t1, col_t2, col_t3, col_t4, col_t5 = st.columns(5)
+                        with col_t1:
+                            # Total P&L
+                            if has_partial_exits:
+                                total_result = total_pnl + final_pnl
+                            else:
+                                total_result = final_pnl
+                            total_color = "green" if total_result > 0 else "red"
+                            st.metric("💰 Total P&L", f"${total_result:.2f}", delta="Final")
+                        with col_t2:
+                            if has_partial_exits:
+                                st.metric("📊 Parciales P&L", f"${total_pnl:.2f}", delta="Fases 1-2")
+                            else:
+                                st.metric("📊 Parciales P&L", "$0.00", delta="No ejecutadas")
+                        with col_t3:
+                            if has_partial_exits:
+                                st.metric("🏃 Runner P&L", f"${final_pnl:.2f}", delta="Fase 3")
+                            else:
+                                st.metric("🏃 Cierre Directo", f"${final_pnl:.2f}", delta="Sin parciales")
+                        with col_t4:
+                            if has_partial_exits:
+                                fases_ejecutadas = len(partial_for_trade[partial_for_trade['phase'].isin(['FASE_1', 'FASE_2'])])
+                                st.metric("✅ Fases Ejecutadas", f"{fases_ejecutadas}/2", delta="Parciales")
+                            else:
+                                st.metric("✅ Fases Ejecutadas", "0/2", delta="Sin risk-free")
+                        with col_t5:
+                            # Recalcular R Multiple con PnL total correcto
+                            R_inicial = trade_data.get('R_inicial', 1)
+                            initial_shares = trade_data.get('initial_shares', trade_data.get('shares', 0))
+                            total_risk = R_inicial * initial_shares
+                            total_r = total_result / total_risk if total_risk > 0 else 0
+                            r_color = "normal" if total_r > 0 else "inverse"
+                            st.metric("⚖️ R Total", f"{total_r:+.2f}R", delta=None, delta_color=r_color)
+                        
+                        # Notas educativas
+                        with st.expander("📚 Notas Educativas - ¿Por qué funciona este sistema?"):
+                            st.markdown("""
+                            ### 🛡️ Sistema de Salidas Risk-Free
+                            
+                            **Fase 1 (40% @ +1R o +1ADR):**
+                            - ✅ Convierte el trade en inversión libre de riesgo
+                            - 🔒 Stop sube a Breakeven AUTOMÁTICAMENTE
+                            - 💡 Asegura ganancia mínima, nunca pierde después de aquí
+                            
+                            **Fase 2 (30% @ +2.5R o resistencia):**
+                            - 💎 Book profits en zona de resistencia técnica
+                            - 📊 Ya tienes 70% de capital recuperado + ganancias
+                            
+                            **Fase 3 (30% Runner con trailing stop):**
+                            - 🚀 Deja correr para capturar big movers (runners)
+                            - 📈 Protegido con EMA/SMA trailing stop
+                            - 🛡️ Stop NUNCA baja de Breakeven
+                            
+                            **Resultado:** 
+                            - ✅ Si sube: Maximizas ganancias
+                            - ✅ Si baja: Sales con ganancia de Fase 1
+                            - ❌ IMPOSIBLE perder después de Fase 1
+                            """)
+
+
+                st.markdown("---")
+
+                # --- MASTERCLASS CONTEXT ---
+                with st.expander("🎓 Contexto Educativo (Masterclass)", expanded=True):
+                    st.markdown("### 📚 Fundamentos del Setup")
+                    
+                    if 'VWAP_RECLAIM' in sig_type:
+                        st.markdown("#### 🛡️ VWAP Reclaim - Segunda Oportunidad")
+                        
+                        col_edu1, col_edu2 = st.columns(2)
+                        
+                        with col_edu1:
+                            st.markdown("""
+                            **🎯 El Concepto:**
+                            
+                            El VWAP Reclaim es un patrón de **recuperación institucional** después de una apertura débil.
+                            
+                            **¿Qué es VWAP?**
+                            - Volume Weighted Average Price
+                            - Precio promedio ponderado por volumen del día
+                            - **Línea de batalla** entre compradores y vendedores
+                            
+                            **La Psicología:**
+                            1. 🔻 Apertura débil (gap down o venta matutina)
+                            2. 🐻 Traders minoristas venden por pánico
+                            3. 🏦 Instituciones **compran la debilidad**
+                            4. ✅ Precio reclaim VWAP = Instituciones ganando
+                            
+                            **Señal de Confirmación:**
+                            - Cruce por encima de VWAP
+                            - RVOL ≥ 1.0x (volumen confirmando)
+                            - Stop: Low of Day (LOD)
+                            """)
+                        
+                        with col_edu2:
+                            st.markdown("""
+                            **📊 Criterios de Validación:**
+                            
+                            ✅ **ACEPTADO si:**
+                            - RVOL ≥ 1.0x (mínimo)
+                            - Precio cruza VWAP de abajo hacia arriba
+                            - Mercado general débil (SPY/QQQ gap down)
+                            - Tendencia general: Uptrend en timeframe mayor
+                            
+                            ❌ **RECHAZADO si:**
+                            - RVOL < 1.0x (sin instituciones)
+                            - Precio ya muy por encima de VWAP
+                            - Tendencia bajista en timeframe mayor
+                            - Stop loss muy amplio (>5% del precio)
+                            
+                            **💡 Trading Edge:**
+                            Este patrón funciona porque capturas el momento exacto 
+                            en que las instituciones "defienden" el precio después 
+                            de una trampa de osos.
+                            
+                            **🎲 Probabilidad:**
+                            - Win Rate: ~45-55%
+                            - Reward:Risk: 2:1 típico
+                            - Best con mercados débiles
+                            """)
+                        
+                    elif 'BLUE_SKY' in sig_type:
+                        st.markdown("#### 🚀 Blue Sky Breakout - Momentum Puro")
+                        
+                        col_edu1, col_edu2 = st.columns(2)
+                        
+                        with col_edu1:
+                            st.markdown("""
+                            **🎯 El Concepto:**
+                            
+                            Blue Sky Breakout es un rompimiento hacia **máximos históricos** sin resistencia superior.
+                            
+                            **¿Por qué funciona?**
+                            - No hay "bag holders" (compradores atrapados arriba)
+                            - Sin resistencia = menos vendedores
+                            - Momentum alcista fuerte
+                            - FOMO institucional activo
+                            
+                            **La Anatomía:**
+                            1. 📊 Base de consolidación (3-10 días)
+                            2. 📈 AVWAP convergiendo con base high
+                            3. 🔥 Volumen explosivo (RVOL > 1.5x)
+                            4. 🚀 Breakout con convicción
+                            
+                            **Señal de Entrada:**
+                            - Buy Stop 5¢ por encima del base high
+                            - AVWAP dentro de 2% del base high
+                            - Tendencia: Uptrend (precio > SMA20)
+                            """)
+                        
+                        with col_edu2:
+                            st.markdown("""
+                            **📊 Criterios de Validación:**
+                            
+                            ✅ **ACEPTADO si:**
+                            - RVOL ≥ 1.5x (instituciones activas)
+                            - AVWAP cerca del base high (<2% divergencia)
+                            - Tendencia: Uptrend confirmado
+                            - ADR ≥ 3% (volatilidad suficiente)
+                            - Base bien formada (3+ días)
+                            
+                            ❌ **RECHAZADO si:**
+                            - RVOL < 1.5x (sin volumen = trampa)
+                            - AVWAP muy por encima del precio actual
+                            - Tendencia: Weak o Downtrend
+                            - ADR < 3% (poco potencial)
+                            
+                            **💡 Trading Edge:**
+                            Este patrón captura el inicio de movimientos impulsivos
+                            cuando instituciones entran masivamente en un stock 
+                            que "rompe techos".
+                            
+                            **🎲 Probabilidad:**
+                            - Win Rate: ~40-50%
+                            - Reward:Risk: 3:1+ en runners
+                            - Best con mercados alcistas
+                            """)
+                    else:
+                        st.info("Selecciona un trade con señal VWAP_RECLAIM o BLUE_SKY para ver el contexto educativo completo.")
+                    
+                    # Glosario común
+                    st.markdown("---")
+                    st.markdown("#### 📖 Glosario de Términos")
+                    
+                    glossary_col1, glossary_col2, glossary_col3 = st.columns(3)
+                    
+                    with glossary_col1:
+                        st.markdown("""
+                        **RVOL (Relative Volume):**
+                        - Volumen actual vs promedio 20 días
+                        - 1.0x = volumen normal
+                        - >1.5x = instituciones activas
+                        - <1.0x = poco interés
+                        """)
+                        
+                    with glossary_col2:
+                        st.markdown("""
+                        **ADR (Average Daily Range):**
+                        - Rango diario promedio en %
+                        - Mide volatilidad
+                        - >5% = Alta volatilidad
+                        - 3-5% = Media (ideal)
+                        - <3% = Baja (poco potencial)
+                        """)
+                    
+                    with glossary_col3:
+                        st.markdown("""
+                        **R (Risk Multiple):**
+                        - Retorno vs riesgo inicial
+                        - 1R = ganaste tu riesgo inicial
+                        - 2R = ganaste 2x tu riesgo
+                        - -1R = perdiste tu stop completo
+                        - Objetivo: >2R promedio
+                        """)
+
+    # ==========================================
+    # TAB 2: QUANTSTATS ANALYTICS (NEW)
+    # ==========================================
+    with tab_quantstats:
+        st.header("📈 QuantStats Professional Analytics")
+        st.markdown("""
+        Análisis profesional con **métricas corregidas** (agrupa salidas parciales en trades completos).
+        
+        ⚠️ **Importante**: Las métricas del dashboard anterior cuentan TP1, TP2, RUNNER como trades separados.
+        Aquí se agrupan correctamente para calcular win rate, profit factor y R-multiples **reales**.
+        """)
+        
+        # Check if we have a trade log
+        trade_log_path = 'outputs/backtests/trade_log.csv'
+        
+        if os.path.exists(trade_log_path):
+            try:
+                # Load trade log
+                trade_log = pd.read_csv(trade_log_path)
+                
+                st.info(f"📊 Cargados {len(trade_log)} eventos de trading (incluye salidas parciales)")
+                
+                # Initialize QuantStats Analyzer
+                with st.spinner("🔄 Agrupando salidas parciales en trades completos..."):
+                    try:
+                        analyzer = QuantStatsAnalyzer(
+                            trade_log=trade_log,
+                            initial_capital=in_equity,
+                            benchmark_ticker='SPY'
+                        )
+                        
+                        st.success(f"✅ Agrupados en {len(analyzer.complete_trades)} trades completos")
+                        
+                        # Create tabs for different analysis views
+                        qs_tab1, qs_tab2, qs_tab3, qs_tab4 = st.tabs([
+                            "📊 Trade Metrics",
+                            "📈 QuantStats Metrics", 
+                            "🔬 Pattern Analysis",
+                            "📋 Complete Trades"
+                        ])
+                        
+                        # --- TAB 1: TRADE METRICS ---
+                        with qs_tab1:
+                            st.subheader("📊 Trade Metrics (Complete Trades)")
+                            
+                            metrics = analyzer.get_trade_metrics()
+                            
+                            if metrics:
+                                # Main metrics in columns
+                                col1, col2, col3, col4 = st.columns(4)
+                                
+                                with col1:
+                                    st.metric("Total Trades", metrics['total_trades'])
+                                    st.metric("Winners", f"{metrics['winners']} ({metrics['win_rate_pct']:.1f}%)")
+                                
+                                with col2:
+                                    st.metric("Losers", metrics['losers'])
+                                    st.metric("Stopped Out", metrics['stopped_out'])
+                                
+                                with col3:
+                                    pnl_color = "normal" if metrics['total_pnl'] >= 0 else "inverse"
+                                    st.metric("Total P&L", f"${metrics['total_pnl']:,.2f}", 
+                                             delta_color=pnl_color)
+                                    st.metric("Profit Factor", f"{metrics['profit_factor']:.2f}")
+                                
+                                with col4:
+                                    r_color = "normal" if metrics['avg_r_multiple'] >= 1.0 else "inverse"
+                                    st.metric("Avg R-Multiple", f"{metrics['avg_r_multiple']:+.2f}R",
+                                             delta_color=r_color)
+                                    st.metric("Median R", f"{metrics['median_r_multiple']:+.2f}R")
+                                
+                                st.markdown("---")
+                                
+                                # Detailed metrics
+                                col1, col2, col3 = st.columns(3)
+                                
+                                with col1:
+                                    st.markdown("### 💰 P&L Analysis")
+                                    st.metric("Avg Win", f"${metrics['avg_win']:,.2f}")
+                                    st.metric("Avg Loss", f"${metrics['avg_loss']:,.2f}")
+                                    st.metric("Best R", f"{metrics['best_r_multiple']:+.2f}R", 
+                                             delta_color="normal")
+                                    st.metric("Worst R", f"{metrics['worst_r_multiple']:+.2f}R",
+                                             delta_color="inverse")
+                                
+                                with col2:
+                                    st.markdown("### 🎯 Exit Analysis")
+                                    hit_tp1_pct = metrics['hit_tp1'] / metrics['total_trades'] * 100
+                                    hit_tp2_pct = metrics['hit_tp2'] / metrics['total_trades'] * 100
+                                    runner_pct = metrics['had_runner'] / metrics['total_trades'] * 100
+                                    
+                                    st.metric("Hit TP1", f"{metrics['hit_tp1']} ({hit_tp1_pct:.0f}%)")
+                                    st.metric("Hit TP2", f"{metrics['hit_tp2']} ({hit_tp2_pct:.0f}%)")
+                                    st.metric("Had Runner", f"{metrics['had_runner']} ({runner_pct:.0f}%)")
+                                
+                                with col3:
+                                    st.markdown("### ⏱️ Hold Time")
+                                    st.metric("Avg Days", f"{metrics['avg_hold_days']:.1f}")
+                                    
+                                    # Calculate by category
+                                    complete_trades = analyzer.complete_trades
+                                    scalps = len(complete_trades[complete_trades['hold_days'] < 3])
+                                    swings = len(complete_trades[(complete_trades['hold_days'] >= 3) & 
+                                                                 (complete_trades['hold_days'] < 10)])
+                                    positions = len(complete_trades[complete_trades['hold_days'] >= 10])
+                                    
+                                    st.metric("Scalps (<3d)", scalps)
+                                    st.metric("Swings (3-10d)", swings)
+                                    st.metric("Positions (>10d)", positions)
+                                
+                                # Warning about partial exits
+                                st.warning("""
+                                ⚠️ **Comparación con Dashboard**:
+                                - Dashboard anterior: Cuenta TP1, TP2, RUNNER como trades separados (win rate inflado)
+                                - QuantStats: Agrupa correctamente en trades completos (win rate real)
+                                
+                                Ejemplo: AAPL con TP1 (+$270), TP2 (+$432), RUNNER (+$360) = 1 trade completo de +$1,062
+                                """)
+                        
+                        # --- TAB 2: QUANTSTATS METRICS ---
+                        with qs_tab2:
+                            st.subheader("📈 QuantStats Time-Series Metrics")
+                            
+                            qs_metrics = analyzer.get_quantstats_metrics()
+                            
+                            if qs_metrics:
+                                # Risk-adjusted returns
+                                st.markdown("### 🎯 Risk-Adjusted Returns")
+                                col1, col2, col3, col4 = st.columns(4)
+                                
+                                with col1:
+                                    sharpe = qs_metrics.get('sharpe_ratio', 0)
+                                    sharpe_status = "🟢" if sharpe > 1.5 else "🟡" if sharpe > 1.0 else "🔴"
+                                    st.metric("Sharpe Ratio", f"{sharpe:.2f}", 
+                                             help="Risk-adjusted returns. >1.5 = Good, >2.0 = Excellent")
+                                    st.caption(f"{sharpe_status} {'Excellent' if sharpe > 2 else 'Good' if sharpe > 1.5 else 'Fair' if sharpe > 1 else 'Poor'}")
+                                
+                                with col2:
+                                    sortino = qs_metrics.get('sortino_ratio', 0)
+                                    st.metric("Sortino Ratio", f"{sortino:.2f}",
+                                             help="Like Sharpe but only penalizes downside")
+                                
+                                with col3:
+                                    calmar = qs_metrics.get('calmar_ratio', 0)
+                                    st.metric("Calmar Ratio", f"{calmar:.2f}",
+                                             help="Return / Max Drawdown")
+                                
+                                with col4:
+                                    omega = qs_metrics.get('omega_ratio', 0)
+                                    st.metric("Omega Ratio", f"{omega:.2f}",
+                                             help="Probability weighted ratio of gains vs losses")
+                                
+                                st.markdown("---")
+                                
+                                # Returns
+                                st.markdown("### 📊 Returns")
+                                col1, col2, col3, col4 = st.columns(4)
+                                
+                                with col1:
+                                    total_ret = qs_metrics.get('total_return', 0) * 100
+                                    ret_color = "normal" if total_ret >= 0 else "inverse"
+                                    st.metric("Total Return", f"{total_ret:+.2f}%", delta_color=ret_color)
+                                
+                                with col2:
+                                    cagr = qs_metrics.get('cagr', 0) * 100
+                                    st.metric("CAGR", f"{cagr:+.2f}%")
+                                
+                                with col3:
+                                    avg_ret = qs_metrics.get('avg_return', 0) * 100
+                                    st.metric("Avg Daily Return", f"{avg_ret:+.4f}%")
+                                
+                                with col4:
+                                    ann_ret = qs_metrics.get('avg_return_annual', 0) * 100
+                                    st.metric("Annualized Return", f"{ann_ret:+.2f}%")
+                                
+                                st.markdown("---")
+                                
+                                # Risk metrics
+                                st.markdown("### ⚠️ Risk Metrics")
+                                col1, col2, col3 = st.columns(3)
+                                
+                                with col1:
+                                    max_dd = qs_metrics.get('max_drawdown', 0) * 100
+                                    dd_status = "🟢" if abs(max_dd) < 15 else "🟡" if abs(max_dd) < 25 else "🔴"
+                                    st.metric("Max Drawdown", f"{max_dd:.2f}%")
+                                    st.caption(f"{dd_status} {'Good' if abs(max_dd) < 15 else 'Fair' if abs(max_dd) < 25 else 'High Risk'}")
+                                
+                                with col2:
+                                    vol = qs_metrics.get('volatility_annual', 0) * 100
+                                    st.metric("Annual Volatility", f"{vol:.2f}%")
+                                
+                                with col3:
+                                    var = qs_metrics.get('var_95', 0) * 100
+                                    st.metric("VaR (95%)", f"{var:.2f}%",
+                                             help="Value at Risk - 95% confidence loss limit")
+                                
+                                # Distribution
+                                st.markdown("---")
+                                st.markdown("### 📉 Distribution Analysis")
+                                col1, col2, col3, col4 = st.columns(4)
+                                
+                                with col1:
+                                    skew = qs_metrics.get('skewness', 0)
+                                    skew_status = "🟢" if skew > 0 else "🔴"
+                                    st.metric("Skewness", f"{skew:.2f}")
+                                    st.caption(f"{skew_status} {'Positive (Good)' if skew > 0 else 'Negative'}")
+                                
+                                with col2:
+                                    kurt = qs_metrics.get('kurtosis', 0)
+                                    st.metric("Kurtosis", f"{kurt:.2f}",
+                                             help="Fat tails indicator. High = more surprises")
+                                
+                                with col3:
+                                    best = qs_metrics.get('best_day', 0) * 100
+                                    st.metric("Best Day", f"{best:+.2f}%")
+                                
+                                with col4:
+                                    worst = qs_metrics.get('worst_day', 0) * 100
+                                    st.metric("Worst Day", f"{worst:+.2f}%")
+                                
+                                # Benchmark comparison if available
+                                if 'alpha' in qs_metrics:
+                                    st.markdown("---")
+                                    st.markdown("### 📊 Benchmark Comparison (vs SPY)")
+                                    col1, col2, col3, col4 = st.columns(4)
+                                    
+                                    with col1:
+                                        alpha = qs_metrics['alpha']
+                                        st.metric("Alpha", f"{alpha:.4f}",
+                                                 help="Daily excess return vs benchmark")
+                                    
+                                    with col2:
+                                        beta = qs_metrics['beta']
+                                        st.metric("Beta", f"{beta:.2f}",
+                                                 help="Market correlation. 1.0 = full market exposure")
+                                    
+                                    with col3:
+                                        corr = qs_metrics['correlation']
+                                        st.metric("Correlation", f"{corr:.2f}",
+                                                 help="0-1 relationship with market")
+                                    
+                                    with col4:
+                                        ir = qs_metrics['information_ratio']
+                                        st.metric("Information Ratio", f"{ir:.2f}",
+                                                 help="Alpha quality/consistency")
+                                
+                                # Health indicators
+                                st.markdown("---")
+                                st.markdown("### 🎯 System Health Indicators")
+                                
+                                # Determine system health
+                                health_checks = []
+                                health_checks.append(("Sharpe > 1.5", sharpe > 1.5))
+                                health_checks.append(("Avg R > 1.0", metrics['avg_r_multiple'] > 1.0))
+                                health_checks.append(("Profit Factor > 2.0", metrics['profit_factor'] > 2.0))
+                                health_checks.append(("Max DD < 20%", abs(max_dd) < 20))
+                                health_checks.append(("Positive Skewness", skew > 0))
+                                
+                                col1, col2 = st.columns(2)
+                                
+                                with col1:
+                                    st.markdown("**✅ Green Flags**")
+                                    for check, passed in health_checks:
+                                        if passed:
+                                            st.success(f"✅ {check}")
+                                
+                                with col2:
+                                    st.markdown("**⚠️ Warning Signs**")
+                                    for check, passed in health_checks:
+                                        if not passed:
+                                            st.warning(f"⚠️ {check}")
+                                
+                                # Overall rating
+                                passed_checks = sum(1 for _, passed in health_checks if passed)
+                                total_checks = len(health_checks)
+                                
+                                if passed_checks >= 4:
+                                    st.success(f"🟢 **System Health: EXCELLENT** ({passed_checks}/{total_checks} checks passed)")
+                                elif passed_checks >= 3:
+                                    st.info(f"🟡 **System Health: GOOD** ({passed_checks}/{total_checks} checks passed)")
+                                else:
+                                    st.error(f"🔴 **System Health: NEEDS IMPROVEMENT** ({passed_checks}/{total_checks} checks passed)")
+                        
+                        # --- TAB 3: PATTERN ANALYSIS ---
+                        with qs_tab3:
+                            st.subheader("🔬 Pattern & Setup Analysis")
+                            
+                            complete_trades = analyzer.complete_trades
+                            
+                            # RVOL Classification
+                            if 'rvol_classification' in complete_trades.columns:
+                                st.markdown("### 📊 Performance by RVOL Classification")
+                                
+                                rvol_analysis = []
+                                for rvol_type in complete_trades['rvol_classification'].unique():
+                                    subset = complete_trades[complete_trades['rvol_classification'] == rvol_type]
+                                    if len(subset) > 0:
+                                        rvol_analysis.append({
+                                            'Classification': rvol_type,
+                                            'Trades': len(subset),
+                                            'Win Rate': f"{(subset['is_winner'].sum() / len(subset) * 100):.1f}%",
+                                            'Avg R': f"{subset['r_multiple'].mean():+.2f}R",
+                                            'Total P&L': f"${subset['total_pnl'].sum():,.0f}"
+                                        })
+                                
+                                if rvol_analysis:
+                                    rvol_df = pd.DataFrame(rvol_analysis)
+                                    st.dataframe(rvol_df, use_container_width=True, hide_index=True)
+                            
+                            # VCP Pattern Analysis
+                            if 'is_vcp_pattern' in complete_trades.columns:
+                                st.markdown("### 🎯 VCP Pattern Performance")
+                                
+                                vcp = complete_trades[complete_trades['is_vcp_pattern'] == True]
+                                non_vcp = complete_trades[complete_trades['is_vcp_pattern'] == False]
+                                
+                                col1, col2 = st.columns(2)
+                                
+                                with col1:
+                                    st.markdown("**VCP Trades**")
+                                    if len(vcp) > 0:
+                                        vcp_wr = (vcp['is_winner'].sum() / len(vcp) * 100)
+                                        vcp_r = vcp['r_multiple'].mean()
+                                        st.metric("Count", len(vcp))
+                                        st.metric("Win Rate", f"{vcp_wr:.1f}%")
+                                        st.metric("Avg R", f"{vcp_r:+.2f}R")
+                                    else:
+                                        st.info("No VCP trades")
+                                
+                                with col2:
+                                    st.markdown("**Non-VCP Trades**")
+                                    if len(non_vcp) > 0:
+                                        non_vcp_wr = (non_vcp['is_winner'].sum() / len(non_vcp) * 100)
+                                        non_vcp_r = non_vcp['r_multiple'].mean()
+                                        st.metric("Count", len(non_vcp))
+                                        st.metric("Win Rate", f"{non_vcp_wr:.1f}%")
+                                        st.metric("Avg R", f"{non_vcp_r:+.2f}R")
+                                    else:
+                                        st.info("No non-VCP trades")
+                            
+                            # Exit Phase Analysis
+                            st.markdown("### 🎯 Exit Phase Effectiveness")
+                            
+                            exit_analysis = []
+                            
+                            # TP1 Only
+                            tp1_only = complete_trades[complete_trades['exit_phases'] == 'TP1']
+                            if len(tp1_only) > 0:
+                                exit_analysis.append({
+                                    'Exit Type': 'TP1 Only (Stopped)',
+                                    'Count': len(tp1_only),
+                                    'Avg R': f"{tp1_only['r_multiple'].mean():+.2f}R"
+                                })
+                            
+                            # Hit TP2
+                            hit_tp2 = complete_trades[complete_trades['hit_tp2']]
+                            if len(hit_tp2) > 0:
+                                exit_analysis.append({
+                                    'Exit Type': 'Hit TP2 (Partial Runner)',
+                                    'Count': len(hit_tp2),
+                                    'Avg R': f"{hit_tp2['r_multiple'].mean():+.2f}R"
+                                })
+                            
+                            # Full Runner
+                            runners = complete_trades[complete_trades['had_runner']]
+                            if len(runners) > 0:
+                                exit_analysis.append({
+                                    'Exit Type': 'Full Runner (TP1+TP2+RUNNER)',
+                                    'Count': len(runners),
+                                    'Avg R': f"{runners['r_multiple'].mean():+.2f}R"
+                                })
+                            
+                            # Stopped Out
+                            stopped = complete_trades[complete_trades['was_stopped_out']]
+                            if len(stopped) > 0:
+                                exit_analysis.append({
+                                    'Exit Type': 'Stopped Out (Losers)',
+                                    'Count': len(stopped),
+                                    'Avg R': f"{stopped['r_multiple'].mean():+.2f}R"
+                                })
+                            
+                            if exit_analysis:
+                                exit_df = pd.DataFrame(exit_analysis)
+                                st.dataframe(exit_df, use_container_width=True, hide_index=True)
+                            
+                            # Top Winners and Losers
+                            st.markdown("---")
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                st.markdown("### 🏆 Top 5 Winners")
+                                top_winners = complete_trades.nlargest(5, 'r_multiple')[
+                                    ['ticker', 'entry_date', 'total_pnl', 'r_multiple', 'exit_phases']
+                                ].copy()
+                                top_winners['entry_date'] = pd.to_datetime(top_winners['entry_date']).dt.strftime('%Y-%m-%d')
+                                top_winners['total_pnl'] = top_winners['total_pnl'].apply(lambda x: f"${x:,.0f}")
+                                top_winners['r_multiple'] = top_winners['r_multiple'].apply(lambda x: f"{x:+.2f}R")
+                                st.dataframe(top_winners, use_container_width=True, hide_index=True)
+                            
+                            with col2:
+                                st.markdown("### 💸 Top 5 Losers")
+                                top_losers = complete_trades.nsmallest(5, 'r_multiple')[
+                                    ['ticker', 'entry_date', 'total_pnl', 'r_multiple', 'exit_phases']
+                                ].copy()
+                                top_losers['entry_date'] = pd.to_datetime(top_losers['entry_date']).dt.strftime('%Y-%m-%d')
+                                top_losers['total_pnl'] = top_losers['total_pnl'].apply(lambda x: f"${x:,.0f}")
+                                top_losers['r_multiple'] = top_losers['r_multiple'].apply(lambda x: f"{x:+.2f}R")
+                                st.dataframe(top_losers, use_container_width=True, hide_index=True)
+                        
+                        # --- TAB 4: COMPLETE TRADES TABLE ---
+                        with qs_tab4:
+                            st.subheader("📋 Complete Trades (Grouped)")
+                            
+                            st.markdown("""
+                            Esta tabla muestra **trades completos** con todas las salidas parciales agrupadas.
+                            Cada fila = 1 trade completo desde entrada hasta salida final.
+                            """)
+                            
+                            # Prepare display dataframe
+                            display_cols = [
+                                'ticker', 'entry_date', 'final_exit_date', 'hold_days',
+                                'total_shares', 'total_pnl', 'r_multiple', 'return_pct',
+                                'exit_phases', 'outcome_category'
+                            ]
+                            
+                            available_cols = [col for col in display_cols if col in complete_trades.columns]
+                            display_df = complete_trades[available_cols].copy()
+                            
+                            # Format columns
+                            display_df['entry_date'] = pd.to_datetime(display_df['entry_date']).dt.strftime('%Y-%m-%d')
+                            display_df['final_exit_date'] = pd.to_datetime(display_df['final_exit_date']).dt.strftime('%Y-%m-%d')
+                            display_df['total_pnl'] = display_df['total_pnl'].apply(lambda x: f"${x:,.2f}")
+                            display_df['r_multiple'] = display_df['r_multiple'].apply(lambda x: f"{x:+.2f}R")
+                            display_df['return_pct'] = display_df['return_pct'].apply(lambda x: f"{x:+.2f}%")
+                            
+                            # Rename for display
+                            display_df = display_df.rename(columns={
+                                'ticker': 'Ticker',
+                                'entry_date': 'Entry',
+                                'final_exit_date': 'Exit',
+                                'hold_days': 'Days',
+                                'total_shares': 'Shares',
+                                'total_pnl': 'P&L',
+                                'r_multiple': 'R-Multiple',
+                                'return_pct': 'Return %',
+                                'exit_phases': 'Exit Phases',
+                                'outcome_category': 'Outcome'
+                            })
+                            
+                            # Show dataframe
+                            st.dataframe(display_df, use_container_width=True, hide_index=True, height=600)
+                            
+                            # Download button
+                            csv = analyzer.complete_trades.to_csv(index=False)
+                            st.download_button(
+                                label="📥 Download Complete Trades CSV",
+                                data=csv,
+                                file_name=f"complete_trades_{datetime.now().strftime('%Y%m%d')}.csv",
+                                mime="text/csv"
+                            )
+                    
+                    except Exception as e:
+                        st.error(f"Error al procesar con QuantStats: {e}")
+                        st.info("Verifica que el trade log tenga las columnas requeridas.")
+                        import traceback
+                        st.code(traceback.format_exc())
+            
+            except Exception as e:
+                st.error(f"Error cargando trade log: {e}")
+        
+        else:
+            st.warning(f"""
+            ⚠️ **No se encontró trade_log.csv**
+            
+            El archivo `{trade_log_path}` no existe. Ejecuta un backtest usando el motor VectorBT 
+            para generar el trade log con salidas parciales.
+            
+            **Cómo generar el trade log:**
+            1. Ve al sidebar
+            2. Configura filtros y fechas
+            3. Ejecuta backtest con el botón "🚀 Ejecutar Backtest"
+            
+            El motor VectorBT genera automáticamente el trade_log.csv con todas las salidas 
+            (TP1, TP2, RUNNER, STOP) que QuantStats agrupa correctamente.
+            """)
+
+    # ==========================================
+    # TAB 3: PnL CALENDAR (OLD TAB 2)
+    # ==========================================
+    with tab_calendar:
+        st.header("📅 PnL Calendar & Monthly Analysis")
+        
+        df_cal = df_raw.copy()
+        if 'shares' in df_cal.columns:
+            df_cal['Result'] = (df_cal['exit_price'] - df_cal['entry_price']) * df_cal['shares']
+            
+            # --- DATE SELECTION ---
+            # Calculate Monthly PnLs for the Selector
+            df_cal['month_key'] = df_cal['exit_date'].dt.to_period('M')
+            monthly_agg = df_cal.groupby('month_key')['Result'].sum().sort_index(ascending=False)
+            
+            month_options = []
+            month_map = {}
+            for period, pnl in monthly_agg.items():
+                start_of_month = period.start_time.date()
+                pnl_str = f"+${pnl:,.0f}" if pnl >= 0 else f"-${abs(pnl):,.0f}"
+                label = f"{start_of_month.strftime('%B %Y')} ({pnl_str})"
+                month_options.append(label)
+                month_map[label] = start_of_month
+
+            col_sel1, col_sel2 = st.columns([1, 2])
+            with col_sel1:
+                if month_options:
+                    selected_month_label = st.selectbox("📅 Seleccionar Mes", month_options)
+                    selected_date = month_map[selected_month_label]
+                else:
+                    selected_date = datetime.now().date().replace(day=1)
+                    st.warning("No hay datos mensuales disponibles.")
+            
+            # Filter Month
+            sel_month_start = selected_date # Already 1st of month
+
+            # Safe logic for next month first day
+            if sel_month_start.month == 12:
+                next_month = sel_month_start.replace(year=sel_month_start.year+1, month=1, day=1)
+            else:
+                next_month = sel_month_start.replace(month=sel_month_start.month+1, day=1)
+            
+            sel_month_end = next_month - timedelta(days=1)
+            
+            monthly_trades = df_cal[(df_cal['exit_date'].dt.date >= sel_month_start) & 
+                                  (df_cal['exit_date'].dt.date <= sel_month_end)]
+            monthly_pnl = monthly_trades['Result'].sum()
+            
+            with col_sel2:
+                # Generate Calendar Grid with Interactive Buttons and Custom Styling
+                cal = calendar.Calendar(firstweekday=6) # Sunday start
+                month_days = cal.monthdayscalendar(selected_date.year, selected_date.month)
+                
+                st.markdown(f"### 🗓️ {selected_date.strftime('%B %Y')}")
+                
+                # Initialize selected_day in session state
+                if 'selected_day' not in st.session_state:
+                    st.session_state.selected_day = selected_date
+                
+                # Custom CSS for calendar styling
+                st.markdown("""
+                <style>
+                .cal-day-header {
+                    text-align: center;
+                    font-weight: bold;
+                    font-size: 11px;
+                    color: #666;
+                    padding: 5px;
+                    background: #f0f2f6;
+                    border-radius: 5px;
+                    margin-bottom: 5px;
+                }
+                /* Override Streamlit button styles for calendar */
+                div[data-testid="column"] > div > div > button {
+                    font-size: 13px !important;
+                    padding: 10px 5px !important;
+                    min-height: 70px !important;
+                    white-space: pre-wrap !important;
+                    border-radius: 8px !important;
+                    font-weight: 500 !important;
+                }
+                /* Win buttons (primary) - Green theme */
+                div[data-testid="column"] > div > div > button[kind="primary"] {
+                    background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%) !important;
+                    color: #155724 !important;
+                    border: 2px solid #b1dfbb !important;
+                }
+                div[data-testid="column"] > div > div > button[kind="primary"]:hover {
+                    background: linear-gradient(135deg, #c3e6cb 0%, #b1dfbb 100%) !important;
+                    border-color: #28a745 !important;
+                    transform: scale(1.05) !important;
+                    box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3) !important;
+                }
+                /* Loss buttons (secondary) - Red theme */
+                div[data-testid="column"] > div > div > button[kind="secondary"] {
+                    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%) !important;
+                    color: #721c24 !important;
+                    border: 2px solid #f1b0b7 !important;
+                }
+                div[data-testid="column"] > div > div > button[kind="secondary"]:hover {
+                    background: linear-gradient(135deg, #f5c6cb 0%, #f1b0b7 100%) !important;
+                    border-color: #dc3545 !important;
+                    transform: scale(1.05) !important;
+                    box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3) !important;
+                }
+                /* Neutral days (tertiary) - Gray theme */
+                div[data-testid="column"] > div > div > button[kind="tertiary"] {
+                    background: #ffffff !important;
+                    color: #495057 !important;
+                    border: 1px solid #dee2e6 !important;
+                }
+                div[data-testid="column"] > div > div > button[kind="tertiary"]:hover {
+                    background: #f8f9fa !important;
+                    border-color: #adb5bd !important;
+                    transform: scale(1.02) !important;
+                }
+                </style>
+                """, unsafe_allow_html=True)
+                
+                days_header = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
+                
+                # Display calendar header
+                header_cols = st.columns(7)
+                for idx, day_name in enumerate(days_header):
+                    with header_cols[idx]:
+                        st.markdown(f'<div class="cal-day-header">{day_name}</div>', unsafe_allow_html=True)
+                
+                month_pnl_total = 0
+                
+                # Display calendar grid with interactive buttons
+                for week in month_days:
+                    week_cols = st.columns(7)
+                    for idx, day in enumerate(week):
+                        with week_cols[idx]:
+                            if day == 0:
+                                st.write("")  # Empty cell
+                            else:
+                                # Find PnL for this day
+                                current_dt = datetime(selected_date.year, selected_date.month, day).date()
+                                day_trades = df_cal[df_cal['exit_date'].dt.date == current_dt]
+                                
+                                pnl_val = day_trades['Result'].sum() if not day_trades.empty else 0
+                                
+                                pnl_str = ""
+                                button_type = "tertiary"  # neutral/no trades
+                                
+                                if pnl_val > 0: 
+                                    pnl_str = f"+${pnl_val:,.0f}"
+                                    month_pnl_total += pnl_val
+                                    button_type = "primary"  # Green for wins
+                                elif pnl_val < 0: 
+                                    pnl_str = f"-${abs(pnl_val):,.0f}"
+                                    month_pnl_total += pnl_val
+                                    button_type = "secondary"  # Red for losses
+                                
+                                # Button label with day and PnL
+                                label = f"**{day}**\n{pnl_str}" if pnl_str else f"{day}"
+                                
+                                # Highlight selected day
+                                is_selected = (current_dt == st.session_state.get('selected_day', selected_date))
+                                
+                                # Create button for each day
+                                if st.button(label, key=f"day_{selected_date.year}_{selected_date.month}_{day}", 
+                                           type=button_type, use_container_width=True):
+                                    st.session_state.selected_day = current_dt
+                
+                if monthly_trades.empty:
+                    st.caption("No trades closed this month.")
+                else:
+                    # Display monthly summary with color
+                    col_metric1, col_metric2 = st.columns(2)
+                    with col_metric1:
+                        pnl_delta = "📈" if month_pnl_total >= 0 else "📉"
+                        st.metric("Monthly PnL", f"${month_pnl_total:,.2f}", 
+                                delta=f"{pnl_delta} {len(monthly_trades)} Trades",
+                                delta_color="normal" if month_pnl_total >= 0 else "inverse")
+                    with col_metric2:
+                        win_trades = monthly_trades[monthly_trades['Result'] > 0]
+                        win_rate = len(win_trades) / len(monthly_trades) * 100 if len(monthly_trades) > 0 else 0
+                        st.metric("Win Rate", f"{win_rate:.1f}%", 
+                                delta=f"{len(win_trades)}W / {len(monthly_trades)-len(win_trades)}L")
+
+            st.markdown("---")
+            
+            # --- DAILY DETAIL VIEW ---
+            # Use the selected day from session state
+            display_date = st.session_state.get('selected_day', selected_date)
+            st.subheader(f"📆 Daily Snapshot: {display_date.strftime('%Y-%m-%d')}")
+            
+            # A. REALIZED PNL (Closed Today)
+            realized_today = df_cal[df_cal['exit_date'].dt.date == display_date]
+            
+            # B. ACTIVE POSITIONS (Active Today)
+            active_today = df_cal[(df_cal['entry_date'].dt.date <= display_date) & 
+                                (df_cal['exit_date'].dt.date > display_date)].copy()
+            
+            c_d1, c_d2 = st.columns([2, 1])
+            
+            with c_d1:
+                combined_rows = []
+                # Realized
+                for _, row in realized_today.iterrows():
+                    combined_rows.append({
+                        'Sym': row['symbol'], 'Pos': 0, 'Last': row['exit_price'],
+                        'PosAvg': row['entry_price'], '$Real': row['Result'], '$Value': 0.0, 'Type': 'Closed'
+                    })
+                # Active
+                for _, row in active_today.iterrows():
+                    combined_rows.append({
+                        'Sym': row['symbol'], 'Pos': row['shares'], 'Last': row['entry_price'], # Proxy
+                        'PosAvg': row['entry_price'], '$Real': 0.0, '$Value': row['shares'] * row['entry_price'], 'Type': 'Open'
+                    })
+                
+                df_day_view = pd.DataFrame(combined_rows)
+                
+                if not df_day_view.empty:
+                    st.dataframe(
+                        df_day_view,
+                        column_config={
+                            "Sym": st.column_config.TextColumn("Sym", width="small"),
+                            "Pos": st.column_config.NumberColumn("Pos", format="%.0f"),
+                            "Last": st.column_config.NumberColumn("Last (Ref)", format="$%.2f"),
+                            "PosAvg": st.column_config.NumberColumn("PosAvg", format="$%.2f"),
+                            "$Real": st.column_config.NumberColumn("$Real PnL", format="$%.2f"),
+                            "$Value": st.column_config.NumberColumn("$Alloc Value", format="$%.2f"),
+                        },
+                        use_container_width=True, hide_index=True
+                    )
+                    total_realized = df_day_view['$Real'].sum()
+                    st.markdown(f"**Total Realized Today:** :green[${total_realized:,.2f}]" if total_realized >= 0 else f"**Total Realized Today:** :red[${total_realized:,.2f}]")
+                else:
+                    st.info("No activity recorded for this date.")
+
+            with c_d2:
+                if not active_today.empty:
+                    # Asegurar que position_value existe
+                    if 'position_value' not in active_today.columns:
+                        active_today['position_value'] = active_today['entry_price'] * active_today['shares']
+                    
+                    fig_pie = px.pie(active_today, values='position_value', names='symbol', 
+                                   title=f"Portfolio Allocation ({display_date.strftime('%b %d')})", hole=0.4)
+                    st.plotly_chart(fig_pie, use_container_width=True, key=f"portfolio_pie_{display_date.strftime('%Y%m%d')}")
+                else:
+                    st.info("No open positions.")
+
+            # --- MONTHLY EQUITY CURVE ---
+            st.markdown("---")
+            st.subheader(f"📈 Monthly Performance: {selected_date.strftime('%B %Y')}")
+            
+            if not monthly_trades.empty:
+                monthly_trades = monthly_trades.sort_values('exit_date')
+                monthly_trades['cum_pnl'] = monthly_trades['Result'].cumsum()
+                fig_equity = px.area(monthly_trades, x='exit_date', y='cum_pnl',
+                                   title=f"Realized PnL Curve - {selected_date.strftime('%B')}",
+                                   labels={'cum_pnl': 'Cumulative PnL ($)', 'exit_date': 'Date'})
+                st.plotly_chart(fig_equity, use_container_width=True, key=f"monthly_equity_{selected_date.strftime('%Y%m')}")
+            else:
+                st.info("No trades closed in this month.")
+        else:
+            st.warning("Run backtest to see Calendar data.")
+    
+    # ==========================================
+    # ==========================================
+    # TAB 4: LIVE MARKET SCANNER (OLD TAB 3)
+    # ==========================================
+    with tab_live_scanner:
+        st.header("📡 Live Market Scanner")
+        st.caption("🔴 Condiciones del mercado en TIEMPO REAL (no histórico)")
+        
+        try:
+            from src.data.market_data import MarketDataProvider
+            from src.core.market_context import MarketContext
+            
+            with st.spinner("Analizando condiciones del mercado..."):
+                provider = MarketDataProvider()
+                mc = MarketContext(provider)
+                context = mc.analyze_indices()
+            
+            # Extract metrics
+            spy_price = context.get('spy_price', 0)
+            spy_ema20 = context.get('spy_ema20', 0)
+            spy_above_ema20 = context.get('spy_above_ema20', False)
+            breadth_improving = context.get('breadth_improving', False)
+            positive_gex = context.get('positive_gex', False)
+            vix_favorable = context.get('vix_favorable', True)
+            sector_leaders = context.get('sector_leaders', {})
+            market_favorable = context.get('market_favorable_for_longs', False)
+            
+            # Calculate health score
+            health_score = 0
+            if spy_above_ema20:
+                health_score += 2
+            if breadth_improving:
+                health_score += 2
+            if positive_gex:
+                health_score += 1
+            if vix_favorable:
+                health_score += 1
+            if sector_leaders:
+                health_score += 1
+            
+            # Display in columns
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric(
+                    "SPY Trend",
+                    f"${spy_price:.2f}",
+                    f"{((spy_price - spy_ema20) / spy_ema20 * 100):+.2f}%" if spy_ema20 else "N/A",
+                    delta_color="normal"
+                )
+                if spy_above_ema20:
+                    st.success("✅ Above EMA20")
+                else:
+                    st.error("❌ Below EMA20")
+            
+            with col2:
+                st.metric("Breadth", "Improving" if breadth_improving else "Declining")
+                if breadth_improving:
+                    st.success("✅ Strong")
+                else:
+                    st.warning("⚠️ Weak")
+            
+            with col3:
+                st.metric("Volatility", "Favorable" if vix_favorable else "Elevated")
+                if vix_favorable:
+                    st.success("✅ VIX < 20")
+                else:
+                    st.error("⚠️ VIX High")
+            
+            with col4:
+                st.metric("GEX", "Positive" if positive_gex else "Neutral")
+                if positive_gex:
+                    st.success("✅ Low Vol Grind")
+                else:
+                    st.info("⚪ Normal")
+            
+            # Health Score and Verdict
+            st.markdown("---")
+            col_score, col_verdict = st.columns([1, 2])
+            
+            with col_score:
+                st.metric("Health Score", f"{health_score}/7", f"{(health_score/7*100):.0f}%")
+                st.progress(health_score / 7)
+            
+            with col_verdict:
+                if not market_favorable:
+                    st.error("❌ **NO TRADE MODE** - Market not favorable for longs")
+                    st.caption("Go to cash or paper trade only")
+                elif health_score >= 6:
+                    st.success("🚀 **AGGRESSIVE MODE** - Excellent conditions")
+                    st.caption("Full size (2% risk), all 3 Caminos, focus on leading sectors")
+                elif health_score >= 4:
+                    st.success("💪 **STANDARD MODE** - Good conditions")
+                    st.caption("Standard size (1.5-2% risk), prefer Camino 1 in leading sectors")
+                else:
+                    st.warning("⚠️ **DEFENSIVE MODE** - Be selective")
+                    st.caption("Half size (0.5-1% risk), only perfect Blue Sky in top sectors")
+            
+            # Sector Leaders
+            if sector_leaders:
+                st.markdown("---")
+                st.subheader("🎯 Top Performing Sectors (Today)")
+                
+                st.info("💡 **Trading Tip**: Focus on leading sectors for mejor probabilidad de éxito. Evita sectores débiles.")
+                
+                # Top 3 in columns
+                top_3 = list(sector_leaders.items())[:3]
+                col_s1, col_s2, col_s3 = st.columns(3)
+                for idx, (sector, data) in enumerate(top_3):
+                    with [col_s1, col_s2, col_s3][idx]:
+                        pct = data['change_pct']
+                        st.metric(
+                            f"#{idx+1} {sector}",
+                            f"{data['symbol']}",
+                            f"{pct:+.2f}%",
+                            delta_color="normal"
+                        )
+                
+                # Full sector table
+                st.markdown("### 📊 All Sectors Performance")
+                sector_df = pd.DataFrame([
+                    {
+                        'Sector': sector,
+                        'ETF': data['symbol'],
+                        'Change %': data['change_pct'],
+                        'Trend': '🟢 Strong' if data['change_pct'] > 0.5 else '🟡 Neutral' if data['change_pct'] > 0 else '🔴 Weak'
+                    }
+                    for sector, data in sector_leaders.items()
+                ]).sort_values('Change %', ascending=False)
+                
+                st.dataframe(
+                    sector_df,
+                    column_config={
+                        "Change %": st.column_config.NumberColumn("Change %", format="%.2f%%"),
+                    },
+                    use_container_width=True,
+                    hide_index=True
+                )
+                
+                # Action recommendations
+                st.markdown("---")
+                st.subheader("🎯 Recommended Actions")
+                
+                top_sector = list(sector_leaders.items())[0]
+                worst_sector = list(sector_leaders.items())[-1]
+                
+                col_rec1, col_rec2 = st.columns(2)
+                with col_rec1:
+                    st.success(f"**✅ FOCUS ON**: {top_sector[0]}")
+                    st.caption(f"Leading with {top_sector[1]['change_pct']:+.2f}%. Busca setups en este sector.")
+                
+                with col_rec2:
+                    st.error(f"**❌ AVOID**: {worst_sector[0]}")
+                    st.caption(f"Lagging with {worst_sector[1]['change_pct']:+.2f}%. Skip este sector hoy.")
+
+        except Exception as e:
+            st.error(f"Error loading market health: {e}")
+            st.caption("Intenta recargar la página")
+
+else:
+    st.info("👋 Bienvenido. Configura los parámetros de riesgo a la izquierda y pulsa 'EJECUTAR BACKTEST'.")

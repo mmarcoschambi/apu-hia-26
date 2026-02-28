@@ -1,0 +1,30 @@
+{
+  "run_date": "2026-02-07 19:38:00",
+  "universe": [
+    "AAPL",
+    "MSFT",
+    "GOOGL",
+    "NVDA",
+    "TSLA",
+    "META",
+    "AMZN"
+  ],
+  "period": "2023-01-01 to 2024-12-31",
+  "engine": "THOR",
+  "results": [
+    {
+      "distribution_name": "optimal",
+      "tp1_pct": 0.2,
+      "tp2_pct": 0.2,
+      "runner_pct": 0.6000000000000001,
+      "sharpe": 0,
+      "return": 0.0,
+      "annualized_return": 0.0,
+      "trades": 0,
+      "win_rate": 0.0,
+      "max_dd": 0.0,
+      "engine": "THOR",
+      "status": "success"
+    }
+  ]
+}

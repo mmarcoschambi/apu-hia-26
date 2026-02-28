@@ -4,6 +4,7 @@
 Interactive Web Dashboard for Backtest Results
 Creates interactive charts with Plotly
 """
+
 import sys
 from pathlib import Path
 import pandas as pd
@@ -22,297 +23,380 @@ from src.indicators.triad import TriadIndicators
 
 
 class InteractiveDashboard:
-    
     def __init__(self, results_csv: str):
         self.results_df = pd.read_csv(results_csv)
         # Fix column name mismatch: Dashboard expects 'date', CSV has 'entry_date'
-        if 'date' not in self.results_df.columns and 'entry_date' in self.results_df.columns:
-            self.results_df['date'] = pd.to_datetime(self.results_df['entry_date'])
+        if (
+            "date" not in self.results_df.columns
+            and "entry_date" in self.results_df.columns
+        ):
+            self.results_df["date"] = pd.to_datetime(self.results_df["entry_date"])
         else:
-            self.results_df['date'] = pd.to_datetime(self.results_df['date'])
-            
+            self.results_df["date"] = pd.to_datetime(self.results_df["date"])
+
         self.data_provider = MarketDataProvider()
         self.indicators = TriadIndicators()
-        
+
         print(f"📊 Loaded {len(self.results_df)} signals")
         print(f"   Symbols: {self.results_df['symbol'].nunique()}")
-        print(f"   Date range: {self.results_df['date'].min().date()} to {self.results_df['date'].max().date()}")
-    
+        print(
+            f"   Date range: {self.results_df['date'].min().date()} to {self.results_df['date'].max().date()}"
+        )
+
     def create_overview_dashboard(self):
         """Create main overview dashboard with filters"""
-        
+
         # Create subplots
         fig = make_subplots(
-            rows=3, cols=2,
+            rows=3,
+            cols=2,
             subplot_titles=(
-                '📊 Returns Distribution',
-                '🎯 Win Rate by Camino',
-                '📈 Equity Curve',
-                '💰 Returns by Symbol',
-                '📅 Signals Over Time',
-                '🔍 Risk vs Reward'
+                "📊 Returns Distribution",
+                "🎯 Win Rate by Camino",
+                "📈 Equity Curve",
+                "💰 Returns by Symbol",
+                "📅 Signals Over Time",
+                "🔍 Risk vs Reward",
             ),
             specs=[
-                [{'type': 'histogram'}, {'type': 'bar'}],
-                [{'type': 'scatter', 'colspan': 2}, None],
-                [{'type': 'bar'}, {'type': 'scatter'}]
+                [{"type": "histogram"}, {"type": "bar"}],
+                [{"type": "scatter", "colspan": 2}, None],
+                [{"type": "bar"}, {"type": "scatter"}],
             ],
             vertical_spacing=0.12,
-            horizontal_spacing=0.1
+            horizontal_spacing=0.1,
         )
-        
+
         # 1. Returns Distribution
-        wins = self.results_df[self.results_df['outcome'] == 'WIN']['return_pct']
-        losses = self.results_df[self.results_df['outcome'] == 'LOSS']['return_pct']
-        
+        wins = self.results_df[self.results_df["outcome"] == "WIN"]["return_pct"]
+        losses = self.results_df[self.results_df["outcome"] == "LOSS"]["return_pct"]
+
         fig.add_trace(
-            go.Histogram(x=wins, name='Wins', marker_color='green', opacity=0.7, nbinsx=30),
-            row=1, col=1
+            go.Histogram(
+                x=wins, name="Wins", marker_color="green", opacity=0.7, nbinsx=30
+            ),
+            row=1,
+            col=1,
         )
         fig.add_trace(
-            go.Histogram(x=losses, name='Losses', marker_color='red', opacity=0.7, nbinsx=30),
-            row=1, col=1
+            go.Histogram(
+                x=losses, name="Losses", marker_color="red", opacity=0.7, nbinsx=30
+            ),
+            row=1,
+            col=1,
         )
-        
+
         # 2. Win Rate by Camino
         camino_stats = []
-        for camino in self.results_df['camino'].unique():
-            subset = self.results_df[self.results_df['camino'] == camino]
-            win_rate = (subset['outcome'] == 'WIN').sum() / len(subset) * 100
-            camino_stats.append({
-                'Camino': camino,
-                'Win Rate': win_rate,
-                'Count': len(subset)
-            })
-        
+        for camino in self.results_df["camino"].unique():
+            subset = self.results_df[self.results_df["camino"] == camino]
+            win_rate = (subset["outcome"] == "WIN").sum() / len(subset) * 100
+            camino_stats.append(
+                {"Camino": camino, "Win Rate": win_rate, "Count": len(subset)}
+            )
+
         stats_df = pd.DataFrame(camino_stats)
-        colors = ['#2E86AB', '#A23B72', '#F18F01']
-        
+        colors = ["#2E86AB", "#A23B72", "#F18F01"]
+
         fig.add_trace(
             go.Bar(
-                x=stats_df['Camino'],
-                y=stats_df['Win Rate'],
-                text=[f"{wr:.1f}%<br>n={cnt}" for wr, cnt in zip(stats_df['Win Rate'], stats_df['Count'])],
-                textposition='auto',
-                marker_color=colors[:len(stats_df)],
-                name='Win Rate'
+                x=stats_df["Camino"],
+                y=stats_df["Win Rate"],
+                text=[
+                    f"{wr:.2f}%<br>n={cnt}"
+                    for wr, cnt in zip(stats_df["Win Rate"], stats_df["Count"])
+                ],
+                textposition="auto",
+                marker_color=colors[: len(stats_df)],
+                name="Win Rate",
             ),
-            row=1, col=2
+            row=1,
+            col=2,
         )
-        
+
         # Add 50% reference line
-        fig.add_hline(y=50, line_dash="dash", line_color="red", opacity=0.5, row=1, col=2)
-        
+        fig.add_hline(
+            y=50, line_dash="dash", line_color="red", opacity=0.5, row=1, col=2
+        )
+
         # 3. Equity Curve
-        sorted_df = self.results_df.sort_values('date')
-        sorted_df['cumulative_return'] = (1 + sorted_df['return_pct']/100).cumprod() - 1
-        
+        sorted_df = self.results_df.sort_values("date")
+        sorted_df["cumulative_return"] = (
+            1 + sorted_df["return_pct"] / 100
+        ).cumprod() - 1
+
         fig.add_trace(
             go.Scatter(
-                x=sorted_df['date'],
-                y=sorted_df['cumulative_return'] * 100,
-                mode='lines',
-                name='Equity Curve',
-                line=dict(color='#2E86AB', width=3),
-                fill='tozeroy',
-                fillcolor='rgba(46, 134, 171, 0.2)'
+                x=sorted_df["date"],
+                y=sorted_df["cumulative_return"] * 100,
+                mode="lines",
+                name="Equity Curve",
+                line=dict(color="#2E86AB", width=3),
+                fill="tozeroy",
+                fillcolor="rgba(46, 134, 171, 0.2)",
             ),
-            row=2, col=1
+            row=2,
+            col=1,
         )
-        
-        fig.add_hline(y=0, line_dash="solid", line_color="black", opacity=0.3, row=2, col=1)
-        
+
+        fig.add_hline(
+            y=0, line_dash="solid", line_color="black", opacity=0.3, row=2, col=1
+        )
+
         # 4. Returns by Symbol
-        symbol_returns = self.results_df.groupby('symbol').agg({
-            'return_pct': 'mean',
-            'outcome': lambda x: (x == 'WIN').sum() / len(x) * 100
-        }).reset_index()
-        symbol_returns.columns = ['Symbol', 'Avg Return', 'Win Rate']
-        
+        symbol_returns = (
+            self.results_df.groupby("symbol")
+            .agg(
+                {
+                    "return_pct": "mean",
+                    "outcome": lambda x: (x == "WIN").sum() / len(x) * 100,
+                }
+            )
+            .reset_index()
+        )
+        symbol_returns.columns = ["Symbol", "Avg Return", "Win Rate"]
+
         fig.add_trace(
             go.Bar(
-                x=symbol_returns['Symbol'],
-                y=symbol_returns['Avg Return'],
-                text=[f"{ret:+.1f}%<br>WR:{wr:.0f}%" for ret, wr in zip(symbol_returns['Avg Return'], symbol_returns['Win Rate'])],
-                textposition='auto',
-                marker_color=['green' if x > 0 else 'red' for x in symbol_returns['Avg Return']],
-                name='Avg Return'
+                x=symbol_returns["Symbol"],
+                y=symbol_returns["Avg Return"],
+                text=[
+                    f"{ret:+.2f}%<br>WR:{wr:.2f}%"
+                    for ret, wr in zip(
+                        symbol_returns["Avg Return"], symbol_returns["Win Rate"]
+                    )
+                ],
+                textposition="auto",
+                marker_color=[
+                    "green" if x > 0 else "red" for x in symbol_returns["Avg Return"]
+                ],
+                name="Avg Return",
             ),
-            row=3, col=1
+            row=3,
+            col=1,
         )
-        
+
         # 5. Risk vs Reward scatter
-        self.results_df['risk_pct'] = abs(
-            (self.results_df['entry_price'] - self.results_df['stop_loss']) / self.results_df['entry_price'] * 100
+        self.results_df["risk_pct"] = abs(
+            (self.results_df["entry_price"] - self.results_df["stop_loss"])
+            / self.results_df["entry_price"]
+            * 100
         )
-        
+
         fig.add_trace(
             go.Scatter(
-                x=self.results_df['risk_pct'],
-                y=self.results_df['return_pct'],
-                mode='markers',
+                x=self.results_df["risk_pct"],
+                y=self.results_df["return_pct"],
+                mode="markers",
                 marker=dict(
-                    color=self.results_df['return_pct'],
-                    colorscale='RdYlGn',
+                    color=self.results_df["return_pct"],
+                    colorscale="RdYlGn",
                     size=8,
-                    colorbar=dict(title="Return %", x=1.15)
+                    colorbar=dict(title="Return %", x=1.15),
                 ),
-                text=[f"{sym}<br>{date.date()}<br>{cam}" 
-                      for sym, date, cam in zip(self.results_df['symbol'], 
-                                                 self.results_df['date'],
-                                                 self.results_df['camino'])],
-                hovertemplate='<b>%{text}</b><br>Risk: %{x:.2f}%<br>Return: %{y:.2f}%<extra></extra>',
-                name='Trades'
+                text=[
+                    f"{sym}<br>{date.date()}<br>{cam}"
+                    for sym, date, cam in zip(
+                        self.results_df["symbol"],
+                        self.results_df["date"],
+                        self.results_df["camino"],
+                    )
+                ],
+                hovertemplate="<b>%{text}</b><br>Risk: %{x:.2f}%<br>Return: %{y:.2f}%<extra></extra>",
+                name="Trades",
             ),
-            row=3, col=2
+            row=3,
+            col=2,
         )
-        
+
         # Add ideal R:R lines
-        max_risk = self.results_df['risk_pct'].max()
+        max_risk = self.results_df["risk_pct"].max()
         fig.add_trace(
             go.Scatter(
                 x=[0, max_risk],
                 y=[0, max_risk * 2],
-                mode='lines',
-                line=dict(dash='dash', color='gray'),
-                name='2:1 R/R',
-                showlegend=False
+                mode="lines",
+                line=dict(dash="dash", color="gray"),
+                name="2:1 R/R",
+                showlegend=False,
             ),
-            row=3, col=2
+            row=3,
+            col=2,
         )
-        
+
         # Update layout
         fig.update_xaxes(title_text="Return %", row=1, col=1)
         fig.update_yaxes(title_text="Frequency", row=1, col=1)
-        
+
         fig.update_xaxes(title_text="Camino", row=1, col=2)
         fig.update_yaxes(title_text="Win Rate %", row=1, col=2)
-        
+
         fig.update_xaxes(title_text="Date", row=2, col=1)
         fig.update_yaxes(title_text="Cumulative Return %", row=2, col=1)
-        
+
         fig.update_xaxes(title_text="Symbol", row=3, col=1)
         fig.update_yaxes(title_text="Avg Return %", row=3, col=1)
-        
+
         fig.update_xaxes(title_text="Risk %", row=3, col=2)
         fig.update_yaxes(title_text="Return %", row=3, col=2)
-        
+
         fig.update_layout(
             title_text="<b>📊 TRIAD BACKTEST DASHBOARD</b><br><sup>Interactive Analysis</sup>",
             title_font_size=24,
             showlegend=True,
             height=1200,
-            template='plotly_white'
+            template="plotly_white",
         )
-        
+
         return fig
-    
+
     def create_trade_chart(self, symbol: str, entry_date: str, signal_data: dict):
         """Create interactive candlestick chart for a single trade"""
-        
-        # Fetch data
+
         daily_df = self.data_provider.get_daily_data(symbol, period="max")
+
+        if daily_df is None or daily_df.empty or "Close" not in daily_df.columns:
+            fig = go.Figure()
+            fig.add_annotation(
+                text=f"No data available for {symbol}",
+                xref="paper",
+                yref="paper",
+                x=0.5,
+                y=0.5,
+                showarrow=False,
+                font=dict(size=20, color="red"),
+            )
+            fig.update_layout(title=f"Trade: {symbol}", height=500)
+            return fig
+
         daily_df.index = pd.to_datetime(daily_df.index).tz_localize(None)
-        
+
         entry_date_pd = pd.to_datetime(entry_date).tz_localize(None)
-        
+
         # Find entry index
-        entry_idx = daily_df.index.get_indexer([entry_date_pd], method='nearest')[0]
-        
+        entry_idx = daily_df.index.get_indexer([entry_date_pd], method="nearest")[0]
+
+        # Determine hold period to adjust window dynamically
+        hold_days = int(signal_data.get("hold_days", 15))
+
+        # If multiple exits exist, find the max date
+        if signal_data.get("exits"):
+            max_exit_date = entry_date_pd
+            for ex in signal_data["exits"]:
+                ex_date = pd.to_datetime(ex.get("date", entry_date_pd)).tz_localize(
+                    None
+                )
+                if ex_date > max_exit_date:
+                    max_exit_date = ex_date
+
+            # Calculate days from entry to last exit
+            actual_hold_days = (max_exit_date - entry_date_pd).days
+            hold_days = max(hold_days, actual_hold_days)
+
+        # Ensure we have enough data after entry to show the exit
+        end_buffer = max(15, hold_days + 10)
+
         # Get window
         start_idx = max(0, entry_idx - 30)
-        end_idx = min(len(daily_df), entry_idx + 15)
+        end_idx = min(len(daily_df), entry_idx + end_buffer)
         window_df = daily_df.iloc[start_idx:end_idx].copy()
-        
+
         # Calculate SMAs for context
-        window_df['SMA_10'] = window_df['Close'].rolling(window=10).mean()
-        window_df['SMA_20'] = window_df['Close'].rolling(window=20).mean()
-        
+        window_df["SMA_10"] = window_df["Close"].rolling(window=10).mean()
+        window_df["SMA_20"] = window_df["Close"].rolling(window=20).mean()
+
         # Calculate AVWAP
-        historical_df = daily_df.iloc[:entry_idx+1]
+        historical_df = daily_df.iloc[: entry_idx + 1]
         avwap_data = self.indicators.calculate_avwap_from_ath(historical_df)
-        
+
         # Create candlestick
         fig = go.Figure()
-        
-        fig.add_trace(go.Candlestick(
-            x=window_df.index,
-            open=window_df['Open'],
-            high=window_df['High'],
-            low=window_df['Low'],
-            close=window_df['Close'],
-            name='Price',
-            increasing_line_color='green',
-            decreasing_line_color='red'
-        ))
-        
+
+        fig.add_trace(
+            go.Candlestick(
+                x=window_df.index,
+                open=window_df["Open"],
+                high=window_df["High"],
+                low=window_df["Low"],
+                close=window_df["Close"],
+                name="Price",
+                increasing_line_color="green",
+                decreasing_line_color="red",
+            )
+        )
+
         # Add SMA 10
-        fig.add_trace(go.Scatter(
-            x=window_df.index,
-            y=window_df['SMA_10'],
-            mode='lines',
-            line=dict(color='#FFD700', width=1.5), # Gold
-            name='SMA 10'
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=window_df.index,
+                y=window_df["SMA_10"],
+                mode="lines",
+                line=dict(color="#FFD700", width=1.5),  # Gold
+                name="SMA 10",
+            )
+        )
 
         # Add SMA 20
-        fig.add_trace(go.Scatter(
-            x=window_df.index,
-            y=window_df['SMA_20'],
-            mode='lines',
-            line=dict(color='#1E90FF', width=1.5), # Dodger Blue
-            name='SMA 20'
-        ))
-        
+        fig.add_trace(
+            go.Scatter(
+                x=window_df.index,
+                y=window_df["SMA_20"],
+                mode="lines",
+                line=dict(color="#1E90FF", width=1.5),  # Dodger Blue
+                name="SMA 20",
+            )
+        )
+
         # Add AVWAP line
-        if avwap_data.get('calculated'):
+        if avwap_data.get("calculated"):
             fig.add_hline(
-                y=avwap_data['current_avwap'],
+                y=avwap_data["current_avwap"],
                 line_dash="dash",
                 line_color="orange",
                 line_width=2,
                 annotation_text=f"AVWAP ATH: ${avwap_data['current_avwap']:.2f}",
-                annotation_position="right"
+                annotation_position="right",
             )
-        
+
         # Add Base High
-        if signal_data.get('base_high'):
+        if signal_data.get("base_high"):
             fig.add_hline(
-                y=signal_data['base_high'],
+                y=signal_data["base_high"],
                 line_dash="dash",
                 line_color="blue",
                 line_width=2,
                 annotation_text=f"Base High: ${signal_data['base_high']:.2f}",
-                annotation_position="right"
+                annotation_position="right",
             )
-        
+
         # Add Stop Loss / Session Low
-        if signal_data.get('stop_loss'):
+        if signal_data.get("stop_loss"):
+            stop_price = float(signal_data["stop_loss"])
             fig.add_hline(
-                y=signal_data['stop_loss'],
+                y=stop_price,
                 line_dash="dot",
                 line_color="red",
                 line_width=2,
-                annotation_text=f"Stop: ${signal_data['stop_loss']:.2f}",
-                annotation_position="right"
+                annotation_text=f"Stop: ${stop_price:.2f}",
+                annotation_position="bottom right",
             )
             # Explicit Session Low Annotation for Masterclass feel
             fig.add_annotation(
                 x=entry_date_pd,
-                y=signal_data['stop_loss'],
+                y=stop_price,
                 text="Session Low (Risk)",
                 showarrow=True,
                 arrowhead=2,
                 arrowcolor="red",
                 ax=0,
-                ay=40
+                ay=40,
             )
 
         # GAP DOWN Detection (Masterclass feature)
-        if signal_data.get('camino') == 'VWAP_RECLAIM' and entry_idx > 0:
-            prev_close = daily_df['Close'].iloc[entry_idx - 1]
-            curr_open = daily_df['Open'].iloc[entry_idx]
-            
+        if signal_data.get("camino") == "VWAP_RECLAIM" and entry_idx > 0:
+            prev_close = daily_df["Close"].iloc[entry_idx - 1]
+            curr_open = daily_df["Open"].iloc[entry_idx]
+
             if curr_open < prev_close:
                 gap_mid = (prev_close + curr_open) / 2
                 fig.add_annotation(
@@ -323,300 +407,452 @@ class InteractiveDashboard:
                     arrowhead=1,
                     arrowcolor="red",
                     ax=-40,
-                    ay=0
+                    ay=0,
                 )
-        
+
         # Entry point
-        if signal_data.get('entry_price'):
-            fig.add_trace(go.Scatter(
-                x=[entry_date_pd],
-                y=[signal_data['entry_price']],
-                mode='markers',
-                marker=dict(color='lime', size=15, symbol='triangle-up', line=dict(color='black', width=2)),
-                name='Entry',
-                hovertemplate=f"<b>ENTRY</b><br>${signal_data['entry_price']:.2f}<extra></extra>"
-            ))
-        
-        # Exit point
-        if signal_data.get('exit_price'):
-            exit_date = entry_date_pd + pd.Timedelta(days=signal_data.get('hold_days', 5))
-            outcome = signal_data.get('outcome')
-            color = 'green' if outcome == 'WIN' else 'red'
-            symbol_marker = 'circle' if outcome == 'WIN' else 'triangle-down'
-            
-            fig.add_trace(go.Scatter(
-                x=[exit_date],
-                y=[signal_data['exit_price']],
-                mode='markers',
-                marker=dict(color=color, size=15, symbol=symbol_marker, line=dict(color='black', width=2)),
-                name='Exit',
-                hovertemplate=f"<b>EXIT ({outcome})</b><br>${signal_data['exit_price']:.2f}<extra></extra>"
-            ))
-        
+        if signal_data.get("entry_price"):
+            fig.add_trace(
+                go.Scatter(
+                    x=[entry_date_pd],
+                    y=[signal_data["entry_price"]],
+                    mode="markers",
+                    marker=dict(
+                        color="lime",
+                        size=15,
+                        symbol="triangle-up",
+                        line=dict(color="black", width=2),
+                    ),
+                    name="Entry",
+                    hovertemplate=f"<b>ENTRY</b><br>${signal_data['entry_price']:.2f}<extra></extra>",
+                )
+            )
+
+        # Multiple Exits (Partial) - MASTERCLASS VISUALIZATION
+        if signal_data.get("exits"):
+            for i, exit_info in enumerate(signal_data["exits"]):
+                exit_date = pd.to_datetime(
+                    exit_info.get("date", entry_date_pd)
+                ).tz_localize(None)
+                exit_price = exit_info.get("price", 0)
+                exit_type = exit_info.get("type", "Exit")
+                qty_pct = exit_info.get("qty_pct", 0)
+
+                # Determine color/shape based on exit type
+                color = "green"  # Default
+                symbol_marker = "triangle-down"
+                marker_size = 12
+
+                type_upper = str(exit_type).upper()
+
+                if "STOP" in type_upper:
+                    color = "#FF4136"  # Red
+                    symbol_marker = "x"
+                    label_text = f"🛑 {exit_type}"
+                elif "TP1" in type_upper:
+                    color = "#2ECC40"  # Green
+                    symbol_marker = "star"
+                    marker_size = 14
+                    label_text = f"⭐ {exit_type} (+1.5R)"
+                elif "TP2" in type_upper:
+                    color = "#01FF70"  # Lime
+                    symbol_marker = "star"
+                    marker_size = 16
+                    label_text = f"🌟 {exit_type} (+3R)"
+                elif "RUNNER" in type_upper:
+                    color = "#0074D9"  # Blue
+                    symbol_marker = "diamond"
+                    label_text = f"🏃 {exit_type}"
+                else:
+                    label_text = f"🚪 {exit_type}"
+
+                # Add Marker
+                fig.add_trace(
+                    go.Scatter(
+                        x=[exit_date],
+                        y=[exit_price],
+                        mode="markers",
+                        marker=dict(
+                            color=color,
+                            size=marker_size,
+                            symbol=symbol_marker,
+                            line=dict(color="black", width=1),
+                        ),
+                        name=f"{exit_type} ({qty_pct:.0f}%)",
+                        hovertemplate=f"<b>{label_text}</b><br>Price: ${exit_price:.2f}<br>Qty: {qty_pct:.0f}%<br>Date: {exit_date.date()}<extra></extra>",
+                    )
+                )
+
+                # Add Annotation Text (offset to avoid clutter)
+                y_offset = -25 if i % 2 == 0 else 25  # Alternate labels up/down
+                fig.add_annotation(
+                    x=exit_date,
+                    y=exit_price,
+                    text=label_text,
+                    showarrow=True,
+                    arrowhead=1,
+                    arrowcolor=color,
+                    ax=0,
+                    ay=y_offset,
+                    font=dict(size=10, color="black"),
+                    bgcolor="rgba(255,255,255,0.7)",
+                    bordercolor=color,
+                    borderwidth=1,
+                )
+
+        # Legacy Single Exit point (fallback)
+        elif signal_data.get("exit_price"):
+            exit_date = entry_date_pd + pd.Timedelta(
+                days=signal_data.get("hold_days", 5)
+            )
+            outcome = signal_data.get("outcome")
+            color = "green" if outcome == "WIN" else "red"
+            symbol_marker = "circle" if outcome == "WIN" else "triangle-down"
+
+            fig.add_trace(
+                go.Scatter(
+                    x=[exit_date],
+                    y=[signal_data["exit_price"]],
+                    mode="markers",
+                    marker=dict(
+                        color=color,
+                        size=15,
+                        symbol=symbol_marker,
+                        line=dict(color="black", width=2),
+                    ),
+                    name="Exit",
+                    hovertemplate=f"<b>EXIT ({outcome})</b><br>${signal_data['exit_price']:.2f}<extra></extra>",
+                )
+            )
+
         # Layout
-        camino = signal_data.get('camino', 'N/A')
-        outcome = signal_data.get('outcome', 'N/A')
-        return_pct = signal_data.get('return_pct', 0)
-        
-        title_color = 'green' if outcome == 'WIN' else 'red'
-        
+        camino = signal_data.get("camino", "N/A")
+        outcome = signal_data.get("outcome", "N/A")
+        return_pct = signal_data.get("return_pct", 0)
+
+        title_color = "green" if outcome == "WIN" else "red"
+
         fig.update_layout(
             title=f"<b>{symbol}</b> - {camino} | {entry_date} | <span style='color:{title_color}'>{outcome} ({return_pct:+.2f}%)</span>",
             xaxis_title="Date",
             yaxis_title="Price ($)",
-            template='plotly_white',
-            hovermode='x unified',
+            template="plotly_white",
+            hovermode="x unified",
             height=600,
             xaxis_rangeslider_visible=False,
             xaxis=dict(
                 rangebreaks=[
-                    dict(bounds=["sat", "mon"]), # Hide weekends
+                    dict(bounds=["sat", "mon"]),  # Hide weekends
                 ]
-            )
+            ),
         )
-        
+
         return fig
-    
+
     def create_intraday_chart(self, symbol: str, entry_date: str, signal_data: dict):
         """Create interactive 5m intraday chart for VWAP Reclaim"""
         entry_date_pd = pd.to_datetime(entry_date).tz_localize(None)
-        
+
         # Check if date is within last 60 days for YFinance limits
         days_diff = (datetime.now() - entry_date_pd).days
         if days_diff > 59:
             fig = go.Figure()
-            fig.add_annotation(text="Intraday data not available for >60 days old trades (API Limit)",
-                              xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+            fig.add_annotation(
+                text="Intraday data not available for >60 days old trades (API Limit)",
+                xref="paper",
+                yref="paper",
+                x=0.5,
+                y=0.5,
+                showarrow=False,
+            )
             fig.update_layout(title=f"Intraday 5m - {symbol} (Data Unavailable)")
             return fig
 
         # Fetch 5m data
-        intraday_df = self.data_provider.get_intraday_data(symbol, interval="5m", days=days_diff+5)
-        
+        intraday_df = self.data_provider.get_intraday_data(
+            symbol, interval="5m", days=days_diff + 5
+        )
+
         if intraday_df.empty:
             return None
 
         # Filter for entry date
-        target_day_str = entry_date_pd.strftime('%Y-%m-%d')
-        day_data = intraday_df[intraday_df.index.strftime('%Y-%m-%d') == target_day_str].copy()
-        
+        target_day_str = entry_date_pd.strftime("%Y-%m-%d")
+        day_data = intraday_df[
+            intraday_df.index.strftime("%Y-%m-%d") == target_day_str
+        ].copy()
+
         if day_data.empty:
             return None
 
         # Calculate VWAP
-        day_data['TP'] = (day_data['High'] + day_data['Low'] + day_data['Close']) / 3
-        day_data['CumVol'] = day_data['Volume'].cumsum()
-        day_data['CumVolPrice'] = (day_data['TP'] * day_data['Volume']).cumsum()
-        day_data['VWAP'] = day_data['CumVolPrice'] / day_data['CumVol']
+        day_data["TP"] = (day_data["High"] + day_data["Low"] + day_data["Close"]) / 3
+        day_data["CumVol"] = day_data["Volume"].cumsum()
+        day_data["CumVolPrice"] = (day_data["TP"] * day_data["Volume"]).cumsum()
+        day_data["VWAP"] = day_data["CumVolPrice"] / day_data["CumVol"]
 
         fig = go.Figure()
 
         # Candlesticks
-        fig.add_trace(go.Candlestick(
-            x=day_data.index,
-            open=day_data['Open'],
-            high=day_data['High'],
-            low=day_data['Low'],
-            close=day_data['Close'],
-            name='Price 5m'
-        ))
+        fig.add_trace(
+            go.Candlestick(
+                x=day_data.index,
+                open=day_data["Open"],
+                high=day_data["High"],
+                low=day_data["Low"],
+                close=day_data["Close"],
+                name="Price 5m",
+            )
+        )
 
         # VWAP Line
-        fig.add_trace(go.Scatter(
-            x=day_data.index,
-            y=day_data['VWAP'],
-            mode='lines',
-            line=dict(color='orange', width=2),
-            name='Intraday VWAP'
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=day_data.index,
+                y=day_data["VWAP"],
+                mode="lines",
+                line=dict(color="orange", width=2),
+                name="Intraday VWAP",
+            )
+        )
 
         # Entry Level
-        entry_price = signal_data.get('entry_price')
+        entry_price = signal_data.get("entry_price")
         if entry_price:
-            fig.add_hline(y=entry_price, line_dash="dash", line_color="cyan", annotation_text="Entry Level")
+            fig.add_hline(
+                y=entry_price,
+                line_dash="dash",
+                line_color="cyan",
+                annotation_text="Entry Level",
+            )
 
         # Session Low / Stop
-        stop_loss = signal_data.get('stop_loss')
+        stop_loss = signal_data.get("stop_loss")
         if stop_loss:
-             fig.add_hline(y=stop_loss, line_dash="dot", line_color="red", annotation_text="Session Low (Stop)")
+            fig.add_hline(
+                y=stop_loss,
+                line_dash="dot",
+                line_color="red",
+                annotation_text="Session Low (Stop)",
+            )
 
         fig.update_layout(
             title=f"<b>🔍 Intraday 5m Zoom - {symbol}</b><br><sup>VWAP Defense Analysis | {target_day_str}</sup>",
             yaxis_title="Price ($)",
             xaxis_title="Time",
-            template='plotly_white',
+            template="plotly_white",
             height=500,
-            xaxis_rangeslider_visible=False
+            xaxis_rangeslider_visible=False,
         )
-        
+
         return fig
-    
+
     def create_symbol_detail_page(self, symbol: str):
         """Create detailed page for a specific symbol"""
-        
-        symbol_df = self.results_df[self.results_df['symbol'] == symbol].sort_values('date')
-        
+
+        symbol_df = self.results_df[self.results_df["symbol"] == symbol].sort_values(
+            "date"
+        )
+
         if symbol_df.empty:
             print(f"No data for {symbol}")
             return None
-        
+
         # Create subplots
         fig = make_subplots(
-            rows=2, cols=2,
+            rows=2,
+            cols=2,
             subplot_titles=(
-                f'📈 {symbol} - Cumulative P&L',
-                f'📊 Trade Statistics',
-                f'📅 Returns Over Time',
-                f'🎯 Win/Loss Distribution'
+                f"📈 {symbol} - Cumulative P&L",
+                f"📊 Trade Statistics",
+                f"📅 Returns Over Time",
+                f"🎯 Win/Loss Distribution",
             ),
             specs=[
-                [{'type': 'scatter'}, {'type': 'indicator'}],
-                [{'type': 'scatter'}, {'type': 'bar'}]
+                [{"type": "scatter"}, {"type": "indicator"}],
+                [{"type": "scatter"}, {"type": "bar"}],
             ],
-            vertical_spacing=0.15
+            vertical_spacing=0.15,
         )
-        
+
         # 1. Cumulative P&L
-        symbol_df['cumulative'] = (1 + symbol_df['return_pct']/100).cumprod() - 1
-        
+        symbol_df["cumulative"] = (1 + symbol_df["return_pct"] / 100).cumprod() - 1
+
         fig.add_trace(
             go.Scatter(
-                x=symbol_df['date'],
-                y=symbol_df['cumulative'] * 100,
-                mode='lines+markers',
-                name='Cumulative Return',
-                line=dict(color='#2E86AB', width=2),
-                fill='tozeroy'
+                x=symbol_df["date"],
+                y=symbol_df["cumulative"] * 100,
+                mode="lines+markers",
+                name="Cumulative Return",
+                line=dict(color="#2E86AB", width=2),
+                fill="tozeroy",
             ),
-            row=1, col=1
+            row=1,
+            col=1,
         )
-        
+
         # 2. Statistics indicator
-        wins = len(symbol_df[symbol_df['outcome'] == 'WIN'])
+        wins = len(symbol_df[symbol_df["outcome"] == "WIN"])
         total = len(symbol_df)
         win_rate = wins / total * 100
-        
+
         fig.add_trace(
             go.Indicator(
                 mode="number+delta",
                 value=win_rate,
-                title={"text": f"Win Rate<br><span style='font-size:0.8em'>{wins}/{total} wins</span>"},
-                delta={'reference': 50, 'relative': False},
-                domain={'x': [0, 1], 'y': [0, 1]},
-                number={'suffix': "%"}
+                title={
+                    "text": f"Win Rate<br><span style='font-size:0.8em'>{wins}/{total} wins</span>"
+                },
+                delta={"reference": 50, "relative": False},
+                domain={"x": [0, 1], "y": [0, 1]},
+                number={"suffix": "%"},
             ),
-            row=1, col=2
+            row=1,
+            col=2,
         )
-        
+
         # 3. Individual returns over time
-        colors = ['green' if x > 0 else 'red' for x in symbol_df['return_pct']]
-        
+        colors = ["green" if x > 0 else "red" for x in symbol_df["return_pct"]]
+
         fig.add_trace(
             go.Scatter(
-                x=symbol_df['date'],
-                y=symbol_df['return_pct'],
-                mode='markers',
+                x=symbol_df["date"],
+                y=symbol_df["return_pct"],
+                mode="markers",
                 marker=dict(color=colors, size=10),
-                name='Trade Returns',
-                text=[f"{cam}<br>{ret:+.2f}%" for cam, ret in zip(symbol_df['camino'], symbol_df['return_pct'])],
-                hovertemplate='<b>%{text}</b><extra></extra>'
+                name="Trade Returns",
+                text=[
+                    f"{cam}<br>{ret:+.2f}%"
+                    for cam, ret in zip(symbol_df["camino"], symbol_df["return_pct"])
+                ],
+                hovertemplate="<b>%{text}</b><extra></extra>",
             ),
-            row=2, col=1
+            row=2,
+            col=1,
         )
-        
+
         # 4. Win/Loss distribution
-        outcomes = symbol_df['outcome'].value_counts()
-        
+        outcomes = symbol_df["outcome"].value_counts()
+
         fig.add_trace(
             go.Bar(
                 x=outcomes.index,
                 y=outcomes.values,
-                marker_color=['green' if x == 'WIN' else 'red' for x in outcomes.index],
+                marker_color=["green" if x == "WIN" else "red" for x in outcomes.index],
                 text=outcomes.values,
-                textposition='auto',
-                showlegend=False
+                textposition="auto",
+                showlegend=False,
             ),
-            row=2, col=2
+            row=2,
+            col=2,
         )
-        
+
         fig.update_layout(
             title_text=f"<b>{symbol} - Detailed Analysis</b><br><sup>Total Trades: {total} | Win Rate: {win_rate:.1f}% | Avg Return: {symbol_df['return_pct'].mean():+.2f}%</sup>",
             title_font_size=20,
             height=800,
             showlegend=False,
-            template='plotly_white'
+            template="plotly_white",
         )
-        
+
         return fig
-    
-    def generate_html_report(self, output_file: str = "outputs/backtests/backtest_dashboard.html"):
+
+    def generate_html_report(
+        self, output_file: str = "outputs/backtests/backtest_dashboard.html"
+    ):
         """Generate complete HTML report with all charts"""
-        
+
         print("\n📊 Generating Interactive Dashboard...")
-        
+
         # Overview dashboard
         print("  Creating overview dashboard...")
         overview_fig = self.create_overview_dashboard()
-        
+
         # Symbol details
         print("  Creating symbol detail pages...")
         symbol_figs = {}
-        for symbol in self.results_df['symbol'].unique():
+        for symbol in self.results_df["symbol"].unique():
             print(f"    Processing {symbol}...")
             symbol_figs[symbol] = self.create_symbol_detail_page(symbol)
-        
+
         # Top trades
         print("  Creating top trades charts...")
-        top_wins = self.results_df.nlargest(5, 'return_pct')
-        top_losses = self.results_df.nsmallest(5, 'return_pct')
-        
+        top_wins = self.results_df.nlargest(5, "return_pct")
+        top_losses = self.results_df.nsmallest(5, "return_pct")
+
         trade_figs = []
         for idx, row in pd.concat([top_wins, top_losses]).iterrows():
             signal_data = {
-                'camino': row['camino'],
-                'entry_price': row['entry_price'],
-                'stop_loss': row['stop_loss'],
-                'base_high': row.get('base_high'),
-                'exit_price': row['exit_price'],
-                'outcome': row['outcome'],
-                'return_pct': row['return_pct'],
-                'hold_days': row['hold_days']
+                "camino": row["camino"],
+                "entry_price": row["entry_price"],
+                "stop_loss": row["stop_loss"],
+                "base_high": row.get("base_high"),
+                "exit_price": row["exit_price"],
+                "outcome": row["outcome"],
+                "return_pct": row["return_pct"],
+                "hold_days": row["hold_days"],
             }
-            fig = self.create_trade_chart(row['symbol'], row['date'].strftime('%Y-%m-%d'), signal_data)
+            fig = self.create_trade_chart(
+                row["symbol"], row["date"].strftime("%Y-%m-%d"), signal_data
+            )
             trade_figs.append(fig)
-        
+
         # Generate HTML
         print("  Generating HTML file...")
-        
+
         # Calculate advanced metrics
-        wins = (self.results_df['outcome'] == 'WIN').sum()
-        losses = (self.results_df['outcome'] == 'LOSS').sum()
+        wins = (self.results_df["outcome"] == "WIN").sum()
+        losses = (self.results_df["outcome"] == "LOSS").sum()
         total_trades = len(self.results_df)
         win_rate = (wins / total_trades * 100) if total_trades > 0 else 0
-        
-        avg_win = self.results_df[self.results_df['outcome'] == 'WIN']['return_pct'].mean() if wins > 0 else 0
-        avg_loss = abs(self.results_df[self.results_df['outcome'] == 'LOSS']['return_pct'].mean()) if losses > 0 else 0
-        
+
+        avg_win = (
+            self.results_df[self.results_df["outcome"] == "WIN"]["return_pct"].mean()
+            if wins > 0
+            else 0
+        )
+        avg_loss = (
+            abs(
+                self.results_df[self.results_df["outcome"] == "LOSS"][
+                    "return_pct"
+                ].mean()
+            )
+            if losses > 0
+            else 0
+        )
+
         # Risk/Reward Ratio
         rr_ratio = (avg_win / avg_loss) if avg_loss > 0 else 0
-        
+
         # Total R (assuming 1R per trade risk)
-        total_r = self.results_df['return_pct'].sum() / (self.results_df['risk_pct'].mean() if 'risk_pct' in self.results_df.columns else 1)
-        
+        total_r = self.results_df["return_pct"].sum() / (
+            self.results_df["risk_pct"].mean()
+            if "risk_pct" in self.results_df.columns
+            else 1
+        )
+
         # Profit Factor
-        total_wins = self.results_df[self.results_df['outcome'] == 'WIN']['return_pct'].sum()
-        total_losses = abs(self.results_df[self.results_df['outcome'] == 'LOSS']['return_pct'].sum())
+        total_wins = self.results_df[self.results_df["outcome"] == "WIN"][
+            "return_pct"
+        ].sum()
+        total_losses = abs(
+            self.results_df[self.results_df["outcome"] == "LOSS"]["return_pct"].sum()
+        )
         profit_factor = (total_wins / total_losses) if total_losses > 0 else 0
-        
+
         # Expectancy in R
-        expectancy_r = (win_rate/100 * avg_win - (1 - win_rate/100) * avg_loss) / (self.results_df['risk_pct'].mean() if 'risk_pct' in self.results_df.columns else 1)
-        
+        expectancy_r = (win_rate / 100 * avg_win - (1 - win_rate / 100) * avg_loss) / (
+            self.results_df["risk_pct"].mean()
+            if "risk_pct" in self.results_df.columns
+            else 1
+        )
+
         # Total return
-        cumulative_return = ((1 + self.results_df['return_pct']/100).prod() - 1) * 100
-        
+        cumulative_return = ((1 + self.results_df["return_pct"] / 100).prod() - 1) * 100
+
         # Market filter info (if available in data)
         date_range_str = f"{self.results_df['date'].min().strftime('%Y-%m-%d')} to {self.results_df['date'].max().strftime('%Y-%m-%d')}"
-        
+
         html_content = f"""
 <!DOCTYPE html>
 <html>
@@ -734,14 +970,14 @@ class InteractiveDashboard:
 <body>
     <div class="header">
         <h1>&#128200; TRIAD MOMENTUM BACKTEST DASHBOARD</h1>
-        <p>Interactive Analysis - Generated {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+        <p>Interactive Analysis - Generated {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
         <p style="font-size: 14px; opacity: 0.9;">Period: {date_range_str} | &#128737; Market Regime Filters Applied</p>
     </div>
     
     <div class="section">
         <div class="section-title">Performance Metrics</div>
         <div class="metrics-grid">
-            <div class="metric-card {'positive' if cumulative_return > 0 else 'negative'}">
+            <div class="metric-card {"positive" if cumulative_return > 0 else "negative"}">
                 <div class="metric-value">{cumulative_return:+.2f}%</div>
                 <div class="metric-label">Total Return</div>
             </div>
@@ -749,7 +985,7 @@ class InteractiveDashboard:
                 <div class="metric-value">{total_trades}</div>
                 <div class="metric-label">Total Trades</div>
             </div>
-            <div class="metric-card {'positive' if win_rate >= 50 else 'negative'}">
+            <div class="metric-card {"positive" if win_rate >= 50 else "negative"}">
                 <div class="metric-value">{win_rate:.1f}%</div>
                 <div class="metric-label">Win Rate</div>
             </div>
@@ -761,19 +997,19 @@ class InteractiveDashboard:
                 <div class="metric-value">{losses}</div>
                 <div class="metric-label">Losers</div>
             </div>
-            <div class="metric-card {'positive' if rr_ratio >= 2 else 'negative'}">
+            <div class="metric-card {"positive" if rr_ratio >= 2 else "negative"}">
                 <div class="metric-value">{rr_ratio:.2f}</div>
                 <div class="metric-label">Risk/Reward Ratio</div>
             </div>
-            <div class="metric-card {'positive' if total_r > 0 else 'negative'}">
+            <div class="metric-card {"positive" if total_r > 0 else "negative"}">
                 <div class="metric-value">{total_r:.2f}R</div>
                 <div class="metric-label">Total R</div>
             </div>
-            <div class="metric-card {'positive' if profit_factor > 1 else 'negative'}">
+            <div class="metric-card {"positive" if profit_factor > 1 else "negative"}">
                 <div class="metric-value">{profit_factor:.2f}</div>
                 <div class="metric-label">Profit Factor</div>
             </div>
-            <div class="metric-card {'positive' if expectancy_r > 0 else 'negative'}">
+            <div class="metric-card {"positive" if expectancy_r > 0 else "negative"}">
                 <div class="metric-value">{expectancy_r:.2f}R</div>
                 <div class="metric-label">Expectancy (R)</div>
             </div>
@@ -786,7 +1022,7 @@ class InteractiveDashboard:
                 <div class="metric-label">Avg Loss</div>
             </div>
             <div class="metric-card">
-                <div class="metric-value">{self.results_df['symbol'].nunique()}</div>
+                <div class="metric-value">{self.results_df["symbol"].nunique()}</div>
                 <div class="metric-label">Symbols Traded</div>
             </div>
         </div>
@@ -796,11 +1032,11 @@ class InteractiveDashboard:
         <div class="nav-tabs">
             <button class="nav-tab active" onclick="showTab('overview')">Overview</button>
 """
-        
+
         # Add symbol tabs
-        for symbol in self.results_df['symbol'].unique():
+        for symbol in self.results_df["symbol"].unique():
             html_content += f'            <button class="nav-tab" onclick="showTab(\'{symbol}\')">{symbol}</button>\n'
-        
+
         html_content += """            <button class="nav-tab" onclick="showTab('trades')">Best/Worst Trades</button>
             <button class="nav-tab" onclick="showTab('masterclass')">🎓 Masterclass</button>
         </div>
@@ -808,10 +1044,10 @@ class InteractiveDashboard:
         <div id="overview" class="tab-content active">
             <div class="section-title">Overview Dashboard</div>
 """
-        
+
         html_content += f"            {overview_fig.to_html(full_html=False, include_plotlyjs=False)}\n"
         html_content += "        </div>\n"
-        
+
         # Add masterclass content
         html_content += """
         <div id="masterclass" class="tab-content">
@@ -843,7 +1079,7 @@ class InteractiveDashboard:
             </div>
         </div>
 """
-        
+
         # Add symbol tabs content
         for symbol, fig in symbol_figs.items():
             html_content += f"""
@@ -852,16 +1088,18 @@ class InteractiveDashboard:
             {fig.to_html(full_html=False, include_plotlyjs=False)}
         </div>
 """
-        
+
         # Add best/worst trades
         html_content += """
         <div id="trades" class="tab-content">
             <div class="section-title">Best & Worst Trades</div>
 """
-        
+
         for fig in trade_figs:
-            html_content += f"            {fig.to_html(full_html=False, include_plotlyjs=False)}\n"
-        
+            html_content += (
+                f"            {fig.to_html(full_html=False, include_plotlyjs=False)}\n"
+            )
+
         html_content += """
         </div>
     </div>
@@ -889,38 +1127,44 @@ class InteractiveDashboard:
 </body>
 </html>
 """
-        
+
         # Save HTML
         output_path = Path(output_file)
         output_path.write_text(html_content)
-        
+
         print(f"\n✅ Dashboard saved: {output_path}")
         print(f"   File size: {output_path.stat().st_size / 1024:.1f} KB")
-        
+
         return str(output_path)
 
 
 def main():
     import argparse
-    
-    parser = argparse.ArgumentParser(description='Generate Interactive Dashboard')
-    parser.add_argument('results_csv', help='Path to backtest results CSV')
-    parser.add_argument('--output', default='outputs/backtests/backtest_dashboard.html', help='Output HTML file')
-    parser.add_argument('--no-browser', action='store_true', help='Don\'t open browser automatically')
-    
+
+    parser = argparse.ArgumentParser(description="Generate Interactive Dashboard")
+    parser.add_argument("results_csv", help="Path to backtest results CSV")
+    parser.add_argument(
+        "--output",
+        default="outputs/backtests/backtest_dashboard.html",
+        help="Output HTML file",
+    )
+    parser.add_argument(
+        "--no-browser", action="store_true", help="Don't open browser automatically"
+    )
+
     args = parser.parse_args()
-    
+
     if not Path(args.results_csv).exists():
         print(f"❌ File not found: {args.results_csv}")
         sys.exit(1)
-    
+
     dashboard = InteractiveDashboard(args.results_csv)
     output_file = dashboard.generate_html_report(args.output)
-    
+
     if not args.no_browser:
         print("\n🌐 Opening dashboard in browser...")
-        webbrowser.open('file://' + str(Path(output_file).absolute()))
-    
+        webbrowser.open("file://" + str(Path(output_file).absolute()))
+
     print("\n✅ Dashboard ready!")
     print(f"   Open: {output_file}")
 

@@ -1,0 +1,270 @@
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                   🏗️ REFACTORING - RESUMEN VISUAL                        ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│                          SITUACIÓN ACTUAL                                 │
+└───────────────────────────────────────────────────────────────────────────┘
+
+    THOR Engine (929 líneas)          Advanced Engine (2,283 líneas)
+    ┌────────────────────┐             ┌────────────────────┐
+    │ RVOL calculation   │◄────────────┤ RVOL calculation   │  DUPLICADO
+    │ ADR calculation    │◄────────────┤ ADR calculation    │  DUPLICADO
+    │ SMA/EMA calcs      │◄────────────┤ SMA/EMA calcs      │  DUPLICADO
+    │ Liquidity filters  │◄────────────┤ Liquidity filters  │  DUPLICADO
+    │ Position sizing    │◄────────────┤ Position sizing    │  DUPLICADO
+    │ Consolidation      │◄────────────┤ Consolidation      │  DUPLICADO
+    └────────────────────┘             └────────────────────┘
+
+    🔴 PROBLEMA: Fix bug → editar en 2 lugares → riesgo desincronización
+
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│                        DESPUÉS DEL REFACTORING                            │
+└───────────────────────────────────────────────────────────────────────────┘
+
+                        src/indicators/technical.py
+                        ┌──────────────────────────┐
+                        │  RVOL()                  │
+                        │  ADR()                   │
+                        │  SMA(), EMA()            │
+                        │  distance_to_sma()       │
+                        │  bollinger_bands()       │
+                        └────────┬─────────────────┘
+                                 │
+                    ┌────────────┼────────────┐
+                    │            │            │
+                    ▼            ▼            ▼
+          ┌─────────────┐ ┌──────────┐ ┌──────────┐
+          │ THOR Engine │ │ Advanced │ │ App.py   │
+          │  (import)   │ │ (import) │ │ (import) │
+          └─────────────┘ └──────────┘ └──────────┘
+
+    ✅ BENEFICIO: Fix bug → editar 1 lugar → garantía sincronización
+
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                        ANÁLISIS DE DUPLICACIÓN                            ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+Categoría          │ THOR  │ Advanced │ Severidad │ Ahorro líneas
+───────────────────┼───────┼──────────┼───────────┼───────────────
+RVOL               │   5   │    14    │    🔴     │    ~80
+ADR                │   2   │    26    │    🔴     │   ~120
+SMA/EMA            │   4   │    36    │    🔴     │   ~180
+Filters            │  10   │    45    │    🔴     │   ~240
+Position Size      │  18   │    32    │    🔴     │   ~220
+Consolidation      │   3   │    11    │    🔴     │    ~60
+Volume             │   5   │    10    │    🟡     │    ~60
+───────────────────┼───────┼──────────┼───────────┼───────────────
+TOTAL              │  47   │   174    │           │   ~960
+
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                         PLAN DE REFACTORING                               ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+FASE 1: INDICATORS (3 horas) 🔴 CRÍTICO
+──────────────────────────────────────────────────────────────────────────
+  Crear: src/indicators/technical.py
+  
+  Consolidar:
+    • RVOL calculation
+    • ADR calculation  
+    • SMA, EMA, RSI
+    • Distance to SMA
+    • Bollinger Bands
+  
+  Ahorro: ~300 líneas
+  
+  Uso:
+  ┌────────────────────────────────────────────────────────────┐
+  │ from src.indicators.technical import TechnicalIndicators   │
+  │                                                             │
+  │ # Antes (6 líneas)                                         │
+  │ avg_vol = volume.rolling(20).mean()                        │
+  │ rvol = volume / avg_vol                                    │
+  │ dr = (high - low) / close                                  │
+  │ adr = dr.rolling(20).mean() * 100                          │
+  │                                                             │
+  │ # Después (2 líneas)                                       │
+  │ rvol = TechnicalIndicators.rvol(volume)                    │
+  │ adr = TechnicalIndicators.adr(high, low, close)            │
+  └────────────────────────────────────────────────────────────┘
+
+
+FASE 2: FILTERS (3 horas) 🔴 CRÍTICO
+──────────────────────────────────────────────────────────────────────────
+  Crear: src/filters/liquidity.py
+  
+  Consolidar:
+    • RVOL filter
+    • ADR filter
+    • Volume filter
+    • Dollar volume filter
+    • Combined filters
+  
+  Ahorro: ~250 líneas
+  
+  Uso:
+  ┌────────────────────────────────────────────────────────────┐
+  │ from src.filters.liquidity import LiquidityFilters as LF   │
+  │                                                             │
+  │ # Antes (10 líneas)                                        │
+  │ entries = base.copy()                                      │
+  │ entries &= (rvol >= min_rvol)                              │
+  │ entries &= (adr >= min_adr)                                │
+  │ entries &= (volume >= 300_000)                             │
+  │ entries &= (volume * price >= 5_000_000)                   │
+  │                                                             │
+  │ # Después (1 línea)                                        │
+  │ entries = LF.apply_all_liquidity_filters(                  │
+  │     base, rvol, adr, volume, price, min_rvol, min_adr)     │
+  └────────────────────────────────────────────────────────────┘
+
+
+FASE 3: POSITION SIZING (2 horas) 🟡 MEDIO
+──────────────────────────────────────────────────────────────────────────
+  Crear: src/risk/position_sizing.py
+  
+  Consolidar:
+    • Fixed dollar risk
+    • Percent risk
+    • Volatility scaling
+    • ADR-based scaling
+  
+  Ahorro: ~150 líneas
+
+
+FASE 4: MARKET REGIME (2 horas) 🟡 MEDIO
+──────────────────────────────────────────────────────────────────────────
+  Crear: src/filters/market_regime.py
+  
+  Consolidar:
+    • SPY > SMA50
+    • VIX < threshold
+    • Bullish/Bearish detection
+  
+  Ahorro: ~100 líneas
+
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                         ESTRUCTURA FINAL                                  ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+src/
+├── indicators/
+│   ├── __init__.py
+│   └── technical.py              ⭐ FASE 1 (RVOL, ADR, SMA...)
+│
+├── filters/
+│   ├── __init__.py
+│   ├── liquidity.py              ⭐ FASE 2 (Volume, RVOL...)
+│   ├── quality.py                (Consolidation, breakout)
+│   └── market_regime.py          ⭐ FASE 4 (SPY, VIX)
+│
+├── risk/
+│   ├── __init__.py
+│   └── position_sizing.py        ⭐ FASE 3 (Risk, scaling)
+│
+├── utils/
+│   ├── __init__.py
+│   ├── data.py                   (Data helpers)
+│   └── metrics.py                (Performance metrics)
+│
+└── backtest/
+    ├── optimization_engine_thor.py      (de 929 → ~600 líneas)
+    └── vectorbt_engine_advanced.py      (de 2,283 → ~1,400 líneas)
+
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                            BENEFICIOS                                     ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────┬──────────────┬──────────────┬────────────────┐
+│ Métrica                 │ Antes        │ Después      │ Mejora         │
+├─────────────────────────┼──────────────┼──────────────┼────────────────┤
+│ Líneas totales          │ 5,500        │ 4,500        │ -1,000 (-18%)  │
+│ THOR Engine             │ 929          │ 600          │ -329 (-35%)    │
+│ Advanced Engine         │ 2,283        │ 1,400        │ -883 (-39%)    │
+│ Bugs duplicados         │ Fix en 2+    │ Fix en 1     │ 2x faster      │
+│ Testing                 │ E2E only     │ Unit + E2E   │ ++ coverage    │
+│ Reutilización           │ Copy/paste   │ Import       │ ++ clean       │
+└─────────────────────────┴──────────────┴──────────────┴────────────────┘
+
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                         OPCIONES DE TIMING                                ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+OPCIÓN A: Todo ahora (1 día)
+──────────────────────────────────────────────────────────────────────────
+  Fase 1-4 en 10 horas
+  ✅ Beneficio inmediato
+  ❌ Bloquea walk forward
+
+OPCIÓN B: Después walk forward (recomendado)
+──────────────────────────────────────────────────────────────────────────
+  1. Completar walk forward
+  2. Implementar params production
+  3. Refactorizar (4 días)
+  ✅ No bloquea trabajo crítico
+  ✅ Código production primero
+
+OPCIÓN C: Incremental (1 fase/semana)
+──────────────────────────────────────────────────────────────────────────
+  Semana 1: Indicators
+  Semana 2: Filters
+  Semana 3: Position Sizing
+  Semana 4: Market Regime
+  ✅ Bajo riesgo
+  ✅ No disruptivo
+  ❌ Beneficio lento
+
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                         MI RECOMENDACIÓN                                  ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+🎯 OPCIÓN B: Después del walk forward
+
+  RAZÓN:
+    1. Walk forward es crítico (validación robustez)
+    2. Params production son urgentes (trading real)
+    3. Refactoring es mantenibilidad (puede esperar)
+    4. Sistema funciona bien ahora
+
+  TIMELINE:
+    Hoy-mañana:   Completar walk forward
+    Día 3:        Implementar params production
+    Día 4+:       Refactoring Fase 1 (Indicators)
+    Semana 2:     Refactoring Fases 2-4
+
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                         QUICK COMMANDS                                    ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+Ver duplicación detallada:
+──────────────────────────────────────────────────────────────────────────
+$ python3 scripts/analyze_code_duplication.py
+
+
+Iniciar Fase 1 (Indicators):
+──────────────────────────────────────────────────────────────────────────
+$ mkdir -p src/indicators
+$ # Editar src/indicators/technical.py
+$ # Actualizar engines
+$ python3 test_convergence_quick.py
+
+
+Validar refactoring:
+──────────────────────────────────────────────────────────────────────────
+$ python3 test_convergence_quick.py
+$ python3 validation_baseline.py --phase 1
+
+
+══════════════════════════════════════════════════════════════════════════
+
+📚 LEER: PLAN_REFACTORING_CODIGO.md (detalle completo)
+

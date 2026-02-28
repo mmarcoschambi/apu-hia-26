@@ -4,7 +4,7 @@ import argparse
 import os
 
 # Configuración
-DB_PATH = 'data/ticker_cache.sqlite'
+DB_PATH = 'data/ticker_cache.db'
 
 def get_top_historical(year, month, limit=50):
     if not os.path.exists(DB_PATH):

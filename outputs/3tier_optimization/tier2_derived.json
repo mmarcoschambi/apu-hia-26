@@ -1,0 +1,41 @@
+{
+  "min_rvol": 0.61,
+  "min_adr": 1.58,
+  "max_dist_sma20": 6.31,
+  "min_dollar_volume": 92371057.9670906,
+  "min_consolidation_days": 5,
+  "min_volume": 100000,
+  "_raw_derived": {
+    "rvol_raw": 0.61,
+    "adr_raw": 1.58,
+    "dist_sma20_raw": 6.31,
+    "dollar_volume_raw": 92371057.9670906
+  },
+  "_dollar_volume_stats": {
+    "p10": 108588459.14154053,
+    "p25": 170543067.77996063,
+    "median": 291883616.00723267,
+    "p75": 470721366.06521606,
+    "p90": 1121480961.2083435,
+    "max": 17804752640.30713,
+    "derived_raw": 92371057.9670906
+  },
+  "_rvol_stats": {
+    "p10": 0.68,
+    "median": 0.95,
+    "p90": 1.46,
+    "max": 2.14
+  },
+  "_adr_stats": {
+    "p10": 1.61,
+    "median": 2.24,
+    "p90": 3.81,
+    "max": 5.13
+  },
+  "_dist_sma20_stats": {
+    "p10": 0.54,
+    "median": 1.56,
+    "p90": 4.62,
+    "max": 8.94
+  }
+}

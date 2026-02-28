@@ -1,0 +1,91 @@
+{
+  "timestamp": "2026-01-10T01:21:47.425163",
+  "method": "Bugatti_BOLIDE_WalkForward",
+  "engine": "DIVO (memory-optimized)",
+  "periods": {
+    "in_sample": "2010-01-01 to 2019-12-31",
+    "validation": "2020-01-01 to 2021-12-31",
+    "out_of_sample": "2022-01-01 to 2024-12-31"
+  },
+  "layer1": {
+    "trials": 450,
+    "tickers": 125,
+    "best_value": 0.3140836804127573,
+    "best_params": {
+      "risk_dollars": 250,
+      "max_exposure_pct": 0.3,
+      "min_rvol": 1.5,
+      "min_adr": 1.0,
+      "signal_type": "breakout",
+      "tp1_r": 2.0,
+      "tp2_r": 3.5,
+      "rvol_danger_size": 0.4
+    }
+  },
+  "layer2": {
+    "trials": 300,
+    "tickers": 75,
+    "best_value": 0.39173165785767894,
+    "best_params": {
+      "min_consolidation_days": 10,
+      "max_consolidation_range": 20.0,
+      "min_volume": 100000,
+      "min_dollar_volume": 10000000.0,
+      "max_dist_sma20": 15.0,
+      "max_stop_pct": 0.08,
+      "rvol_danger": 3.0,
+      "rvol_warning": 2.0,
+      "rvol_warning_size": 0.6,
+      "require_bullish_spy": false,
+      "max_vix": 40.0
+    },
+    "improvement_pct": 24.722066852655157
+  },
+  "validation": {
+    "sharpe": 0.6403768639718619,
+    "degradation_pct": 63.47334996461248,
+    "robustness": "CRITICAL",
+    "stats": {
+      "profit_factor": 1.5076609112904742,
+      "total_trades": 1350.0,
+      "total_return_pct": 2.9503086420399782,
+      "sharpe_ratio": 0.6403768639718619,
+      "max_drawdown_pct": 1.6867014960086024,
+      "win_rate_pct": 40.74074074074074,
+      "final_value": 7721273.148152998,
+      "phase_breakdown": {
+        "tp1_trades": 447,
+        "tp2_trades": 415,
+        "runner_trades": 488
+      }
+    }
+  },
+  "out_of_sample": {
+    "run": false,
+    "stats": {}
+  },
+  "final_params": {
+    "risk_dollars": 250,
+    "max_exposure_pct": 0.3,
+    "min_rvol": 1.5,
+    "min_adr": 1.0,
+    "signal_type": "breakout",
+    "tp1_r": 2.0,
+    "tp2_r": 3.5,
+    "rvol_danger_size": 0.4,
+    "min_consolidation_days": 10,
+    "max_consolidation_range": 20.0,
+    "min_volume": 100000,
+    "min_dollar_volume": 10000000.0,
+    "max_dist_sma20": 15.0,
+    "max_stop_pct": 0.08,
+    "rvol_danger": 3.0,
+    "rvol_warning": 2.0,
+    "rvol_warning_size": 0.6,
+    "require_bullish_spy": false,
+    "max_vix": 40.0,
+    "use_phases": true,
+    "require_positive_rs": false,
+    "require_sma_trend": false
+  }
+}

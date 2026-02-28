@@ -4,6 +4,24 @@ Sistema de trading institucional automatizado basado en el protocolo "Triad" (Ba
 
 ---
 
+## 🎯 Dual Mode Architecture
+
+This system uses **two distinct modes** for different purposes:
+
+| Mode | Purpose | Risk Type | Command |
+|------|---------|-----------|---------|
+| **CONVERGENCE** | Signal validation & debugging | Fixed $150 | `python3 debug_convergence.py` |
+| **PRODUCTION** | Performance simulation & live trading | 1.5% with compounding | `python3 backtest_vectorbt_advanced.py --mode production` |
+
+⚠️ **Important**: 
+- Use **convergence mode** to validate signal logic against THOR baseline
+- Use **production mode** for realistic P&L simulation and backtesting
+- Never compare production metrics to THOR/convergence (different implementations)
+
+📖 **Full Documentation**: [DUAL_MODE_ARCHITECTURE.md](DUAL_MODE_ARCHITECTURE.md)
+
+---
+
 ## ⚡ Inicio Rápido
 
 ### 1. Comandos Principales (Lo único que necesitas saber)

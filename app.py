@@ -1,7 +1,12 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
+import plotly.io as pio
+
+# Set global plotly theme
+pio.templates.default = "plotly_dark"
 from datetime import datetime, timedelta
 import json
 import os
@@ -14,6 +19,20 @@ import plotly.figure_factory as ff
 import random
 import pickle
 import shutil
+import quantstats as qs
+import matplotlib.pyplot as plt
+
+# Fix for Linux font issues in QuantStats/Matplotlib
+try:
+    plt.rcParams["font.family"] = "sans-serif"
+    plt.rcParams["font.sans-serif"] = [
+        "DejaVu Sans",
+        "Liberation Sans",
+        "Bitstream Vera Sans",
+        "Arial",
+    ]
+except Exception:
+    pass
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -23,2142 +42,1651 @@ from src.backtest.visualizer import BacktestVisualizer
 from src.data.openbb_data import OpenBBData
 from src.data.ticker_cache import TickerCache
 from config.universe_presets import LIQUID_MID_CAPS
+from src.analytics.quantstats_analyzer import QuantStatsAnalyzer, TradeGrouper
+from src.config.dynamic_config import (
+    load_production_config,
+    flatten_config,
+    get_engine_params,
+)
+from config.defaults import (
+    get_tier1_defaults,
+    get_tier2_defaults,
+    get_tier3_defaults,
+    reload_config,
+)
 
-# Initialize TickerCache
+# --- LOAD PRODUCTION CONFIG (Single source of truth) ---
+_raw_config = load_production_config()
+_engine_params = flatten_config(_raw_config)
+
+# Extract tier-level configs with defaults from centralized system
+# This ensures fallbacks are ALWAYS synchronized with production_config.json
+_t1 = {**get_tier1_defaults(), **_raw_config.get("tier1_strategy", {})}
+_t2 = {
+    **get_tier2_defaults(),
+    **_raw_config.get("tier2_filters", _raw_config.get("tier2_quality", {})),
+}
+_t3 = {**get_tier3_defaults(), **_raw_config.get("tier3_risk", {})}
+_mr = {
+    **{"require_spy_above_sma50": True, "max_vix": 35.0},
+    **_raw_config.get("market_regime", {}),
+}
+_perf = _raw_config.get("performance", {})
+
+# --- PERFORMANCE OPTIMIZATION WRAPPERS ---
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def get_cached_intraday_data(symbol: str, interval: str, days: int):
+    from src.data.market_data import MarketDataProvider
+
+    provider = MarketDataProvider()
+    return provider.get_intraday_data(symbol, interval=interval, days=days)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def run_cached_backtest(
+    universe,
+    start_date,
+    end_date,
+    initial_capital,
+    risk_pct,
+    risk_dollars,
+    max_exposure_pct,
+    max_dist_sma20,
+    min_rvol,
+    min_adr,
+    min_volume,
+    min_dollar_volume,
+    rvol_danger,
+    rvol_warning,
+    rvol_danger_size,
+    rvol_warning_size,
+    adr_high,
+    adr_med,
+    max_stop_pct,
+    min_consolidation_days,
+    earnings_days,
+    earnings_cushion,
+    offline_mode,
+    use_adaptive_filtering,
+    tp1_r,
+    tp2_r,
+    require_spy_above_sma50,
+    tp1_pct,
+    tp2_pct,
+    runner_pct,
+    use_earnings_calendar=False,
+    use_pit_universe=False,
+):
+    from src.backtest.vectorbt_engine_advanced import AdvancedVectorBTEngine
+
+    engine = AdvancedVectorBTEngine(
+        universe=universe,
+        start_date=start_date,
+        end_date=end_date,
+        initial_capital=initial_capital,
+        risk_pct=risk_pct,
+        risk_dollars=risk_dollars,
+        max_exposure_pct=max_exposure_pct,
+        max_dist_sma20=max_dist_sma20,
+        min_rvol=min_rvol,
+        min_adr=min_adr,
+        min_volume=min_volume,
+        min_dollar_volume=min_dollar_volume,
+        rvol_danger=rvol_danger,
+        rvol_warning=rvol_warning,
+        rvol_danger_size=rvol_danger_size,
+        rvol_warning_size=rvol_warning_size,
+        adr_high=adr_high,
+        adr_med=adr_med,
+        max_stop_pct=max_stop_pct,
+        min_consolidation_days=min_consolidation_days,
+        earnings_days=earnings_days,
+        earnings_cushion=earnings_cushion,
+        use_earnings_calendar=use_earnings_calendar,
+        offline_mode=offline_mode,
+        use_adaptive_filtering=use_adaptive_filtering,
+        tp1_r=tp1_r,
+        tp2_r=tp2_r,
+        require_spy_above_sma50=require_spy_above_sma50,
+        tp1_pct=tp1_pct,
+        tp2_pct=tp2_pct,
+        runner_pct=runner_pct,
+        use_pit_universe=use_pit_universe,
+    )
+    results = engine.run_backtest()
+    # BUG FIX: Get combined rejection stats from engine, not just filter_engine
+    rejection_stats = (
+        engine.get_rejection_stats() if hasattr(engine, "get_rejection_stats") else None
+    )
+    engine.cleanup()
+    return results, rejection_stats
+
+
 ticker_cache = TickerCache()
 
-# Función para cargar/guardar watchlist
-WATCHLIST_FILE = 'config/watchlist.json'
-
-def load_watchlist_json():
-    if os.path.exists(WATCHLIST_FILE):
-        with open(WATCHLIST_FILE, 'r') as f:
-            return json.load(f)
-    return {}
-
-def save_watchlist_json(data):
-    with open(WATCHLIST_FILE, 'w') as f:
-        json.dump(data, f, indent=4)
 
 def get_cache_date_range():
-    """
-    Obtiene el rango de fechas real disponible en el cache (tanto .pkl como SQLite)
-    Returns: (min_date, max_date) as datetime objects
-    """
-    min_date = None
-    max_date = None
-    
-    # 1. Check SQLite Cache
     try:
-        cursor = ticker_cache.conn.execute("SELECT MIN(date), MAX(date) FROM ohlcv_cache")
+        cursor = ticker_cache.conn.execute(
+            "SELECT MIN(date), MAX(date) FROM ohlcv_cache"
+        )
         sqlite_min, sqlite_max = cursor.fetchone()
         if sqlite_min and sqlite_max:
-            min_date = datetime.strptime(sqlite_min, '%Y-%m-%d')
-            max_date = datetime.strptime(sqlite_max, '%Y-%m-%d')
-    except Exception as e:
+            return datetime.strptime(sqlite_min, "%Y-%m-%d"), datetime.strptime(
+                sqlite_max, "%Y-%m-%d"
+            )
+    except:
         pass
+    return datetime(2020, 1, 1), datetime.now()
 
-    # 2. Check Legacy .pkl Cache
-    cache_dir = 'data/cache'
-    if os.path.exists(cache_dir):
-        try:
-            for file in os.listdir(cache_dir):
-                # Only process daily data files
-                if file.endswith('_daily.pkl'):
-                    try:
-                        with open(os.path.join(cache_dir, file), 'rb') as f:
-                            data = pickle.load(f)
-                            if not data.empty:
-                                file_min = data.index.min()
-                                file_max = data.index.max()
-                                
-                                if hasattr(file_min, 'to_pydatetime'):
-                                    file_min = file_min.to_pydatetime()
-                                if hasattr(file_max, 'to_pydatetime'):
-                                    file_max = file_max.to_pydatetime()
 
-                                if min_date is None or file_min < min_date:
-                                    min_date = file_min
-                                if max_date is None or file_max > max_date:
-                                    max_date = file_max
-                    except:
-                        continue
-        except:
-            pass
-    
-    # Default fallback if nothing found
-    if min_date is None or max_date is None:
-        return datetime(2020, 1, 1), datetime.now()
-    
-    # Cap max_date to today (no future dates)
-    today = datetime.now()
-    if max_date > today:
-        max_date = today
-    
-    return min_date, max_date
+def paginate_dataframe(df, page_size=20, key_prefix="df", **kwargs):
+    use_container_width = kwargs.pop("use_container_width", True)
+    if len(df) <= page_size:
+        return st.dataframe(df, use_container_width=use_container_width, **kwargs)
+    total_pages = (len(df) // page_size) + 1
+    page_number = st.number_input(
+        f"Page (1-{total_pages})",
+        min_value=1,
+        max_value=total_pages,
+        value=1,
+        step=1,
+        key=f"{key_prefix}_page_input",
+    )
+    start_idx = (page_number - 1) * page_size
+    end_idx = min(start_idx + page_size, len(df))
+    st.caption(f"Showing {start_idx + 1} to {end_idx} of {len(df)}")
+    return st.dataframe(
+        df.iloc[start_idx:end_idx], use_container_width=use_container_width, **kwargs
+    )
 
-# Función para ejecutar el backtest con UI de progreso y parámetros de riesgo
-def run_backtest_with_progress(start_date, end_date, stop_loss_pct=None, 
-                               equity=100000, risk_pct=0.5, max_exp_pct=25,
-                               min_mcap_b=2.0, max_mcap_b=20.0, 
-                               min_vol_k=300, min_adr=1.5, min_price=5.0, min_dollar_m=15,
-                               min_rvol=1.5, watchlist_path='config/watchlist.json', skip_filters=False,
-                               source='file', sector=None, offline=False, max_symbols=None, sort_by='liquidity'):
+
+def run_vectorbt_backtest_ui(
+    start_date,
+    end_date,
+    equity,
+    risk_pct,
+    max_exp_pct,
+    risk_dollars,
+    tickers_list,
+    max_symbols,
+    offline_mode,
+    max_dist_sma20,
+    min_rvol,
+    min_adr,
+    min_volume,
+    min_dollar_volume,
+    rvol_danger,
+    rvol_warning,
+    rvol_danger_size,
+    rvol_warning_size,
+    adr_high,
+    adr_med,
+    max_stop_pct,
+    min_consolidation_days,
+    earnings_days,
+    earnings_cushion,
+    tp1_r,
+    tp2_r,
+    require_spy_above_sma50,
+    tp1_pct,
+    tp2_pct,
+    runner_pct,
+    use_adaptive_filtering=True,
+    use_earnings_calendar=False,
+    use_pit_universe=False,
+):
     progress_bar = st.progress(0)
     status_text = st.empty()
-    log_area = st.empty()
-    logs = []
-
-    cmd = [
-        "python3", "daily_backtest_runner.py",
-        "--start", str(start_date),
-        "--end", str(end_date),
-        "--watchlist", watchlist_path,
-        "--equity", str(equity),
-        "--risk", str(risk_pct / 100.0),
-        "--max_exp", str(max_exp_pct / 100.0),
-        "--min_mcap", str(min_mcap_b * 1e9),
-        "--max_mcap", str(max_mcap_b * 1e9),
-        "--min_volume", str(int(min_vol_k * 1000)),
-        "--min_adr", str(min_adr),
-        "--min_price", str(min_price),
-        "--min_dollar_vol", str(int(min_dollar_m * 1e6)),
-        "--min_rvol", str(min_rvol),
-        "--source", str(source)
-    ]
-    
-    if sector:
-        cmd.extend(["--sector", str(sector)])
-    
-    if offline:
-        cmd.append("--offline")
-    
-    if skip_filters:
-        cmd.append("--skip_filters")
-    
-    if stop_loss_pct is not None and stop_loss_pct > 0:
-        cmd.extend(["--stop_loss", str(stop_loss_pct)])
-    
-    if max_symbols:
-        cmd.extend(["--max_symbols", str(max_symbols)])
-    
-    if sort_by:
-        cmd.extend(["--sort_by", str(sort_by)])
-    
+    status_text.markdown("**Running VectorBT Engine**...")
     try:
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            universal_newlines=True
-        )
-        
-        while True:
-            line = process.stdout.readline()
-            if not line and process.poll() is not None:
-                break
-            if line:
-                line = line.strip()
-                if "__PROGRESS__" in line:
-                    parts = line.split("__")
-                    if len(parts) >= 3:
-                        progress_info = parts[2].split("/") # "1/10"
-                        info_text = parts[3] if len(parts) > 3 else ""
-                        
-                        if len(progress_info) == 2:
-                            try:
-                                current = int(progress_info[0])
-                                total = int(progress_info[1])
-                                progress = min(1.0, max(0.0, float(current) / float(total)))
-                                progress_bar.progress(progress)
-                                
-                                # Detectar fase basado en el texto
-                                if "Loading" in info_text:
-                                    status_text.markdown(f"📥 **Descargando/Verificando Datos**... \n\n`{info_text}` ({current}/{total})")
-                                else:
-                                    status_text.markdown(f"🔄 **Simulando Mercado**... \n\n`{info_text}` ({current}/{total} días)")
-                            except:
-                                pass
-                else:
-                    logs.append(line)
-                    log_text = "\n".join(logs[-10:])
-                    log_area.code(log_text)
-        
-        if process.returncode == 0:
-            progress_bar.progress(1.0)
-            status_text.success("✅ Backtest completado exitosamente!")
-            st.toast("🚀 ¡Proceso Terminado!", icon="✅")
-            st.balloons()
-            
-            # System Notification (Linux / WSL2 Windows)
-            try:
-                # 1. Try Windows Notification via PowerShell (WSL2)
-                import shutil
-                if shutil.which("powershell.exe"):
-                    ps_cmd = "[reflection.assembly]::loadwithpartialname('System.Windows.Forms'); [reflection.assembly]::loadwithpartialname('System.Drawing'); $notify = new-object system.windows.forms.notifyicon; $notify.icon = [System.Drawing.SystemIcons]::Information; $notify.visible = $true; $notify.showballoontip(10, 'Momentum V2', '🚀 Backtest Finalizado Exitosamente', [system.windows.forms.tooltipicon]::None)"
-                    subprocess.run(['powershell.exe', '-Command', ps_cmd], check=False)
-                
-                # 2. Try Linux native notification (fallback or for Linux users)
-                if shutil.which("notify-send"):
-                    subprocess.run(['notify-send', '-u', 'normal', '-t', '5000', 'Momentum V2', '🚀 Backtest Finalizado Exitosamente'], check=False)
-            except Exception:
-                pass
-                
-            time.sleep(1)
-            st.cache_data.clear()
-            return True
+        if tickers_list:
+            universe = tickers_list
         else:
-            status_text.error("❌ Error en la ejecución.")
-            return False
+            import sqlite3
 
+            conn = sqlite3.connect("./data/ticker_cache.db")
+            selection_start, selection_end = str(start_date), str(end_date)
+            min_required_days = 100
+            if max_symbols == 0:
+                query = "SELECT ticker FROM ohlcv_cache WHERE date BETWEEN ? AND ? GROUP BY ticker HAVING COUNT(*) >= ? ORDER BY ticker"
+                cursor = conn.execute(
+                    query, (selection_start, selection_end, min_required_days)
+                )
+            else:
+                query = "SELECT ticker, AVG(dollar_volume) as avg_dv FROM ohlcv_cache WHERE date BETWEEN ? AND ? GROUP BY ticker HAVING COUNT(*) >= ? ORDER BY avg_dv DESC LIMIT ?"
+                cursor = conn.execute(
+                    query,
+                    (selection_start, selection_end, min_required_days, max_symbols),
+                )
+            universe = [row[0] for row in cursor.fetchall()]
+            conn.close()
+        if not universe:
+            raise ValueError("No tickers found.")
+        results, rejection_stats = run_cached_backtest(
+            universe,
+            str(start_date),
+            str(end_date),
+            equity,
+            risk_pct / 100.0,
+            risk_dollars,
+            max_exp_pct / 100.0,
+            max_dist_sma20,
+            min_rvol,
+            min_adr,
+            min_volume,
+            min_dollar_volume,
+            rvol_danger,
+            rvol_warning,
+            rvol_danger_size,
+            rvol_warning_size,
+            adr_high,
+            adr_med,
+            max_stop_pct,
+            min_consolidation_days,
+            earnings_days,
+            earnings_cushion,
+            offline_mode,
+            use_adaptive_filtering,
+            tp1_r,
+            tp2_r,
+            require_spy_above_sma50,
+            tp1_pct,
+            tp2_pct,
+            runner_pct,
+            use_earnings_calendar,
+            use_pit_universe,
+        )
+        # BUG FIX: Always update session state and persistence to avoid stale data
+        st.session_state["adaptive_filter_rejections"] = (
+            rejection_stats if rejection_stats else {}
+        )
+
+        # Also persist to disk so diagnostics tab works after rerun
+        with open("outputs/backtests/rejection_stats.json", "w") as f:
+            json.dump(st.session_state["adaptive_filter_rejections"], f)
+
+        # Clear stale legacy file if it exists to prevent UI from falling back to it
+        stale_csv = "outputs/backtests/adaptive_filter_rejections.csv"
+        if os.path.exists(stale_csv):
+            try:
+                os.remove(stale_csv)
+            except:
+                pass
+
+        # Persist summary metrics for Scorecard in Tab 4
+        metrics_summary = {
+            "sharpe_ratio": results.get("sharpe_ratio", 0),
+            "win_rate": results.get("win_rate", 0),
+            "profit_factor": results.get("profit_factor", 0),
+            "max_drawdown": results.get("max_drawdown", 0),
+            "annualized_return": results.get("annualized_return", 0),
+        }
+        with open("outputs/backtests/backtest_metrics.json", "w") as f:
+            json.dump(metrics_summary, f)
+
+        trades = results["trades"]
+        if not trades.empty:
+            symbol_col = "symbol" if "symbol" in trades.columns else "ticker"
+            entry_date_col = (
+                "entry_date" if "entry_date" in trades.columns else "Entry Timestamp"
+            )
+            exit_date_col = (
+                "exit_date" if "exit_date" in trades.columns else "Exit Timestamp"
+            )
+            entry_price_col = (
+                "entry_price" if "entry_price" in trades.columns else "Avg Entry Price"
+            )
+            exit_price_col = (
+                "exit_price" if "exit_price" in trades.columns else "Avg Exit Price"
+            )
+            output_df = pd.DataFrame(
+                {
+                    "symbol": trades[symbol_col],
+                    "entry_date": pd.to_datetime(trades[entry_date_col]),
+                    "exit_date": pd.to_datetime(trades[exit_date_col]),
+                    "entry_price": trades[entry_price_col],
+                    "exit_price": trades[exit_price_col],
+                    "shares": trades["shares"],
+                    "pnl": trades["pnl"],
+                    "exit_phase": trades.get("exit_phase", "FULL"),
+                    "signal_type": trades.get("entry_signal", "MOMENTUM"),
+                    "stop_loss": trades.get("stop_loss", np.nan),
+                    "tp1_target": trades.get("tp1_target", np.nan),
+                    "tp2_target": trades.get("tp2_target", np.nan),
+                    "adjusted_risk_dollars": trades.get("adjusted_risk_dollars", 0),
+                }
+            )
+            output_df.to_csv("outputs/backtests/backtest_results.csv", index=False)
+            # Also save full enriched trades for derive_tier2_filters.py
+            trades.to_csv("outputs/backtests/complete_trades_clean.csv", index=False)
+            if "equity_curve" in results and results["equity_curve"] is not None:
+                results["equity_curve"].to_csv("outputs/backtests/equity_curve.csv")
+        st.balloons()
+        return True
     except Exception as e:
-        status_text.error(f"Error inesperado: {e}")
+        st.error(f"Error: {e}")
+        import traceback
+
+        st.error(traceback.format_exc())
         return False
 
-# Configuración de la página
-st.set_page_config(
-    page_title="Momentum V2 - Institutional Risk Dashboard",
-    page_icon="📈",
-    layout="wide"
+
+# --- CUSTOM CSS ---
+st.set_page_config(page_title="Momentum V2 Dashboard", page_icon="📈", layout="wide")
+st.markdown(
+    """
+<style>
+    .stApp { background-color: var(--background-color); color: var(--text-color); }
+    .metric-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .metric-card { 
+        background-color: var(--secondary-background-color); 
+        padding: 20px 16px; 
+        border-radius: 12px; 
+        border: 1px solid rgba(255,255,255,0.1); 
+        border-left: 4px solid var(--primary-color); 
+        transition: 0.3s; 
+    }
+    .metric-card:hover { transform: translateY(-4px); border-color: var(--primary-color); box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+    .metric-label { color: #8899a6; font-size: 0.75rem; text-transform: uppercase; font-weight: 600; margin-bottom: 6px; }
+    .metric-value { color: var(--text-color); font-size: 1.5rem; font-weight: 700; }
+    .metric-value.positive { color: #00ffa3; }
+    .metric-value.negative { color: #ff4b4b; }
+    [data-testid="stSidebar"] { background-color: var(--secondary-background-color); border-right: 1px solid rgba(255,255,255,0.1); }
+    
+    /* Better Scrollbars */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: rgba(0,0,0,0); }
+    ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #484f58; }
+    
+    /* Scorecard / Semáforo Styles */
+    .scorecard-container { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+    .scorecard-item { 
+        padding: 12px 16px; 
+        border-radius: 8px; 
+        flex: 1; 
+        min-width: 140px; 
+        text-align: center;
+        border: 1px solid rgba(255,255,255,0.1);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        transition: 0.3s;
+    }
+    .score-green { background-color: rgba(0, 255, 163, 0.1); border-color: #00ffa3; color: #00ffa3; box-shadow: 0 0 10px rgba(0, 255, 163, 0.1); }
+    .score-yellow { background-color: rgba(255, 165, 0, 0.1); border-color: #ffa500; color: #ffa500; box-shadow: 0 0 10px rgba(255, 165, 0, 0.1); }
+    .score-red { background-color: rgba(255, 75, 75, 0.1); border-color: #ff4b4b; color: #ff4b4b; box-shadow: 0 0 10px rgba(255, 75, 75, 0.1); }
+    .score-label { font-size: 0.7rem; text-transform: uppercase; font-weight: 700; opacity: 0.9; margin-bottom: 4px; }
+    .score-value { font-size: 1.2rem; font-weight: 800; }
+</style>
+""",
+    unsafe_allow_html=True,
 )
 
-# Título y Descripción
-st.title("📈 Momentum V2 - Institutional Risk Dashboard")
 
-# --- Barra Lateral: Configuración y Ejecución ---
-st.sidebar.header("⚙️ Configuración del Sistema")
+def render_metric_cards(metrics):
+    html = '<div class="metric-container">'
+    for m in metrics:
+        v_class = (
+            "positive"
+            if "+" in str(m["value"])
+            or (isinstance(m["value"], (int, float)) and m["value"] > 0)
+            else ("negative" if "-" in str(m["value"]) else "")
+        )
+        html += f'<div class="metric-card"><div class="metric-label">{m["label"]}</div><div class="metric-value {v_class}">{m["value"]}</div>'
+        if "sub" in m:
+            html += f'<div style="color:#64748b;font-size:0.8rem;">{m["sub"]}</div>'
+        html += "</div>"
+    html += "</div>"
+    st.markdown(html, unsafe_allow_html=True)
 
-with st.sidebar.expander("📅 Fechas y Filtros Universo", expanded=True):
-    # Get actual date range from cache
-    cache_min_date, cache_max_date = get_cache_date_range()
-    
-    # Initialize session state for dates if not exists
-    if 'start_date' not in st.session_state:
-        # Default to last year if available
-        default_start = max(cache_min_date, cache_max_date - timedelta(days=365))
-        st.session_state.start_date = default_start
-    if 'end_date' not in st.session_state:
-        st.session_state.end_date = cache_max_date
-    
-    # Show cache info
-    st.info(f"📦 Datos disponibles: {cache_min_date.strftime('%Y-%m-%d')} a {cache_max_date.strftime('%Y-%m-%d')}")
 
-    # --- Selector de Años (Nuevo) ---
-    years_available = range(cache_min_date.year, cache_max_date.year + 1)
-    year_opts = ["Personalizado"] + sorted([str(y) for y in years_available], reverse=True)
-    
-    def on_year_change():
-        sel = st.session_state.year_selector
-        if sel != "Personalizado":
-            y = int(sel)
-            # Definir inicio y fin del año seleccionado
-            new_start = datetime(y, 1, 1)
-            new_end = datetime(y, 12, 31)
-            
-            # Ajustar a los límites reales del cache si es necesario
-            if new_start < cache_min_date: new_start = cache_min_date
-            if new_end > cache_max_date: new_end = cache_max_date
-            
-            st.session_state.start_date = new_start
-            st.session_state.end_date = new_end
+def render_scorecard(metrics_dict):
+    """
+    Renders a 'Semáforo' (Traffic Light) scorecard for backtest results.
+     thresholds:
+     - Sharpe: G>1.2, Y>0.7, R<0.7
+     - WinRate: G>55%, Y>45%, R<45%
+     - PF: G>1.5, Y>1.1, R<1.1
+     - MaxDD: G<10%, Y<20%, R>20%
+     - AvgR: G>1.5, Y>1.0, R<1.0
+    """
+    sharpe = metrics_dict.get("sharpe_ratio", 0)
+    win_rate = (
+        metrics_dict.get("win_rate", 0) * 100
+        if metrics_dict.get("win_rate", 0) < 1
+        else metrics_dict.get("win_rate", 0)
+    )
+    pf = metrics_dict.get("profit_factor", 0)
+    max_dd = (
+        abs(metrics_dict.get("max_drawdown", 0)) * 100
+        if abs(metrics_dict.get("max_drawdown", 0)) < 1
+        else abs(metrics_dict.get("max_drawdown", 0))
+    )
+    avg_r = metrics_dict.get("avg_r", 0)
 
-    st.selectbox("📅 Año Completo (Rápido)", year_opts, key="year_selector", on_change=on_year_change)
-    # --------------------------------
+    def get_color(val, metric_type):
+        if metric_type == "sharpe":
+            return (
+                "score-green"
+                if val > 1.2
+                else ("score-yellow" if val > 0.7 else "score-red")
+            )
+        if metric_type == "win_rate":
+            return (
+                "score-green"
+                if val > 55
+                else ("score-yellow" if val > 45 else "score-red")
+            )
+        if metric_type == "pf":
+            return (
+                "score-green"
+                if val > 1.5
+                else ("score-yellow" if val > 1.1 else "score-red")
+            )
+        if metric_type == "dd":
+            return (
+                "score-green"
+                if val < 10
+                else ("score-yellow" if val < 20 else "score-red")
+            )
+        if metric_type == "avg_r":
+            return (
+                "score-green"
+                if val > 1.5
+                else ("score-yellow" if val > 1.0 else "score-red")
+            )
+        return ""
 
-    # Random Date Button
-    if st.button("🎲 Rango Aleatorio (Backtest)", use_container_width=True):
-        # Random start within available cache range
-        days_available = (cache_max_date - cache_min_date).days
-        if days_available > 365:
-            # Random start between cache_min and 6 months before cache_max
-            start_offset = random.randint(0, max(0, days_available - 180))
-            random_start = cache_min_date + timedelta(days=start_offset)
-            
-            # Duration: 3 to 8 months
-            duration_days = random.randint(90, 240)
-            random_end = min(random_start + timedelta(days=duration_days), cache_max_date)
-            
-            st.session_state.start_date = random_start
-            st.session_state.end_date = random_end
-            st.session_state.year_selector = "Personalizado" # Reset selector
+    html = '<div class="scorecard-container">'
+
+    # Sharpe
+    color = get_color(sharpe, "sharpe")
+    html += f'<div class="scorecard-item {color}"><div class="score-label">Sharpe Ratio</div><div class="score-value">{sharpe:.2f}</div></div>'
+
+    # Profit Factor
+    color = get_color(pf, "pf")
+    pf_str = f"{pf:.2f}" if pf != float("inf") else "INF"
+    html += f'<div class="scorecard-item {color}"><div class="score-label">Profit Factor</div><div class="score-value">{pf_str}</div></div>'
+
+    # Win Rate
+    color = get_color(win_rate, "win_rate")
+    html += f'<div class="scorecard-item {color}"><div class="score-label">Win Rate</div><div class="score-value">{win_rate:.1f}%</div></div>'
+
+    # Max DD
+    color = get_color(max_dd, "dd")
+    html += f'<div class="scorecard-item {color}"><div class="score-label">Max Drawdown</div><div class="score-value">{max_dd:.1f}%</div></div>'
+
+    # Avg R
+    color = get_color(avg_r, "avg_r")
+    html += f'<div class="scorecard-item {color}"><div class="score-label">Avg R-Mult</div><div class="score-value">{avg_r:.2f}R</div></div>'
+
+    html += "</div>"
+    st.markdown(html, unsafe_allow_html=True)
+
+
+# --- SIDEBAR (Wired to production_config.json) ---
+with st.sidebar:
+    st.title("Momentum V2")
+    st.caption("Institutional Trading Engine")
+
+    # Show loaded config version
+    st.caption(f"Config: THOR-Optimized | Sharpe: {_perf.get('sharpe_ratio', 0):.2f}")
+
+    if st.button("Clear Cache", use_container_width=True):
+        st.cache_data.clear()
+        st.cache_resource.clear()
+        st.toast("Cache Cleared")
+    st.markdown("---")
+
+    with st.expander("Market & Universe", expanded=True):
+        cache_min, cache_max = get_cache_date_range()
+        start_date = st.date_input("Start", value=cache_max - timedelta(days=365))
+        end_date = st.date_input("End", value=cache_max)
+        scan_mode = st.radio(
+            "Source", ["Manual", "All Market", "Sector"], horizontal=True
+        )
+        tickers_input = st.text_area("Tickers (CSV)", "APP, PLTR", height=70)
+
+    with st.expander("Risk Management", expanded=False):
+        equity = st.number_input(
+            "Equity ($)",
+            value=int(
+                _raw_config.get("ui_defaults", {}).get("initial_capital", 100000)
+            ),
+        )
+
+        # Compounding toggle
+        use_compounding = st.checkbox(
+            "Enable Compounding",
+            value=_t3.get("compounding_enabled", False),
+            help="When enabled, risk amount scales with account equity (recommended). When disabled, fixed dollar risk is used.",
+        )
+
+        if use_compounding:
+            risk_pct = st.slider(
+                "Risk per Trade (%)",
+                0.1,
+                3.0,
+                float(_t3.get("risk_fraction", 0.01) * 100),
+                step=0.1,
+                help="Percentage of equity to risk per trade (compounding mode)",
+            )
+            risk_dollars = 0  # Not used in compounding mode
+            st.info(
+                f"Risk: ${equity * (risk_pct / 100):,.0f} per trade (1.0% of equity)"
+            )
+        else:
+            risk_dollars = st.number_input(
+                "Risk per Trade ($)",
+                value=int(_t1.get("risk_dollars", 1000)),
+                min_value=50,
+                max_value=2000,
+                step=50,
+                help="Fixed dollar risk per trade (no compounding)",
+            )
+            risk_pct = 0.0  # Not used in fixed dollar mode
+
+        max_exp = st.slider(
+            "Max Exposure (%)",
+            5,
+            100,
+            int(_t3.get("max_exposure_pct", 0.65) * 100),
+        )
+
+    with st.expander("Strategy & Targets", expanded=False):
+        tp1_r = st.number_input(
+            "TP1 (R)",
+            value=float(_t1.get("tp1_r", 1.5)),
+            min_value=0.5,
+            max_value=5.0,
+            step=0.25,
+        )
+        tp2_r = st.number_input(
+            "TP2 (R)",
+            value=float(_t1.get("tp2_r", 6.0)),
+            min_value=1.0,
+            max_value=10.0,
+            step=0.5,
+        )
+        # Show actual optimized distribution from config
+        tp1_p = float(_t1.get("tp1_pct", 0.45))
+        tp2_p = float(_t1.get("tp2_pct", 0.25))
+        run_p = float(_t1.get("runner_pct", 0.30))
+        st.info(
+            f"Distribution: TP1={tp1_p * 100:.0f}% / TP2={tp2_p * 100:.0f}% / Runner={run_p * 100:.0f}%"
+        )
+
+        max_stop_pct_raw = float(_t1.get("max_stop_pct", 0.08))
+        st.info(f"Max Stop: {max_stop_pct_raw * 100:.1f}% (Tier 1 optimized)")
+
+    with st.expander("Tier 2 Filters (Derived)", expanded=False):
+        use_adaptive = st.checkbox("Adaptive Engine (Tiered Filters)", value=True)
+        use_earnings_filter = st.checkbox(
+            "Earnings Filter",
+            value=False,
+            help=f"Avoid entries within {_t3.get('earnings_days', 5)} days of earnings announcements. Requires earnings calendar data in cache.",
+        )
+        use_pit = st.checkbox(
+            "Point-in-Time Universe (S&P 500)",
+            value=False,
+            help="Use historical S&P 500 composition to eliminate survivorship bias. "
+            "Only trades tickers that were ACTUALLY in the index on each date.",
+        )
+        min_rvol = st.slider(
+            "Min RVOL",
+            0.5,
+            3.0,
+            float(_t2.get("min_rvol", 0.91)),
+            step=0.1,
+        )
+        max_dist = st.slider(
+            "Max Dist SMA20%",
+            1.0,
+            30.0,
+            float(_t2.get("max_dist_sma20", 8.94)),
+            step=0.1,
+        )
+        st.caption(
+            f"Min ADR: {_t2.get('min_adr', 1.97)}% | Min $Vol: ${_t2.get('min_dollar_volume', 20000000):,.0f}"
+        )
+
+    with st.expander("Tier 3 Risk (Fixed)", expanded=False):
+        st.caption("Institutional risk parameters - not editable")
+        st.text(
+            f"RVOL Danger: {_t3.get('rvol_danger', 3.0)}x -> {_t3.get('rvol_danger_size', 0.5) * 100:.0f}% size"
+        )
+        st.text(
+            f"RVOL Warning: {_t3.get('rvol_warning', 2.0)}x -> {_t3.get('rvol_warning_size', 0.75) * 100:.0f}% size"
+        )
+        st.text(
+            f"ADR High: {_t3.get('adr_high', 6.0)}% | ADR Med: {_t3.get('adr_med', 5.0)}%"
+        )
+        st.text(
+            f"SPY > SMA50: {'ON' if _mr.get('require_spy_above_sma50', True) else 'OFF'}"
+        )
+
+    st.markdown("---")
+    benchmark_ticker = st.selectbox("Benchmark", ["SPY", "QQQ", "IWM", "DIA"], index=0)
+
+    if st.button("RUN BACKTEST", use_container_width=True, type="primary"):
+        manual_list = [s.strip().upper() for s in tickers_input.split(",") if s.strip()]
+        if run_vectorbt_backtest_ui(
+            start_date,
+            end_date,
+            equity,
+            risk_pct
+            if use_compounding
+            else 0.5,  # risk_pct as percentage (e.g. 1.0 = 1%), run_vectorbt_backtest_ui divides by 100
+            max_exp,
+            risk_dollars if not use_compounding else 0,
+            manual_list if scan_mode == "Manual" else None,
+            0 if scan_mode == "All Market" else 500,
+            True,  # offline_mode
+            max_dist,
+            min_rvol,
+            float(_t2.get("min_adr", 2.48)),
+            int(_t2.get("min_volume", 300000)),
+            int(_t2.get("min_dollar_volume", 20000000)),
+            float(_t3.get("rvol_danger", 3.0)),
+            float(_t3.get("rvol_warning", 2.0)),
+            # Engine expects integer units for rvol sizes (divides by 100 internally)
+            int(round(_t3.get("rvol_danger_size", 0.5) * 100)),
+            int(round(_t3.get("rvol_warning_size", 0.75) * 100)),
+            float(_t3.get("adr_high", 6.0)),
+            float(_t3.get("adr_med", 5.0)),
+            # Engine expects percentage unit for max_stop_pct (divides by 100 internally)
+            float(_t1.get("max_stop_pct", 0.08) * 100),
+            int(_t2.get("min_consolidation_days", 10)),
+            int(_t3.get("earnings_days", 5)),
+            float(_t3.get("earnings_cushion", 2)),
+            tp1_r,
+            tp2_r,
+            bool(_mr.get("require_spy_above_sma50", True)),
+            tp1_p,
+            tp2_p,
+            run_p,
+            use_adaptive,
+            use_earnings_filter,
+            use_pit,
+        ):
             st.rerun()
 
-    # Preparar valores para date_input (asegurar que sean date objects)
-    curr_start = st.session_state.start_date
-    if isinstance(curr_start, datetime): curr_start = curr_start.date()
-    
-    curr_end = st.session_state.end_date
-    if isinstance(curr_end, datetime): curr_end = curr_end.date()
+# --- MAIN PAGE ---
+st.title("Institutional Dashboard")
 
-    # INPUT FECHA INICIO
-    run_start_date = st.date_input(
-        "Fecha Inicio", 
-        value=curr_start,
-        min_value=cache_min_date.date(),
-        max_value=cache_max_date.date()
-    )
-
-    # INPUT FECHA FIN (Validado: min_value = start_date)
-    # Si el usuario avanza la fecha de inicio más allá de la fecha fin actual,
-    # debemos ajustar el value para evitar error de Streamlit.
-    final_end_value = max(curr_end, run_start_date)
-    
-    run_end_date = st.date_input(
-        "Fecha Fin", 
-        value=final_end_value,
-        min_value=run_start_date, # 🔒 Bloquea fechas anteriores a inicio
-        max_value=cache_max_date.date()
-    )
-    
-    # Sync session state (Convert back to datetime for internal consistency)
-    st.session_state.start_date = datetime.combine(run_start_date, datetime.min.time())
-    st.session_state.end_date = datetime.combine(run_end_date, datetime.min.time())
-    
-    # Show warning if dates are outside cache range
-    if run_start_date < cache_min_date.date() or run_end_date > cache_max_date.date():
-        st.warning("⚠️ Fechas seleccionadas fuera del rango del cache. Se descargarán datos adicionales.")
-    
-    # Show days selected
-    days_selected = (run_end_date - run_start_date).days
-    st.caption(f"📊 Rango: {days_selected} días ({days_selected/365:.1f} años)")
-    
-    st.markdown("---")
-    # Checkbox para forzar calidad institucional
-    use_inst_quality = st.checkbox("🛡️ Modo Calidad Institucional", value=True, 
-                                   help="Fuerza filtros mínimos: Mcap > $2B (sin límite superior), Precio > $5, Volumen > 300k, $Vol > $15M")
-    
-    # Logic to set defaults based on checkbox
-    def_mcap = 2.0 if use_inst_quality else 0.5
-    def_price = 5.0 if use_inst_quality else 1.0
-    def_vol = 300 if use_inst_quality else 50
-    def_dvol = 15 if use_inst_quality else 1
-    
-    st.markdown("**Filtros de Calidad**")
-    c1, c2 = st.columns(2)
-    in_min_mcap = c1.number_input("Min Mcap ($B)", value=def_mcap, step=0.5, disabled=use_inst_quality)
-    in_max_mcap = c2.number_input("Max Mcap ($B)", value=5000.0, step=100.0, help="Default: $5T (permite mega-caps)")
-    in_min_price = st.number_input("Precio Mínimo ($)", value=def_price, step=1.0, disabled=use_inst_quality)
-    
-    st.markdown("**Filtros de Liquidez y Volatilidad**")
-    in_min_vol = st.number_input("Min Volumen Diario (k)", value=def_vol, step=50, disabled=use_inst_quality)
-    in_min_dollar_m = st.number_input("Min Dollar Volume ($M)", value=def_dvol, step=5, disabled=use_inst_quality)
-    in_min_adr = st.number_input("Min ADR 20 (%)", value=1.5, step=0.1, format="%.1f")
-    in_min_rvol = st.number_input("Min RVOL (x)", value=1.5, step=0.1, format="%.1f", help="Relative Volume: Volumen actual vs promedio 20 días")
-    
-    # Stop Loss Config
-    use_custom_stop = st.checkbox("Forzar Stop Loss Fijo (%)")
-    stop_loss_input = 2.0
-    if use_custom_stop:
-        stop_loss_input = st.number_input("Stop Loss %", value=3.0, step=0.5)
-
-    st.markdown("---")
-    st.markdown("**Mantenimiento del Universo**")
-    if st.button("🔄 Actualizar Universo (SQLite)", help="Descarga lista fresca de tickers (S&P500, Nasdaq, Dow)"):
-        with st.spinner("Actualizando universo..."):
-            ticker_cache.update_universe(force=True)
-            st.success("¡Universo actualizado!")
-            st.rerun()
-
-with st.sidebar.expander("🛡️ Institutional Risk Manager", expanded=True):
-    in_equity = st.number_input("Equity ($)", value=100000.0, step=10000.0)
-    in_risk = st.number_input("Risk per Trade (%)", value=0.5, step=0.1, format="%.2f")
-    in_max_exp = st.number_input("Max Exposure (%)", value=25.0, step=5.0)
-
-# --- Nueva Entrada Directa de Símbolos ---
-st.sidebar.markdown("---")
-st.sidebar.header("🚀 Ejecución Rápida")
-
-# Scan Mode Selection
-scan_mode = st.sidebar.radio(
-    "Fuente del Universo",
-    ["📝 Lista Manual", "🌎 Todo el Mercado (SQLite)", "🏗️ Por Sector"],
-    help="Elige qué tickers escanear"
-)
-
-selected_sector = None
-if scan_mode == "🏗️ Por Sector":
-    # Get available sectors from DB
+# Calculate results summary if they exist for the top bar
+top_net_pnl = 0
+if os.path.exists("outputs/backtests/backtest_results.csv"):
     try:
-        cursor = ticker_cache.conn.execute("SELECT DISTINCT sector FROM universe WHERE sector != '' ORDER BY sector")
-        sectors = [row[0] for row in cursor.fetchall()]
-        selected_sector = st.sidebar.selectbox("Selecciona Sector", sectors)
-    except:
-        st.sidebar.warning("No se pudieron cargar sectores")
-
-direct_symbols = st.sidebar.text_area("Tu Lista (Referencia o Escaneo)", value="APP, PLTR", help="Si eliges 'Todo el Mercado', esta lista se usará para resaltar oportunidades que NO tenías en el radar.")
-
-# Cache Check Button (Only relevant for manual list)
-if scan_mode == "📝 Lista Manual" and st.sidebar.button("🔍 Verificar Cache de Símbolos", use_container_width=True):
-    if direct_symbols:
-        symbols_list = [s.strip().upper() for s in direct_symbols.split(',') if s.strip()]
-        
-        with st.sidebar:
-            st.markdown("### 📦 Estado del Cache")
-            
-            for symbol in symbols_list:
-                # Check SQLite first
-                cursor = ticker_cache.conn.execute(
-                    "SELECT MIN(date), MAX(date) FROM ohlcv_cache WHERE ticker = ?", (symbol,)
-                )
-                sqlite_res = cursor.fetchone()
-                
-                # Check .pkl legacy
-                cache_file = f"data/cache/{symbol}_daily.pkl"
-                cache_file_alt = f"data/cache/{symbol}.pkl"
-                
-                found = False
-                if sqlite_res and sqlite_res[0]:
-                    st.write(f"✅ **{symbol}**: SQLite Cache ({sqlite_res[0]} a {sqlite_res[1]})")
-                    found = True
-                
-                if not found:
-                    file_to_check = None
-                    if os.path.exists(cache_file):
-                        file_to_check = cache_file
-                    elif os.path.exists(cache_file_alt):
-                        file_to_check = cache_file_alt
-                    
-                    if file_to_check:
-                        try:
-                            with open(file_to_check, 'rb') as f:
-                                data = pickle.load(f)
-                                if not data.empty:
-                                    min_d = data.index.min()
-                                    max_d = data.index.max()
-                                    st.write(f"✅ **{symbol}**: Pickle Cache ({min_d.strftime('%Y-%m-%d')} a {max_d.strftime('%Y-%m-%d')})")
-                                    found = True
-                        except:
-                            pass
-                
-                if not found:
-                    st.write(f"❌ **{symbol}**: Sin datos en cache")
-    else:
-        st.sidebar.warning("Ingresa símbolos primero")
-
-# Offline Mode Checkbox
-offline_mode = st.sidebar.checkbox("💾 Modo Offline (Solo Cache)", value=False, help="No descargar datos nuevos, usar solo lo disponible localmente.")
-
-# Universe Size Limiter (for SQLite mode)
-max_symbols_limit = None
-selection_strategy = 'liquidity'  # Default
-
-if scan_mode == "🌎 Todo el Mercado (SQLite)":
-    st.sidebar.warning("⚠️ Universo completo = 5600+ tickers. Puede tardar mucho, pero verás el progreso detallado.")
-    limit_universe = st.sidebar.checkbox("🎯 Limitar Universo", value=True, help="Recomendado para pruebas rápidas")
-    if limit_universe:
-        max_symbols_limit = st.sidebar.number_input("Máximo de Símbolos", value=500, min_value=50, max_value=5000, step=50)
-        
-        # Selection strategy
-        st.sidebar.markdown("**Estrategia de Selección**")
-        selection_strategy = st.sidebar.radio(
-            "Cómo elegir símbolos:",
-            ['liquidity', 'random', 'alphabetical'],
-            format_func=lambda x: {
-                'liquidity': '💎 Por Liquidez (recomendado)',
-                'random': '🎲 Aleatorio',
-                'alphabetical': '🔤 Alfabético (A-Z)'
-            }[x],
-            help="Liquidez = tickers con mayor volumen en dólares"
-        )
-
-if st.sidebar.button("🚀 EJECUTAR BACKTEST", use_container_width=True):
-    # Validate dates
-    if run_end_date > cache_max_date.date():
-        st.sidebar.error(f"❌ Fecha Fin no puede ser mayor que {cache_max_date.date().strftime('%Y-%m-%d')}")
-        st.stop()
-    
-    if run_start_date > run_end_date:
-        st.sidebar.error("❌ Fecha Inicio debe ser anterior a Fecha Fin")
-        st.stop()
-    
-    sl_val = stop_loss_input if use_custom_stop else None
-    
-    # Logic for source
-    source_arg = "file"
-    sector_arg = None
-    temp_watchlist_path = 'outputs/temp_backtest_list.json'
-    
-    # Save manual list anyway for highlighting or usage
-    manual_list = []
-    if direct_symbols:
-        manual_list = [s.strip().upper() for s in direct_symbols.split(',') if s.strip()]
-        
-        # Guardar en base de datos si son nuevos
-        if len(manual_list) > 0:
-            added_count = ticker_cache.add_tickers(manual_list)
-            if added_count > 0:
-                st.toast(f"✅ Se agregaron {added_count} nuevos tickers a la base de datos.", icon="💾")
-        
-        with open(temp_watchlist_path, 'w') as f:
-            json.dump({"DIRECT_INPUT": manual_list}, f)
-    
-    if scan_mode == "🌎 Todo el Mercado (SQLite)":
-        source_arg = "sqlite"
-        st.sidebar.info("Escaneando todo el mercado... esto puede tardar.")
-    elif scan_mode == "🏗️ Por Sector":
-        source_arg = "sqlite_sector"
-        sector_arg = selected_sector
-        st.sidebar.info(f"Escaneando sector: {selected_sector}")
-    
-    # Run
-    # Skip filters when using Manual List (allow any ticker regardless of mcap/volume)
-    skip_fundamental_filters = (scan_mode == "📝 Lista Manual")
-    
-    if run_backtest_with_progress(run_start_date, run_end_date, sl_val, in_equity, in_risk, in_max_exp, 
-                                  in_min_mcap, in_max_mcap, in_min_vol, in_min_adr, in_min_price, in_min_dollar_m,
-                                  in_min_rvol, watchlist_path=temp_watchlist_path, skip_filters=skip_fundamental_filters, 
-                                  source=source_arg, sector=sector_arg, offline=offline_mode, 
-                                  max_symbols=max_symbols_limit, sort_by=selection_strategy):
-        st.rerun()
-
-st.sidebar.markdown("---")
-
-# --- Carga de datos ---
-@st.cache_data
-def load_data():
-    try:
-        main_df = pd.DataFrame()
-        partial_df = pd.DataFrame()
-        
-        if os.path.exists('outputs/backtests/backtest_results.csv'):
-            main_df = pd.read_csv('outputs/backtests/backtest_results.csv')
-            main_df['entry_date'] = pd.to_datetime(main_df['entry_date'])
-            main_df['exit_date'] = pd.to_datetime(main_df['exit_date'])
-            main_df['trade_type'] = 'FULL_EXIT'  # Marcar como cierre completo
-        
-        # Cargar salidas parciales si existen
-        if os.path.exists('outputs/backtests/partial_exits.csv'):
-            partial_df = pd.read_csv('outputs/backtests/partial_exits.csv')
-            partial_df['entry_date'] = pd.to_datetime(partial_df['entry_date'])
-            partial_df['exit_date'] = pd.to_datetime(partial_df['exit_date'])
-            partial_df['trade_type'] = partial_df['phase']  # FASE_1 o FASE_2
-            
-            # Renombrar columnas para compatibilidad con main_df
-            partial_df = partial_df.rename(columns={
-                'shares_sold': 'shares',
-                'pct_sold': 'exit_pct'
-            })
-        
-        return main_df, partial_df
-    except Exception as e:
-        return pd.DataFrame(), pd.DataFrame()
-
-df_raw, df_partial_raw = load_data()
-
-# --- 📚 Backtest History Loader ---
-st.sidebar.markdown("---")
-st.sidebar.header("📚 Historial de Backtests")
-
-history_file = 'outputs/backtests/backtest_history.csv'
-if os.path.exists(history_file):
-    history_df = pd.read_csv(history_file)
-    
-    if not history_df.empty:
-        # Formatear para display
-        history_df['display'] = history_df.apply(
-            lambda row: f"{row['start_date']} to {row['end_date']} | {row['trades']} trades | PnL: ${row['pnl']:,.0f}", 
-            axis=1
-        )
-        
-        selected_backtest = st.sidebar.selectbox(
-            "Cargar backtest guardado:",
-            options=['Actual (recién ejecutado)'] + history_df['display'].tolist(),
-            help="Selecciona un backtest anterior para analizar"
-        )
-        
-        if selected_backtest != 'Actual (recién ejecutado)':
-            # Cargar el backtest seleccionado
-            idx = history_df[history_df['display'] == selected_backtest].index[0]
-            
-            # Verificar si tiene archived_file
-            if 'archived_file' in history_df.columns and pd.notna(history_df.loc[idx, 'archived_file']):
-                archived_file = history_df.loc[idx, 'archived_file']
-                
-                if os.path.exists(archived_file):
-                    st.sidebar.success(f"✅ Cargando: {archived_file}")
-                    df_raw = pd.read_csv(archived_file)
-                    df_raw['entry_date'] = pd.to_datetime(df_raw['entry_date'])
-                    df_raw['exit_date'] = pd.to_datetime(df_raw['exit_date'])
-                    df_raw['trade_type'] = 'FULL_EXIT'
-                    
-                    # Mostrar info del backtest
-                    st.sidebar.info(f"""
-                    **Backtest Info:**
-                    - 📅 Periodo: {history_df.loc[idx, 'start_date']} → {history_df.loc[idx, 'end_date']}
-                    - 🎯 Trades: {history_df.loc[idx, 'trades']}
-                    - 💰 PnL: ${history_df.loc[idx, 'pnl']:,.2f}
-                    - 📊 Win Rate: {history_df.loc[idx, 'win_rate']:.1f}%
-                    - 🔥 Profit Factor: {history_df.loc[idx, 'profit_factor']:.2f}
-                    """)
-                else:
-                    st.sidebar.error(f"❌ Archivo no encontrado: {archived_file}")
-            else:
-                st.sidebar.warning("⚠️ Este backtest no tiene archivo archivado (ejecutado antes de la actualización)")
-
-# --- Highlight New Opportunities ---
-if not df_raw.empty and os.path.exists('outputs/temp_backtest_list.json'):
-    try:
-        with open('outputs/temp_backtest_list.json', 'r') as f:
-            data = json.load(f)
-            if "DIRECT_INPUT" in data:
-                manual_set = set(data["DIRECT_INPUT"])
-                # Add 'source' column
-                df_raw['source'] = df_raw['symbol'].apply(lambda x: '📝 Manual' if x in manual_set else '💡 Discovery')
-                
-                # If we have discovery items, show a notification
-                discovery_count = len(df_raw[df_raw['source'] == '💡 Discovery'])
-                if discovery_count > 0:
-                    st.success(f"✨ ¡Se encontraron {discovery_count} oportunidades fuera de tu lista manual!")
-            else:
-                df_raw['source'] = 'N/A'
+        _temp_df = pd.read_csv("outputs/backtests/backtest_results.csv")
+        top_net_pnl = _temp_df["pnl"].sum()
     except:
         pass
 
-# --- Formulario de Filtros (Solo visualización) ---
-with st.sidebar.form("filtros_form"):
-    st.header("🔍 Filtros de Visualización")
-    if not df_raw.empty:
-        syms = ['Todos'] + sorted(df_raw['symbol'].unique().tolist())
-        sig_types = ['Todos'] + sorted(df_raw['signal_type'].unique().tolist())
-    else:
-        syms, sig_types = ['Todos'], ['Todos']
-
-    f_symbol = st.selectbox("Símbolo", syms)
-    f_signal = st.selectbox("Señal", sig_types)
-    submitted = st.form_submit_button("Actualizar Vista")
-
-# --- MARKET HEALTH CHECK (Only show if no backtest results or user wants it) ---
-# For backtesting, this shows TODAY's market conditions which is irrelevant for historical analysis
-# Only useful for live trading or when no backtest results exist
-
-show_market_health = df_raw.empty  # Only show if no backtest results
-
-if show_market_health:
-    st.header("🛡️ Market Health Check")
-    st.caption("📅 Condiciones actuales del mercado (útil para trading en vivo)")
-    
-    try:
-        from src.data.market_data import MarketDataProvider
-        from src.core.market_context import MarketContext
-        
-        with st.spinner("Analizando condiciones del mercado..."):
-            provider = MarketDataProvider()
-            mc = MarketContext(provider)
-            context = mc.analyze_indices()
-        
-        # Extract metrics
-        spy_price = context.get('spy_price', 0)
-        spy_ema20 = context.get('spy_ema20', 0)
-        spy_above_ema20 = context.get('spy_above_ema20', False)
-        breadth_improving = context.get('breadth_improving', False)
-        positive_gex = context.get('positive_gex', False)
-        vix_favorable = context.get('vix_favorable', True)
-        sector_leaders = context.get('sector_leaders', {})
-        market_favorable = context.get('market_favorable_for_longs', False)
-        
-        # Calculate health score
-        health_score = 0
-        if spy_above_ema20:
-            health_score += 2
-        if breadth_improving:
-            health_score += 2
-        if positive_gex:
-            health_score += 1
-        if vix_favorable:
-            health_score += 1
-        if sector_leaders:
-            health_score += 1
-        
-        # Display in columns
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric(
-                "SPY Trend",
-                f"${spy_price:.2f}",
-                f"{((spy_price - spy_ema20) / spy_ema20 * 100):+.2f}%" if spy_ema20 else "N/A",
-                delta_color="normal"
-            )
-            if spy_above_ema20:
-                st.success("✅ Above EMA20")
-            else:
-                st.error("❌ Below EMA20")
-        
-        with col2:
-            st.metric("Breadth", "Improving" if breadth_improving else "Declining")
-            if breadth_improving:
-                st.success("✅ Strong")
-            else:
-                st.warning("⚠️ Weak")
-        
-        with col3:
-            st.metric("Volatility", "Favorable" if vix_favorable else "Elevated")
-            if vix_favorable:
-                st.success("✅ VIX < 20")
-            else:
-                st.error("⚠️ VIX High")
-        
-        with col4:
-            st.metric("GEX", "Positive" if positive_gex else "Neutral")
-            if positive_gex:
-                st.success("✅ Low Vol Grind")
-            else:
-                st.info("⚪ Normal")
-        
-        # Health Score and Verdict
-        st.markdown("---")
-        col_score, col_verdict = st.columns([1, 2])
-        
-        with col_score:
-            st.metric("Health Score", f"{health_score}/7", f"{(health_score/7*100):.0f}%")
-            # Progress bar
-            st.progress(health_score / 7)
-        
-        with col_verdict:
-            if not market_favorable:
-                st.error("❌ **NO TRADE MODE** - Market not favorable for longs")
-                st.caption("Go to cash or paper trade only")
-            elif health_score >= 6:
-                st.success("🚀 **AGGRESSIVE MODE** - Excellent conditions")
-                st.caption("Full size (2% risk), all 3 Caminos, focus on leading sectors")
-            elif health_score >= 4:
-                st.success("💪 **STANDARD MODE** - Good conditions")
-                st.caption("Standard size (1.5-2% risk), prefer Camino 1 in leading sectors")
-            else:
-                st.warning("⚠️ **DEFENSIVE MODE** - Be selective")
-                st.caption("Half size (0.5-1% risk), only perfect Blue Sky in top sectors")
-        
-        # Sector Leaders
-        if sector_leaders:
-            st.markdown("---")
-            st.subheader("🎯 Top Sectors Today")
-            top_3 = list(sector_leaders.items())[:3]
-            
-            col_s1, col_s2, col_s3 = st.columns(3)
-            for idx, (sector, data) in enumerate(top_3):
-                with [col_s1, col_s2, col_s3][idx]:
-                    pct = data['change_pct']
-                    st.metric(
-                        f"#{idx+1} {sector}",
-                        f"{data['symbol']}",
-                        f"{pct:+.2f}%",
-                        delta_color="normal"
-                    )
-
-    except Exception as e:
-        st.error(f"Error loading market health: {e}")
-        st.caption("Backtest data will still be available below")
-
+# Config summary bar
+cc1, cc2, cc3, cc4, cc5, cc6 = st.columns(6)
+cc1.metric("TP1/TP2", f"{_t1.get('tp1_r', 0):.2f}R / {_t1.get('tp2_r', 0):.2f}R")
+cc2.metric("Max Stop", f"{_t1.get('max_stop_pct', 0) * 100:.2f}%")
+cc3.metric("Risk", f"${_t1.get('risk_dollars', 0):.2f}")
+cc4.metric("SPY>SMA50", "ON" if _mr.get("require_spy_above_sma50") else "OFF")
+cc5.metric("Val Sharpe", f"{_perf.get('sharpe_ratio', 0):.2f}")
+cc6.metric("Final Equity", f"${(equity + top_net_pnl):,.2f}", f"{top_net_pnl:+,.2f}")
 st.markdown("---")
 
-# Lógica Principal
-if not df_raw.empty:
-    # --- TABS PRINCIPALES ---
-    tab_dashboard, tab_calendar, tab_live_scanner = st.tabs([
-        "📊 Dashboard Backtest", 
-        "📅 PnL Calendar",
-        "📡 Live Market Scanner"
-    ])
+if os.path.exists("outputs/backtests/backtest_results.csv"):
+    df = pd.read_csv("outputs/backtests/backtest_results.csv")
+    df["entry_date"] = pd.to_datetime(df["entry_date"])
+    df["exit_date"] = pd.to_datetime(df["exit_date"])
 
-    # ==========================================
-    # TAB 1: DASHBOARD GENERAL (Original)
-    # ==========================================
-    with tab_dashboard:
-        df_filtered = df_raw.copy()
-        if f_symbol != 'Todos': df_filtered = df_filtered[df_filtered['symbol'] == f_symbol]
-        if f_signal != 'Todos': df_filtered = df_filtered[df_filtered['signal_type'] == f_signal]
+    # Round numeric columns for cleaner UI
+    numeric_cols = df.select_dtypes(include=[np.number]).columns
+    df[numeric_cols] = df[numeric_cols].round(2)
 
-        df_filtered = df_filtered.sort_values('exit_date')
-        
-        # Usar PnL total (incluye salidas parciales) si existe, sino calcularlo
-        if 'pnl' in df_filtered.columns:
-            df_filtered['Result'] = df_filtered['pnl']
-        elif 'shares' in df_filtered.columns:
-            df_filtered['Result'] = (df_filtered['exit_price'] - df_filtered['entry_price']) * df_filtered['shares']
-        else:
-            df_filtered['Result'] = 0.0
-        
-        # Calcular R-multiple
-        if 'monetary_risk' in df_filtered.columns:
-            df_filtered['r_multiple'] = df_filtered['Result'] / df_filtered['monetary_risk']
-        else:
-            df_filtered['r_multiple'] = 0.0
+    # --- GROUP PARTIAL EXITS INTO COMPLETE TRADES ---
+    # The CSV has one row per partial exit (TP1, TP2, RUNNER, STOP).
+    # TradeGrouper merges them into single complete trades.
+    trade_df_for_grouper = df.rename(columns={"symbol": "ticker"})
+    grouped_trades = TradeGrouper.group_partial_trades(trade_df_for_grouper)
 
-        df_filtered['Running_Capital'] = in_equity + df_filtered['Result'].cumsum()
+    # Round grouped trades as well
+    if not grouped_trades.empty:
+        g_numeric_cols = grouped_trades.select_dtypes(include=[np.number]).columns
+        grouped_trades[g_numeric_cols] = grouped_trades[g_numeric_cols].round(2)
 
-        # --- CUSTOM METRICS SECTION ---
-        st.markdown("### 📊 Performance Overview")
-        
-        # Calculate advanced metrics
-        total_trades = len(df_filtered)
-        winners = df_filtered[df_filtered['Result'] > 0]
-        losers = df_filtered[df_filtered['Result'] <= 0]
-        
-        closed_pnl = df_filtered['Result'].sum()
-        win_rate = (len(winners) / total_trades * 100) if total_trades > 0 else 0.0
-        
-        # R-Multiples
-        if 'r_multiple' in df_filtered.columns:
-            total_r = df_filtered['r_multiple'].sum()
-            avg_r = df_filtered['r_multiple'].mean() if total_trades > 0 else 0
-        else:
-            total_r = 0.0
-            avg_r = 0.0
-            
-        # Profit Factor
-        gross_win = winners['Result'].sum()
-        gross_loss = abs(losers['Result'].sum())
-        profit_factor = (gross_win / gross_loss) if gross_loss > 0 else 0.0
-        
-        # Avg Risk/Reward
-        avg_win_amt = winners['Result'].mean() if not winners.empty else 0
-        avg_loss_amt = abs(losers['Result'].mean()) if not losers.empty else 0
-        rr_ratio = (avg_win_amt / avg_loss_amt) if avg_loss_amt > 0 else 0.0
-        
-        general_perf_pct = (closed_pnl / in_equity) * 100
+    # R-multiples availability check (shared across tabs)
+    has_r = (
+        "r_multiple" in grouped_trades.columns
+        and grouped_trades["r_multiple"].abs().sum() > 0
+    )
 
-        # Row 1
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            st.metric("General Performance (%)", f"{general_perf_pct:+.2f}%")
-            st.metric("Available Capital", f"${(in_equity + closed_pnl):,.2f}")
-        with c2:
-            st.metric("Cash - Invested Capital", f"${(in_equity + closed_pnl):,.2f}") 
-            st.metric("Open Trades PnL", "$0.00") 
-        with c3:
-            st.metric("Closed Trades PnL", f"${closed_pnl:,.2f}", delta=f"{general_perf_pct:.1f}%")
-            st.metric("Win Rate (%)", f"{win_rate:.1f}%")
-        with c4:
-            st.metric("Total Trades", total_trades)
-            st.metric("Winners / Losers", f"{len(winners)} / {len(losers)}")
+    t1, t2, t3, t4, t5 = st.tabs(
+        ["Performance", "Trade Log", "QuantStats", "Diagnostics", "Insights"]
+    )
 
-        st.markdown("---")
-        
-        # Row 2 (Risk Metrics)
-        d1, d2, d3, d4 = st.columns(4)
-        d1.metric("Risk/Reward Ratio", f"{rr_ratio:.2f}")
-        d2.metric("Total R", f"{total_r:.2f}R")
-        d3.metric("Profit Factor", f"{profit_factor:.2f}")
-        d4.metric("Expectancy (R)", f"{avg_r:.2f}R")
-
-        st.markdown("---")
-        
-        # === SPY BENCHMARK CALCULATION ===
-        def calculate_spy_benchmark(start_date, end_date, initial_capital):
-            """Calculate SPY buy & hold performance for comparison"""
-            try:
-                from src.data.market_data import MarketDataProvider
-                provider = MarketDataProvider()
-                spy_data = provider.get_daily_data('SPY', start_date=start_date, end_date=end_date, offline=False)
-                
-                if spy_data.empty:
-                    return None
-                
-                # Normalize columns
-                spy_data.columns = [c.lower() for c in spy_data.columns]
-                
-                # Calculate buy & hold returns
-                entry_price = spy_data['close'].iloc[0]
-                shares = initial_capital / entry_price
-                
-                spy_equity = []
-                for date, row in spy_data.iterrows():
-                    equity = shares * row['close']
-                    spy_equity.append({'date': date, 'equity': equity, 'returns_pct': ((equity - initial_capital) / initial_capital) * 100})
-                
-                return pd.DataFrame(spy_equity)
-            except Exception as e:
-                st.warning(f"No se pudo cargar SPY para comparación: {e}")
-                return None
-        
-        # Charts
-        col1, col2 = st.columns(2)
-        with col1:
-            # Get date range from backtest
-            if not df_filtered.empty and 'entry_date' in df_filtered.columns and 'exit_date' in df_filtered.columns:
-                backtest_start = df_filtered['entry_date'].min()
-                backtest_end = df_filtered['exit_date'].max()
-                
-                # Calculate SPY benchmark
-                spy_benchmark = calculate_spy_benchmark(backtest_start, backtest_end, in_equity)
-                
-                # Create comparative chart
-                fig = go.Figure()
-                
-                # Strategy equity curve
-                fig.add_trace(go.Scatter(
-                    x=df_filtered['exit_date'],
-                    y=df_filtered['Running_Capital'],
-                    mode='lines',
-                    name='Strategy',
-                    line=dict(color='#00D9FF', width=2),
-                    hovertemplate='<b>Strategy</b><br>Date: %{x}<br>Equity: $%{y:,.0f}<extra></extra>'
-                ))
-                
-                # SPY benchmark if available
-                if spy_benchmark is not None:
-                    fig.add_trace(go.Scatter(
-                        x=spy_benchmark['date'],
-                        y=spy_benchmark['equity'],
-                        mode='lines',
-                        name='SPY (Buy & Hold)',
-                        line=dict(color='#FFD700', width=2, dash='dash'),
-                        hovertemplate='<b>SPY</b><br>Date: %{x}<br>Equity: $%{y:,.0f}<extra></extra>'
-                    ))
-                
-                fig.update_layout(
-                    title='Equity Curve vs SPY Benchmark',
-                    xaxis_title='Date',
-                    yaxis_title='Portfolio Value ($)',
-                    hovermode='x unified',
-                    template='plotly_dark',
-                    showlegend=True,
-                    legend=dict(
-                        yanchor="top",
-                        y=0.99,
-                        xanchor="left",
-                        x=0.01
-                    )
-                )
-                
-                st.plotly_chart(fig, use_container_width=True, key="equity_curve_chart")
-                
-                # Show comparative metrics
-                if spy_benchmark is not None:
-                    final_strategy = df_filtered['Running_Capital'].iloc[-1]
-                    final_spy = spy_benchmark['equity'].iloc[-1]
-                    spy_return = spy_benchmark['returns_pct'].iloc[-1]
-                    
-                    col_a, col_b, col_c = st.columns(3)
-                    col_a.metric("Strategy Final", f"${final_strategy:,.0f}", f"{general_perf_pct:+.2f}%")
-                    col_b.metric("SPY Final", f"${final_spy:,.0f}", f"{spy_return:+.2f}%")
-                    col_c.metric("Alpha vs SPY", f"{(general_perf_pct - spy_return):.2f}%", 
-                                delta_color="normal" if general_perf_pct > spy_return else "inverse")
-            else:
-                # Fallback to simple chart
-                fig = px.line(df_filtered, x='exit_date', y='Running_Capital', title='Equity Curve (Real Risk Adjusted)')
-                st.plotly_chart(fig, use_container_width=True, key="equity_curve_chart")
-        with col2:
-            if 'shares' in df_filtered.columns:
-                fig = px.scatter(df_filtered, x='entry_date', y='position_value', 
-                                 color='is_profitable', size='shares',
-                                 title='Position Sizing Impact (Size = Shares, Y = Capital Alloc)')
-                st.plotly_chart(fig, use_container_width=True, key="position_sizing_chart")
-
-        #Tabla
-        st.markdown("### 📋 Trade Log (Institutional)")
-        df_disp = df_filtered.copy()
-        if 'shares' in df_disp.columns:
-            df_disp['days_held'] = (df_filtered['exit_date'] - df_filtered['entry_date']).dt.days
-            
-            cols = ['symbol', 'entry_date', 'days_held', 'signal_type', 'shares', 'position_value', 'monetary_risk', 'returns_pct', 'r_multiple', 'Result']
-            
-            # Add context columns if available
-            if 'context_rvol' in df_disp.columns:
-                cols.insert(4, 'context_rvol')  # Add after signal_type
-            if 'context_trend' in df_disp.columns:
-                cols.insert(5, 'context_trend')  # Add after rvol
-            
-            column_config = {
-                "symbol": st.column_config.TextColumn("Symbol", width="small"),
-                "entry_date": st.column_config.DateColumn("Entry Date", format="YYYY-MM-DD"),
-                "days_held": st.column_config.NumberColumn("Days", format="%d"),
-                "signal_type": st.column_config.TextColumn("Signal"),
-                "context_rvol": st.column_config.NumberColumn("RVOL", format="%.2fx"),
-                "context_trend": st.column_config.TextColumn("Trend", width="small"),
-                "shares": st.column_config.NumberColumn("Shares", format="%.2f"),
-                "position_value": st.column_config.NumberColumn("Position", format="$%.0f"),
-                "monetary_risk": st.column_config.NumberColumn("Risk", format="$%.0f"),
-                "returns_pct": st.column_config.NumberColumn("Return %", format="%+.2f%%",), 
-                "r_multiple": st.column_config.NumberColumn("R Multiple", format="%+.2f R"),
-                "Result": st.column_config.NumberColumn("P/L", format="$%.2f")
-            }
-            
-            st.dataframe(
-                df_disp[cols].sort_values('entry_date', ascending=False),
-                use_container_width=True,
-                hide_index=True,
-                column_config=column_config
-            )
-        else:
-            st.dataframe(df_filtered)
-        
-        # --- 📊 ALL EXITS TABLE (Incluye Fase 1, 2 y 3) ---
-        if not df_partial_raw.empty:
-            st.markdown("---")
-            st.markdown("### 📤 Detalle de Salidas Escalonadas (Todas las Fases)")
-            st.caption("📊 Registro completo de cada salida: Fase 1 (Risk-Free), Fase 2 (Resistance), Fase 3 (Runner)")
-            
-            # Filtrar partial exits según los filtros aplicados
-            df_partial_filtered = df_partial_raw.copy()
-            if f_symbol != 'Todos':
-                df_partial_filtered = df_partial_filtered[df_partial_filtered['symbol'] == f_symbol]
-            if f_signal != 'Todos':
-                df_partial_filtered = df_partial_filtered[df_partial_filtered['signal_type'] == f_signal]
-            
-            if not df_partial_filtered.empty:
-                df_partial_disp = df_partial_filtered.copy()
-                df_partial_disp['days_to_exit'] = (df_partial_disp['exit_date'] - df_partial_disp['entry_date']).dt.days
-                
-                # Ordenar por fase (FASE_1 primero) y luego alfabéticamente por símbolo
-                df_partial_disp = df_partial_disp.sort_values(['phase', 'symbol'], ascending=[True, True])
-                
-                # Agregar numeración de filas
-                df_partial_disp = df_partial_disp.reset_index(drop=True)
-                df_partial_disp.insert(0, '#', range(1, len(df_partial_disp) + 1))
-                
-                partial_cols = ['#', 'symbol', 'phase', 'exit_date', 'days_to_exit', 'exit_price', 
-                               'shares', 'exit_pct', 'pnl', 'return_pct', 'reason']
-                
-                partial_config = {
-                    "#": st.column_config.NumberColumn("#", width="tiny"),
-                    "symbol": st.column_config.TextColumn("Symbol", width="small"),
-                    "phase": st.column_config.TextColumn("Fase", width="small"),
-                    "exit_date": st.column_config.DateColumn("Exit Date", format="YYYY-MM-DD"),
-                    "days_to_exit": st.column_config.NumberColumn("Days", format="%d"),
-                    "exit_price": st.column_config.NumberColumn("Exit Price", format="$%.2f"),
-                    "shares": st.column_config.NumberColumn("Shares Sold", format="%d"),
-                    "exit_pct": st.column_config.NumberColumn("% Sold", format="%.0f%%"),
-                    "pnl": st.column_config.NumberColumn("P&L", format="$%.2f"),
-                    "return_pct": st.column_config.NumberColumn("Return %", format="%+.2f%%"),
-                    "reason": st.column_config.TextColumn("Reason"),
-                }
-                
-                st.dataframe(
-                    df_partial_disp[partial_cols],
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config=partial_config
-                )
-                
-                # Fila de totales
-                st.markdown("**📊 Totales:**")
-                total_row_cols = st.columns([1, 2, 1, 2, 2, 2, 2, 2, 2, 2, 3])
-                with total_row_cols[0]:
-                    st.write(f"**{len(df_partial_disp)}**")
-                with total_row_cols[1]:
-                    st.write("**TOTAL**")
-                with total_row_cols[6]:
-                    st.write(f"**{df_partial_disp['shares'].sum():,.0f}**")
-                with total_row_cols[8]:
-                    st.write(f"**${df_partial_disp['pnl'].sum():,.2f}**")
-                with total_row_cols[9]:
-                    avg_return = df_partial_disp['return_pct'].mean()
-                    st.write(f"**{avg_return:+.2f}%** (avg)")
-                
-                st.markdown("---")
-                
-                # Estadísticas rápidas de partial exits
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    total_partial_pnl = df_partial_disp['pnl'].sum()
-                    st.metric("Total P&L Parciales", f"${total_partial_pnl:,.2f}")
-                with col2:
-                    fase1_count = len(df_partial_disp[df_partial_disp['phase'] == 'FASE_1'])
-                    st.metric("Fase 1 Ejecutadas", fase1_count)
-                with col3:
-                    fase2_count = len(df_partial_disp[df_partial_disp['phase'] == 'FASE_2'])
-                    st.metric("Fase 2 Ejecutadas", fase2_count)
-                with col4:
-                    avg_days = df_partial_disp['days_to_exit'].mean()
-                    st.metric("Días Promedio", f"{avg_days:.1f}")
-            else:
-                st.info("No hay salidas parciales que coincidan con los filtros aplicados.")
-
-        # --- 🔬 TRADE ANALYSIS SECTION ---
-        st.markdown("---")
-        st.header("🔬 Análisis Detallado de Operaciones")
-        
-        if not df_filtered.empty:
-            df_analysis = df_filtered.sort_values('entry_date', ascending=False)
-            trade_options = []
-            trade_map = {}
-            
-            for idx, row in df_analysis.iterrows():
-                sym = row['symbol']
-                date = row['entry_date'].strftime('%Y-%m-%d')
-                pnl = row['Result'] if 'Result' in row else 0
-                sig_type = row.get('signal_type', 'N/A').replace('Camino.', '')
-                label = f"{date} | {sym} | {sig_type} | PnL: ${pnl:,.2f}"
-                trade_options.append(label)
-                trade_map[label] = row
-                
-            selected_trade_label = st.selectbox("Selecciona una operación para analizar:", trade_options)
-            
-            if selected_trade_label:
-                trade_data = trade_map[selected_trade_label]
-                
-                # --- VISUALIZATION TABS ---
-                tab_static, tab_interactive = st.tabs(["📸 Gráfico Detallado (Masterclass)", "🖱️ Gráfico Interactivo"])
-                
-                signal_data = {
-                    'camino': trade_data.get('signal_type', 'N/A'),
-                    'entry_price': trade_data['entry_price'],
-                    'stop_loss': trade_data.get('entry_price', 0) * 0.95,
-                    'exit_price': trade_data['exit_price'],
-                    'outcome': 'WIN' if trade_data.get('is_profitable') else 'LOSS',
-                    'return_pct': trade_data['returns_pct'],
-                    'hold_days': (trade_data['exit_date'] - trade_data['entry_date']).days,
-                    'monetary_risk': trade_data.get('monetary_risk', 0)
-                }
-
-                with tab_static:
-                    st.info("💡 Este gráfico muestra el ciclo de vida del trade con temporalidad ajustable.")
-                    
-                    # Timeframe selector
-                    col_tf1, col_tf2 = st.columns([1, 3])
-                    with col_tf1:
-                        timeframe = st.selectbox(
-                            "⏱️ Temporalidad",
-                            options=["5m", "15m", "30m", "1h", "1d"],
-                            index=0,  # Default to 5m
-                            key=f"tf_{trade_data['symbol']}_{trade_data['entry_date'].strftime('%Y%m%d')}"
-                        )
-                    
-                    with col_tf2:
-                        entry_date_pd = pd.to_datetime(trade_data['entry_date']).tz_localize(None)
-                        days_ago = (datetime.now() - entry_date_pd).days
-                        
-                        if days_ago > 59:
-                            st.warning(f"⚠️ Trade de hace {days_ago} días. Datos intraday no disponibles en APIs gratuitas (límite ~60 días). Solo disponible: 1d")
-                        else:
-                            st.caption(f"📊 Mostrando velas de **{timeframe}** para análisis intraday del ciclo de vida del trade.")
-                    
-                    entry_date_str = trade_data['entry_date'].strftime('%Y-%m-%d')
-                    
-                    # Initialize dashboard engine
-                    if 'dashboard_engine' not in st.session_state:
-                        if os.path.exists('outputs/backtests/backtest_results.csv'):
-                            st.session_state['dashboard_engine'] = InteractiveDashboard('outputs/backtests/backtest_results.csv')
-                    
-                    if 'dashboard_engine' in st.session_state:
-                        db = st.session_state['dashboard_engine']
-                        
-                        with st.spinner(f"Cargando gráfico {timeframe}..."):
-                            try:
-                                # Use intraday chart with selected timeframe
-                                if timeframe == "1d":
-                                    # Use daily chart
-                                    fig = db.create_trade_chart(trade_data['symbol'], entry_date_str, signal_data)
-                                else:
-                                    # Use intraday chart
-                                    entry_date_pd = pd.to_datetime(entry_date_str).tz_localize(None)
-                                    days_diff = (datetime.now() - entry_date_pd).days
-                                    
-                                    intraday_df = None
-                                    
-                                    # Try YFinance first (if <60 days)
-                                    if days_diff <= 59:
-                                        try:
-                                            intraday_df = db.data_provider.get_intraday_data(trade_data['symbol'], interval=timeframe, days=days_diff+5)
-                                        except:
-                                            pass
-                                    
-                                    # If YFinance failed or trade too old, try OpenBB
-                                    if intraday_df is None or intraday_df.empty:
-                                        st.info(f"📡 Intentando obtener datos históricos intraday vía OpenBB...")
-                                        try:
-                                            openbb_provider = OpenBBData()
-                                            # Calculate date range for OpenBB
-                                            start_date = (entry_date_pd - timedelta(days=1)).strftime('%Y-%m-%d')
-                                            end_date = (entry_date_pd + timedelta(days=1)).strftime('%Y-%m-%d')
-                                            
-                                            intraday_df = openbb_provider.get_intraday_data(
-                                                symbol=trade_data['symbol'],
-                                                start_date=start_date,
-                                                end_date=end_date,
-                                                interval=timeframe
-                                            )
-                                            
-                                            if intraday_df is not None and not intraday_df.empty:
-                                                st.success("✅ Datos históricos obtenidos exitosamente vía OpenBB!")
-                                        except Exception as openbb_error:
-                                            st.warning(f"⚠️ OpenBB tampoco pudo obtener datos: {openbb_error}")
-                                            intraday_df = None
-                                    
-                                    if intraday_df is not None and not intraday_df.empty:
-                                        # Filter for entry date
-                                        target_day_str = entry_date_pd.strftime('%Y-%m-%d')
-                                        day_data = intraday_df[intraday_df.index.strftime('%Y-%m-%d') == target_day_str].copy()
-                                        
-                                        if not day_data.empty:
-                                            # Normalize column names (OpenBB uses lowercase, YFinance uses Title case)
-                                            day_data.columns = [col.capitalize() if col.lower() in ['open', 'high', 'low', 'close', 'volume'] else col for col in day_data.columns]
-                                            
-                                            # Calculate VWAP
-                                            day_data['TP'] = (day_data['High'] + day_data['Low'] + day_data['Close']) / 3
-                                            day_data['CumVol'] = day_data['Volume'].cumsum()
-                                            day_data['CumVolPrice'] = (day_data['TP'] * day_data['Volume']).cumsum()
-                                            day_data['VWAP'] = day_data['CumVolPrice'] / day_data['CumVol']
-                                            
-                                            # Create figure
-                                            fig = go.Figure()
-                                            
-                                            # Candlesticks
-                                            fig.add_trace(go.Candlestick(
-                                                x=day_data.index,
-                                                open=day_data['Open'],
-                                                high=day_data['High'],
-                                                low=day_data['Low'],
-                                                close=day_data['Close'],
-                                                name=f'Price {timeframe}'
-                                            ))
-                                            
-                                            # VWAP Line
-                                            fig.add_trace(go.Scatter(
-                                                x=day_data.index,
-                                                y=day_data['VWAP'],
-                                                mode='lines',
-                                                line=dict(color='orange', width=2),
-                                                name='Intraday VWAP'
-                                            ))
-                                            
-                                            # Entry Level
-                                            fig.add_hline(y=signal_data['entry_price'], line_dash="dash", 
-                                                        line_color="cyan", annotation_text="Entry")
-                                            
-                                            # Exit Level
-                                            fig.add_hline(y=signal_data['exit_price'], line_dash="dash", 
-                                                        line_color="green" if signal_data['outcome'] == 'WIN' else "red", 
-                                                        annotation_text="Exit")
-                                            
-                                            # Stop Loss
-                                            fig.add_hline(y=signal_data['stop_loss'], line_dash="dot", 
-                                                        line_color="red", annotation_text="Stop")
-                                            
-                                            fig.update_layout(
-                                                title=f"<b>🔍 Ciclo de Vida del Trade - {trade_data['symbol']}</b><br><sup>{timeframe} | {target_day_str} | {signal_data['camino']}</sup>",
-                                                yaxis_title="Price ($)",
-                                                xaxis_title="Time",
-                                                template='plotly_white',
-                                                height=600,
-                                                xaxis_rangeslider_visible=False
-                                            )
-                                        else:
-                                            st.warning(f"No hay datos {timeframe} para la fecha específica {entry_date_str}.")
-                                            fig = None
-                                    else:
-                                        st.warning(f"⚠️ No se pudieron obtener datos {timeframe}. Mostrando gráfico diario.")
-                                        fig = db.create_trade_chart(trade_data['symbol'], entry_date_str, signal_data)
-                                
-                                if fig:
-                                    st.plotly_chart(fig, use_container_width=True, key=f"intraday_chart_{trade_data['symbol']}_{entry_date_str}_{timeframe}")
-                                else:
-                                    st.info("Mostrando gráfico estático como respaldo...")
-                                    viz = BacktestVisualizer()
-                                    viz.visualize_trade(trade_data['symbol'], entry_date_str, signal_data)
-                                    chart_filename = f"{trade_data['symbol']}_{entry_date_str}_{signal_data['camino']}.png"
-                                    chart_path = Path("backtest_charts") / chart_filename
-                                    if chart_path.exists():
-                                        st.image(str(chart_path), caption=f"Análisis Técnico: {trade_data['symbol']}", use_container_width=True)
-                                        
-                            except Exception as e:
-                                st.error(f"Error cargando gráfico: {e}")
-                                st.info("Mostrando gráfico estático como respaldo...")
-                                viz = BacktestVisualizer()
-                                viz.visualize_trade(trade_data['symbol'], entry_date_str, signal_data)
-                                chart_filename = f"{trade_data['symbol']}_{entry_date_str}_{signal_data['camino']}.png"
-                                chart_path = Path("backtest_charts") / chart_filename
-                                if chart_path.exists():
-                                    st.image(str(chart_path), caption=f"Análisis Técnico: {trade_data['symbol']}", use_container_width=True)
-                    else:
-                        st.warning("Dashboard engine no disponible. Ejecuta un backtest primero.")
-
-                with tab_interactive:
-                    if 'dashboard_engine' not in st.session_state:
-                         if os.path.exists('outputs/backtests/backtest_results.csv'):
-                             st.session_state['dashboard_engine'] = InteractiveDashboard('outputs/backtests/backtest_results.csv')
-                    
-                    if 'dashboard_engine' in st.session_state:
-                        db = st.session_state['dashboard_engine']
-                        try:
-                            fig = db.create_trade_chart(trade_data['symbol'], entry_date_str, signal_data)
-                            st.plotly_chart(fig, use_container_width=True, key=f"interactive_chart_{trade_data['symbol']}_{entry_date_str}")
-                        except Exception as e:
-                            st.error(f"Error generando gráfico interactivo: {e}")
-
-                # --- ANATOMÍA DEL TRADE ---
-                st.markdown("### 🏫 Anatomía del Trade (Explicación Paso a Paso)")
-                st.info("Esta sección desglosa la operación para que puedas mecanizar el proceso mental.")
-                
-                sig_type = trade_data.get('signal_type', '')
-                is_reclaim = 'VWAP_RECLAIM' in sig_type
-                is_blue_sky = 'BLUE_SKY' in sig_type
-                
-                # Card 1: El Contexto - FULL WIDTH
-                st.markdown("#### 1️⃣ Selección (El 'Qué')")
-                
-                # Extract Context Data
-                vol_raw = trade_data.get('context_vol', 0)
-                vol_str = f"{vol_raw/1e6:.1f}M" if vol_raw > 1e6 else f"{vol_raw/1e3:.0f}k" if vol_raw > 0 else "N/A"
-                
-                trend_str = trade_data.get('context_trend', 'N/A')
-                adr_val = trade_data.get('context_adr', 0)
-                rvol_val = trade_data.get('context_rvol', 0)
-                
-                # Tooltips educativos
-                rvol_status = "✅ ACEPTADO" if rvol_val >= 1.0 else "❌ RECHAZADO"
-                rvol_explanation = ""
-                if is_blue_sky:
-                    rvol_explanation = f"Blue Sky requiere RVOL ≥ 1.5x. Valor: {rvol_val:.2f}x {'✅' if rvol_val >= 1.5 else '❌'}"
-                else:
-                    rvol_explanation = f"VWAP Reclaim requiere RVOL ≥ 1.0x. Valor: {rvol_val:.2f}x {'✅' if rvol_val >= 1.0 else '❌'}"
-                
-                trend_explanation = {
-                    'Uptrend': "✅ Precio por encima de SMA20 - Momentum alcista",
-                    'Weak': "⚠️ Precio cerca de SMA20 - Gestión conservadora requerida",
-                    'Downtrend': "❌ Precio debajo de SMA20 - Tendencia bajista"
-                }.get(trend_str, "Tendencia no definida")
-                
-                adr_explanation = f"Volatilidad diaria promedio: {adr_val:.1f}% - {'Alta' if adr_val > 5 else 'Media' if adr_val > 3 else 'Baja'} oportunidad de movimiento"
-                
-                filter_col1, filter_col2, filter_col3, filter_col4 = st.columns(4)
-                
-                with filter_col1:
-                    st.metric("📊 Volumen", vol_str)
-                    with st.expander("ℹ️ ¿Por qué importa?"):
-                        st.write("**Liquidez institucional.** Necesitamos volumen suficiente para entradas/salidas sin slippage.")
-                
-                with filter_col2:
-                    st.metric("🔥 RVOL", f"{rvol_val:.2f}x", delta=rvol_status)
-                    with st.expander("ℹ️ ¿Por qué importa?"):
-                        st.write(f"**{rvol_explanation}**")
-                        st.write("RVOL = Volumen actual vs promedio 20 días. Confirma interés institucional.")
-                
-                with filter_col3:
-                    st.metric("📈 Tendencia", trend_str)
-                    with st.expander("ℹ️ ¿Por qué importa?"):
-                        st.write(f"**{trend_explanation}**")
-                        if trend_str == "Weak":
-                            st.write("En tendencia débil operamos con **salidas escalonadas** (FASE 1→2→3) para protección de capital.")
-                        else:
-                            st.write("Preferimos Uptrend para maximizar probabilidad. El sistema permite Weak con gestión risk-free.")
-                
-                with filter_col4:
-                    st.metric("⚡ ADR", f"{adr_val:.1f}%")
-                    with st.expander("ℹ️ ¿Por qué importa?"):
-                        st.write(f"**{adr_explanation}**")
-                        st.write("Average Daily Range: Potencial de movimiento. Mínimo 3% para justificar el riesgo.")
-                
-                st.markdown("---")
-                
-                # Card 2, 3, 4 - En fila
-                step2, step3, step4 = st.columns(3)
-                
-                with step2:
-                    st.markdown("#### 2️⃣ El Patrón (El 'Por qué')")
-                    if is_reclaim:
-                        st.markdown("🛡️ **VWAP Reclaim:**")
-                        st.write("Trampa de Osos. Las instituciones defendieron el precio en apertura débil.")
-                    elif is_blue_sky:
-                        st.markdown("🚀 **Blue Sky Breakout:**")
-                        st.write("Rompimiento de máximos sin resistencia. Momentum puro.")
-                    else:
-                        st.markdown("Patrón del sistema.")
-
-                with step3:
-                    st.markdown("#### 3️⃣ La Ejecución (El 'Cómo')")
-                    if is_reclaim:
-                        st.markdown(f"""
-                        🔫 **Trigger:** Cruce VWAP  
-                        📍 **Entrada:** ${trade_data['entry_price']:.2f}  
-                        🛑 **Stop:** Min Día
-                        """)
-                    else:
-                        st.markdown(f"""
-                        🔫 **Trigger:** Base Break  
-                        📍 **Entrada:** ${trade_data['entry_price']:.2f}  
-                        🛑 **Stop:** Estructura
-                        """)
-
-                with step4:
-                    st.markdown("#### 4️⃣ El Resultado (La Nota)")
-                    r_mul = trade_data.get('r_multiple', 0)
-                    result_color = "green" if r_mul > 0 else "red"
-                    st.markdown(f"""
-                    🏆 **Retorno:** :{result_color}[{trade_data['returns_pct']:+.2f}%]  
-                    ⚖️ **Ratio R:** :{result_color}[{r_mul:+.2f}R]
-                    """)
-                
-                st.markdown("---")
-                
-                # --- PARTIAL EXITS BREAKDOWN (NUEVO) ---
-                # Buscar salidas parciales para este trade específico
-                if not df_partial_raw.empty:
-                    symbol = trade_data['symbol']
-                    entry_date = trade_data['entry_date']
-                    
-                    partial_for_trade = df_partial_raw[
-                        (df_partial_raw['symbol'] == symbol) & 
-                        (df_partial_raw['entry_date'] == entry_date)
-                    ].sort_values('exit_date')
-                    
-                    if not partial_for_trade.empty:
-                        # Verificar si realmente hubo salidas parciales (FASE_1 o FASE_2)
-                        has_partial_exits = any(partial_for_trade['phase'].isin(['FASE_1', 'FASE_2']))
-                        
-                        if has_partial_exits:
-                            st.markdown("### 📤 Progresión de Salidas Parciales")
-                            st.success("✅ Este trade ejecutó salidas escalonadas (Fase 1, Fase 2, Fase 3) - Sistema de Risk-Free")
-                        else:
-                            st.markdown("### 📤 Cierre de Posición")
-                            st.info("ℹ️ Este trade se cerró sin ejecutar salidas parciales (no alcanzó +1R para risk-free)")
-                        
-                        # Timeline visual - FULL WIDTH
-                        st.markdown("#### 📊 Timeline del Trade")
-                        
-                        # Calcular número de columnas: Entrada + Parciales (FASE_1, FASE_2) + Final
-                        partial_phases_count = len(partial_for_trade[partial_for_trade['phase'].isin(['FASE_1', 'FASE_2'])])
-                        num_phases = 1 + partial_phases_count + 1  # Entrada + Parciales + Final
-                        timeline_cols = st.columns(num_phases)
-                        
-                        # Entrada
-                        with timeline_cols[0]:
-                            st.markdown("##### 🟢 ENTRADA")
-                            entry_metrics = {
-                                "📅 Fecha": trade_data['entry_date'].strftime('%Y-%m-%d'),
-                                "💵 Precio": f"${trade_data['entry_price']:.2f}",
-                                "📊 Shares": trade_data.get('initial_shares', 'N/A'),
-                                "🎯 R inicial": f"${trade_data.get('R_inicial', 0):.2f}",
-                                "⚡ ADR": f"${trade_data.get('adr_valor', 0):.2f}"
-                            }
-                            for key, val in entry_metrics.items():
-                                st.write(f"**{key}:** {val}")
-                        
-                        # Cada salida parcial (FASE_1, FASE_2)
-                        partial_phases = partial_for_trade[partial_for_trade['phase'].isin(['FASE_1', 'FASE_2'])]
-                        for i, (idx, partial_row) in enumerate(partial_phases.iterrows()):
-                            with timeline_cols[i + 1]:
-                                phase_emoji = "🔵" if partial_row['phase'] == 'FASE_1' else "🟡"
-                                days_held = (partial_row['exit_date'] - partial_row['entry_date']).days
-                                
-                                # Explicación de la fase
-                                phase_explanation = ""
-                                if partial_row['phase'] == 'FASE_1':
-                                    phase_explanation = "⚡ Risk-Free Conversion\n🛡️ Stop → Breakeven"
-                                elif partial_row['phase'] == 'FASE_2':
-                                    phase_explanation = "💎 Resistance Exit\n📊 Booking Profits"
-                                
-                                st.markdown(f"##### {phase_emoji} {partial_row['phase']}")
-                                st.write(phase_explanation)
-                                st.write(f"**📅 Fecha:** {partial_row['exit_date'].strftime('%Y-%m-%d')}")
-                                st.write(f"**⏱️ Días:** {days_held}")
-                                st.write(f"**💵 Precio:** ${partial_row['exit_price']:.2f}")
-                                st.write(f"**📉 Vendido:** {int(partial_row['shares'])} sh ({partial_row.get('exit_pct', 0):.0f}%)")
-                                pnl_color = "green" if partial_row['pnl'] > 0 else "red"
-                                st.markdown(f"**💰 P&L:** :{pnl_color}[${partial_row['pnl']:.2f}]")
-                                st.markdown(f"**📈 Return:** :{pnl_color}[{partial_row['return_pct']:+.2f}%]")
-                        
-                        # Salida Final (Runner o Cierre Normal)
-                        with timeline_cols[-1]:
-                            if has_partial_exits:
-                                st.markdown("##### 🏁 FASE 3 (Runner)")
-                                st.write("🎯 Trailing Stop")
-                            else:
-                                st.markdown("##### 🔴 CIERRE")
-                                # Mostrar razón del cierre
-                                reason = trade_data.get('reason', 'N/A').split('|')[0].strip()
-                                st.write(f"⚠️ {reason}")
-                            
-                            st.write(f"**📅 Fecha:** {trade_data['exit_date'].strftime('%Y-%m-%d')}")
-                            # Calcular días totales desde entrada hasta salida final
-                            total_days_held = (trade_data['exit_date'] - trade_data['entry_date']).days
-                            st.write(f"**⏱️ Total Días:** {total_days_held}")
-                            st.write(f"**💵 Precio:** ${trade_data['exit_price']:.2f}")
-                            final_shares = trade_data.get('shares', 0)
-                            
-                            if has_partial_exits:
-                                st.write(f"**📉 Restante:** {int(final_shares)} sh")
-                            else:
-                                st.write(f"**📉 Shares:** {int(final_shares)} sh")
-                            
-                            # Calcular P&L del runner correctamente desde precio de entrada
-                            entry_price = trade_data['entry_price']
-                            exit_price = trade_data['exit_price']
-                            runner_pnl = (exit_price - entry_price) * final_shares
-                            runner_color = "green" if runner_pnl > 0 else "red"
-                            st.markdown(f"**💰 P&L:** :{runner_color}[${runner_pnl:.2f}]")
-                        
-                        st.markdown("---")
-                        
-                        # Tabla resumen - FULL WIDTH (solo si hay salidas parciales)
-                        if has_partial_exits:
-                            st.markdown("#### 📋 Resumen de Ejecución")
-                            
-                            summary_data = []
-                            total_pnl = 0
-                            
-                            # Solo incluir FASE_1 y FASE_2
-                            partial_phases = partial_for_trade[partial_for_trade['phase'].isin(['FASE_1', 'FASE_2'])]
-                            for _, row in partial_phases.iterrows():
-                                trigger_short = row['reason'].split(':')[1].strip() if ':' in row['reason'] else row['reason']
-                                summary_data.append({
-                                    '🎯 Fase': row['phase'],
-                                    '⚡ Trigger': trigger_short,
-                                    '💵 Exit Price': f"${row['exit_price']:.2f}",
-                                    '📊 Shares': int(row['shares']),
-                                    '📉 % Sold': f"{row.get('exit_pct', 0):.0f}%",
-                                    '💰 P&L': f"${row['pnl']:.2f}",
-                                    '📈 Return': f"{row['return_pct']:+.2f}%"
-                                })
-                                total_pnl += row['pnl']
-                            
-                            # Agregar salida final (Fase 3 - runner)
-                            entry_price = trade_data['entry_price']
-                            exit_price = trade_data['exit_price']
-                            final_shares = trade_data.get('shares', 0)
-                            final_pnl = (exit_price - entry_price) * final_shares
-                            final_trigger = trade_data.get('reason', 'N/A').split('|')[0].strip()
-                            summary_data.append({
-                                '🎯 Fase': 'FASE_3 (Runner)',
-                                '⚡ Trigger': final_trigger,
-                                '💵 Exit Price': f"${trade_data['exit_price']:.2f}",
-                                '📊 Shares': int(final_shares),
-                                '📉 % Sold': f"{trade_data.get('final_shares_pct', 0):.0f}%",
-                                '💰 P&L': f"${final_pnl:.2f}",
-                                '📈 Return': f"{trade_data['returns_pct']:+.2f}%"
-                            })
-                            
-                            summary_df = pd.DataFrame(summary_data)
-                            st.dataframe(summary_df, use_container_width=True, hide_index=True)
-                        else:
-                            # Trade sin parciales - mostrar solo resumen simple
-                            total_pnl = 0
-                            final_pnl = trade_data['pnl']  # PnL total ya está en el trade_data
-                        
-                        # Métricas totales - FULL WIDTH
-                        st.markdown("#### 🎯 Métricas Totales")
-                        col_t1, col_t2, col_t3, col_t4, col_t5 = st.columns(5)
-                        with col_t1:
-                            # Total P&L
-                            if has_partial_exits:
-                                total_result = total_pnl + final_pnl
-                            else:
-                                total_result = final_pnl
-                            total_color = "green" if total_result > 0 else "red"
-                            st.metric("💰 Total P&L", f"${total_result:.2f}", delta="Final")
-                        with col_t2:
-                            if has_partial_exits:
-                                st.metric("📊 Parciales P&L", f"${total_pnl:.2f}", delta="Fases 1-2")
-                            else:
-                                st.metric("📊 Parciales P&L", "$0.00", delta="No ejecutadas")
-                        with col_t3:
-                            if has_partial_exits:
-                                st.metric("🏃 Runner P&L", f"${final_pnl:.2f}", delta="Fase 3")
-                            else:
-                                st.metric("🏃 Cierre Directo", f"${final_pnl:.2f}", delta="Sin parciales")
-                        with col_t4:
-                            if has_partial_exits:
-                                fases_ejecutadas = len(partial_for_trade[partial_for_trade['phase'].isin(['FASE_1', 'FASE_2'])])
-                                st.metric("✅ Fases Ejecutadas", f"{fases_ejecutadas}/2", delta="Parciales")
-                            else:
-                                st.metric("✅ Fases Ejecutadas", "0/2", delta="Sin risk-free")
-                        with col_t5:
-                            # Recalcular R Multiple con PnL total correcto
-                            R_inicial = trade_data.get('R_inicial', 1)
-                            initial_shares = trade_data.get('initial_shares', trade_data.get('shares', 0))
-                            total_risk = R_inicial * initial_shares
-                            total_r = total_result / total_risk if total_risk > 0 else 0
-                            r_color = "normal" if total_r > 0 else "inverse"
-                            st.metric("⚖️ R Total", f"{total_r:+.2f}R", delta=None, delta_color=r_color)
-                        
-                        # Notas educativas
-                        with st.expander("📚 Notas Educativas - ¿Por qué funciona este sistema?"):
-                            st.markdown("""
-                            ### 🛡️ Sistema de Salidas Risk-Free
-                            
-                            **Fase 1 (40% @ +1R o +1ADR):**
-                            - ✅ Convierte el trade en inversión libre de riesgo
-                            - 🔒 Stop sube a Breakeven AUTOMÁTICAMENTE
-                            - 💡 Asegura ganancia mínima, nunca pierde después de aquí
-                            
-                            **Fase 2 (30% @ +2.5R o resistencia):**
-                            - 💎 Book profits en zona de resistencia técnica
-                            - 📊 Ya tienes 70% de capital recuperado + ganancias
-                            
-                            **Fase 3 (30% Runner con trailing stop):**
-                            - 🚀 Deja correr para capturar big movers (runners)
-                            - 📈 Protegido con EMA/SMA trailing stop
-                            - 🛡️ Stop NUNCA baja de Breakeven
-                            
-                            **Resultado:** 
-                            - ✅ Si sube: Maximizas ganancias
-                            - ✅ Si baja: Sales con ganancia de Fase 1
-                            - ❌ IMPOSIBLE perder después de Fase 1
-                            """)
-
-
-                st.markdown("---")
-
-                # --- MASTERCLASS CONTEXT ---
-                with st.expander("🎓 Contexto Educativo (Masterclass)", expanded=True):
-                    st.markdown("### 📚 Fundamentos del Setup")
-                    
-                    if 'VWAP_RECLAIM' in sig_type:
-                        st.markdown("#### 🛡️ VWAP Reclaim - Segunda Oportunidad")
-                        
-                        col_edu1, col_edu2 = st.columns(2)
-                        
-                        with col_edu1:
-                            st.markdown("""
-                            **🎯 El Concepto:**
-                            
-                            El VWAP Reclaim es un patrón de **recuperación institucional** después de una apertura débil.
-                            
-                            **¿Qué es VWAP?**
-                            - Volume Weighted Average Price
-                            - Precio promedio ponderado por volumen del día
-                            - **Línea de batalla** entre compradores y vendedores
-                            
-                            **La Psicología:**
-                            1. 🔻 Apertura débil (gap down o venta matutina)
-                            2. 🐻 Traders minoristas venden por pánico
-                            3. 🏦 Instituciones **compran la debilidad**
-                            4. ✅ Precio reclaim VWAP = Instituciones ganando
-                            
-                            **Señal de Confirmación:**
-                            - Cruce por encima de VWAP
-                            - RVOL ≥ 1.0x (volumen confirmando)
-                            - Stop: Low of Day (LOD)
-                            """)
-                        
-                        with col_edu2:
-                            st.markdown("""
-                            **📊 Criterios de Validación:**
-                            
-                            ✅ **ACEPTADO si:**
-                            - RVOL ≥ 1.0x (mínimo)
-                            - Precio cruza VWAP de abajo hacia arriba
-                            - Mercado general débil (SPY/QQQ gap down)
-                            - Tendencia general: Uptrend en timeframe mayor
-                            
-                            ❌ **RECHAZADO si:**
-                            - RVOL < 1.0x (sin instituciones)
-                            - Precio ya muy por encima de VWAP
-                            - Tendencia bajista en timeframe mayor
-                            - Stop loss muy amplio (>5% del precio)
-                            
-                            **💡 Trading Edge:**
-                            Este patrón funciona porque capturas el momento exacto 
-                            en que las instituciones "defienden" el precio después 
-                            de una trampa de osos.
-                            
-                            **🎲 Probabilidad:**
-                            - Win Rate: ~45-55%
-                            - Reward:Risk: 2:1 típico
-                            - Best con mercados débiles
-                            """)
-                        
-                    elif 'BLUE_SKY' in sig_type:
-                        st.markdown("#### 🚀 Blue Sky Breakout - Momentum Puro")
-                        
-                        col_edu1, col_edu2 = st.columns(2)
-                        
-                        with col_edu1:
-                            st.markdown("""
-                            **🎯 El Concepto:**
-                            
-                            Blue Sky Breakout es un rompimiento hacia **máximos históricos** sin resistencia superior.
-                            
-                            **¿Por qué funciona?**
-                            - No hay "bag holders" (compradores atrapados arriba)
-                            - Sin resistencia = menos vendedores
-                            - Momentum alcista fuerte
-                            - FOMO institucional activo
-                            
-                            **La Anatomía:**
-                            1. 📊 Base de consolidación (3-10 días)
-                            2. 📈 AVWAP convergiendo con base high
-                            3. 🔥 Volumen explosivo (RVOL > 1.5x)
-                            4. 🚀 Breakout con convicción
-                            
-                            **Señal de Entrada:**
-                            - Buy Stop 5¢ por encima del base high
-                            - AVWAP dentro de 2% del base high
-                            - Tendencia: Uptrend (precio > SMA20)
-                            """)
-                        
-                        with col_edu2:
-                            st.markdown("""
-                            **📊 Criterios de Validación:**
-                            
-                            ✅ **ACEPTADO si:**
-                            - RVOL ≥ 1.5x (instituciones activas)
-                            - AVWAP cerca del base high (<2% divergencia)
-                            - Tendencia: Uptrend confirmado
-                            - ADR ≥ 3% (volatilidad suficiente)
-                            - Base bien formada (3+ días)
-                            
-                            ❌ **RECHAZADO si:**
-                            - RVOL < 1.5x (sin volumen = trampa)
-                            - AVWAP muy por encima del precio actual
-                            - Tendencia: Weak o Downtrend
-                            - ADR < 3% (poco potencial)
-                            
-                            **💡 Trading Edge:**
-                            Este patrón captura el inicio de movimientos impulsivos
-                            cuando instituciones entran masivamente en un stock 
-                            que "rompe techos".
-                            
-                            **🎲 Probabilidad:**
-                            - Win Rate: ~40-50%
-                            - Reward:Risk: 3:1+ en runners
-                            - Best con mercados alcistas
-                            """)
-                    else:
-                        st.info("Selecciona un trade con señal VWAP_RECLAIM o BLUE_SKY para ver el contexto educativo completo.")
-                    
-                    # Glosario común
-                    st.markdown("---")
-                    st.markdown("#### 📖 Glosario de Términos")
-                    
-                    glossary_col1, glossary_col2, glossary_col3 = st.columns(3)
-                    
-                    with glossary_col1:
-                        st.markdown("""
-                        **RVOL (Relative Volume):**
-                        - Volumen actual vs promedio 20 días
-                        - 1.0x = volumen normal
-                        - >1.5x = instituciones activas
-                        - <1.0x = poco interés
-                        """)
-                        
-                    with glossary_col2:
-                        st.markdown("""
-                        **ADR (Average Daily Range):**
-                        - Rango diario promedio en %
-                        - Mide volatilidad
-                        - >5% = Alta volatilidad
-                        - 3-5% = Media (ideal)
-                        - <3% = Baja (poco potencial)
-                        """)
-                    
-                    with glossary_col3:
-                        st.markdown("""
-                        **R (Risk Multiple):**
-                        - Retorno vs riesgo inicial
-                        - 1R = ganaste tu riesgo inicial
-                        - 2R = ganaste 2x tu riesgo
-                        - -1R = perdiste tu stop completo
-                        - Objetivo: >2R promedio
-                        """)
-
-    # ==========================================
-    # TAB 2: PnL CALENDAR (NEW)
-    # ==========================================
-    with tab_calendar:
-        st.header("📅 PnL Calendar & Monthly Analysis")
-        
-        df_cal = df_raw.copy()
-        if 'shares' in df_cal.columns:
-            df_cal['Result'] = (df_cal['exit_price'] - df_cal['entry_price']) * df_cal['shares']
-            
-            # --- DATE SELECTION ---
-            # Calculate Monthly PnLs for the Selector
-            df_cal['month_key'] = df_cal['exit_date'].dt.to_period('M')
-            monthly_agg = df_cal.groupby('month_key')['Result'].sum().sort_index(ascending=False)
-            
-            month_options = []
-            month_map = {}
-            for period, pnl in monthly_agg.items():
-                start_of_month = period.start_time.date()
-                pnl_str = f"+${pnl:,.0f}" if pnl >= 0 else f"-${abs(pnl):,.0f}"
-                label = f"{start_of_month.strftime('%B %Y')} ({pnl_str})"
-                month_options.append(label)
-                month_map[label] = start_of_month
-
-            col_sel1, col_sel2 = st.columns([1, 2])
-            with col_sel1:
-                if month_options:
-                    selected_month_label = st.selectbox("📅 Seleccionar Mes", month_options)
-                    selected_date = month_map[selected_month_label]
-                else:
-                    selected_date = datetime.now().date().replace(day=1)
-                    st.warning("No hay datos mensuales disponibles.")
-            
-            # Filter Month
-            sel_month_start = selected_date # Already 1st of month
-
-            # Safe logic for next month first day
-            if sel_month_start.month == 12:
-                next_month = sel_month_start.replace(year=sel_month_start.year+1, month=1, day=1)
-            else:
-                next_month = sel_month_start.replace(month=sel_month_start.month+1, day=1)
-            
-            sel_month_end = next_month - timedelta(days=1)
-            
-            monthly_trades = df_cal[(df_cal['exit_date'].dt.date >= sel_month_start) & 
-                                  (df_cal['exit_date'].dt.date <= sel_month_end)]
-            monthly_pnl = monthly_trades['Result'].sum()
-            
-            with col_sel2:
-                # Generate Calendar Grid with Interactive Buttons and Custom Styling
-                cal = calendar.Calendar(firstweekday=6) # Sunday start
-                month_days = cal.monthdayscalendar(selected_date.year, selected_date.month)
-                
-                st.markdown(f"### 🗓️ {selected_date.strftime('%B %Y')}")
-                
-                # Initialize selected_day in session state
-                if 'selected_day' not in st.session_state:
-                    st.session_state.selected_day = selected_date
-                
-                # Custom CSS for calendar styling
-                st.markdown("""
-                <style>
-                .cal-day-header {
-                    text-align: center;
-                    font-weight: bold;
-                    font-size: 11px;
-                    color: #666;
-                    padding: 5px;
-                    background: #f0f2f6;
-                    border-radius: 5px;
-                    margin-bottom: 5px;
-                }
-                /* Override Streamlit button styles for calendar */
-                div[data-testid="column"] > div > div > button {
-                    font-size: 13px !important;
-                    padding: 10px 5px !important;
-                    min-height: 70px !important;
-                    white-space: pre-wrap !important;
-                    border-radius: 8px !important;
-                    font-weight: 500 !important;
-                }
-                /* Win buttons (primary) - Green theme */
-                div[data-testid="column"] > div > div > button[kind="primary"] {
-                    background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%) !important;
-                    color: #155724 !important;
-                    border: 2px solid #b1dfbb !important;
-                }
-                div[data-testid="column"] > div > div > button[kind="primary"]:hover {
-                    background: linear-gradient(135deg, #c3e6cb 0%, #b1dfbb 100%) !important;
-                    border-color: #28a745 !important;
-                    transform: scale(1.05) !important;
-                    box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3) !important;
-                }
-                /* Loss buttons (secondary) - Red theme */
-                div[data-testid="column"] > div > div > button[kind="secondary"] {
-                    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%) !important;
-                    color: #721c24 !important;
-                    border: 2px solid #f1b0b7 !important;
-                }
-                div[data-testid="column"] > div > div > button[kind="secondary"]:hover {
-                    background: linear-gradient(135deg, #f5c6cb 0%, #f1b0b7 100%) !important;
-                    border-color: #dc3545 !important;
-                    transform: scale(1.05) !important;
-                    box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3) !important;
-                }
-                /* Neutral days (tertiary) - Gray theme */
-                div[data-testid="column"] > div > div > button[kind="tertiary"] {
-                    background: #ffffff !important;
-                    color: #495057 !important;
-                    border: 1px solid #dee2e6 !important;
-                }
-                div[data-testid="column"] > div > div > button[kind="tertiary"]:hover {
-                    background: #f8f9fa !important;
-                    border-color: #adb5bd !important;
-                    transform: scale(1.02) !important;
-                }
-                </style>
-                """, unsafe_allow_html=True)
-                
-                days_header = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
-                
-                # Display calendar header
-                header_cols = st.columns(7)
-                for idx, day_name in enumerate(days_header):
-                    with header_cols[idx]:
-                        st.markdown(f'<div class="cal-day-header">{day_name}</div>', unsafe_allow_html=True)
-                
-                month_pnl_total = 0
-                
-                # Display calendar grid with interactive buttons
-                for week in month_days:
-                    week_cols = st.columns(7)
-                    for idx, day in enumerate(week):
-                        with week_cols[idx]:
-                            if day == 0:
-                                st.write("")  # Empty cell
-                            else:
-                                # Find PnL for this day
-                                current_dt = datetime(selected_date.year, selected_date.month, day).date()
-                                day_trades = df_cal[df_cal['exit_date'].dt.date == current_dt]
-                                
-                                pnl_val = day_trades['Result'].sum() if not day_trades.empty else 0
-                                
-                                pnl_str = ""
-                                button_type = "tertiary"  # neutral/no trades
-                                
-                                if pnl_val > 0: 
-                                    pnl_str = f"+${pnl_val:,.0f}"
-                                    month_pnl_total += pnl_val
-                                    button_type = "primary"  # Green for wins
-                                elif pnl_val < 0: 
-                                    pnl_str = f"-${abs(pnl_val):,.0f}"
-                                    month_pnl_total += pnl_val
-                                    button_type = "secondary"  # Red for losses
-                                
-                                # Button label with day and PnL
-                                label = f"**{day}**\n{pnl_str}" if pnl_str else f"{day}"
-                                
-                                # Highlight selected day
-                                is_selected = (current_dt == st.session_state.get('selected_day', selected_date))
-                                
-                                # Create button for each day
-                                if st.button(label, key=f"day_{selected_date.year}_{selected_date.month}_{day}", 
-                                           type=button_type, use_container_width=True):
-                                    st.session_state.selected_day = current_dt
-                
-                if monthly_trades.empty:
-                    st.caption("No trades closed this month.")
-                else:
-                    # Display monthly summary with color
-                    col_metric1, col_metric2 = st.columns(2)
-                    with col_metric1:
-                        pnl_delta = "📈" if month_pnl_total >= 0 else "📉"
-                        st.metric("Monthly PnL", f"${month_pnl_total:,.2f}", 
-                                delta=f"{pnl_delta} {len(monthly_trades)} Trades",
-                                delta_color="normal" if month_pnl_total >= 0 else "inverse")
-                    with col_metric2:
-                        win_trades = monthly_trades[monthly_trades['Result'] > 0]
-                        win_rate = len(win_trades) / len(monthly_trades) * 100 if len(monthly_trades) > 0 else 0
-                        st.metric("Win Rate", f"{win_rate:.1f}%", 
-                                delta=f"{len(win_trades)}W / {len(monthly_trades)-len(win_trades)}L")
-
-            st.markdown("---")
-            
-            # --- DAILY DETAIL VIEW ---
-            # Use the selected day from session state
-            display_date = st.session_state.get('selected_day', selected_date)
-            st.subheader(f"📆 Daily Snapshot: {display_date.strftime('%Y-%m-%d')}")
-            
-            # A. REALIZED PNL (Closed Today)
-            realized_today = df_cal[df_cal['exit_date'].dt.date == display_date]
-            
-            # B. ACTIVE POSITIONS (Active Today)
-            active_today = df_cal[(df_cal['entry_date'].dt.date <= display_date) & 
-                                (df_cal['exit_date'].dt.date > display_date)].copy()
-            
-            c_d1, c_d2 = st.columns([2, 1])
-            
-            with c_d1:
-                combined_rows = []
-                # Realized
-                for _, row in realized_today.iterrows():
-                    combined_rows.append({
-                        'Sym': row['symbol'], 'Pos': 0, 'Last': row['exit_price'],
-                        'PosAvg': row['entry_price'], '$Real': row['Result'], '$Value': 0.0, 'Type': 'Closed'
-                    })
-                # Active
-                for _, row in active_today.iterrows():
-                    combined_rows.append({
-                        'Sym': row['symbol'], 'Pos': row['shares'], 'Last': row['entry_price'], # Proxy
-                        'PosAvg': row['entry_price'], '$Real': 0.0, '$Value': row['shares'] * row['entry_price'], 'Type': 'Open'
-                    })
-                
-                df_day_view = pd.DataFrame(combined_rows)
-                
-                if not df_day_view.empty:
-                    st.dataframe(
-                        df_day_view,
-                        column_config={
-                            "Sym": st.column_config.TextColumn("Sym", width="small"),
-                            "Pos": st.column_config.NumberColumn("Pos", format="%.0f"),
-                            "Last": st.column_config.NumberColumn("Last (Ref)", format="$%.2f"),
-                            "PosAvg": st.column_config.NumberColumn("PosAvg", format="$%.2f"),
-                            "$Real": st.column_config.NumberColumn("$Real PnL", format="$%.2f"),
-                            "$Value": st.column_config.NumberColumn("$Alloc Value", format="$%.2f"),
-                        },
-                        use_container_width=True, hide_index=True
-                    )
-                    total_realized = df_day_view['$Real'].sum()
-                    st.markdown(f"**Total Realized Today:** :green[${total_realized:,.2f}]" if total_realized >= 0 else f"**Total Realized Today:** :red[${total_realized:,.2f}]")
-                else:
-                    st.info("No activity recorded for this date.")
-
-            with c_d2:
-                if not active_today.empty:
-                    fig_pie = px.pie(active_today, values='position_value', names='symbol', 
-                                   title=f"Portfolio Allocation ({display_date.strftime('%b %d')})", hole=0.4)
-                    st.plotly_chart(fig_pie, use_container_width=True, key=f"portfolio_pie_{display_date.strftime('%Y%m%d')}")
-                else:
-                    st.info("No open positions.")
-
-            # --- MONTHLY EQUITY CURVE ---
-            st.markdown("---")
-            st.subheader(f"📈 Monthly Performance: {selected_date.strftime('%B %Y')}")
-            
-            if not monthly_trades.empty:
-                monthly_trades = monthly_trades.sort_values('exit_date')
-                monthly_trades['cum_pnl'] = monthly_trades['Result'].cumsum()
-                fig_equity = px.area(monthly_trades, x='exit_date', y='cum_pnl',
-                                   title=f"Realized PnL Curve - {selected_date.strftime('%B')}",
-                                   labels={'cum_pnl': 'Cumulative PnL ($)', 'exit_date': 'Date'})
-                st.plotly_chart(fig_equity, use_container_width=True, key=f"monthly_equity_{selected_date.strftime('%Y%m')}")
-            else:
-                st.info("No trades closed in this month.")
-        else:
-            st.warning("Run backtest to see Calendar data.")
-    
-    # ==========================================
-    # TAB 3: LIVE MARKET SCANNER
-    # ==========================================
-    with tab_live_scanner:
-        st.header("📡 Live Market Scanner")
-        st.caption("🔴 Condiciones del mercado en TIEMPO REAL (no histórico)")
-        
+    # --- Fetch Benchmark Data ---
+    @st.cache_data(ttl=3600)
+    def get_benchmark_returns(ticker, start, end):
         try:
             from src.data.market_data import MarketDataProvider
-            from src.core.market_context import MarketContext
-            
-            with st.spinner("Analizando condiciones del mercado..."):
-                provider = MarketDataProvider()
-                mc = MarketContext(provider)
-                context = mc.analyze_indices()
-            
-            # Extract metrics
-            spy_price = context.get('spy_price', 0)
-            spy_ema20 = context.get('spy_ema20', 0)
-            spy_above_ema20 = context.get('spy_above_ema20', False)
-            breadth_improving = context.get('breadth_improving', False)
-            positive_gex = context.get('positive_gex', False)
-            vix_favorable = context.get('vix_favorable', True)
-            sector_leaders = context.get('sector_leaders', {})
-            market_favorable = context.get('market_favorable_for_longs', False)
-            
-            # Calculate health score
-            health_score = 0
-            if spy_above_ema20:
-                health_score += 2
-            if breadth_improving:
-                health_score += 2
-            if positive_gex:
-                health_score += 1
-            if vix_favorable:
-                health_score += 1
-            if sector_leaders:
-                health_score += 1
-            
-            # Display in columns
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                st.metric(
-                    "SPY Trend",
-                    f"${spy_price:.2f}",
-                    f"{((spy_price - spy_ema20) / spy_ema20 * 100):+.2f}%" if spy_ema20 else "N/A",
-                    delta_color="normal"
-                )
-                if spy_above_ema20:
-                    st.success("✅ Above EMA20")
-                else:
-                    st.error("❌ Below EMA20")
-            
-            with col2:
-                st.metric("Breadth", "Improving" if breadth_improving else "Declining")
-                if breadth_improving:
-                    st.success("✅ Strong")
-                else:
-                    st.warning("⚠️ Weak")
-            
-            with col3:
-                st.metric("Volatility", "Favorable" if vix_favorable else "Elevated")
-                if vix_favorable:
-                    st.success("✅ VIX < 20")
-                else:
-                    st.error("⚠️ VIX High")
-            
-            with col4:
-                st.metric("GEX", "Positive" if positive_gex else "Neutral")
-                if positive_gex:
-                    st.success("✅ Low Vol Grind")
-                else:
-                    st.info("⚪ Normal")
-            
-            # Health Score and Verdict
-            st.markdown("---")
-            col_score, col_verdict = st.columns([1, 2])
-            
-            with col_score:
-                st.metric("Health Score", f"{health_score}/7", f"{(health_score/7*100):.0f}%")
-                st.progress(health_score / 7)
-            
-            with col_verdict:
-                if not market_favorable:
-                    st.error("❌ **NO TRADE MODE** - Market not favorable for longs")
-                    st.caption("Go to cash or paper trade only")
-                elif health_score >= 6:
-                    st.success("🚀 **AGGRESSIVE MODE** - Excellent conditions")
-                    st.caption("Full size (2% risk), all 3 Caminos, focus on leading sectors")
-                elif health_score >= 4:
-                    st.success("💪 **STANDARD MODE** - Good conditions")
-                    st.caption("Standard size (1.5-2% risk), prefer Camino 1 in leading sectors")
-                else:
-                    st.warning("⚠️ **DEFENSIVE MODE** - Be selective")
-                    st.caption("Half size (0.5-1% risk), only perfect Blue Sky in top sectors")
-            
-            # Sector Leaders
-            if sector_leaders:
-                st.markdown("---")
-                st.subheader("🎯 Top Performing Sectors (Today)")
-                
-                st.info("💡 **Trading Tip**: Focus on leading sectors for mejor probabilidad de éxito. Evita sectores débiles.")
-                
-                # Top 3 in columns
-                top_3 = list(sector_leaders.items())[:3]
-                col_s1, col_s2, col_s3 = st.columns(3)
-                for idx, (sector, data) in enumerate(top_3):
-                    with [col_s1, col_s2, col_s3][idx]:
-                        pct = data['change_pct']
-                        st.metric(
-                            f"#{idx+1} {sector}",
-                            f"{data['symbol']}",
-                            f"{pct:+.2f}%",
-                            delta_color="normal"
-                        )
-                
-                # Full sector table
-                st.markdown("### 📊 All Sectors Performance")
-                sector_df = pd.DataFrame([
-                    {
-                        'Sector': sector,
-                        'ETF': data['symbol'],
-                        'Change %': data['change_pct'],
-                        'Trend': '🟢 Strong' if data['change_pct'] > 0.5 else '🟡 Neutral' if data['change_pct'] > 0 else '🔴 Weak'
-                    }
-                    for sector, data in sector_leaders.items()
-                ]).sort_values('Change %', ascending=False)
-                
-                st.dataframe(
-                    sector_df,
-                    column_config={
-                        "Change %": st.column_config.NumberColumn("Change %", format="%.2f%%"),
-                    },
-                    use_container_width=True,
-                    hide_index=True
-                )
-                
-                # Action recommendations
-                st.markdown("---")
-                st.subheader("🎯 Recommended Actions")
-                
-                top_sector = list(sector_leaders.items())[0]
-                worst_sector = list(sector_leaders.items())[-1]
-                
-                col_rec1, col_rec2 = st.columns(2)
-                with col_rec1:
-                    st.success(f"**✅ FOCUS ON**: {top_sector[0]}")
-                    st.caption(f"Leading with {top_sector[1]['change_pct']:+.2f}%. Busca setups en este sector.")
-                
-                with col_rec2:
-                    st.error(f"**❌ AVOID**: {worst_sector[0]}")
-                    st.caption(f"Lagging with {worst_sector[1]['change_pct']:+.2f}%. Skip este sector hoy.")
 
+            provider = MarketDataProvider()
+            # Convert dates to string for provider
+            s_str = (
+                start.strftime("%Y-%m-%d")
+                if isinstance(start, datetime)
+                else str(start)
+            )
+            e_str = end.strftime("%Y-%m-%d") if isinstance(end, datetime) else str(end)
+
+            # Try to get from provider
+            df = provider.get_daily_data(ticker, start_date=s_str, end_date=e_str)
+            if df.empty:
+                # Fallback to yfinance directly
+                import yfinance as yf
+
+                df = yf.download(ticker, start=s_str, end=e_str, progress=False)
+
+            if not df.empty:
+                if "Close" in df.columns:
+                    return df["Close"].pct_change().fillna(0)
+                elif "close" in df.columns:
+                    return df["close"].pct_change().fillna(0)
         except Exception as e:
-            st.error(f"Error loading market health: {e}")
-            st.caption("Intenta recargar la página")
+            st.error(f"Error fetching benchmark: {e}")
+        return pd.Series()
 
+    benchmark_returns = get_benchmark_returns(benchmark_ticker, start_date, end_date)
+
+    # =========================================================================
+    # TAB 1: PERFORMANCE (Full QuantStats integration)
+    # =========================================================================
+    with t1:
+        # --- Trade-based metrics (from grouped complete trades) ---
+        total_trades = len(grouped_trades)
+        winners = (
+            int(grouped_trades["is_winner"].sum()) if not grouped_trades.empty else 0
+        )
+        losers = total_trades - winners
+        net_pnl = grouped_trades["total_pnl"].sum() if not grouped_trades.empty else 0
+        win_rate = (winners / total_trades * 100) if total_trades > 0 else 0
+
+        # Profit factor
+        gross_profit = (
+            grouped_trades[grouped_trades["is_winner"]]["total_pnl"].sum()
+            if winners > 0
+            else 0
+        )
+        gross_loss = (
+            abs(grouped_trades[~grouped_trades["is_winner"]]["total_pnl"].sum())
+            if losers > 0
+            else 0
+        )
+        profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else float("inf")
+
+        # Avg win/loss
+        avg_win = (
+            grouped_trades[grouped_trades["is_winner"]]["total_pnl"].mean()
+            if winners > 0
+            else 0
+        )
+        avg_loss = (
+            grouped_trades[~grouped_trades["is_winner"]]["total_pnl"].mean()
+            if losers > 0
+            else 0
+        )
+
+        # R-multiples (already calculated above)
+        avg_r = grouped_trades["r_multiple"].mean() if has_r else 0
+
+        # Exit analysis
+        hit_tp1 = (
+            int(grouped_trades["hit_tp1"].sum())
+            if "hit_tp1" in grouped_trades.columns
+            else 0
+        )
+        hit_tp2 = (
+            int(grouped_trades["hit_tp2"].sum())
+            if "hit_tp2" in grouped_trades.columns
+            else 0
+        )
+        had_runner = (
+            int(grouped_trades["had_runner"].sum())
+            if "had_runner" in grouped_trades.columns
+            else 0
+        )
+        was_stopped = (
+            int(grouped_trades["was_stopped_out"].sum())
+            if "was_stopped_out" in grouped_trades.columns
+            else 0
+        )
+
+        # Avg hold days
+        avg_hold = (
+            grouped_trades["hold_days"].mean()
+            if "hold_days" in grouped_trades.columns
+            else 0
+        )
+
+        # --- Row 1: Core metrics ---
+        render_metric_cards(
+            [
+                {"label": "Net Profit", "value": f"${net_pnl:,.2f}"},
+                {
+                    "label": "Win Rate",
+                    "value": f"{win_rate:.2f}%",
+                    "sub": f"{winners}W / {losers}L",
+                },
+                {
+                    "label": "Total Trades",
+                    "value": str(total_trades),
+                    "sub": f"({len(df)} partial exits)",
+                },
+                {
+                    "label": "Profit Factor",
+                    "value": f"{profit_factor:.2f}"
+                    if profit_factor != float("inf")
+                    else "INF",
+                },
+                {
+                    "label": "Avg Win / Loss",
+                    "value": f"${avg_win:,.2f} / ${avg_loss:,.2f}",
+                },
+            ]
+        )
+
+        # --- Row 2: Exit analysis ---
+        render_metric_cards(
+            [
+                {
+                    "label": "Hit TP1",
+                    "value": str(hit_tp1),
+                    "sub": f"{hit_tp1 / total_trades * 100:.2f}% of trades"
+                    if total_trades > 0
+                    else "",
+                },
+                {
+                    "label": "Hit TP2",
+                    "value": str(hit_tp2),
+                    "sub": f"{hit_tp2 / total_trades * 100:.2f}% of trades"
+                    if total_trades > 0
+                    else "",
+                },
+                {
+                    "label": "Runners",
+                    "value": str(had_runner),
+                    "sub": f"{had_runner / total_trades * 100:.2f}% of trades"
+                    if total_trades > 0
+                    else "",
+                },
+                {
+                    "label": "Stopped Out",
+                    "value": str(was_stopped),
+                    "sub": f"{was_stopped / total_trades * 100:.2f}% of trades"
+                    if total_trades > 0
+                    else "",
+                },
+                {"label": "Avg Hold", "value": f"{avg_hold:.2f}d"},
+            ]
+        )
+
+        # --- QuantStats Time-Series Metrics ---
+        st.markdown("### Time-Series Analytics")
+
+        try:
+            # Filter trades by date range
+            if start_date and end_date:
+                filter_start = pd.to_datetime(start_date)
+                filter_end = pd.to_datetime(end_date)
+                filtered_trades_t1 = trade_df_for_grouper[
+                    (pd.to_datetime(trade_df_for_grouper["entry_date"]) >= filter_start)
+                    & (pd.to_datetime(trade_df_for_grouper["entry_date"]) <= filter_end)
+                ]
+            else:
+                filtered_trades_t1 = trade_df_for_grouper
+
+            analyzer = QuantStatsAnalyzer(
+                trade_log=filtered_trades_t1,
+                initial_capital=equity if "equity" in dir() else 100000,
+                benchmark_ticker=benchmark_ticker,
+            )
+            # Pass benchmark returns if available
+            qs_metrics = analyzer.get_quantstats_metrics(
+                benchmark_data=benchmark_returns
+                if not benchmark_returns.empty
+                else None
+            )
+
+            if qs_metrics:
+                qs_col1, qs_col2, qs_col3, qs_col4 = st.columns(4)
+
+                with qs_col1:
+                    st.markdown("**Risk-Adjusted**")
+                    sharpe = qs_metrics.get("sharpe_ratio", 0)
+                    sortino = qs_metrics.get("sortino_ratio", 0)
+                    render_metric_cards(
+                        [
+                            {
+                                "label": "Sharpe",
+                                "value": f"{sharpe:.2f}" if sharpe else "N/A",
+                            },
+                            {
+                                "label": "Sortino",
+                                "value": f"{sortino:.2f}" if sortino else "N/A",
+                            },
+                        ]
+                    )
+
+                with qs_col2:
+                    st.markdown("**Returns**")
+                    total_ret = qs_metrics.get("total_return", 0)
+                    max_dd = qs_metrics.get("max_drawdown", 0)
+                    render_metric_cards(
+                        [
+                            {
+                                "label": "Return",
+                                "value": f"{total_ret * 100:+.2f}%"
+                                if total_ret
+                                else "N/A",
+                            },
+                            {
+                                "label": "Max DD",
+                                "value": f"{max_dd * 100:.2f}%" if max_dd else "N/A",
+                            },
+                        ]
+                    )
+
+                with qs_col3:
+                    st.markdown("**Benchmark Alpha**")
+                    alpha = qs_metrics.get("alpha", 0)
+                    beta = qs_metrics.get("beta", 0)
+                    render_metric_cards(
+                        [
+                            {
+                                "label": f"Alpha vs {benchmark_ticker}",
+                                "value": f"{alpha:.2f}" if alpha is not None else "N/A",
+                            },
+                            {
+                                "label": f"Beta vs {benchmark_ticker}",
+                                "value": f"{beta:.2f}" if beta is not None else "N/A",
+                            },
+                        ]
+                    )
+
+                with qs_col4:
+                    st.markdown("**Outperformance**")
+                    excess = qs_metrics.get("excess_return", 0)
+                    info_ratio = qs_metrics.get("information_ratio", 0)
+                    render_metric_cards(
+                        [
+                            {
+                                "label": "Excess Return",
+                                "value": f"{excess * 100:+.2f}%"
+                                if excess is not None
+                                else "N/A",
+                            },
+                            {
+                                "label": "Info Ratio",
+                                "value": f"{info_ratio:.2f}"
+                                if info_ratio is not None
+                                else "N/A",
+                            },
+                        ]
+                    )
+        except Exception as e:
+            st.warning(f"QuantStats metrics unavailable: {e}")
+
+        # --- Cumulative PnL Chart ---
+        st.markdown("### Equity Curve")
+
+        # Build equity curve from grouped trades (by exit date)
+        if not grouped_trades.empty:
+            eq_data = grouped_trades[["final_exit_date", "total_pnl"]].copy()
+            eq_data = eq_data.sort_values("final_exit_date")
+            eq_data["cumulative_pnl"] = eq_data["total_pnl"].cumsum()
+
+            fig = go.Figure()
+            fig.add_trace(
+                go.Scatter(
+                    x=eq_data["final_exit_date"],
+                    y=eq_data["cumulative_pnl"],
+                    mode="lines",
+                    fill="tozeroy",
+                    line=dict(color="#00ffa3", width=2),
+                    fillcolor="rgba(0, 255, 163, 0.1)",
+                    name="Cumulative PnL",
+                )
+            )
+            fig.update_layout(
+                title="Cumulative PnL (Complete Trades)",
+                xaxis_title="Date",
+                yaxis_title="PnL ($)",
+                template="plotly_dark",
+                height=400,
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+        # --- Monthly Returns Heatmap ---
+        if not grouped_trades.empty:
+            st.markdown("### Monthly Returns")
+            monthly = grouped_trades.copy()
+            monthly["month"] = monthly["final_exit_date"].dt.to_period("M")
+            monthly_pnl = monthly.groupby("month")["total_pnl"].sum()
+
+            if len(monthly_pnl) > 1:
+                monthly_df = monthly_pnl.reset_index()
+                monthly_df["month"] = monthly_df["month"].dt.to_timestamp()
+                monthly_df["year"] = monthly_df["month"].dt.year
+                monthly_df["mo"] = monthly_df["month"].dt.month
+
+                pivot = monthly_df.pivot_table(
+                    values="total_pnl", index="year", columns="mo", aggfunc="sum"
+                ).fillna(0)
+                pivot.columns = [calendar.month_abbr[m] for m in pivot.columns]
+
+                fig_hm = px.imshow(
+                    pivot.values,
+                    x=pivot.columns.tolist(),
+                    y=[str(y) for y in pivot.index.tolist()],
+                    color_continuous_scale="RdYlGn",
+                    aspect="auto",
+                    labels=dict(color="PnL ($)"),
+                )
+                fig_hm.update_layout(
+                    title="Monthly PnL Heatmap",
+                    template="plotly_dark",
+                    height=300,
+                )
+                st.plotly_chart(fig_hm, use_container_width=True)
+
+        # --- R-Multiple Distribution ---
+        if has_r and not grouped_trades.empty:
+            st.markdown("### R-Multiple Distribution")
+            fig_r = px.histogram(
+                grouped_trades,
+                x="r_multiple",
+                nbins=30,
+                color_discrete_sequence=["#00ffa3"],
+                labels={"r_multiple": "R-Multiple"},
+            )
+            fig_r.update_layout(
+                title=f"R-Multiple Distribution (Avg: {avg_r:+.2f}R)",
+                template="plotly_dark",
+                height=300,
+            )
+            st.plotly_chart(fig_r, use_container_width=True)
+
+    # =========================================================================
+    # TAB 2: TRADE LOG
+    # =========================================================================
+    with t2:
+        # Quick Sort / Filter Options
+        st.markdown("### 🔍 Filter & Sort")
+        q_col1, q_col2, q_col3 = st.columns(3)
+
+        with q_col1:
+            view_mode = st.radio(
+                "View Mode", ["Complete Trades", "All Partial Exits"], horizontal=True
+            )
+
+        with q_col2:
+            quick_sort = st.selectbox(
+                "Quick Sort (Entire Dataset)",
+                [
+                    "Latest First",
+                    "Oldest First",
+                    "Top Winners ($)",
+                    "Top Losers ($)",
+                    "High R-Multiple",
+                ],
+                index=0,
+            )
+
+        with q_col3:
+            show_all = st.checkbox(
+                "Show All (Disable Pagination)",
+                value=False,
+                help="May be slow for >1000 trades",
+            )
+
+        if view_mode == "Complete Trades":
+            display_source = grouped_trades.copy()
+            display_source = display_source.rename(columns={"ticker": "symbol"})
+            # Select most useful columns
+            show_cols = [
+                "symbol",
+                "entry_date",
+                "final_exit_date",
+                "entry_price",
+                "total_pnl",
+                "total_shares",
+                "exit_phases",
+                "hold_days",
+            ]
+            if has_r:
+                show_cols.append("r_multiple")
+            show_cols = [c for c in show_cols if c in display_source.columns]
+
+            # Apply sorting before pagination
+            if quick_sort == "Latest First":
+                display_df = display_source[show_cols].sort_values(
+                    "final_exit_date", ascending=False
+                )
+            elif quick_sort == "Oldest First":
+                display_df = display_source[show_cols].sort_values(
+                    "final_exit_date", ascending=True
+                )
+            elif quick_sort == "Top Winners ($)":
+                display_df = display_source[show_cols].sort_values(
+                    "total_pnl", ascending=False
+                )
+            elif quick_sort == "Top Losers ($)":
+                display_df = display_source[show_cols].sort_values(
+                    "total_pnl", ascending=True
+                )
+            elif quick_sort == "High R-Multiple" and "r_multiple" in show_cols:
+                display_df = display_source[show_cols].sort_values(
+                    "r_multiple", ascending=False
+                )
+            else:
+                display_df = display_source[show_cols].sort_values(
+                    "final_exit_date", ascending=False
+                )
+        else:
+            # Partial exits view
+            if quick_sort == "Latest First":
+                display_df = df.sort_values("exit_date", ascending=False)
+            elif quick_sort == "Oldest First":
+                display_df = df.sort_values("exit_date", ascending=True)
+            elif quick_sort == "Top Winners ($)":
+                display_df = df.sort_values("pnl", ascending=False)
+            elif quick_sort == "Top Losers ($)":
+                display_df = df.sort_values("pnl", ascending=True)
+            else:
+                display_df = df.sort_values("exit_date", ascending=False)
+
+        selected_symbol = st.selectbox(
+            "Filter Symbol", ["All"] + sorted(df["symbol"].unique().tolist())
+        )
+        if selected_symbol != "All":
+            sym_col = "symbol" if "symbol" in display_df.columns else "ticker"
+            display_df = display_df[display_df[sym_col] == selected_symbol]
+
+        # Filter by date range (start_date / end_date from backtest config)
+        if start_date and end_date:
+            filter_start = pd.to_datetime(start_date)
+            filter_end = pd.to_datetime(end_date)
+            date_col = (
+                "entry_date"
+                if "entry_date" in display_df.columns
+                else "final_exit_date"
+            )
+            display_df = display_df[
+                (display_df[date_col] >= filter_start)
+                & (display_df[date_col] <= filter_end)
+            ]
+
+        # Display dataframe
+        if show_all:
+            st.dataframe(display_df, use_container_width=True, height=600)
+        else:
+            paginate_dataframe(display_df, key_prefix="trades_log")
+
+        st.markdown("---")
+        st.subheader("Trade Chart Viewer")
+        if not display_df.empty:
+            # Synchronize with the filtered and sorted display_df
+            trade_options = display_df.index.tolist()
+
+            if view_mode == "Complete Trades":
+
+                def format_fn(i):
+                    row = display_source.loc[i]
+                    return f"{row['symbol']} - {row['entry_date'].date()} (${row['total_pnl']:,.2f})"
+
+                source_df = display_source
+            else:
+
+                def format_fn(i):
+                    row = df.loc[i]
+                    return f"{row['symbol']} - {row['entry_date'].date()} ({row['exit_phase']} - ${row['pnl']:,.2f})"
+
+                source_df = df
+
+            trade_idx = st.selectbox(
+                "Select Trade to Visualize (Follows filters/sort above)",
+                trade_options,
+                format_func=format_fn,
+            )
+
+            if st.button("Show Detailed Chart"):
+                dash = InteractiveDashboard("outputs/backtests/backtest_results.csv")
+
+                # If it's a grouped trade, we need all partials
+                if view_mode == "Complete Trades":
+                    main_trade = grouped_trades.loc[trade_idx]
+                    # Find all partial exits for this trade
+                    partials = df[
+                        (df["symbol"] == main_trade["ticker"])
+                        & (df["entry_date"] == main_trade["entry_date"])
+                    ]
+
+                    exits = []
+                    for _, p in partials.iterrows():
+                        exits.append(
+                            {
+                                "date": p["exit_date"],
+                                "price": p["exit_price"],
+                                "type": p["exit_phase"],
+                                "qty_pct": (
+                                    p["shares"] / main_trade["total_shares"] * 100
+                                )
+                                if main_trade["total_shares"] > 0
+                                else 0,
+                            }
+                        )
+
+                    signal_data = {
+                        "camino": main_trade.get("signal_type", "MOMENTUM"),
+                        "entry_price": main_trade["entry_price"],
+                        "stop_loss": main_trade.get("stop_loss"),
+                        "exits": exits,
+                        "outcome": "WIN" if main_trade["total_pnl"] > 0 else "LOSS",
+                        "return_pct": (
+                            main_trade["total_pnl"]
+                            / (main_trade["entry_price"] * main_trade["total_shares"])
+                            * 100
+                        )
+                        if (main_trade["entry_price"] * main_trade["total_shares"]) > 0
+                        else 0,
+                        "hold_days": main_trade["hold_days"],
+                    }
+                    symbol = main_trade["ticker"]
+                    entry_date = main_trade["entry_date"]
+                else:
+                    # Single partial exit view
+                    trade = df.loc[trade_idx]
+                    signal_data = {
+                        "camino": trade.get("signal_type", "MOMENTUM"),
+                        "entry_price": trade["entry_price"],
+                        "stop_loss": trade.get("stop_loss"),
+                        "exit_price": trade["exit_price"],
+                        "outcome": "WIN" if trade["pnl"] > 0 else "LOSS",
+                        "return_pct": (trade["exit_price"] - trade["entry_price"])
+                        / trade["entry_price"]
+                        * 100,
+                        "hold_days": (trade["exit_date"] - trade["entry_date"]).days,
+                    }
+                    symbol = trade["symbol"]
+                    entry_date = trade["entry_date"]
+
+                st.plotly_chart(
+                    dash.create_trade_chart(
+                        symbol,
+                        entry_date.strftime("%Y-%m-%d"),
+                        signal_data,
+                    ),
+                    use_container_width=True,
+                )
+
+    # =========================================================================
+    # TAB 3: QUANTSTATS (Professional Analytics)
+    # =========================================================================
+    with t3:
+        st.header(f"Performance vs {benchmark_ticker}")
+
+        if not grouped_trades.empty and not benchmark_returns.empty:
+            # Filter trades by date range
+            if start_date and end_date:
+                filter_start = pd.to_datetime(start_date)
+                filter_end = pd.to_datetime(end_date)
+                filtered_trades = trade_df_for_grouper[
+                    (pd.to_datetime(trade_df_for_grouper["entry_date"]) >= filter_start)
+                    & (pd.to_datetime(trade_df_for_grouper["entry_date"]) <= filter_end)
+                ]
+            else:
+                filtered_trades = trade_df_for_grouper
+
+            # Re-initialize analyzer for report generation
+            analyzer = QuantStatsAnalyzer(
+                trade_log=filtered_trades,
+                initial_capital=equity,
+                benchmark_ticker=benchmark_ticker,
+            )
+
+            # --- Returns Comparison Chart ---
+            st.markdown("### Cumulative Returns vs Benchmark")
+
+            strat_returns = analyzer.daily_returns
+            aligned_bench = benchmark_returns.reindex(strat_returns.index).fillna(0)
+
+            cum_strat = (1 + strat_returns).cumprod() - 1
+            cum_bench = (1 + aligned_bench).cumprod() - 1
+
+            fig_comp = go.Figure()
+            fig_comp.add_trace(
+                go.Scatter(
+                    x=cum_strat.index,
+                    y=cum_strat * 100,
+                    mode="lines",
+                    name="Strategy",
+                    line=dict(color="#00ffa3", width=3),
+                )
+            )
+            fig_comp.add_trace(
+                go.Scatter(
+                    x=cum_bench.index,
+                    y=cum_bench * 100,
+                    mode="lines",
+                    name=benchmark_ticker,
+                    line=dict(color="#8899a6", width=2, dash="dash"),
+                )
+            )
+
+            fig_comp.update_layout(
+                title=f"Strategy vs {benchmark_ticker} Cumulative Returns",
+                yaxis_title="Return (%)",
+                template="plotly_dark",
+                height=500,
+                hovermode="x unified",
+            )
+            st.plotly_chart(fig_comp, use_container_width=True)
+
+            # --- QuantStats Detailed Plots ---
+            st.markdown("### Advanced Analytics")
+
+            col_q1, col_q2 = st.columns(2)
+
+            with col_q1:
+                # Underwater Plot
+                st.markdown("**Underwater Plot (Drawdowns)**")
+                dd = qs.stats.to_drawdown_series(strat_returns)
+                fig_dd = px.area(
+                    x=dd.index, y=dd * 100, color_discrete_sequence=["#ff4b4b"]
+                )
+                fig_dd.update_layout(
+                    template="plotly_dark",
+                    height=300,
+                    yaxis_title="Drawdown (%)",
+                    showlegend=False,
+                )
+                st.plotly_chart(fig_dd, use_container_width=True)
+
+            with col_q2:
+                # Rolling Beta
+                st.markdown(f"**Rolling Beta vs {benchmark_ticker}**")
+                try:
+                    # Align benchmark exactly to strategy returns
+                    aligned_bench_local = aligned_bench.reindex(
+                        strat_returns.index
+                    ).fillna(0)
+
+                    # Determine best window (min between 126 and 1/3 of total data)
+                    available_days = len(strat_returns)
+                    adaptive_window = min(126, max(10, available_days // 3))
+
+                    if available_days > 20:
+                        # Use rolling_greeks and extract beta (rolling_beta is deprecated/missing in some qs versions)
+                        greeks = qs.stats.rolling_greeks(
+                            strat_returns, aligned_bench_local, periods=adaptive_window
+                        )
+                        rolling_beta = greeks["beta"]
+
+                        fig_beta = px.line(
+                            x=rolling_beta.index,
+                            y=rolling_beta.values,
+                            color_discrete_sequence=["#00d1ff"],
+                        )
+                        fig_beta.update_layout(
+                            title=f"Rolling Beta ({adaptive_window}d)",
+                            template="plotly_dark",
+                            height=300,
+                            yaxis_title="Beta",
+                            showlegend=False,
+                        )
+                        st.plotly_chart(fig_beta, use_container_width=True)
+                    else:
+                        st.info(f"Need > 20 days for beta (current: {available_days})")
+                except Exception as e:
+                    st.error(f"Beta error: {e}")
+
+            # --- Monthly Returns ---
+            st.markdown("### Monthly Returns (%)")
+            monthly_ret = qs.stats.monthly_returns(strat_returns) * 100
+            # Format for display
+            st.dataframe(
+                monthly_ret.style.background_gradient(cmap="RdYlGn", axis=None).format(
+                    "{:.2f}%"
+                ),
+                use_container_width=True,
+            )
+
+            # --- Report Generation ---
+            st.markdown("---")
+            if st.button("Generate Full PDF Tearsheet"):
+                with st.spinner("Generating professional PDF report..."):
+                    report_path = analyzer.generate_pdf_report(
+                        benchmark_ticker=benchmark_ticker
+                    )
+                    if report_path:
+                        st.success(f"PDF Report generated successfully!")
+                        with open(report_path, "rb") as f:
+                            st.download_button(
+                                label="Download PDF Tearsheet",
+                                data=f,
+                                file_name=os.path.basename(report_path),
+                                mime="application/pdf",
+                            )
+        else:
+            st.info(
+                "Run backtest and ensure benchmark data is available for comparison."
+            )
+
+    # =========================================================================
+    # TAB 4: DIAGNOSTICS (Rejection funnel + filter analysis)
+    # =========================================================================
+    with t4:
+        # --- Backtest Scorecard (Semáforo) ---
+        scorecard_metrics = {}
+        if os.path.exists("outputs/backtests/backtest_metrics.json"):
+            try:
+                with open("outputs/backtests/backtest_metrics.json", "r") as f:
+                    scorecard_metrics = json.load(f)
+
+                # Add Avg R if available from grouped_trades
+                if not grouped_trades.empty and "r_multiple" in grouped_trades.columns:
+                    scorecard_metrics["avg_r"] = grouped_trades["r_multiple"].mean()
+
+                st.subheader("Performance Scorecard")
+                render_scorecard(scorecard_metrics)
+                st.markdown("---")
+            except Exception as e:
+                st.warning(f"Error loading scorecard metrics: {e}")
+
+        # Try session state first, then persisted file
+        rejections = None
+        if "adaptive_filter_rejections" in st.session_state:
+            rejections = st.session_state["adaptive_filter_rejections"]
+        elif os.path.exists("outputs/backtests/rejection_stats.json"):
+            try:
+                with open("outputs/backtests/rejection_stats.json", "r") as f:
+                    rejections = json.load(f)
+            except:
+                pass
+        elif os.path.exists("outputs/backtests/adaptive_filter_rejections.csv"):
+            try:
+                rej_csv = pd.read_csv(
+                    "outputs/backtests/adaptive_filter_rejections.csv"
+                )
+                rejections = dict(zip(rej_csv.iloc[:, 0], rej_csv.iloc[:, 1]))
+            except Exception as e:
+                st.error(f"Error loading rejection data: {e}")
+
+        if rejections:
+            st.subheader("Filter Rejection Funnel")
+
+            rej_df = pd.DataFrame(
+                [{"filter": k, "rejections": v} for k, v in rejections.items()]
+            ).sort_values("rejections", ascending=False)
+
+            # Categorize by tier
+            def categorize_tier(filter_name):
+                fn = filter_name.lower()
+                if any(
+                    x in fn
+                    for x in ["tier1", "spy", "market", "regime", "vix", "warmup"]
+                ):
+                    return "Tier 1 (Market Safety)"
+                elif any(
+                    x in fn
+                    for x in [
+                        "tier2",
+                        "tier3",
+                        "rvol",
+                        "adr",
+                        "sma20",
+                        "consolidat",
+                        "volume",
+                        "sector",
+                        "overextended",
+                    ]
+                ):
+                    return "Tier 2 (Quality Filter)"
+                else:
+                    return "Other"
+
+            rej_df["tier"] = rej_df["filter"].apply(categorize_tier)
+
+            # Summary by tier
+            tier_summary = rej_df.groupby("tier")["rejections"].sum().reset_index()
+
+            col_d1, col_d2 = st.columns([1, 2])
+
+            with col_d1:
+                st.markdown("**Rejections by Tier**")
+                for _, row in tier_summary.iterrows():
+                    st.metric(row["tier"], f"{row['rejections']:,}")
+                st.metric("Total Rejections", f"{rej_df['rejections'].sum():,}")
+
+            with col_d2:
+                fig_rej = px.bar(
+                    rej_df.head(15),
+                    x="filter",
+                    y="rejections",
+                    color="tier",
+                    title="Top 15 Rejection Reasons",
+                    color_discrete_map={
+                        "Tier 1 (Market Safety)": "#ff4b4b",
+                        "Tier 2 (Quality Filter)": "#ffa500",
+                        "Other": "#64748b",
+                    },
+                )
+                fig_rej.update_layout(
+                    template="plotly_dark",
+                    xaxis_tickangle=-45,
+                    height=450,
+                )
+                st.plotly_chart(fig_rej, use_container_width=True)
+
+            # Detailed table
+            with st.expander("Full Rejection Detail"):
+                st.dataframe(rej_df, use_container_width=True)
+        else:
+            st.info(
+                "No rejection data available. Run a backtest to see filter diagnostics."
+            )
+
+        # --- Trade Distribution Analysis ---
+        if not grouped_trades.empty:
+            st.markdown("---")
+            st.subheader("Trade Distribution Analysis")
+
+            col_da, col_db = st.columns(2)
+
+            with col_da:
+                # Outcome breakdown
+                if "outcome_category" in grouped_trades.columns:
+                    outcome_counts = grouped_trades["outcome_category"].value_counts()
+                    fig_out = px.pie(
+                        values=outcome_counts.values,
+                        names=outcome_counts.index,
+                        title="Trade Outcome Distribution",
+                        color_discrete_sequence=px.colors.qualitative.Set2,
+                    )
+                    fig_out.update_layout(template="plotly_dark", height=350)
+                    st.plotly_chart(fig_out, use_container_width=True)
+
+            with col_db:
+                # Exit phase breakdown
+                exit_counts = grouped_trades["exit_phases"].value_counts().head(10)
+                fig_exit = px.bar(
+                    x=exit_counts.index,
+                    y=exit_counts.values,
+                    title="Exit Phase Combinations",
+                    labels={"x": "Exit Phases", "y": "Count"},
+                    color_discrete_sequence=["#00ffa3"],
+                )
+                fig_exit.update_layout(template="plotly_dark", height=350)
+                st.plotly_chart(fig_exit, use_container_width=True)
+
+    # =========================================================================
+    # TAB 5: INSIGHTS (Dynamic from config)
+    # =========================================================================
+    with t5:
+        st.header("Trading System Configuration")
+
+        col_i1, col_i2 = st.columns(2)
+
+        with col_i1:
+            st.markdown("**Tier 1: Strategy (THOR Optimized)**")
+            st.info(
+                f"TP1: Sell {_t1.get('tp1_pct', 0) * 100:.0f}% at {_t1.get('tp1_r', 0)}R"
+            )
+            st.info(
+                f"TP2: Sell {_t1.get('tp2_pct', 0) * 100:.0f}% at {_t1.get('tp2_r', 0)}R"
+            )
+            st.info(
+                f"Runner: Hold {_t1.get('runner_pct', 0) * 100:.0f}% with trailing SMA20"
+            )
+            st.info(
+                f"Max Stop: {_t1.get('max_stop_pct', 0) * 100:.1f}% | Risk: ${_t1.get('risk_dollars', 0)}/trade"
+            )
+
+            st.markdown("**Tier 2: Filters (Statistically Derived)**")
+            st.info(
+                f"Min RVOL: {_t2.get('min_rvol', 0)}x | Max Dist SMA20: {_t2.get('max_dist_sma20', 0)}%"
+            )
+            st.info(
+                f"Min ADR: {_t2.get('min_adr', 0)}% | Min $Volume: ${_t2.get('min_dollar_volume', 0):,.0f}"
+            )
+
+        with col_i2:
+            st.markdown("**Tier 3: Risk Management (Fixed)**")
+            st.info(
+                f"RVOL Danger ({_t3.get('rvol_danger', 0)}x): Size to {_t3.get('rvol_danger_size', 0) * 100:.0f}%"
+            )
+            st.info(
+                f"RVOL Warning ({_t3.get('rvol_warning', 0)}x): Size to {_t3.get('rvol_warning_size', 0) * 100:.0f}%"
+            )
+            st.info(
+                f"Max Exposure: {_t3.get('max_exposure_pct', 0) * 100:.0f}% | Max Position: {_t3.get('max_position_pct', 0) * 100:.0f}%"
+            )
+
+            st.markdown("**Market Regime**")
+            st.info(
+                f"SPY > SMA50: {'Required' if _mr.get('require_spy_above_sma50') else 'Not Required'}"
+            )
+            st.info(f"Max VIX: {_mr.get('max_vix', 40)}")
+
+            st.markdown("**THOR Optimization Results**")
+            st.success(
+                f"Validation Sharpe: {_perf.get('sharpe_ratio', 0):.2f} | "
+                f"Win Rate: {_perf.get('win_rate_pct', 0):.2f}% | "
+                f"Trades: {_perf.get('total_trades', 0)} | "
+                f"Return: {_perf.get('total_return_pct', 0):.2f}%"
+            )
 else:
-    st.info("👋 Bienvenido. Configura los parámetros de riesgo a la izquierda y pulsa 'EJECUTAR BACKTEST'.")
+    st.info("No backtest results found. Run a backtest to see analytics.")

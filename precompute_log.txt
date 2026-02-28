@@ -1,0 +1,4259 @@
+Precompute started: 2026-02-19 10:42:48.400778
+
+SUCCESS: 000270-KS - 487 bars
+SUCCESS: 000333-SZ - 487 bars
+SUCCESS: 000651-SZ - 487 bars
+SUCCESS: 000660-KS - 487 bars
+SUCCESS: 000858-SZ - 487 bars
+SUCCESS: 0011-HK - 481 bars
+SUCCESS: 0016-HK - 495 bars
+SUCCESS: 0019-HK - 495 bars
+SUCCESS: 002371-SZ - 487 bars
+SUCCESS: 002475-SZ - 487 bars
+SUCCESS: 002594-SZ - 487 bars
+SUCCESS: 002714-SZ - 487 bars
+SUCCESS: 005380-KS - 487 bars
+SUCCESS: 005930-KS - 487 bars
+SUCCESS: 034020-KS - 487 bars
+SUCCESS: 0388-HK - 495 bars
+SUCCESS: 068270-KS - 487 bars
+SUCCESS: 0941-HK - 495 bars
+SUCCESS: 0981-HK - 495 bars
+SUCCESS: 1024-HK - 495 bars
+SUCCESS: 1120-SR - 503 bars
+SUCCESS: 1180-SR - 503 bars
+SUCCESS: 1211-SR - 503 bars
+SUCCESS: 1299-HK - 495 bars
+SUCCESS: 2010-SR - 503 bars
+SUCCESS: 207940-KS - 487 bars
+SUCCESS: 2082-SR - 504 bars
+SUCCESS: 2222-SR - 504 bars
+SUCCESS: 2308-TW - 488 bars
+SUCCESS: 2317-TW - 488 bars
+SUCCESS: 2359-HK - 495 bars
+SUCCESS: 2382-TW - 488 bars
+SUCCESS: 2454-TW - 488 bars
+SUCCESS: 2914-T - 492 bars
+SUCCESS: 300124-SZ - 487 bars
+SUCCESS: 300274-SZ - 487 bars
+SUCCESS: 300308-SZ - 487 bars
+SUCCESS: 300476-SZ - 487 bars
+SUCCESS: 300502-SZ - 487 bars
+SUCCESS: 300750-SZ - 487 bars
+SUCCESS: 300760-SZ - 487 bars
+SUCCESS: 329180-KS - 487 bars
+SUCCESS: 3382-T - 492 bars
+SUCCESS: 3690-HK - 495 bars
+SUCCESS: 3692-HK - 495 bars
+SUCCESS: 373220-KS - 487 bars
+SUCCESS: 3968-HK - 495 bars
+SUCCESS: 402340-KS - 487 bars
+SUCCESS: 4063-T - 492 bars
+SUCCESS: 4519-T - 492 bars
+SUCCESS: 4568-T - 492 bars
+SUCCESS: 5802-T - 492 bars
+SUCCESS: 600150-SS - 487 bars
+SUCCESS: 600276-SS - 487 bars
+SUCCESS: 600309-SS - 487 bars
+SUCCESS: 600519-SS - 487 bars
+SUCCESS: 600547-SS - 487 bars
+SUCCESS: 601088-SS - 487 bars
+SUCCESS: 601138-SS - 487 bars
+SUCCESS: 601318-SS - 487 bars
+SUCCESS: 601336-SS - 487 bars
+SUCCESS: 601601-SS - 487 bars
+SUCCESS: 601628-SS - 487 bars
+SUCCESS: 601899-SS - 487 bars
+SUCCESS: 603288-SS - 487 bars
+SUCCESS: 6098-T - 492 bars
+SUCCESS: 6146-T - 492 bars
+SUCCESS: 6178-T - 492 bars
+SUCCESS: 6201-T - 492 bars
+SUCCESS: 6301-T - 492 bars
+SUCCESS: 6367-T - 492 bars
+SUCCESS: 6501-T - 492 bars
+SUCCESS: 6503-T - 492 bars
+SUCCESS: 6701-T - 492 bars
+SUCCESS: 6702-T - 492 bars
+SUCCESS: 6752-T - 492 bars
+SUCCESS: 6857-T - 492 bars
+SUCCESS: 6861-T - 492 bars
+SUCCESS: 688012-SS - 487 bars
+SUCCESS: 6902-T - 492 bars
+SUCCESS: 6954-T - 492 bars
+SUCCESS: 6981-T - 492 bars
+SUCCESS: 7011-T - 492 bars
+SUCCESS: 7182-T - 492 bars
+SUCCESS: 7741-T - 492 bars
+SUCCESS: 7974-T - 2284 bars
+SUCCESS: 8001-T - 492 bars
+SUCCESS: 8015-T - 492 bars
+SUCCESS: 8031-T - 492 bars
+SUCCESS: 8035-T - 492 bars
+SUCCESS: 8053-T - 492 bars
+SUCCESS: 8058-T - 492 bars
+SUCCESS: 8267-T - 492 bars
+SUCCESS: 8630-T - 492 bars
+SUCCESS: 8725-T - 492 bars
+SUCCESS: 8750-T - 492 bars
+SUCCESS: 8766-T - 492 bars
+SUCCESS: 8801-T - 492 bars
+SUCCESS: 9433-T - 492 bars
+SUCCESS: 9633-HK - 495 bars
+SUCCESS: 9983-T - 492 bars
+SUCCESS: 9984-T - 492 bars
+SUCCESS: 9992-HK - 495 bars
+SUCCESS: A - 2261 bars
+SKIP: AA - already_done
+SKIP: AAA - already_done
+SKIP: AAAU - already_done
+SKIP: AACBU_daily - already_done
+SKIP: AACG - already_done
+SKIP: AADR - already_done
+SUCCESS: AAL-L - 510 bars
+SKIP: AAL - already_done
+SKIP: AAM-U - already_done
+SKIP: AAM-WS - already_done
+SKIP: AAME - already_done
+SKIP: AAMI - already_done
+SKIP: AAOI - already_done
+SKIP: AAON - already_done
+SKIP: AAP - already_done
+SKIP: AAPL - already_done
+SKIP: AAT - already_done
+SKIP: AAVM - already_done
+SKIP: AAXJ - already_done
+SKIP: AB - already_done
+SKIP: ABAT - already_done
+SUCCESS: ABBN-SW - 502 bars
+SUCCESS: ABBV - 2261 bars
+SKIP: ABCB - already_done
+SKIP: ABCL - already_done
+SKIP: ABEO - already_done
+SKIP: ABEQ - already_done
+SKIP: ABEV - already_done
+SKIP: ABFL - already_done
+SKIP: ABG - already_done
+SKIP: ABLD - already_done
+SKIP: ABLG - already_done
+SKIP: ABM - already_done
+SKIP: ABNB - already_done
+SKIP: ABNB_daily - already_done
+SKIP: ABOS - already_done
+SKIP: ABOT - already_done
+SKIP: ABR - already_done
+SKIP: ABSI - already_done
+SKIP: ABT - already_done
+SKIP: ABTC - already_done
+SKIP: ABTS - already_done
+SKIP: ABUS - already_done
+SKIP: ABVC - already_done
+SKIP: ABX - already_done
+SKIP: ABXB - already_done
+SUCCESS: ACA-PA - 514 bars
+SKIP: ACA - already_done
+SKIP: ACAD - already_done
+SKIP: ACB - already_done
+SKIP: ACCO - already_done
+SKIP: ACCS - already_done
+SKIP: ACEL - already_done
+SKIP: ACES - already_done
+SKIP: ACET - already_done
+SKIP: ACFN - already_done
+SUCCESS: ACGL - 2261 bars
+SKIP: ACGLN - already_done
+SKIP: ACGLO - already_done
+SKIP: ACGR - already_done
+SKIP: ACH - already_done
+SKIP: ACHC - already_done
+SKIP: ACHR-WS - already_done
+SKIP: ACHR - already_done
+SKIP: ACHV - already_done
+SKIP: ACI - already_done
+SKIP: ACIC - already_done
+SKIP: ACIO - already_done
+SKIP: ACIU - already_done
+SKIP: ACIW - already_done
+SKIP: ACLC - already_done
+SKIP: ACLS - already_done
+SKIP: ACM - already_done
+SKIP: ACMR - already_done
+SUCCESS: ACN - 2261 bars
+SKIP: ACNB - already_done
+SKIP: ACNT - already_done
+SKIP: ACP - already_done
+SKIP: ACPPA - already_done
+SKIP: ACR - already_done
+SKIP: ACRE - already_done
+SKIP: ACRPC - already_done
+SKIP: ACRS - already_done
+SKIP: ACSI - already_done
+SKIP: ACT - already_done
+SKIP: ACTG - already_done
+SKIP: ACU - already_done
+SKIP: ACV - already_done
+SKIP: ACVA - already_done
+SKIP: ACVF - already_done
+SKIP: ACWI - already_done
+SKIP: ACWV - already_done
+SKIP: ACWX - already_done
+SKIP: ACXP - already_done
+SUCCESS: AD-AS - 514 bars
+SKIP: AD - already_done
+SKIP: ADAG - already_done
+SKIP: ADAM - already_done
+SKIP: ADAML - already_done
+SKIP: ADAMM - already_done
+SKIP: ADAMN - already_done
+SKIP: ADAMZ - already_done
+SUCCESS: ADANIPORTS-NS - 499 bars
+SKIP: ADBE - already_done
+SKIP: ADC - already_done
+SKIP: ADCPA - already_done
+SKIP: ADCT - already_done
+SKIP: ADEA - already_done
+SKIP: ADFI - already_done
+SUCCESS: ADI - 2261 bars
+SKIP: ADIL - already_done
+SKIP: ADIV - already_done
+SUCCESS: ADM - 2261 bars
+SKIP: ADMA - already_done
+SKIP: ADME - already_done
+SKIP: ADNT - already_done
+SKIP: ADP - already_done
+SKIP: ADPT - already_done
+SUCCESS: ADS-DE - 510 bars
+SKIP: ADSE - already_done
+SUCCESS: ADSK - 2261 bars
+SKIP: ADT - already_done
+SKIP: ADTN - already_done
+SKIP: ADTX - already_done
+SKIP: ADUS - already_done
+SKIP: ADV - already_done
+SUCCESS: ADVANC-BK - 488 bars
+SKIP: ADX - already_done
+SKIP: ADXN - already_done
+SKIP: AEC - already_done
+SKIP: AEE - already_done
+SKIP: AEF - already_done
+SKIP: AEFC - already_done
+SKIP: AEG - already_done
+SKIP: AEHL - already_done
+SKIP: AEHR - already_done
+SKIP: AEI - already_done
+SKIP: AEIS - already_done
+SUCCESS: AEM - 2261 bars
+SKIP: AEMD - already_done
+SKIP: AENT - already_done
+SKIP: AEO - already_done
+SKIP: AEON - already_done
+SKIP: AEON_daily - already_done
+SUCCESS: AEP - 2261 bars
+SKIP: AER - already_done
+SKIP: AERT - already_done
+SKIP: AES - already_done
+SKIP: AESR - already_done
+SKIP: AEVA - already_done
+SKIP: AEYE - already_done
+SKIP: AFB - already_done
+SKIP: AFBI - already_done
+SKIP: AFCG - already_done
+SKIP: AFG - already_done
+SKIP: AFGB - already_done
+SKIP: AFGC - already_done
+SKIP: AFGD - already_done
+SKIP: AFGE - already_done
+SKIP: AFIF - already_done
+SKIP: AFK - already_done
+SUCCESS: AFL - 2261 bars
+SKIP: AFLG - already_done
+SKIP: AFMC - already_done
+SKIP: AFRI - already_done
+SKIP: AFRM - already_done
+SKIP: AFSM - already_done
+SKIP: AFYA - already_done
+SKIP: AG - already_done
+SKIP: AGAE - already_done
+SKIP: AGCO - already_done
+SKIP: AGD - already_done
+SKIP: AGEN - already_done
+SKIP: AGG - already_done
+SKIP: AGGH - already_done
+SKIP: AGGY - already_done
+SKIP: AGI - already_done
+SKIP: AGIG - already_done
+SKIP: AGIO - already_done
+SKIP: AGI_daily - already_done
+SKIP: AGL - already_done
+SKIP: AGM-A - already_done
+SKIP: AGM - already_done
+SKIP: AGMH - already_done
+SKIP: AGMPD - already_done
+SKIP: AGNC - already_done
+SKIP: AGNCM - already_done
+SKIP: AGNCN - already_done
+SKIP: AGNCO - already_done
+SKIP: AGNCP - already_done
+SKIP: AGNG - already_done
+SKIP: AGO - already_done
+SKIP: AGOX - already_done
+SKIP: AGPU - already_done
+SKIP: AGQ - already_done
+SKIP: AGRO - already_done
+SKIP: AGX - already_done
+SKIP: AGYS - already_done
+SKIP: AGZ - already_done
+SKIP: AGZD - already_done
+SKIP: AHCO - already_done
+SKIP: AHG - already_done
+SKIP: AHH - already_done
+SKIP: AHHPA - already_done
+SKIP: AHT - already_done
+SKIP: AHYB - already_done
+SUCCESS: AI-PA - 514 bars
+SKIP: AI - already_done
+SKIP: AIA - already_done
+SKIP: AIEQ - already_done
+SKIP: AIFF - already_done
+SKIP: AIFU - already_done
+SUCCESS: AIG - 2261 bars
+SKIP: AIHS - already_done
+SKIP: AIIO - already_done
+SKIP: AIM - already_done
+SKIP: AIMD - already_done
+SKIP: AIN - already_done
+SKIP: AIO - already_done
+SKIP: AIOT - already_done
+SKIP: AIP - already_done
+SKIP: AIQ - already_done
+SUCCESS: AIR-PA - 514 bars
+SKIP: AIR - already_done
+SKIP: AIRG - already_done
+SKIP: AIRI - already_done
+SKIP: AIRR - already_done
+SKIP: AIRS - already_done
+SKIP: AIRT - already_done
+SKIP: AIRTP - already_done
+SKIP: AISP - already_done
+SKIP: AIT - already_done
+SKIP: AIV - already_done
+SKIP: AIVC - already_done
+SKIP: AIVI - already_done
+SKIP: AIVL - already_done
+SKIP: AIXC - already_done
+SKIP: AIZ - already_done
+SKIP: AIZN - already_done
+SUCCESS: AJG - 2261 bars
+SKIP: AKA - already_done
+SKIP: AKAM - already_done
+SKIP: AKBA - already_done
+SKIP: AKO-A - already_done
+SKIP: AKO-B - already_done
+SKIP: AKR - already_done
+SKIP: AKTX - already_done
+SKIP: AL - already_done
+SUCCESS: ALAB - 477 bars
+SKIP: ALAR - already_done
+SKIP: ALB - already_done
+SKIP: ALBPA - already_done
+SKIP: ALBT - already_done
+SUCCESS: ALC - 1722 bars
+SKIP: ALCO - already_done
+SKIP: ALDX - already_done
+SKIP: ALEC - already_done
+SKIP: ALEX - already_done
+SKIP: ALG - already_done
+SKIP: ALGM - already_done
+SKIP: ALGN - already_done
+SKIP: ALGS - already_done
+SKIP: ALGT - already_done
+SKIP: ALHC - already_done
+SKIP: ALIT - already_done
+SKIP: ALK - already_done
+SKIP: ALKS - already_done
+SKIP: ALKT - already_done
+SUCCESS: ALL - 2261 bars
+SKIP: ALLE - already_done
+SKIP: ALLO - already_done
+SKIP: ALLPB - already_done
+SKIP: ALLPH - already_done
+SKIP: ALLR - already_done
+SKIP: ALLT - already_done
+SKIP: ALLY - already_done
+SKIP: ALM - already_done
+SKIP: ALNT - already_done
+SUCCESS: ALNY - 5462 bars
+SUCCESS: ALNY_daily - 5462 bars
+SKIP: ALOT - already_done
+SKIP: ALRM - already_done
+SKIP: ALRS - already_done
+SKIP: ALSN - already_done
+SKIP: ALT - already_done
+SKIP: ALTG - already_done
+SKIP: ALTI - already_done
+SKIP: ALTL - already_done
+SKIP: ALTO - already_done
+SKIP: ALTS - already_done
+SKIP: ALTY - already_done
+SKIP: ALUR - already_done
+SUCCESS: ALV-DE - 510 bars
+SKIP: ALV - already_done
+SKIP: ALX - already_done
+SKIP: ALXO - already_done
+SKIP: ALZN - already_done
+SKIP: AM - already_done
+SKIP: AMAL - already_done
+SKIP: AMAT - already_done
+SKIP: AMAX - already_done
+SKIP: AMBA - already_done
+SKIP: AMBO - already_done
+SKIP: AMBP - already_done
+SKIP: AMBR - already_done
+SKIP: AMC - already_done
+SKIP: AMCR - already_done
+SKIP: AMCX - already_done
+SKIP: AMD - already_done
+SKIP: AMD_daily - already_done
+SUCCESS: AME - 2261 bars
+SKIP: AMG - already_done
+SUCCESS: AMGN - 2261 bars
+SKIP: AMH - already_done
+SKIP: AMKR - already_done
+SKIP: AMLP - already_done
+SKIP: AMN - already_done
+SKIP: AMOD - already_done
+SKIP: AMOM - already_done
+SUCCESS: AMP - 2261 bars
+SKIP: AMPG - already_done
+SKIP: AMPGW - already_done
+SKIP: AMPH - already_done
+SKIP: AMPH_daily - already_done
+SKIP: AMPL - already_done
+SKIP: AMPY - already_done
+SKIP: AMR - already_done
+SKIP: AMRC - already_done
+SKIP: AMRN - already_done
+SKIP: AMRX - already_done
+SKIP: AMS - already_done
+SKIP: AMSC - already_done
+SKIP: AMSF - already_done
+SKIP: AMST - already_done
+SUCCESS: AMT - 2261 bars
+SKIP: AMTB - already_done
+SKIP: AMTD - already_done
+SKIP: AMTX - already_done
+SKIP: AMUB - already_done
+SKIP: AMWD - already_done
+SKIP: AMWL - already_done
+SUCCESS: AMX - 2261 bars
+SKIP: AMZA - already_done
+SKIP: AMZE - already_done
+SKIP: AMZN - already_done
+SKIP: AMZN_daily - already_done
+SKIP: AN - already_done
+SKIP: ANAB - already_done
+SKIP: ANDE - already_done
+SKIP: ANEB - already_done
+SUCCESS: ANET - 2261 bars
+SKIP: ANEW - already_done
+SKIP: ANF - already_done
+SKIP: ANGH - already_done
+SKIP: ANGI - already_done
+SKIP: ANGL - already_done
+SKIP: ANGO - already_done
+SKIP: ANIK - already_done
+SKIP: ANIP - already_done
+SKIP: ANIX - already_done
+SKIP: ANNX - already_done
+SUCCESS: ANTO-L - 510 bars
+SKIP: ANVS - already_done
+SKIP: ANY - already_done
+SUCCESS: ANZ-AX - 510 bars
+SKIP: AOA - already_done
+SKIP: AOD - already_done
+SKIP: AOK - already_done
+SKIP: AOM - already_done
+SKIP: AOMR - already_done
+SUCCESS: AON - 2261 bars
+SKIP: AOR - already_done
+SKIP: AORT - already_done
+SKIP: AOS - already_done
+SKIP: AOSL - already_done
+SKIP: AOS_daily - already_done
+SKIP: AOUT - already_done
+SKIP: AP - already_done
+SKIP: APA - already_done
+SKIP: APAM - already_done
+SUCCESS: APD - 2261 bars
+SKIP: APEI - already_done
+SKIP: APG - already_done
+SUCCESS: APH - 2261 bars
+SKIP: API - already_done
+SKIP: APLE - already_done
+SKIP: APLM - already_done
+SKIP: APLS - already_done
+SKIP: APLT - already_done
+SKIP: APM - already_done
+SKIP: APO - already_done
+SKIP: APOG - already_done
+SUCCESS: APP - 1214 bars
+SKIP: APPF - already_done
+SKIP: APPN - already_done
+SKIP: APPS - already_done
+SKIP: APRE - already_done
+SKIP: APRT - already_done
+SKIP: APRW - already_done
+SKIP: APRZ - already_done
+SKIP: APT - already_done
+SKIP: APTV - already_done
+SKIP: APVO - already_done
+SKIP: APWC - already_done
+SKIP: APYX - already_done
+SKIP: AQB - already_done
+SKIP: AQMS - already_done
+SKIP: AQN - already_done
+SKIP: AQNB - already_done
+SKIP: AQST - already_done
+SKIP: AQWA - already_done
+SKIP: AR - already_done
+SKIP: ARAY - already_done
+SKIP: ARB - already_done
+SKIP: ARBE - already_done
+SKIP: ARBK - already_done
+SKIP: ARCB - already_done
+SKIP: ARCC - already_done
+SKIP: ARCM - already_done
+SKIP: ARCO - already_done
+SKIP: ARCT - already_done
+SKIP: ARDC - already_done
+SKIP: ARDX - already_done
+SKIP: ARE - already_done
+SKIP: AREB - already_done
+SKIP: AREC - already_done
+SKIP: AREN - already_done
+SUCCESS: ARES - 2261 bars
+SKIP: ARGT - already_done
+SUCCESS: ARGX - 2197 bars
+SKIP: ARHS - already_done
+SKIP: ARI - already_done
+SKIP: ARKF - already_done
+SKIP: ARKG - already_done
+SKIP: ARKK - already_done
+SKIP: ARKO - already_done
+SKIP: ARKQ - already_done
+SKIP: ARKR - already_done
+SKIP: ARKW - already_done
+SKIP: ARKX - already_done
+SKIP: ARL - already_done
+SKIP: ARLO - already_done
+SKIP: ARLP - already_done
+SUCCESS: ARM - 606 bars
+SKIP: ARMK - already_done
+SKIP: ARMN - already_done
+SKIP: ARMP - already_done
+SKIP: AROC - already_done
+SKIP: AROW - already_done
+SKIP: ARQ - already_done
+SKIP: ARQQ - already_done
+SKIP: ARQT - already_done
+SKIP: ARR - already_done
+SKIP: ARRY - already_done
+SKIP: ARTL - already_done
+SKIP: ARTNA - already_done
+SKIP: ARTW - already_done
+SKIP: ARTY - already_done
+SKIP: ARVN - already_done
+SKIP: ARW - already_done
+SKIP: ARWR - already_done
+SKIP: ASA - already_done
+SKIP: ASAN - already_done
+SKIP: ASB - already_done
+SKIP: ASC - already_done
+SKIP: ASEA - already_done
+SUCCESS: ASELS-IS - 503 bars
+SKIP: ASG - already_done
+SKIP: ASGI - already_done
+SKIP: ASGN - already_done
+SKIP: ASH - already_done
+SKIP: ASHR - already_done
+SKIP: ASHS - already_done
+SKIP: ASIX - already_done
+SKIP: ASLE - already_done
+SUCCESS: ASM-AS - 514 bars
+SKIP: ASM - already_done
+SKIP: ASMB - already_done
+SUCCESS: ASML - 2261 bars
+SKIP: ASND - already_done
+SKIP: ASO - already_done
+SKIP: ASPN - already_done
+SKIP: ASPS - already_done
+SKIP: ASR - already_done
+SKIP: ASRT - already_done
+SKIP: ASRV - already_done
+SUCCESS: ASSA-B-ST - 502 bars
+SKIP: ASTC - already_done
+SKIP: ASTE - already_done
+SKIP: ASTH - already_done
+SKIP: ASTL - already_done
+SUCCESS: ASTS - 1578 bars
+SKIP: ASUR - already_done
+SUCCESS: ASX - 2261 bars
+SKIP: ASYS - already_done
+SKIP: ATAI - already_done
+SKIP: ATCH - already_done
+SUCCESS: ATCO-B-ST - 502 bars
+SUCCESS: ATD-TO - 505 bars
+SKIP: ATEC - already_done
+SKIP: ATEN - already_done
+SKIP: ATER - already_done
+SKIP: ATEX - already_done
+SKIP: ATFV - already_done
+SKIP: ATGE - already_done
+SKIP: ATHA - already_done
+SKIP: ATHE - already_done
+SKIP: ATHM - already_done
+SKIP: ATI - already_done
+SKIP: ATKR - already_done
+SKIP: ATLC - already_done
+SKIP: ATLCL - already_done
+SKIP: ATLCP - already_done
+SKIP: ATLN - already_done
+SKIP: ATLO - already_done
+SKIP: ATLX - already_done
+SKIP: ATMP - already_done
+SKIP: ATNI - already_done
+SKIP: ATNM - already_done
+SKIP: ATO - already_done
+SKIP: ATOM - already_done
+SKIP: ATON - already_done
+SKIP: ATOS - already_done
+SKIP: ATR - already_done
+SKIP: ATRA - already_done
+SKIP: ATRC - already_done
+SKIP: ATRO - already_done
+SKIP: ATS - already_done
+SKIP: ATXG - already_done
+SKIP: ATXS - already_done
+SKIP: ATYR - already_done
+SUCCESS: AU - 2261 bars
+SKIP: AUB - already_done
+SKIP: AUBN - already_done
+SKIP: AUDC - already_done
+SKIP: AUGZ - already_done
+SKIP: AUID - already_done
+SKIP: AUPH - already_done
+SKIP: AUR - already_done
+SKIP: AURA - already_done
+SKIP: AUSF - already_done
+SKIP: AUTL - already_done
+SKIP: AUUD - already_done
+SKIP: AVA - already_done
+SKIP: AVAH - already_done
+SKIP: AVAL - already_done
+SKIP: AVAV - already_done
+SKIP: AVB - already_done
+SKIP: AVBH - already_done
+SKIP: AVD - already_done
+SKIP: AVDE - already_done
+SKIP: AVDL - already_done
+SKIP: AVDV - already_done
+SKIP: AVEM - already_done
+SKIP: AVES - already_done
+SKIP: AVGO - already_done
+SKIP: AVIG - already_done
+SKIP: AVIR - already_done
+SKIP: AVIV - already_done
+SKIP: AVK - already_done
+SKIP: AVLV - already_done
+SKIP: AVMU - already_done
+SKIP: AVNS - already_done
+SKIP: AVNT - already_done
+SKIP: AVNW - already_done
+SKIP: AVO - already_done
+SKIP: AVPT - already_done
+SKIP: AVRE - already_done
+SKIP: AVSF - already_done
+SKIP: AVT - already_done
+SKIP: AVTR - already_done
+SKIP: AVTX - already_done
+SKIP: AVUS - already_done
+SKIP: AVUV - already_done
+SKIP: AVX - already_done
+SKIP: AVXL - already_done
+SKIP: AVY - already_done
+SKIP: AWAY - already_done
+SKIP: AWF - already_done
+SKIP: AWI - already_done
+SKIP: AWK - already_done
+SKIP: AWP - already_done
+SKIP: AWR - already_done
+SKIP: AWRE - already_done
+SKIP: AWX - already_done
+SKIP: AX - already_done
+SKIP: AXGN - already_done
+SKIP: AXIA - already_done
+SUCCESS: AXISBANK-BO - 495 bars
+SKIP: AXL - already_done
+SUCCESS: AXON - 6203 bars
+SUCCESS: AXON_daily - 6203 bars
+SUCCESS: AXP - 2261 bars
+SKIP: AXR - already_done
+SKIP: AXS - already_done
+SKIP: AXSM - already_done
+SKIP: AXTA - already_done
+SKIP: AXTI - already_done
+SKIP: AYI - already_done
+SKIP: AYTU - already_done
+SKIP: AZ - already_done
+SUCCESS: AZN - 2261 bars
+SUCCESS: AZO - 2261 bars
+SKIP: AZTA - already_done
+SKIP: AZZ - already_done
+SKIP: B - already_done
+SUCCESS: BA-L - 510 bars
+SUCCESS: BA - 2261 bars
+SKIP: BAB - already_done
+SUCCESS: BABA - 2261 bars
+SUCCESS: BAC - 2261 bars
+SKIP: BAER - already_done
+SKIP: BAFN - already_done
+SKIP: BAH - already_done
+SUCCESS: BAJAJFINSV-NS - 499 bars
+SUCCESS: BAJFINANCE-NS - 499 bars
+SKIP: BAK - already_done
+SKIP: BALL - already_done
+SKIP: BALT - already_done
+SKIP: BANC - already_done
+SKIP: BAND - already_done
+SKIP: BANF - already_done
+SKIP: BANFP - already_done
+SKIP: BANR - already_done
+SKIP: BANX - already_done
+SKIP: BAOS - already_done
+SUCCESS: BAS-DE - 510 bars
+SKIP: BATRA - already_done
+SKIP: BATRK - already_done
+SKIP: BAX - already_done
+SUCCESS: BAYN-DE - 510 bars
+SKIP: BBBY - already_done
+SKIP: BBCP - already_done
+SKIP: BBGI - already_done
+SKIP: BBH - already_done
+SKIP: BBIO - already_done
+SKIP: BBLG - already_done
+SKIP: BBLGW - already_done
+SKIP: BBSI - already_done
+SKIP: BBT - already_done
+SUCCESS: BBVA - 2261 bars
+SKIP: BBWI - already_done
+SKIP: BBY - already_done
+SKIP: BCAB - already_done
+SKIP: BCAL - already_done
+SKIP: BCBP - already_done
+SKIP: BCDA - already_done
+SKIP: BCIC - already_done
+SKIP: BCML - already_done
+SKIP: BCPC - already_done
+SKIP: BCRX - already_done
+SUCCESS: BCS - 2261 bars
+SKIP: BCTX - already_done
+SKIP: BCYC - already_done
+SKIP: BDMD - already_done
+SKIP: BDRX - already_done
+SKIP: BDSX - already_done
+SKIP: BDTX - already_done
+SUCCESS: BDX - 2261 bars
+SUCCESS: BE - 1899 bars
+SKIP: BEAM - already_done
+SKIP: BEAT - already_done
+SKIP: BEEM - already_done
+SKIP: BELFA - already_done
+SKIP: BELFB - already_done
+SKIP: BEN - already_done
+SKIP: BENF - already_done
+SKIP: BETR - already_done
+SKIP: BF-B - already_done
+SKIP: BFC - already_done
+SKIP: BFRI - already_done
+SKIP: BFST - already_done
+SKIP: BG - already_done
+SKIP: BGC - already_done
+SKIP: BGI - already_done
+SKIP: BGLC - already_done
+SKIP: BGM - already_done
+SKIP: BGMS - already_done
+SKIP: BGMSP - already_done
+SKIP: BGRN - already_done
+SUCCESS: BHARTIARTL-NS - 499 bars
+SKIP: BHAT - already_done
+SKIP: BHF - already_done
+SKIP: BHFAL - already_done
+SKIP: BHFAM - already_done
+SKIP: BHFAN - already_done
+SKIP: BHFAO - already_done
+SKIP: BHFAP - already_done
+SUCCESS: BHP - 2261 bars
+SKIP: BHRB - already_done
+SKIP: BHST - already_done
+SKIP: BIB - already_done
+SUCCESS: BIDU - 2261 bars
+SKIP: BIIB - already_done
+SKIP: BILI - already_done
+SKIP: BIOX - already_done
+SKIP: BIRD - already_done
+SKIP: BIS - already_done
+SKIP: BITF - already_done
+SKIP: BITS - already_done
+SKIP: BIVI - already_done
+SKIP: BJDX - already_done
+SKIP: BJK - already_done
+SKIP: BJRI - already_done
+SUCCESS: BK - 2261 bars
+SKIP: BKCH - already_done
+SKIP: BKNG - already_done
+SUCCESS: BKR - 2261 bars
+SKIP: BKYI - already_done
+SKIP: BL - already_done
+SKIP: BLBD - already_done
+SKIP: BLBX - already_done
+SKIP: BLCN - already_done
+SKIP: BLDP - already_done
+SKIP: BLDR - already_done
+SKIP: BLFS - already_done
+SKIP: BLFY - already_done
+SKIP: BLIN - already_done
+SUCCESS: BLK - 2261 bars
+SKIP: BLKB - already_done
+SKIP: BLMN - already_done
+SKIP: BLNE - already_done
+SKIP: BLNK - already_done
+SKIP: BLRX - already_done
+SKIP: BLZE - already_done
+SKIP: BMBL - already_done
+SKIP: BMEA - already_done
+SUCCESS: BMO - 2261 bars
+SUCCESS: BMPS-MI - 508 bars
+SKIP: BMRA - already_done
+SKIP: BMRC - already_done
+SKIP: BMRN - already_done
+SUCCESS: BMW-DE - 510 bars
+SUCCESS: BMY - 2261 bars
+SUCCESS: BN-PA - 514 bars
+SUCCESS: BN - 2261 bars
+SKIP: BNAI - already_done
+SKIP: BNBX - already_done
+SKIP: BNC - already_done
+SKIP: BND - already_done
+SKIP: BNDW - already_done
+SKIP: BNDX - already_done
+SKIP: BNGO - already_done
+SKIP: BNKK - already_done
+SUCCESS: BNP-PA - 514 bars
+SKIP: BNR - already_done
+SUCCESS: BNS - 2261 bars
+SKIP: BNTC - already_done
+SKIP: BNTX - already_done
+SKIP: BNZI - already_done
+SKIP: BODI - already_done
+SKIP: BOKF - already_done
+SKIP: BOLT - already_done
+SKIP: BON - already_done
+SKIP: BOOM - already_done
+SKIP: BOSC - already_done
+SKIP: BOTJ - already_done
+SKIP: BOTZ - already_done
+SKIP: BOXL - already_done
+SUCCESS: BP - 2261 bars
+SUCCESS: BPAC3-SA - 504 bars
+SKIP: BPOP - already_done
+SKIP: BPOPM - already_done
+SKIP: BPRN - already_done
+SKIP: BPYPM - already_done
+SKIP: BPYPN - already_done
+SKIP: BPYPO - already_done
+SKIP: BPYPP - already_done
+SKIP: BR - already_done
+SKIP: BRAG - already_done
+SKIP: BRFH - already_done
+SKIP: BRID - already_done
+SUCCESS: BRK-B - 2261 bars
+SKIP: BRKR - already_done
+SKIP: BRLS - already_done
+SKIP: BRLT - already_done
+SKIP: BRNS - already_done
+SKIP: BRO - already_done
+SKIP: BRTX - already_done
+SKIP: BRZE - already_done
+SKIP: BSBK - already_done
+SUCCESS: BSBR - 2261 bars
+SKIP: BSCQ - already_done
+SKIP: BSCR - already_done
+SKIP: BSCS - already_done
+SKIP: BSCT - already_done
+SKIP: BSCU - already_done
+SKIP: BSCV - already_done
+SKIP: BSET - already_done
+SKIP: BSJQ - already_done
+SKIP: BSJR - already_done
+SKIP: BSJS - already_done
+SKIP: BSJT - already_done
+SKIP: BSLK - already_done
+SKIP: BSMQ - already_done
+SKIP: BSMR - already_done
+SKIP: BSMS - already_done
+SKIP: BSMT - already_done
+SKIP: BSMU - already_done
+SKIP: BSMV - already_done
+SKIP: BSRR - already_done
+SKIP: BSVN - already_done
+SUCCESS: BSX - 2261 bars
+SKIP: BSY - already_done
+SKIP: BTAI - already_done
+SKIP: BTBD - already_done
+SKIP: BTBT - already_done
+SKIP: BTCS - already_done
+SKIP: BTCT - already_done
+SKIP: BTDR - already_done
+SKIP: BTE - already_done
+SKIP: BTF - already_done
+SUCCESS: BTI - 2261 bars
+SKIP: BTMD - already_done
+SKIP: BTOG - already_done
+SUCCESS: BUD - 2261 bars
+SKIP: BUG - already_done
+SKIP: BUSE - already_done
+SKIP: BVFL - already_done
+SKIP: BVS - already_done
+SKIP: BWA - already_done
+SKIP: BWAY - already_done
+SKIP: BWB - already_done
+SKIP: BWBBP - already_done
+SKIP: BWEN - already_done
+SKIP: BWFG - already_done
+SKIP: BWIN - already_done
+SKIP: BWMN - already_done
+SUCCESS: BX - 2261 bars
+SKIP: BXP - already_done
+SKIP: BYFC - already_done
+SKIP: BYND - already_done
+SKIP: BYRN - already_done
+SKIP: BYSI - already_done
+SKIP: BZ - already_done
+SKIP: BZFD - already_done
+SKIP: BZUN - already_done
+SUCCESS: C - 2261 bars
+SKIP: CAAS - already_done
+SKIP: CABA - already_done
+SUCCESS: CABK-MC - 514 bars
+SKIP: CAC - already_done
+SKIP: CACC - already_done
+SKIP: CADL - already_done
+SKIP: CAG - already_done
+SUCCESS: CAH - 2261 bars
+SKIP: CAKE - already_done
+SKIP: CALM - already_done
+SKIP: CAMT - already_done
+SKIP: CAN - already_done
+SKIP: CAPR - already_done
+SKIP: CAPS - already_done
+SKIP: CAR - already_done
+SKIP: CARE - already_done
+SKIP: CARG - already_done
+SUCCESS: CARR - 1484 bars
+SKIP: CARR_daily - already_done
+SKIP: CARY - already_done
+SKIP: CARZ - already_done
+SKIP: CASH - already_done
+SKIP: CASI - already_done
+SKIP: CASS - already_done
+SKIP: CASY - already_done
+SUCCESS: CAT - 2261 bars
+SKIP: CATH - already_done
+SKIP: CATY - already_done
+SUCCESS: CB - 2261 bars
+SUCCESS: CBA-AX - 510 bars
+SKIP: CBAT - already_done
+SKIP: CBFV - already_done
+SKIP: CBIO - already_done
+SUCCESS: CBK-F - 510 bars
+SKIP: CBNK - already_done
+SKIP: CBOE - already_done
+SUCCESS: CBRE - 2261 bars
+SKIP: CBRL - already_done
+SKIP: CBSH - already_done
+SKIP: CBUS - already_done
+SKIP: CCAP - already_done
+SKIP: CCB - already_done
+SKIP: CCBG - already_done
+SKIP: CCC - already_done
+SKIP: CCCC - already_done
+SKIP: CCD - already_done
+SKIP: CCE - already_done
+SKIP: CCEC - already_done
+SUCCESS: CCEP - 2261 bars
+SUCCESS: CCI - 2261 bars
+SUCCESS: CCJ - 2261 bars
+SUCCESS: CCL - 2261 bars
+SKIP: CCLD - already_done
+SKIP: CCNE - already_done
+SKIP: CCNEP - already_done
+SKIP: CCOI - already_done
+SKIP: CCRN - already_done
+SKIP: CCSI - already_done
+SKIP: CD - already_done
+SKIP: CDC - already_done
+SUCCESS: CDI-PA - 514 bars
+SKIP: CDL - already_done
+SKIP: CDLX - already_done
+SKIP: CDNA - already_done
+SKIP: CDNS - already_done
+SKIP: CDRO - already_done
+SKIP: CDTX - already_done
+SKIP: CDW - already_done
+SKIP: CDXS - already_done
+SKIP: CDZI - already_done
+SKIP: CDZIP - already_done
+SKIP: CE - already_done
+SKIP: CECO - already_done
+SKIP: CEFA - already_done
+SUCCESS: CEG - 1021 bars
+SKIP: CELC - already_done
+SKIP: CELH - already_done
+SKIP: CELU - already_done
+SKIP: CELZ - already_done
+SKIP: CENN - already_done
+SKIP: CENT - already_done
+SKIP: CENTA - already_done
+SKIP: CENX - already_done
+SKIP: CERS - already_done
+SKIP: CERT - already_done
+SKIP: CETX - already_done
+SKIP: CEVA - already_done
+SKIP: CF - already_done
+SKIP: CFA - already_done
+SKIP: CFBK - already_done
+SKIP: CFFI - already_done
+SKIP: CFFN - already_done
+SKIP: CFG - already_done
+SKIP: CFLT - already_done
+SKIP: CFO - already_done
+SUCCESS: CFR-SW - 502 bars
+SKIP: CG - already_done
+SKIP: CGABL - already_done
+SKIP: CGBD - already_done
+SKIP: CGC - already_done
+SKIP: CGEM - already_done
+SKIP: CGEN - already_done
+SKIP: CGNT - already_done
+SKIP: CGNX - already_done
+SKIP: CGO - already_done
+SKIP: CGTX - already_done
+SKIP: CHAI - already_done
+SKIP: CHCI - already_done
+SKIP: CHCO - already_done
+SKIP: CHD - already_done
+SKIP: CHDN - already_done
+SKIP: CHEF - already_done
+SKIP: CHGX - already_done
+SKIP: CHI - already_done
+SKIP: CHKP - already_done
+SKIP: CHMG - already_done
+SKIP: CHNR - already_done
+SKIP: CHR - already_done
+SKIP: CHRD - already_done
+SKIP: CHRS - already_done
+SKIP: CHRW - already_done
+SKIP: CHSCL - already_done
+SKIP: CHSCM - already_done
+SKIP: CHSCN - already_done
+SKIP: CHSCO - already_done
+SKIP: CHSCP - already_done
+SUCCESS: CHT - 2261 bars
+SKIP: CHTR - already_done
+SKIP: CHW - already_done
+SKIP: CHY - already_done
+SUCCESS: CI - 2261 bars
+SKIP: CIBR - already_done
+SUCCESS: CIEN - 2261 bars
+SKIP: CIFR - already_done
+SKIP: CIGI - already_done
+SKIP: CIIT - already_done
+SKIP: CIL - already_done
+SKIP: CINF - already_done
+SKIP: CING - already_done
+SKIP: CIVB - already_done
+SUCCESS: CL - 2261 bars
+SKIP: CLAR - already_done
+SKIP: CLBK - already_done
+SKIP: CLBT - already_done
+SKIP: CLDX - already_done
+SKIP: CLF - already_done
+SKIP: CLFD - already_done
+SKIP: CLGN - already_done
+SKIP: CLIR - already_done
+SKIP: CLLS - already_done
+SKIP: CLMB - already_done
+SKIP: CLMT - already_done
+SKIP: CLNE - already_done
+SKIP: CLNN - already_done
+SKIP: CLOU - already_done
+SKIP: CLOV - already_done
+SKIP: CLPS - already_done
+SKIP: CLPT - already_done
+SKIP: CLRB - already_done
+SKIP: CLRO - already_done
+SUCCESS: CLS - 2261 bars
+SKIP: CLSK - already_done
+SKIP: CLSM - already_done
+SKIP: CLST - already_done
+SKIP: CLWT - already_done
+SKIP: CLX - already_done
+SKIP: CLYM - already_done
+SKIP: CM - already_done
+SKIP: CMA - already_done
+SKIP: CMBM - already_done
+SKIP: CMCO - already_done
+SUCCESS: CMCSA - 2261 bars
+SKIP: CMCT - already_done
+SUCCESS: CME - 2261 bars
+SUCCESS: CMG - 2261 bars
+SKIP: CMI - already_done
+SKIP: CMMB - already_done
+SKIP: CMPR - already_done
+SKIP: CMPS - already_done
+SKIP: CMPX - already_done
+SKIP: CMRC - already_done
+SKIP: CMS - already_done
+SKIP: CMTL - already_done
+SKIP: CNC - already_done
+SKIP: CNCK - already_done
+SKIP: CNDT - already_done
+SKIP: CNET - already_done
+SKIP: CNEY - already_done
+SUCCESS: CNI - 2261 bars
+SKIP: CNOB - already_done
+SKIP: CNOBP - already_done
+SKIP: CNP - already_done
+SUCCESS: CNQ - 2261 bars
+SKIP: CNSP - already_done
+SKIP: CNTA - already_done
+SKIP: CNTB - already_done
+SKIP: CNTX - already_done
+SKIP: CNTY - already_done
+SKIP: CNVS - already_done
+SKIP: CNX - already_done
+SKIP: CNXC - already_done
+SKIP: COCO - already_done
+SKIP: COCP - already_done
+SKIP: CODA - already_done
+SKIP: CODX - already_done
+SKIP: COEP - already_done
+SUCCESS: COF - 2261 bars
+SKIP: COFS - already_done
+SKIP: COGT - already_done
+SKIP: COHR - already_done
+SKIP: COHU - already_done
+SUCCESS: COIN - 1215 bars
+SKIP: COKE - already_done
+SKIP: COL - already_done
+SKIP: COLB - already_done
+SKIP: COLL - already_done
+SKIP: COLM - already_done
+SKIP: COMM - already_done
+SKIP: COMT - already_done
+SKIP: COO - already_done
+SKIP: COOT - already_done
+SUCCESS: COP - 2261 bars
+SUCCESS: COR - 2261 bars
+SKIP: CORT - already_done
+SKIP: COSM - already_done
+SKIP: COST - already_done
+SKIP: COTY - already_done
+SUCCESS: CP - 2261 bars
+SKIP: CPAY - already_done
+SKIP: CPB - already_done
+SUCCESS: CPG-L - 510 bars
+SKIP: CPHC - already_done
+SKIP: CPIX - already_done
+SUCCESS: CPNG - 1238 bars
+SKIP: CPOP - already_done
+SKIP: CPRI - already_done
+SUCCESS: CPRT - 2261 bars
+SKIP: CPRX - already_done
+SKIP: CPSH - already_done
+SKIP: CPSS - already_done
+SKIP: CPT - already_done
+SKIP: CPZ - already_done
+SKIP: CRAI - already_done
+SKIP: CRBP - already_done
+SKIP: CRBU - already_done
+SKIP: CRCT - already_done
+SKIP: CRDF - already_done
+SKIP: CRDL - already_done
+SKIP: CREG - already_done
+SKIP: CRESY - already_done
+SKIP: CREX - already_done
+SKIP: CRGO - already_done
+SUCCESS: CRH - 2261 bars
+SKIP: CRIS - already_done
+SKIP: CRL - already_done
+SUCCESS: CRM - 1255 bars
+SKIP: CRMD - already_done
+SKIP: CRMT - already_done
+SKIP: CRNC - already_done
+SKIP: CRNT - already_done
+SKIP: CRNX - already_done
+SKIP: CRON - already_done
+SKIP: CROX - already_done
+SKIP: CRSP - already_done
+SKIP: CRSR - already_done
+SKIP: CRTO - already_done
+SKIP: CRUS - already_done
+SKIP: CRVL - already_done
+SKIP: CRVO - already_done
+SKIP: CRVS - already_done
+SUCCESS: CRWD - 1678 bars
+SKIP: CRWS - already_done
+SUCCESS: CRWV - 221 bars
+SUCCESS: CS-PA - 514 bars
+SKIP: CSB - already_done
+SKIP: CSBR - already_done
+SKIP: CSCO - already_done
+SKIP: CSGP - already_done
+SKIP: CSGS - already_done
+SKIP: CSIQ - already_done
+SUCCESS: CSL-AX - 510 bars
+SKIP: CSPI - already_done
+SKIP: CSQ - already_done
+SKIP: CSTE - already_done
+SKIP: CSTL - already_done
+SUCCESS: CSU-TO - 505 bars
+SKIP: CSWC - already_done
+SUCCESS: CSX - 2261 bars
+SUCCESS: CTAS - 1255 bars
+SKIP: CTBI - already_done
+SKIP: CTEC - already_done
+SKIP: CTKB - already_done
+SKIP: CTLP - already_done
+SKIP: CTMX - already_done
+SKIP: CTRA - already_done
+SKIP: CTRM - already_done
+SKIP: CTRN - already_done
+SUCCESS: CTSH - 2261 bars
+SKIP: CTSO - already_done
+SUCCESS: CTVA - 1690 bars
+SKIP: CTXR - already_done
+SKIP: CUE - already_done
+SKIP: CURI - already_done
+SKIP: CVAC - already_done
+SKIP: CVBF - already_done
+SKIP: CVCO - already_done
+SUCCESS: CVE - 2261 bars
+SKIP: CVGI - already_done
+SKIP: CVGW - already_done
+SKIP: CVLT - already_done
+SUCCESS: CVNA - 2211 bars
+SKIP: CVRX - already_done
+SUCCESS: CVS - 2261 bars
+SKIP: CVV - already_done
+SUCCESS: CVX - 2261 bars
+SKIP: CWBC - already_done
+SKIP: CWCO - already_done
+SKIP: CWST - already_done
+SKIP: CXAI - already_done
+SKIP: CXDO - already_done
+SKIP: CXSE - already_done
+SKIP: CYBR - already_done
+SKIP: CYCN - already_done
+SKIP: CYN - already_done
+SKIP: CYPH - already_done
+SKIP: CYRX - already_done
+SKIP: CYTK - already_done
+SKIP: CZFS - already_done
+SKIP: CZNC - already_done
+SKIP: CZR - already_done
+SKIP: CZWI - already_done
+SUCCESS: D - 2261 bars
+SUCCESS: D05-SI - 506 bars
+SKIP: DAIO - already_done
+SKIP: DAKT - already_done
+SUCCESS: DAL - 2261 bars
+SKIP: DALI - already_done
+SUCCESS: DANS-VI - 510 bars
+SKIP: DAPP - already_done
+SKIP: DARE - already_done
+SUCCESS: DASH - 1300 bars
+SKIP: DAVE - already_done
+SKIP: DAWN - already_done
+SKIP: DAX - already_done
+SKIP: DAY - already_done
+SUCCESS: DB - 2261 bars
+SUCCESS: DB1-DE - 510 bars
+SKIP: DBGI - already_done
+SKIP: DBRG - already_done
+SKIP: DBVT - already_done
+SKIP: DBX - already_done
+SKIP: DCBO - already_done
+SKIP: DCGO - already_done
+SUCCESS: DCII-JK - 475 bars
+SKIP: DCOM - already_done
+SKIP: DCOMP - already_done
+SKIP: DCTH - already_done
+SKIP: DD - already_done
+SKIP: DDI - already_done
+SKIP: DDIV - already_done
+SUCCESS: DDOG - 1609 bars
+SUCCESS: DE - 2261 bars
+SKIP: DEC - already_done
+SKIP: DECK - already_done
+SUCCESS: DELL - 2261 bars
+SUCCESS: DELTA-BK - 488 bars
+SKIP: DEMZ - already_done
+SKIP: DENN - already_done
+SUCCESS: DEO - 2261 bars
+SKIP: DERM - already_done
+SKIP: DFLI - already_done
+SKIP: DFSC - already_done
+SUCCESS: DG-PA - 514 bars
+SUCCESS: DG - 2261 bars
+SKIP: DGICA - already_done
+SKIP: DGICB - already_done
+SKIP: DGII - already_done
+SKIP: DGLY - already_done
+SKIP: DGRE - already_done
+SKIP: DGRS - already_done
+SKIP: DGRW - already_done
+SKIP: DGX - already_done
+SKIP: DGXX - already_done
+SKIP: DH - already_done
+SKIP: DHC - already_done
+SKIP: DHCNI - already_done
+SUCCESS: DHI - 2261 bars
+SKIP: DHIL - already_done
+SUCCESS: DHL-DE - 509 bars
+SUCCESS: DHR - 2261 bars
+SUCCESS: DIA - 1255 bars
+SKIP: DIBS - already_done
+SKIP: DIOD - already_done
+SUCCESS: DIS - 2261 bars
+SKIP: DJCO - already_done
+SKIP: DJT - already_done
+SKIP: DKNG - already_done
+SKIP: DLHC - already_done
+SKIP: DLO - already_done
+SKIP: DLPN - already_done
+SUCCESS: DLR - 2261 bars
+SKIP: DLTH - already_done
+SKIP: DLTR - already_done
+SKIP: DMAC - already_done
+SKIP: DMLP - already_done
+SKIP: DMRC - already_done
+SKIP: DMXF - already_done
+SUCCESS: DNB-OL - 503 bars
+SKIP: DNLI - already_done
+SKIP: DNTH - already_done
+SKIP: DNUT - already_done
+SKIP: DOC - already_done
+SKIP: DOCU - already_done
+SUCCESS: DOGEF - 2071 bars
+SKIP: DOGZ - already_done
+SUCCESS: DOL-TO - 505 bars
+SKIP: DOMH - already_done
+SKIP: DOMO - already_done
+SKIP: DOO - already_done
+SKIP: DORM - already_done
+SKIP: DOV - already_done
+SKIP: DOW - already_done
+SKIP: DOX - already_done
+SKIP: DOYU - already_done
+SKIP: DPRO - already_done
+SKIP: DPZ - already_done
+SKIP: DRH - already_done
+SKIP: DRI - already_done
+SKIP: DRIO - already_done
+SKIP: DRIV - already_done
+SKIP: DRMA - already_done
+SKIP: DRS - already_done
+SKIP: DRTS - already_done
+SKIP: DRUG - already_done
+SKIP: DRVN - already_done
+SKIP: DSGN - already_done
+SKIP: DSGR - already_done
+SKIP: DSGX - already_done
+SKIP: DSP - already_done
+SUCCESS: DSV-VI - 510 bars
+SKIP: DSWL - already_done
+SUCCESS: DSY-PA - 514 bars
+SKIP: DTCR - already_done
+SUCCESS: DTE-DE - 510 bars
+SKIP: DTE - already_done
+SUCCESS: DTG-F - 510 bars
+SKIP: DTI - already_done
+SKIP: DTIL - already_done
+SKIP: DTSS - already_done
+SKIP: DTST - already_done
+SUCCESS: DUK - 2261 bars
+SKIP: DUO - already_done
+SKIP: DUOL - already_done
+SKIP: DUOT - already_done
+SKIP: DVA - already_done
+SKIP: DVAX - already_done
+SKIP: DVLT - already_done
+SKIP: DVLU - already_done
+SKIP: DVN - already_done
+SKIP: DVOL - already_done
+SKIP: DVY - already_done
+SKIP: DWAS - already_done
+SKIP: DWAW - already_done
+SKIP: DWSH - already_done
+SKIP: DWSN - already_done
+SKIP: DWTX - already_done
+SKIP: DWUS - already_done
+SKIP: DXC - already_done
+SKIP: DXCM - already_done
+SKIP: DXLG - already_done
+SKIP: DXPE - already_done
+SKIP: DXR - already_done
+SKIP: DYAI - already_done
+SKIP: DYN - already_done
+SUCCESS: E - 2261 bars
+SUCCESS: EA - 2261 bars
+SUCCESS: EBAY - 2261 bars
+SKIP: EBC - already_done
+SKIP: EBIZ - already_done
+SKIP: EBMT - already_done
+SUCCESS: EBO-F - 510 bars
+SKIP: EBON - already_done
+SKIP: ECL - already_done
+SKIP: ECOR - already_done
+SKIP: ECOW - already_done
+SKIP: ECPG - already_done
+SKIP: ECX - already_done
+SUCCESS: ED - 2261 bars
+SKIP: EDAP - already_done
+SKIP: EDIT - already_done
+SKIP: EDRY - already_done
+SKIP: EDSA - already_done
+SKIP: EDTK - already_done
+SKIP: EDUC - already_done
+SKIP: EEFT - already_done
+SKIP: EEIQ - already_done
+SKIP: EEMA - already_done
+SKIP: EFAS - already_done
+SKIP: EFOI - already_done
+SKIP: EFSC - already_done
+SKIP: EFSCP - already_done
+SKIP: EFSI - already_done
+SKIP: EFX - already_done
+SKIP: EG - already_done
+SKIP: EGAN - already_done
+SKIP: EGBN - already_done
+SKIP: EGHT - already_done
+SKIP: EH - already_done
+SKIP: EHTH - already_done
+SKIP: EIX - already_done
+SKIP: EJH - already_done
+SKIP: EKSO - already_done
+SUCCESS: EL-PA - 514 bars
+SUCCESS: EL - 2261 bars
+SKIP: ELBM - already_done
+SKIP: ELDN - already_done
+SUCCESS: ELE-MC - 514 bars
+SKIP: ELE - already_done
+SKIP: ELSE - already_done
+SKIP: ELTK - already_done
+SKIP: ELTX - already_done
+SKIP: ELUT - already_done
+SKIP: ELV - already_done
+SKIP: ELVA - already_done
+SKIP: ELVN - already_done
+SKIP: EM - already_done
+SKIP: EMB - already_done
+SKIP: EMCB - already_done
+SUCCESS: EME - 2261 bars
+SKIP: EMIF - already_done
+SUCCESS: EMIRATESNBD-AE - 412 bars
+SKIP: EML - already_done
+SKIP: EMN - already_done
+SKIP: EMPD - already_done
+SKIP: EMR - already_done
+SKIP: EMXC - already_done
+SKIP: EMXF - already_done
+SUCCESS: ENB - 2261 bars
+SUCCESS: ENEL-MI - 508 bars
+SUCCESS: ENGI-PA - 514 bars
+SKIP: ENLV - already_done
+SKIP: ENPH - already_done
+SUCCESS: ENR-F - 510 bars
+SKIP: ENSC - already_done
+SKIP: ENSG - already_done
+SKIP: ENTA - already_done
+SKIP: ENTG - already_done
+SKIP: ENTX - already_done
+SKIP: ENVB - already_done
+SKIP: ENVX - already_done
+SKIP: ENZL - already_done
+SUCCESS: EOAN-DE - 510 bars
+SUCCESS: EOG - 2261 bars
+SKIP: EOLS - already_done
+SKIP: EOSE - already_done
+SKIP: EP - already_done
+SKIP: EPAM - already_done
+SUCCESS: EPD - 2261 bars
+SKIP: EPOW - already_done
+SKIP: EPSN - already_done
+SKIP: EQ - already_done
+SKIP: EQIX - already_done
+SUCCESS: EQNR - 2261 bars
+SKIP: EQR - already_done
+SKIP: EQRR - already_done
+SUCCESS: EQT-ST - 502 bars
+SUCCESS: EQT - 2261 bars
+SKIP: ERAS - already_done
+SUCCESS: ERIC - 2261 bars
+SKIP: ERIE - already_done
+SKIP: ERII - already_done
+SKIP: ERNA - already_done
+SKIP: ES - already_done
+SKIP: ESCA - already_done
+SKIP: ESEA - already_done
+SKIP: ESGD - already_done
+SKIP: ESGE - already_done
+SKIP: ESGU - already_done
+SKIP: ESLA - already_done
+SUCCESS: ESLT - 2261 bars
+SKIP: ESMV - already_done
+SKIP: ESOA - already_done
+SKIP: ESPO - already_done
+SKIP: ESPR - already_done
+SKIP: ESQ - already_done
+SKIP: ESS - already_done
+SKIP: ESTA - already_done
+SUCCESS: ET - 2261 bars
+SKIP: ETHZ - already_done
+SUCCESS: ETN - 2261 bars
+SKIP: ETON - already_done
+SUCCESS: ETR - 2261 bars
+SKIP: EU - already_done
+SKIP: EUDA - already_done
+SKIP: EUFN - already_done
+SKIP: EVAX - already_done
+SKIP: EVCM - already_done
+SKIP: EVER - already_done
+SKIP: EVGN - already_done
+SKIP: EVGO - already_done
+SKIP: EVGOW - already_done
+SKIP: EVLV - already_done
+SKIP: EVO - already_done
+SUCCESS: EVOX - 52 bars
+SKIP: EVRG - already_done
+SKIP: EVTV - already_done
+SUCCESS: EW - 2261 bars
+SKIP: EWBC - already_done
+SKIP: EWCZ - already_done
+SKIP: EWJV - already_done
+SKIP: EWTX - already_done
+SKIP: EWZS - already_done
+SKIP: EXAS - already_done
+SUCCESS: EXC - 2261 bars
+SKIP: EXE - already_done
+SKIP: EXEEL - already_done
+SKIP: EXEEW - already_done
+SKIP: EXEEZ - already_done
+SKIP: EXEL - already_done
+SKIP: EXFY - already_done
+SKIP: EXLS - already_done
+SKIP: EXPD - already_done
+SUCCESS: EXPE - 2261 bars
+SUCCESS: EXPGF - 2261 bars
+SKIP: EXPI - already_done
+SKIP: EXPO - already_done
+SUCCESS: EXR - 2261 bars
+SKIP: EXTR - already_done
+SKIP: EYE - already_done
+SKIP: EYPT - already_done
+SKIP: EZGO - already_done
+SKIP: EZPW - already_done
+SUCCESS: F - 2261 bars
+SKIP: FA - already_done
+SKIP: FAAR - already_done
+SKIP: FAB - already_done
+SKIP: FAD - already_done
+SKIP: FALN - already_done
+SKIP: FAMI - already_done
+SUCCESS: FANG - 2261 bars
+SKIP: FARM - already_done
+SUCCESS: FAST - 2261 bars
+SKIP: FAT - already_done
+SKIP: FATBB - already_done
+SKIP: FATBP - already_done
+SKIP: FATE - already_done
+SKIP: FBIO - already_done
+SKIP: FBIOP - already_done
+SKIP: FBIZ - already_done
+SKIP: FBNC - already_done
+SKIP: FBRX - already_done
+SKIP: FCA - already_done
+SKIP: FCAL - already_done
+SKIP: FCAP - already_done
+SKIP: FCBC - already_done
+SKIP: FCCO - already_done
+SKIP: FCEF - already_done
+SKIP: FCEL - already_done
+SKIP: FCFS - already_done
+SKIP: FCNCA - already_done
+SKIP: FCNCP - already_done
+SKIP: FCPT - already_done
+SKIP: FCUV - already_done
+SKIP: FCVT - already_done
+SKIP: FCX - already_done
+SKIP: FDBC - already_done
+SKIP: FDMT - already_done
+SKIP: FDNI - already_done
+SKIP: FDS - already_done
+SKIP: FDT - already_done
+SKIP: FDTS - already_done
+SKIP: FDUS - already_done
+SUCCESS: FDX - 2261 bars
+SKIP: FE - already_done
+SKIP: FEED - already_done
+SKIP: FEIM - already_done
+SKIP: FELE - already_done
+SKIP: FEM - already_done
+SKIP: FEMB - already_done
+SKIP: FEMS - already_done
+SKIP: FEMY - already_done
+SKIP: FENC - already_done
+SKIP: FEP - already_done
+SUCCESS: FER-MC - 514 bars
+SKIP: FER - already_done
+SUCCESS: FERG - 2261 bars
+SKIP: FEUZ - already_done
+SKIP: FEX - already_done
+SKIP: FFAI - already_done
+SKIP: FFBC - already_done
+SUCCESS: FFH-TO - 505 bars
+SKIP: FFIC - already_done
+SKIP: FFIN - already_done
+SKIP: FFIV - already_done
+SKIP: FGBI - already_done
+SKIP: FGBIP - already_done
+SKIP: FGEN - already_done
+SKIP: FGM - already_done
+SKIP: FGNX - already_done
+SKIP: FGNXP - already_done
+SKIP: FHB - already_done
+SKIP: FHTX - already_done
+SKIP: FIBK - already_done
+SUCCESS: FICO - 2261 bars
+SKIP: FICS - already_done
+SKIP: FID - already_done
+SKIP: FIEE - already_done
+SKIP: FINW - already_done
+SKIP: FINX - already_done
+SUCCESS: FIS - 2261 bars
+SKIP: FISI - already_done
+SUCCESS: FISV - 503 bars
+SUCCESS: FITB - 2261 bars
+SKIP: FITBI - already_done
+SKIP: FITBO - already_done
+SKIP: FITBP - already_done
+SKIP: FIVE - already_done
+SKIP: FIVN - already_done
+SUCCESS: FIX - 2261 bars
+SKIP: FIXD - already_done
+SKIP: FIZZ - already_done
+SKIP: FJP - already_done
+SKIP: FKU - already_done
+SKIP: FKWL - already_done
+SKIP: FLEX - already_done
+SKIP: FLGC - already_done
+SKIP: FLGT - already_done
+SKIP: FLL - already_done
+SKIP: FLN - already_done
+SKIP: FLNC - already_done
+SKIP: FLNT - already_done
+SKIP: FLR - already_done
+SKIP: FLS - already_done
+SUCCESS: FLUT - 2261 bars
+SKIP: FLUX - already_done
+SKIP: FLWS - already_done
+SKIP: FLXS - already_done
+SKIP: FLYW - already_done
+SKIP: FMAO - already_done
+SKIP: FMB - already_done
+SKIP: FMBH - already_done
+SKIP: FMC - already_done
+SUCCESS: FMG-AX - 510 bars
+SKIP: FMHI - already_done
+SKIP: FMNB - already_done
+SUCCESS: FMX - 2261 bars
+SKIP: FNGR - already_done
+SKIP: FNK - already_done
+SKIP: FNKO - already_done
+SKIP: FNLC - already_done
+SUCCESS: FNLPF - 2261 bars
+SUCCESS: FNV - 2261 bars
+SKIP: FNWB - already_done
+SKIP: FNWD - already_done
+SKIP: FNX - already_done
+SKIP: FNY - already_done
+SKIP: FOLD - already_done
+SKIP: FONR - already_done
+SKIP: FORA - already_done
+SKIP: FORM - already_done
+SKIP: FORR - already_done
+SKIP: FORTY - already_done
+SKIP: FOSL - already_done
+SUCCESS: FOX - 1741 bars
+SKIP: FOXA - already_done
+SKIP: FOXF - already_done
+SKIP: FPA - already_done
+SKIP: FPXE - already_done
+SKIP: FPXI - already_done
+SKIP: FRAF - already_done
+SKIP: FRBA - already_done
+SKIP: FRD - already_done
+SUCCESS: FRE-DE - 510 bars
+SKIP: FRGT - already_done
+SKIP: FRHC - already_done
+SKIP: FRME - already_done
+SKIP: FRMEP - already_done
+SKIP: FROG - already_done
+SKIP: FRSH - already_done
+SKIP: FRST - already_done
+SKIP: FRSX - already_done
+SKIP: FRT - already_done
+SKIP: FSCS - already_done
+SKIP: FSEA - already_done
+SKIP: FSFG - already_done
+SKIP: FSGS - already_done
+SKIP: FSLR - already_done
+SKIP: FSLY - already_done
+SKIP: FSTR - already_done
+SKIP: FSV - already_done
+SKIP: FSZ - already_done
+SKIP: FTA - already_done
+SKIP: FTAG - already_done
+SKIP: FTAI - already_done
+SKIP: FTAIN - already_done
+SKIP: FTC - already_done
+SKIP: FTCI - already_done
+SKIP: FTCS - already_done
+SKIP: FTDR - already_done
+SKIP: FTDS - already_done
+SKIP: FTEK - already_done
+SKIP: FTFT - already_done
+SKIP: FTGC - already_done
+SKIP: FTHI - already_done
+SKIP: FTHM - already_done
+SKIP: FTI - already_done
+SKIP: FTLF - already_done
+SKIP: FTNT - already_done
+SKIP: FTQI - already_done
+SKIP: FTRI - already_done
+SKIP: FTSL - already_done
+SKIP: FTSM - already_done
+SKIP: FTV - already_done
+SKIP: FTXG - already_done
+SKIP: FTXH - already_done
+SKIP: FTXL - already_done
+SKIP: FTXN - already_done
+SKIP: FTXO - already_done
+SKIP: FTXR - already_done
+SKIP: FUFU - already_done
+SKIP: FULC - already_done
+SKIP: FULT - already_done
+SKIP: FULTP - already_done
+SKIP: FUNC - already_done
+SKIP: FUND - already_done
+SKIP: FUSB - already_done
+SKIP: FUTU - already_done
+SKIP: FV - already_done
+SKIP: FVC - already_done
+SKIP: FVCB - already_done
+SUCCESS: FVNNR - 122 bars
+SKIP: FWDI - already_done
+SKIP: FWONA - already_done
+SKIP: FWONK - already_done
+SKIP: FWRD - already_done
+SKIP: FWRG - already_done
+SKIP: FXNC - already_done
+SKIP: FYBR - already_done
+SKIP: FYC - already_done
+SKIP: FYT - already_done
+SKIP: FYX - already_done
+SUCCESS: G-MI - 508 bars
+SKIP: GABC - already_done
+SKIP: GAIA - already_done
+SKIP: GAIN - already_done
+SKIP: GAINN - already_done
+SKIP: GAINZ - already_done
+SUCCESS: GALD-SW - 476 bars
+SKIP: GALT - already_done
+SKIP: GAMB - already_done
+SKIP: GAME - already_done
+SKIP: GANX - already_done
+SKIP: GASS - already_done
+SKIP: GBDC - already_done
+SKIP: GBIO - already_done
+SKIP: GBLI - already_done
+SUCCESS: GBTC - 2261 bars
+SKIP: GCBC - already_done
+SKIP: GCMG - already_done
+SKIP: GCTK - already_done
+SUCCESS: GD - 2261 bars
+SKIP: GDC - already_done
+SKIP: GDDY - already_done
+SKIP: GDEN - already_done
+SKIP: GDEV - already_done
+SKIP: GDRX - already_done
+SKIP: GDS - already_done
+SKIP: GDXU - already_done
+SKIP: GDYN - already_done
+SUCCESS: GE - 2261 bars
+SKIP: GECC - already_done
+SKIP: GECCO - already_done
+SKIP: GEG - already_done
+SUCCESS: GEHC - 792 bars
+SKIP: GEN - already_done
+SKIP: GEOS - already_done
+SKIP: GERN - already_done
+SUCCESS: GEV - 472 bars
+SKIP: GEVO - already_done
+SKIP: GFAI - already_done
+SKIP: GFGF - already_done
+SUCCESS: GFI - 2261 bars
+SKIP: GFS - already_done
+SKIP: GGAL - already_done
+SKIP: GGR - already_done
+SKIP: GH - already_done
+SKIP: GHC - already_done
+SKIP: GHRS - already_done
+SKIP: GIFI - already_done
+SKIP: GIFT - already_done
+SKIP: GIGM - already_done
+SKIP: GIII - already_done
+SUCCESS: GILD - 2261 bars
+SKIP: GILT - already_done
+SKIP: GIPR - already_done
+SKIP: GIS - already_done
+SUCCESS: GIVN-SW - 502 bars
+SKIP: GL - already_done
+SKIP: GLAD - already_done
+SKIP: GLBE - already_done
+SKIP: GLBS - already_done
+SUCCESS: GLCNF - 2261 bars
+SKIP: GLDD - already_done
+SKIP: GLDI - already_done
+SUCCESS: GLE-PA - 514 bars
+SKIP: GLMD - already_done
+SKIP: GLNG - already_done
+SKIP: GLPG - already_done
+SKIP: GLPI - already_done
+SKIP: GLRE - already_done
+SKIP: GLSI - already_done
+SKIP: GLTO - already_done
+SKIP: GLUE - already_done
+SKIP: GLW - already_done
+SUCCESS: GM - 2261 bars
+SKIP: GMAB - already_done
+SUCCESS: GMBXF - 2261 bars
+SKIP: GME - already_done
+SUCCESS: GMG-AX - 510 bars
+SKIP: GMGI - already_done
+SKIP: GNLN - already_done
+SKIP: GNMA - already_done
+SKIP: GNOM - already_done
+SKIP: GNPX - already_done
+SKIP: GNRC - already_done
+SKIP: GNSS - already_done
+SKIP: GNTA - already_done
+SKIP: GNTX - already_done
+SKIP: GNW - already_done
+SKIP: GO - already_done
+SKIP: GOCO - already_done
+SKIP: GOGO - already_done
+SKIP: GOLD - already_done
+SKIP: GOOD - already_done
+SKIP: GOODN - already_done
+SKIP: GOODO - already_done
+SUCCESS: GOOG - 2261 bars
+SUCCESS: GOOGL - 1255 bars
+SKIP: GOSS - already_done
+SKIP: GOVI - already_done
+SKIP: GOVX - already_done
+SKIP: GP - already_done
+SKIP: GPC - already_done
+SKIP: GPN - already_done
+SKIP: GPRE - already_done
+SKIP: GPRO - already_done
+SKIP: GRAB - already_done
+SKIP: GRABW - already_done
+SKIP: GRCE - already_done
+SKIP: GRDX - already_done
+SKIP: GREE - already_done
+SKIP: GREEL - already_done
+SKIP: GRFS - already_done
+SKIP: GRI - already_done
+SKIP: GRID - already_done
+SUCCESS: GRMN - 2261 bars
+SKIP: GRNQ - already_done
+SKIP: GROW - already_done
+SKIP: GRPN - already_done
+SKIP: GRRR - already_done
+SKIP: GRVY - already_done
+SKIP: GRWG - already_done
+SUCCESS: GS - 2261 bars
+SKIP: GSAT - already_done
+SKIP: GSBC - already_done
+SKIP: GSHD - already_done
+SKIP: GSIT - already_done
+SUCCESS: GSK - 2261 bars
+SKIP: GSM - already_done
+SKIP: GT - already_done
+SKIP: GTBP - already_done
+SKIP: GTEC - already_done
+SKIP: GTIM - already_done
+SKIP: GTLB - already_done
+SKIP: GTM - already_done
+SKIP: GTR - already_done
+SKIP: GTX - already_done
+SKIP: GURE - already_done
+SKIP: GWAV - already_done
+SUCCESS: GWO-TO - 505 bars
+SKIP: GWRS - already_done
+SUCCESS: GWW - 2261 bars
+SKIP: GXDW - already_done
+SKIP: GYRE - already_done
+SKIP: GYRO - already_done
+SKIP: HAFC - already_done
+SKIP: HAIN - already_done
+SUCCESS: HAL-NS - 499 bars
+SKIP: HAL - already_done
+SKIP: HALO - already_done
+SKIP: HAR - already_done
+SKIP: HAS - already_done
+SKIP: HBAN - already_done
+SKIP: HBANM - already_done
+SKIP: HBANP - already_done
+SKIP: HBCP - already_done
+SKIP: HBI - already_done
+SKIP: HBIO - already_done
+SKIP: HBNC - already_done
+SKIP: HBT - already_done
+SUCCESS: HCA - 2261 bars
+SKIP: HCAT - already_done
+SKIP: HCKT - already_done
+SUCCESS: HCLTECH-NS - 499 bars
+SKIP: HCM - already_done
+SKIP: HCSG - already_done
+SKIP: HCTI - already_done
+SKIP: HCWB - already_done
+SUCCESS: HD - 2261 bars
+SUCCESS: HDB - 2261 bars
+SKIP: HDSN - already_done
+SKIP: HEAL - already_done
+SUCCESS: HEI-DE - 510 bars
+SUCCESS: HEI - 2261 bars
+SUCCESS: HEIA-AS - 514 bars
+SKIP: HELE - already_done
+SUCCESS: HEN3-DE - 510 bars
+SKIP: HEPS - already_done
+SKIP: HERD - already_done
+SKIP: HERO - already_done
+SKIP: HERZ - already_done
+SKIP: HFBL - already_done
+SKIP: HFFG - already_done
+SKIP: HFWA - already_done
+SKIP: HGBL - already_done
+SKIP: HHS - already_done
+SKIP: HIFS - already_done
+SUCCESS: HIG - 2261 bars
+SKIP: HIHO - already_done
+SKIP: HII - already_done
+SKIP: HIMX - already_done
+SKIP: HIND - already_done
+SUCCESS: HINDUNILVR-NS - 499 bars
+SUCCESS: HINDZINC-NS - 499 bars
+SKIP: HISF - already_done
+SKIP: HITI - already_done
+SKIP: HIVE - already_done
+SKIP: HL - already_done
+SKIP: HLAL - already_done
+SKIP: HLIT - already_done
+SKIP: HLMN - already_done
+SUCCESS: HLN - 893 bars
+SKIP: HLNE - already_done
+SUCCESS: HLT - 2261 bars
+SUCCESS: HM-B-ST - 502 bars
+SUCCESS: HMC - 2261 bars
+SKIP: HNDL - already_done
+SKIP: HNNA - already_done
+SKIP: HNNAZ - already_done
+SUCCESS: HNR1-DE - 510 bars
+SKIP: HNRG - already_done
+SKIP: HNST - already_done
+SUCCESS: HO-PA - 514 bars
+SKIP: HOFT - already_done
+SKIP: HOG - already_done
+SUCCESS: HOLN-SW - 502 bars
+SKIP: HOLO - already_done
+SKIP: HOLX - already_done
+SUCCESS: HON - 2261 bars
+SUCCESS: HOOD - 1141 bars
+SKIP: HOPE - already_done
+SUCCESS: HOT-F - 510 bars
+SKIP: HOTH - already_done
+SKIP: HOVNP - already_done
+SKIP: HOWL - already_done
+SKIP: HP - already_done
+SKIP: HPE - already_done
+SKIP: HPK - already_done
+SKIP: HPQ - already_done
+SKIP: HQI - already_done
+SKIP: HQY - already_done
+SKIP: HRB - already_done
+SKIP: HRL - already_done
+SKIP: HRMY - already_done
+SKIP: HROW - already_done
+SKIP: HRTX - already_done
+SKIP: HRZN - already_done
+SUCCESS: HSBC - 2261 bars
+SKIP: HSDT - already_done
+SKIP: HSIC - already_done
+SKIP: HST - already_done
+SKIP: HSTM - already_done
+SUCCESS: HSY - 2261 bars
+SKIP: HTBK - already_done
+SKIP: HTCO - already_done
+SKIP: HTO - already_done
+SKIP: HTOO - already_done
+SKIP: HTZ - already_done
+SKIP: HUBB - already_done
+SKIP: HUBG - already_done
+SKIP: HUDI - already_done
+SKIP: HUIZ - already_done
+SUCCESS: HUM - 2261 bars
+SKIP: HUMA - already_done
+SKIP: HURA - already_done
+SKIP: HURC - already_done
+SKIP: HURN - already_done
+SKIP: HUT - already_done
+SKIP: HWBK - already_done
+SKIP: HWC - already_done
+SKIP: HWCPZ - already_done
+SKIP: HWKN - already_done
+SUCCESS: HWM - 2261 bars
+SKIP: HYDR - already_done
+SKIP: HYFM - already_done
+SKIP: HYFT - already_done
+SKIP: HYLS - already_done
+SKIP: HYMC - already_done
+SKIP: HYPD - already_done
+SKIP: HYPR - already_done
+SKIP: HYXF - already_done
+SKIP: HYZD - already_done
+SKIP: IAC - already_done
+SKIP: IART - already_done
+SKIP: IBB - already_done
+SKIP: IBBQ - already_done
+SKIP: IBCP - already_done
+SUCCESS: IBE-MC - 514 bars
+SKIP: IBEX - already_done
+SKIP: IBIO - already_done
+SUCCESS: IBKR - 2261 bars
+SUCCESS: IBM - 2261 bars
+SUCCESS: IBN - 2261 bars
+SKIP: IBOC - already_done
+SKIP: IBRX - already_done
+SKIP: IBTG - already_done
+SKIP: IBTH - already_done
+SKIP: IBTI - already_done
+SKIP: IBTJ - already_done
+SKIP: IBTK - already_done
+SKIP: IBTL - already_done
+SKIP: ICCC - already_done
+SKIP: ICCM - already_done
+SUCCESS: ICE - 2261 bars
+SKIP: ICFI - already_done
+SKIP: ICHR - already_done
+SKIP: ICLN - already_done
+SKIP: ICLR - already_done
+SKIP: ICMB - already_done
+SKIP: ICU - already_done
+SKIP: ICUI - already_done
+SKIP: IDAI - already_done
+SKIP: IDCC - already_done
+SUCCESS: IDEXY - 2261 bars
+SKIP: IDN - already_done
+SUCCESS: IDXX - 2261 bars
+SKIP: IDYA - already_done
+SKIP: IEF - already_done
+SKIP: IEI - already_done
+SKIP: IEP - already_done
+SKIP: IESC - already_done
+SKIP: IEUS - already_done
+SKIP: IEX - already_done
+SKIP: IFBD - already_done
+SUCCESS: IFC-TO - 505 bars
+SKIP: IFF - already_done
+SKIP: IFGL - already_done
+SKIP: IFRX - already_done
+SKIP: IFV - already_done
+SUCCESS: IFX-DE - 510 bars
+SKIP: IGF - already_done
+SKIP: IGIB - already_done
+SKIP: IGIC - already_done
+SKIP: IGOV - already_done
+SKIP: IGSB - already_done
+SKIP: IHRT - already_done
+SKIP: IHYF - already_done
+SUCCESS: III-L - 510 bars
+SKIP: III - already_done
+SKIP: IIIV - already_done
+SKIP: IINN - already_done
+SKIP: IINNW - already_done
+SKIP: IJT - already_done
+SKIP: IKT - already_done
+SKIP: ILLR - already_done
+SKIP: ILMN - already_done
+SKIP: ILPT - already_done
+SKIP: IMA - already_done
+SUCCESS: IMB-L - 509 bars
+SKIP: IMCC - already_done
+SKIP: IMCR - already_done
+SKIP: IMCV - already_done
+SKIP: IMDX - already_done
+SKIP: IMG - already_done
+SKIP: IMKTA - already_done
+SKIP: IMMP - already_done
+SKIP: IMMR - already_done
+SKIP: IMMX - already_done
+SKIP: IMNM - already_done
+SKIP: IMNN - already_done
+SUCCESS: IMO - 2261 bars
+SKIP: IMOM - already_done
+SKIP: IMOS - already_done
+SKIP: IMPP - already_done
+SKIP: IMPPP - already_done
+SKIP: IMRN - already_done
+SKIP: IMRX - already_done
+SKIP: IMTE - already_done
+SKIP: IMTX - already_done
+SKIP: IMUX - already_done
+SKIP: IMVT - already_done
+SKIP: IMXI - already_done
+SKIP: INAB - already_done
+SKIP: INBK - already_done
+SKIP: INBKZ - already_done
+SKIP: INBS - already_done
+SKIP: INCR - already_done
+SKIP: INCY - already_done
+SKIP: INDB - already_done
+SKIP: INDI - already_done
+SKIP: INDP - already_done
+SKIP: INDV - already_done
+SKIP: INDY - already_done
+SUCCESS: INFY - 2261 bars
+SKIP: ING - already_done
+SKIP: INGN - already_done
+SKIP: INKT - already_done
+SKIP: INM - already_done
+SKIP: INMB - already_done
+SKIP: INMD - already_done
+SKIP: INNV - already_done
+SKIP: INO - already_done
+SKIP: INOD - already_done
+SKIP: INSE - already_done
+SKIP: INSG - already_done
+SUCCESS: INSM - 2261 bars
+SKIP: INTA - already_done
+SKIP: INTC - already_done
+SKIP: INTC_daily - already_done
+SKIP: INTG - already_done
+SKIP: INTU - already_done
+SKIP: INTZ - already_done
+SKIP: INV - already_done
+SKIP: INVA - already_done
+SUCCESS: INVE-B-ST - 502 bars
+SKIP: INVE - already_done
+SKIP: INVH - already_done
+SKIP: INVZ - already_done
+SKIP: IOBT - already_done
+SKIP: IONS - already_done
+SKIP: IOSP - already_done
+SKIP: IOVA - already_done
+SKIP: IP - already_done
+SKIP: IPAR - already_done
+SKIP: IPDN - already_done
+SKIP: IPG - already_done
+SKIP: IPGP - already_done
+SKIP: IPHA - already_done
+SKIP: IPKW - already_done
+SKIP: IPM - already_done
+SKIP: IPSC - already_done
+SKIP: IPW - already_done
+SKIP: IPWR - already_done
+SKIP: IQ - already_done
+SKIP: IQST - already_done
+SUCCESS: IQV - 2261 bars
+SUCCESS: IR - 2201 bars
+SKIP: IRD - already_done
+SKIP: IRDM - already_done
+SKIP: IREN - already_done
+SKIP: IRIX - already_done
+SKIP: IRM - already_done
+SKIP: IRMD - already_done
+SKIP: IRON - already_done
+SKIP: IROQ - already_done
+SKIP: IRTC - already_done
+SKIP: IRWD - already_done
+SKIP: ISBA - already_done
+SKIP: ISHG - already_done
+SKIP: ISHP - already_done
+SUCCESS: ISP-MI - 508 bars
+SKIP: ISPC - already_done
+SKIP: ISPO - already_done
+SKIP: ISPOW - already_done
+SUCCESS: ISRG - 2261 bars
+SKIP: ISSC - already_done
+SKIP: ISTB - already_done
+SKIP: ISTR - already_done
+SKIP: IT - already_done
+SKIP: ITIC - already_done
+SKIP: ITP - already_done
+SKIP: ITRI - already_done
+SKIP: ITRM - already_done
+SKIP: ITRN - already_done
+SUCCESS: ITUB - 2261 bars
+SUCCESS: ITW - 2261 bars
+SUCCESS: ITX-MC - 514 bars
+SKIP: IUS - already_done
+SKIP: IUSB - already_done
+SKIP: IUSG - already_done
+SKIP: IUSV - already_done
+SKIP: IVA - already_done
+SKIP: IVAL - already_done
+SKIP: IVDA - already_done
+SKIP: IVF - already_done
+SKIP: IVVD - already_done
+SKIP: IVZ - already_done
+SUCCESS: IWM - 1255 bars
+SUCCESS: IX - 2261 bars
+SKIP: IXUS - already_done
+SKIP: IZEA - already_done
+SKIP: J - already_done
+SUCCESS: J36-SI - 506 bars
+SKIP: JACK - already_done
+SKIP: JAGX - already_done
+SKIP: JAKK - already_done
+SKIP: JAMF - already_done
+SKIP: JANX - already_done
+SKIP: JAZZ - already_done
+SKIP: JBHT - already_done
+SKIP: JBIO - already_done
+SKIP: JBL - already_done
+SKIP: JBLU - already_done
+SKIP: JBSS - already_done
+SUCCESS: JCI - 2261 bars
+SKIP: JCTC - already_done
+SUCCESS: JD - 2261 bars
+SKIP: JEF - already_done
+SKIP: JFIN - already_done
+SKIP: JFU - already_done
+SKIP: JG - already_done
+SKIP: JJSF - already_done
+SKIP: JKHY - already_done
+SKIP: JMIA - already_done
+SKIP: JMSB - already_done
+SUCCESS: JNJ - 2261 bars
+SKIP: JOUT - already_done
+SKIP: JOYY - already_done
+SUCCESS: JPM - 2261 bars
+SKIP: JRSH - already_done
+SKIP: JRVR - already_done
+SKIP: JSM - already_done
+SKIP: JSMD - already_done
+SKIP: JSML - already_done
+SKIP: JSPR - already_done
+SUCCESS: JSWSTEEL-NS - 499 bars
+SKIP: JTAI - already_done
+SKIP: JVA - already_done
+SKIP: JWEL - already_done
+SKIP: JXG - already_done
+SKIP: JYNT - already_done
+SKIP: JZXN - already_done
+SKIP: K - already_done
+SKIP: KALA - already_done
+SKIP: KALU - already_done
+SKIP: KALV - already_done
+SKIP: KARO - already_done
+SUCCESS: KB - 2261 bars
+SUCCESS: KBCSF - 2261 bars
+SKIP: KBWB - already_done
+SKIP: KBWD - already_done
+SKIP: KBWP - already_done
+SKIP: KBWR - already_done
+SKIP: KBWY - already_done
+SKIP: KC - already_done
+SUCCESS: KDP - 2261 bars
+SKIP: KE - already_done
+SKIP: KELYA - already_done
+SKIP: KELYB - already_done
+SKIP: KEQU - already_done
+SUCCESS: KER-PA - 514 bars
+SKIP: KEY - already_done
+SUCCESS: KEYS - 2261 bars
+SKIP: KFFB - already_done
+SUCCESS: KFH-KW - 495 bars
+SKIP: KG - already_done
+SUCCESS: KGC - 2261 bars
+SKIP: KGEI - already_done
+SKIP: KHC - already_done
+SKIP: KIDS - already_done
+SKIP: KIM - already_done
+SKIP: KINS - already_done
+SKIP: KITT - already_done
+SUCCESS: KKR - 2261 bars
+SKIP: KLAC - already_done
+SKIP: KLIC - already_done
+SKIP: KLRS - already_done
+SKIP: KLTR - already_done
+SKIP: KLXE - already_done
+SUCCESS: KMB - 2261 bars
+SKIP: KMDA - already_done
+SUCCESS: KMI - 2261 bars
+SKIP: KMX - already_done
+SKIP: KNDI - already_done
+SUCCESS: KNEBV-HE - 503 bars
+SKIP: KNGZ - already_done
+SKIP: KNSA - already_done
+SUCCESS: KO - 2261 bars
+SKIP: KOD - already_done
+SKIP: KOPN - already_done
+SKIP: KOSS - already_done
+SKIP: KPLT - already_done
+SKIP: KPRX - already_done
+SKIP: KPTI - already_done
+SUCCESS: KR - 2261 bars
+SKIP: KRKR - already_done
+SKIP: KRMA - already_done
+SKIP: KRMD - already_done
+SKIP: KRNT - already_done
+SKIP: KRNY - already_done
+SKIP: KROP - already_done
+SKIP: KROS - already_done
+SKIP: KRRO - already_done
+SKIP: KRT - already_done
+SKIP: KRUS - already_done
+SKIP: KRYS - already_done
+SKIP: KSS - already_done
+SKIP: KTCC - already_done
+SKIP: KTOS - already_done
+SKIP: KTTA - already_done
+SKIP: KURA - already_done
+SKIP: KVHI - already_done
+SUCCESS: KVUE - 697 bars
+SKIP: KXIN - already_done
+SKIP: KYMR - already_done
+SKIP: KZIA - already_done
+SKIP: KZR - already_done
+SKIP: L - already_done
+SKIP: LAB - already_done
+SKIP: LAKE - already_done
+SKIP: LAMR - already_done
+SKIP: LAND - already_done
+SKIP: LANDM - already_done
+SKIP: LANDO - already_done
+SKIP: LARK - already_done
+SKIP: LASR - already_done
+SUCCESS: LATAW - 60 bars
+SKIP: LAUR - already_done
+SKIP: LAZR - already_done
+SKIP: LBRDA - already_done
+SKIP: LBRDK - already_done
+SKIP: LBRDP - already_done
+SKIP: LBTYA - already_done
+SKIP: LBTYB - already_done
+SKIP: LBTYK - already_done
+SKIP: LCID - already_done
+SKIP: LCNB - already_done
+SKIP: LCUT - already_done
+SKIP: LDEM - already_done
+SUCCESS: LDO-MI - 508 bars
+SKIP: LDOS - already_done
+SKIP: LDSF - already_done
+SKIP: LDWY - already_done
+SKIP: LE - already_done
+SKIP: LECO - already_done
+SKIP: LEDS - already_done
+SKIP: LEE - already_done
+SKIP: LEG - already_done
+SKIP: LEGH - already_done
+SKIP: LEGN - already_done
+SKIP: LEGR - already_done
+SKIP: LEN - already_done
+SKIP: LENZ - already_done
+SKIP: LESL - already_done
+SKIP: LEXI - already_done
+SKIP: LEXX - already_done
+SKIP: LFCR - already_done
+SKIP: LFMD - already_done
+SKIP: LFMDP - already_done
+SKIP: LFST - already_done
+SKIP: LFUS - already_done
+SKIP: LFVN - already_done
+SKIP: LFWD - already_done
+SKIP: LGHL - already_done
+SKIP: LGIH - already_done
+SKIP: LGND - already_done
+SKIP: LGO - already_done
+SKIP: LGVN - already_done
+SKIP: LH - already_done
+SUCCESS: LHX - 2261 bars
+SKIP: LI - already_done
+SUCCESS: LICI-NS - 499 bars
+SKIP: LIDR - already_done
+SKIP: LIDRW - already_done
+SKIP: LII - already_done
+SKIP: LILA - already_done
+SKIP: LILAK - already_done
+SUCCESS: LIN - 2261 bars
+SKIP: LINC - already_done
+SKIP: LIND - already_done
+SKIP: LINK - already_done
+SKIP: LIQT - already_done
+SUCCESS: LISP-SW - 502 bars
+SKIP: LITE - already_done
+SKIP: LITM - already_done
+SKIP: LITS - already_done
+SKIP: LIVE - already_done
+SKIP: LIVN - already_done
+SKIP: LIXT - already_done
+SKIP: LKFN - already_done
+SKIP: LKQ - already_done
+SUCCESS: LLY - 2261 bars
+SKIP: LLY_daily - already_done
+SKIP: LMAT - already_done
+SKIP: LMB - already_done
+SKIP: LMBS - already_done
+SKIP: LMFA - already_done
+SKIP: LMNR - already_done
+SUCCESS: LMT - 2261 bars
+SKIP: LNAI - already_done
+SKIP: LNC - already_done
+SUCCESS: LNG - 2261 bars
+SKIP: LNSR - already_done
+SKIP: LNT - already_done
+SKIP: LNTH - already_done
+SKIP: LNZA - already_done
+SKIP: LOAN - already_done
+SKIP: LOCO - already_done
+SKIP: LOGI - already_done
+SUCCESS: LONN-SW - 502 bars
+SKIP: LOOP - already_done
+SKIP: LOPE - already_done
+SKIP: LOT - already_done
+SKIP: LOVE - already_done
+SUCCESS: LOW - 2261 bars
+SKIP: LPCN - already_done
+SKIP: LPLA - already_done
+SKIP: LPRO - already_done
+SKIP: LPSN - already_done
+SKIP: LPTH - already_done
+SKIP: LQDA - already_done
+SKIP: LQDT - already_done
+SUCCESS: LR-PA - 514 bars
+SKIP: LRCX - already_done
+SKIP: LRCX_daily - already_done
+SKIP: LRGE - already_done
+SKIP: LRMR - already_done
+SKIP: LSAK - already_done
+SKIP: LSBK - already_done
+SKIP: LSCC - already_done
+SUCCESS: LSEG-L - 510 bars
+SKIP: LSTA - already_done
+SKIP: LSTR - already_done
+SUCCESS: LT-NS - 499 bars
+SKIP: LTBR - already_done
+SKIP: LTRN - already_done
+SKIP: LTRX - already_done
+SKIP: LUCD - already_done
+SKIP: LULU - already_done
+SUCCESS: LUMI-TA - 486 bars
+SKIP: LUNG - already_done
+SKIP: LUNR - already_done
+SKIP: LUV - already_done
+SKIP: LVHD - already_done
+SKIP: LVLU - already_done
+SKIP: LVO - already_done
+SKIP: LVRO - already_done
+SUCCESS: LVS - 2261 bars
+SKIP: LW - already_done
+SKIP: LWAY - already_done
+SKIP: LWLG - already_done
+SKIP: LX - already_done
+SKIP: LXEH - already_done
+SKIP: LXRX - already_done
+SKIP: LYB - already_done
+SKIP: LYEL - already_done
+SKIP: LYFT - already_done
+SKIP: LYG - already_done
+SKIP: LYRA - already_done
+SKIP: LYTS - already_done
+SUCCESS: LYV - 2261 bars
+SKIP: LZ - already_done
+SUCCESS: M&M-NS - 499 bars
+SKIP: M - already_done
+SUCCESS: MA - 2261 bars
+SKIP: MAA - already_done
+SKIP: MAAS - already_done
+SKIP: MAC - already_done
+SUCCESS: MAERSK-B-CO - 502 bars
+SKIP: MAMA - already_done
+SKIP: MANH - already_done
+SKIP: MAPS - already_done
+SKIP: MAR - already_done
+SKIP: MARA - already_done
+SKIP: MARPS - already_done
+SUCCESS: MARUTI-NS - 499 bars
+SKIP: MAS - already_done
+SKIP: MASI - already_done
+SKIP: MASS - already_done
+SKIP: MAT - already_done
+SKIP: MATH - already_done
+SKIP: MATW - already_done
+SKIP: MAXN - already_done
+SKIP: MAYS - already_done
+SKIP: MBAI - already_done
+SKIP: MBB - already_done
+SKIP: MBBC - already_done
+SKIP: MBCN - already_done
+SUCCESS: MBG-DE - 510 bars
+SKIP: MBIN - already_done
+SKIP: MBINN - already_done
+SKIP: MBIO - already_done
+SKIP: MBOT - already_done
+SKIP: MBRX - already_done
+SKIP: MBUU - already_done
+SKIP: MBWM - already_done
+SUCCESS: MC-PA - 514 bars
+SKIP: MCBS - already_done
+SKIP: MCD - already_done
+SKIP: MCFT - already_done
+SKIP: MCHB - already_done
+SKIP: MCHI - already_done
+SUCCESS: MCHP - 2261 bars
+SKIP: MCHX - already_done
+SUCCESS: MCK - 2261 bars
+SUCCESS: MCO - 2261 bars
+SKIP: MCRB - already_done
+SKIP: MCRI - already_done
+SKIP: MCSE - already_done
+SKIP: MCW - already_done
+SKIP: MDAI - already_done
+SUCCESS: MDB - 2090 bars
+SKIP: MDGL - already_done
+SKIP: MDIA - already_done
+SKIP: MDIV - already_done
+SUCCESS: MDLZ - 2261 bars
+SKIP: MDRR - already_done
+SUCCESS: MDT - 2261 bars
+SKIP: MDWD - already_done
+SKIP: MDXG - already_done
+SKIP: MDXH - already_done
+SKIP: MEDP - already_done
+SKIP: MELI - already_done
+SKIP: MELI_daily - already_done
+SKIP: MEOH - already_done
+SKIP: MERC - already_done
+SKIP: MESO - already_done
+SUCCESS: MET - 2261 bars
+SKIP: META - already_done
+SKIP: METC - already_done
+SUCCESS: MFC - 2261 bars
+SUCCESS: MFG - 2261 bars
+SKIP: MFIC - already_done
+SKIP: MFIN - already_done
+SKIP: MFLX - already_done
+SKIP: MGEE - already_done
+SKIP: MGIC - already_done
+SKIP: MGM - already_done
+SKIP: MGNI - already_done
+SKIP: MGNX - already_done
+SKIP: MGPI - already_done
+SKIP: MGRC - already_done
+SKIP: MGTX - already_done
+SKIP: MGYR - already_done
+SKIP: MHK - already_done
+SKIP: MIDD - already_done
+SKIP: MIGI - already_done
+SKIP: MILN - already_done
+SKIP: MIND - already_done
+SKIP: MIRM - already_done
+SKIP: MIST - already_done
+SKIP: MITK - already_done
+SKIP: MKC - already_done
+SKIP: MKSI - already_done
+SKIP: MKTW - already_done
+SKIP: MKTX - already_done
+SKIP: MLAB - already_done
+SKIP: MLCI - already_done
+SKIP: MLCO - already_done
+SKIP: MLEC - already_done
+SKIP: MLGO - already_done
+SKIP: MLKN - already_done
+SUCCESS: MLM - 2261 bars
+SKIP: MLTX - already_done
+SUCCESS: MLYBY - 2261 bars
+SUCCESS: MMC - 2261 bars
+SKIP: MMLP - already_done
+SKIP: MMM - already_done
+SKIP: MMSI - already_done
+SKIP: MMYT - already_done
+SKIP: MNDO - already_done
+SKIP: MNDY - already_done
+SKIP: MNKD - already_done
+SKIP: MNMD - already_done
+SKIP: MNOV - already_done
+SKIP: MNPR - already_done
+SKIP: MNRO - already_done
+SKIP: MNSB - already_done
+SKIP: MNSBP - already_done
+SUCCESS: MNST - 2261 bars
+SKIP: MNTK - already_done
+SKIP: MNTS - already_done
+SKIP: MNY - already_done
+SKIP: MNYWW - already_done
+SUCCESS: MO - 2261 bars
+SKIP: MOBX - already_done
+SKIP: MOFG - already_done
+SKIP: MOGO - already_done
+SKIP: MOH - already_done
+SKIP: MOLN - already_done
+SKIP: MOMO - already_done
+SKIP: MORN - already_done
+SKIP: MOS - already_done
+SKIP: MOVE - already_done
+SKIP: MPAA - already_done
+SKIP: MPB - already_done
+SUCCESS: MPC - 2261 bars
+SUCCESS: MPLX - 2261 bars
+SKIP: MPU - already_done
+SUCCESS: MPWR - 2261 bars
+SKIP: MQ - already_done
+SUCCESS: MQG-AX - 510 bars
+SKIP: MRAM - already_done
+SKIP: MRBK - already_done
+SKIP: MRCC - already_done
+SKIP: MRCY - already_done
+SKIP: MREO - already_done
+SUCCESS: MRK-DE - 510 bars
+SUCCESS: MRK - 2261 bars
+SKIP: MRKR - already_done
+SKIP: MRM - already_done
+SKIP: MRNA - already_done
+SKIP: MRSN - already_done
+SKIP: MRTN - already_done
+SKIP: MRUS - already_done
+SKIP: MRVI - already_done
+SUCCESS: MRVL - 2261 bars
+SUCCESS: MS - 2261 bars
+SKIP: MSAI - already_done
+SKIP: MSBI - already_done
+SUCCESS: MSCI - 2261 bars
+SKIP: MSEX - already_done
+SKIP: MSFT - already_done
+SKIP: MSFT_daily - already_done
+SKIP: MSGM - already_done
+SUCCESS: MSI - 2261 bars
+SUCCESS: MSTR - 2261 bars
+SUCCESS: MT - 2261 bars
+SUCCESS: MTB - 2261 bars
+SKIP: MTC - already_done
+SKIP: MTCH - already_done
+SKIP: MTD - already_done
+SKIP: MTEX - already_done
+SKIP: MTLS - already_done
+SKIP: MTRX - already_done
+SKIP: MTSI - already_done
+SKIP: MTVA - already_done
+SKIP: MU - already_done
+SUCCESS: MUFG - 2261 bars
+SKIP: MUR - already_done
+SUCCESS: MUV2-DE - 510 bars
+SKIP: MVBF - already_done
+SKIP: MVIS - already_done
+SKIP: MVST - already_done
+SKIP: MXCT - already_done
+SKIP: MXL - already_done
+SKIP: MYFW - already_done
+SKIP: MYGN - already_done
+SKIP: MYNZ - already_done
+SKIP: MYPS - already_done
+SKIP: MYPSW - already_done
+SKIP: MYRG - already_done
+SKIP: MYSE - already_done
+SKIP: MYSEW - already_done
+SKIP: MYSZ - already_done
+SKIP: MZTI - already_done
+SUCCESS: NA-TO - 505 bars
+SKIP: NA - already_done
+SKIP: NAAS - already_done
+SUCCESS: NAB-AX - 510 bars
+SKIP: NAGE - already_done
+SKIP: NAII - already_done
+SKIP: NAMMW - already_done
+SKIP: NAMS - already_done
+SKIP: NAMSW - already_done
+SKIP: NATH - already_done
+SKIP: NATR - already_done
+SKIP: NAUT - already_done
+SKIP: NAVI - already_done
+SKIP: NBIX - already_done
+SKIP: NBN - already_done
+SKIP: NBP - already_done
+SKIP: NBR - already_done
+SKIP: NBTB - already_done
+SKIP: NBTX - already_done
+SKIP: NCEL - already_done
+SKIP: NCLH - already_done
+SKIP: NCMI - already_done
+SKIP: NCNA - already_done
+SKIP: NCNO - already_done
+SKIP: NCPL - already_done
+SKIP: NCRA - already_done
+SKIP: NCSM - already_done
+SKIP: NCTY - already_done
+SUCCESS: NDA-FI-HE - 503 bars
+SUCCESS: NDAQ - 2261 bars
+SKIP: NDLS - already_done
+SKIP: NDRA - already_done
+SKIP: NDSN - already_done
+SKIP: NE - already_done
+SKIP: NECB - already_done
+SUCCESS: NEE - 2261 bars
+SKIP: NEGG - already_done
+SUCCESS: NEM - 2261 bars
+SKIP: NEO - already_done
+SKIP: NEOG - already_done
+SKIP: NEON - already_done
+SKIP: NEOV - already_done
+SKIP: NEPH - already_done
+SKIP: NERV - already_done
+SUCCESS: NESN-SW - 502 bars
+SUCCESS: NET - 1613 bars
+SKIP: NEUP - already_done
+SKIP: NEWT - already_done
+SKIP: NEWTZ - already_done
+SKIP: NEXM - already_done
+SKIP: NEXN - already_done
+SKIP: NEXT - already_done
+SKIP: NFBK - already_done
+SKIP: NFE - already_done
+SKIP: NFLX - already_done
+SKIP: NFLX_daily - already_done
+SKIP: NFTY - already_done
+SUCCESS: NGG - 2261 bars
+SKIP: NGNE - already_done
+SKIP: NHPAP - already_done
+SKIP: NHPBP - already_done
+SKIP: NHTC - already_done
+SKIP: NI - already_done
+SKIP: NICE - already_done
+SKIP: NIO - already_done
+SKIP: NISN - already_done
+SKIP: NITO - already_done
+SKIP: NIU - already_done
+SKIP: NIXX - already_done
+SUCCESS: NKE - 2261 bars
+SKIP: NKSH - already_done
+SKIP: NKTR - already_done
+SKIP: NKTX - already_done
+SKIP: NMFC - already_done
+SKIP: NMIH - already_done
+SKIP: NMRK - already_done
+SKIP: NMTC - already_done
+SKIP: NN - already_done
+SKIP: NNBR - already_done
+SKIP: NNDM - already_done
+SKIP: NNOX - already_done
+SUCCESS: NOC - 2261 bars
+SKIP: NODK - already_done
+SKIP: NOG - already_done
+SUCCESS: NOK - 2261 bars
+SKIP: NOTV - already_done
+SKIP: NOV - already_done
+SKIP: NOVT - already_done
+SUCCESS: NOW - 2261 bars
+SKIP: NPCE - already_done
+SUCCESS: NPSNY - 2261 bars
+SKIP: NRC - already_done
+SKIP: NRDS - already_done
+SKIP: NRG - already_done
+SKIP: NRIM - already_done
+SKIP: NRIX - already_done
+SKIP: NRSN - already_done
+SKIP: NRXP - already_done
+SUCCESS: NSC - 2261 bars
+SKIP: NSIT - already_done
+SKIP: NSPR - already_done
+SKIP: NSSC - already_done
+SKIP: NSYS - already_done
+SKIP: NTAP - already_done
+SKIP: NTCT - already_done
+SUCCESS: NTES - 2261 bars
+SKIP: NTGR - already_done
+SKIP: NTIC - already_done
+SKIP: NTLA - already_done
+SKIP: NTNX - already_done
+SUCCESS: NTR - 2040 bars
+SUCCESS: NTRA - 2261 bars
+SKIP: NTRB - already_done
+SKIP: NTRBW - already_done
+SKIP: NTRP - already_done
+SKIP: NTRS - already_done
+SKIP: NTRSO - already_done
+SKIP: NTWK - already_done
+SUCCESS: NU - 1048 bars
+SUCCESS: NUE - 2261 bars
+SKIP: NUKK - already_done
+SKIP: NUVL - already_done
+SKIP: NUWE - already_done
+SKIP: NVAX - already_done
+SKIP: NVCR - already_done
+SKIP: NVDA - already_done
+SKIP: NVDA_daily - already_done
+SKIP: NVEC - already_done
+SKIP: NVMI - already_done
+SKIP: NVNI - already_done
+SKIP: NVNO - already_done
+SUCCESS: NVO - 2261 bars
+SKIP: NVR - already_done
+SUCCESS: NVS - 2261 bars
+SKIP: NVTS - already_done
+SKIP: NVVE - already_done
+SKIP: NWBI - already_done
+SKIP: NWE - already_done
+SKIP: NWFL - already_done
+SUCCESS: NWG - 2261 bars
+SKIP: NWL - already_done
+SKIP: NWPX - already_done
+SKIP: NWS - already_done
+SKIP: NWSA - already_done
+SKIP: NXGL - already_done
+SUCCESS: NXPI - 2261 bars
+SKIP: NXPL - already_done
+SKIP: NXST - already_done
+SKIP: NXTC - already_done
+SKIP: NXTG - already_done
+SKIP: NXXT - already_done
+SKIP: NYXH - already_done
+SKIP: NZAC - already_done
+SUCCESS: O - 2261 bars
+SUCCESS: O39-SI - 506 bars
+SKIP: OABI - already_done
+SKIP: OBE - already_done
+SKIP: OBIO - already_done
+SKIP: OBT - already_done
+SKIP: OBTC - already_done
+SKIP: OCC - already_done
+SKIP: OCCI - already_done
+SKIP: OCCIN - already_done
+SKIP: OCCIO - already_done
+SKIP: OCFC - already_done
+SKIP: OCG - already_done
+SKIP: OCGN - already_done
+SKIP: OCS - already_done
+SKIP: OCSL - already_done
+SKIP: OCUL - already_done
+SUCCESS: ODFL - 2261 bars
+SKIP: ODYS - already_done
+SKIP: OESX - already_done
+SKIP: OFIX - already_done
+SKIP: OFLX - already_done
+SKIP: OFS - already_done
+SKIP: OFSSH - already_done
+SKIP: OGI - already_done
+SKIP: OI - already_done
+SUCCESS: OKE - 2261 bars
+SKIP: OKLO - already_done
+SKIP: OKTA - already_done
+SKIP: OKUR - already_done
+SKIP: OLB - already_done
+SKIP: OLED - already_done
+SKIP: OLLI - already_done
+SKIP: OLMA - already_done
+SKIP: OLPX - already_done
+SKIP: OM - already_done
+SKIP: OMAB - already_done
+SKIP: OMC - already_done
+SKIP: OMCC - already_done
+SKIP: OMCL - already_done
+SKIP: OMER - already_done
+SKIP: OMEX - already_done
+SKIP: ON - already_done
+SKIP: ONB - already_done
+SKIP: ONBPO - already_done
+SKIP: ONBPP - already_done
+SUCCESS: ONC - 2261 bars
+SKIP: ONCY - already_done
+SKIP: ONDS - already_done
+SKIP: ONEQ - already_done
+SKIP: ONEW - already_done
+SKIP: ONMD - already_done
+SKIP: OPAL - already_done
+SKIP: OPBK - already_done
+SKIP: OPCH - already_done
+SKIP: OPEN - already_done
+SKIP: OPK - already_done
+SKIP: OPPJ - already_done
+SKIP: OPRA - already_done
+SKIP: OPRT - already_done
+SKIP: OPRX - already_done
+SKIP: OPXS - already_done
+SUCCESS: OR-PA - 514 bars
+SUCCESS: ORA-PA - 514 bars
+SUCCESS: ORCL - 2261 bars
+SKIP: ORGN - already_done
+SKIP: ORGO - already_done
+SKIP: ORIC - already_done
+SKIP: ORKA - already_done
+SUCCESS: ORLY - 1255 bars
+SKIP: ORMP - already_done
+SKIP: ORRF - already_done
+SKIP: OSBC - already_done
+SKIP: OSIS - already_done
+SKIP: OSPN - already_done
+SKIP: OSS - already_done
+SKIP: OSUR - already_done
+SKIP: OSW - already_done
+SKIP: OTEX - already_done
+SUCCESS: OTIS - 1484 bars
+SKIP: OTLK - already_done
+SKIP: OTLY - already_done
+SKIP: OTTR - already_done
+SKIP: OUST - already_done
+SKIP: OVBC - already_done
+SKIP: OVID - already_done
+SKIP: OVLY - already_done
+SKIP: OXBR - already_done
+SKIP: OXLC - already_done
+SKIP: OXLCL - already_done
+SKIP: OXLCO - already_done
+SKIP: OXLCP - already_done
+SKIP: OXSQ - already_done
+SKIP: OXSQG - already_done
+SUCCESS: OXY - 2261 bars
+SKIP: OZK - already_done
+SKIP: OZKAP - already_done
+SUCCESS: P911-DE - 510 bars
+SKIP: PAA - already_done
+SKIP: PACB - already_done
+SKIP: PAGP - already_done
+SKIP: PAHC - already_done
+SKIP: PALI - already_done
+SKIP: PAMT - already_done
+SKIP: PANL - already_done
+SKIP: PANW - already_done
+SKIP: PASG - already_done
+SKIP: PATH - already_done
+SKIP: PATK - already_done
+SKIP: PAVM - already_done
+SKIP: PAVS - already_done
+SKIP: PAX - already_done
+SKIP: PAYC - already_done
+SKIP: PAYO - already_done
+SKIP: PAYS - already_done
+SUCCESS: PAYX - 2261 bars
+SKIP: PBBK - already_done
+SUCCESS: PBEU - 54 bars
+SKIP: PBFS - already_done
+SKIP: PBHC - already_done
+SKIP: PBI - already_done
+SKIP: PBM - already_done
+SUCCESS: PBOG - 54 bars
+SUCCESS: PBPH - 54 bars
+SUCCESS: PBR - 2261 bars
+SKIP: PBYI - already_done
+SKIP: PCAR - already_done
+SKIP: PCB - already_done
+SUCCESS: PCG - 2261 bars
+SKIP: PCH - already_done
+SKIP: PCRX - already_done
+SKIP: PCSA - already_done
+SKIP: PCT - already_done
+SKIP: PCTTU - already_done
+SKIP: PCTY - already_done
+SKIP: PCVX - already_done
+SKIP: PCYO - already_done
+SKIP: PDBC - already_done
+SUCCESS: PDD - 1899 bars
+SUCCESS: PDD_daily - 1899 bars
+SKIP: PDEX - already_done
+SKIP: PDFS - already_done
+SKIP: PDLB - already_done
+SKIP: PDP - already_done
+SKIP: PDSB - already_done
+SKIP: PDYN - already_done
+SKIP: PEBK - already_done
+SKIP: PEBO - already_done
+SKIP: PECO - already_done
+SUCCESS: PEG - 2261 bars
+SKIP: PEGA - already_done
+SKIP: PENG - already_done
+SKIP: PENN - already_done
+SUCCESS: PEP - 2261 bars
+SKIP: PERI - already_done
+SKIP: PESI - already_done
+SKIP: PETS - already_done
+SKIP: PETZ - already_done
+SKIP: PEY - already_done
+SKIP: PEZ - already_done
+SKIP: PFBC - already_done
+SUCCESS: PFE - 2261 bars
+SKIP: PFF - already_done
+SKIP: PFG - already_done
+SKIP: PFI - already_done
+SKIP: PFIS - already_done
+SKIP: PFM - already_done
+SKIP: PFX - already_done
+SKIP: PFXNZ - already_done
+SUCCESS: PG - 2261 bars
+SKIP: PGC - already_done
+SKIP: PGEN - already_done
+SUCCESS: PGHN-SW - 502 bars
+SKIP: PGJ - already_done
+SKIP: PGNY - already_done
+SUCCESS: PGR - 2261 bars
+SKIP: PGY - already_done
+SUCCESS: PH - 2261 bars
+SKIP: PHAR - already_done
+SKIP: PHAT - already_done
+SKIP: PHIO - already_done
+SKIP: PHM - already_done
+SKIP: PHO - already_done
+SKIP: PHUN - already_done
+SKIP: PHVS - already_done
+SKIP: PI - already_done
+SKIP: PID - already_done
+SKIP: PIE - already_done
+SKIP: PIII - already_done
+SKIP: PINS - already_done
+SKIP: PIO - already_done
+SKIP: PIZ - already_done
+SKIP: PKBK - already_done
+SKIP: PKG - already_done
+SUCCESS: PKN-WA - 500 bars
+SKIP: PKOH - already_done
+SKIP: PKW - already_done
+SKIP: PL - already_done
+SKIP: PLAB - already_done
+SKIP: PLAY - already_done
+SKIP: PLBC - already_done
+SKIP: PLBY - already_done
+SKIP: PLCE - already_done
+SUCCESS: PLD - 2261 bars
+SKIP: PLMR - already_done
+SKIP: PLPC - already_done
+SKIP: PLRX - already_done
+SKIP: PLSE - already_done
+SKIP: PLTK - already_done
+SUCCESS: PLTR - 1349 bars
+SKIP: PLUG - already_done
+SKIP: PLUR - already_done
+SKIP: PLUS - already_done
+SKIP: PLXS - already_done
+SUCCESS: PM - 2261 bars
+SKIP: PMCB - already_done
+SKIP: PMN - already_done
+SKIP: PMTS - already_done
+SKIP: PMVP - already_done
+SKIP: PNBK - already_done
+SUCCESS: PNC - 2261 bars
+SKIP: PNFP - already_done
+SKIP: PNFPP - already_done
+SKIP: PNQI - already_done
+SKIP: PNR - already_done
+SKIP: PNRG - already_done
+SKIP: PNTG - already_done
+SKIP: PNW - already_done
+SKIP: POCI - already_done
+SKIP: PODD - already_done
+SKIP: POET - already_done
+SKIP: POLA - already_done
+SUCCESS: POLI-TA - 486 bars
+SKIP: POOL - already_done
+SUCCESS: POW-TO - 505 bars
+SKIP: POWI - already_done
+SKIP: POWL - already_done
+SKIP: POWW - already_done
+SKIP: POWWP - already_done
+SKIP: PPBT - already_done
+SKIP: PPC - already_done
+SKIP: PPCB - already_done
+SKIP: PPG - already_done
+SKIP: PPH - already_done
+SKIP: PPI - already_done
+SKIP: PPIH - already_done
+SKIP: PPL - already_done
+SKIP: PPSI - already_done
+SKIP: PPTA - already_done
+SKIP: PRAA - already_done
+SKIP: PRAX - already_done
+SKIP: PRCH - already_done
+SKIP: PRCT - already_done
+SKIP: PRDO - already_done
+SKIP: PRE - already_done
+SKIP: PRFX - already_done
+SKIP: PRFZ - already_done
+SKIP: PRGO - already_done
+SKIP: PRGS - already_done
+SKIP: PRHI - already_done
+SUCCESS: PRHIZ - 184 bars
+SKIP: PRLD - already_done
+SKIP: PRN - already_done
+SKIP: PROF - already_done
+SKIP: PROK - already_done
+SKIP: PROP - already_done
+SKIP: PROV - already_done
+SKIP: PRPH - already_done
+SKIP: PRPL - already_done
+SKIP: PRPO - already_done
+SKIP: PRQR - already_done
+SKIP: PRSO - already_done
+SKIP: PRTA - already_done
+SKIP: PRTC - already_done
+SKIP: PRTH - already_done
+SKIP: PRTS - already_done
+SUCCESS: PRU - 2261 bars
+SKIP: PRVA - already_done
+SUCCESS: PRX-AS - 514 bars
+SUCCESS: PRY-MI - 508 bars
+SUCCESS: PSA - 2261 bars
+SKIP: PSC - already_done
+SKIP: PSCC - already_done
+SKIP: PSCD - already_done
+SKIP: PSCE - already_done
+SKIP: PSCF - already_done
+SKIP: PSCH - already_done
+SKIP: PSCI - already_done
+SKIP: PSCM - already_done
+SKIP: PSCT - already_done
+SKIP: PSCU - already_done
+SKIP: PSEC - already_done
+SKIP: PSET - already_done
+SKIP: PSHG - already_done
+SKIP: PSIX - already_done
+SKIP: PSKY - already_done
+SKIP: PSL - already_done
+SKIP: PSMT - already_done
+SKIP: PSNL - already_done
+SKIP: PSNY - already_done
+SUCCESS: PST-MI - 508 bars
+SKIP: PSTV - already_done
+SUCCESS: PSX - 2261 bars
+SKIP: PT - already_done
+SKIP: PTC - already_done
+SKIP: PTCT - already_done
+SKIP: PTEN - already_done
+SKIP: PTF - already_done
+SKIP: PTGX - already_done
+SKIP: PTH - already_done
+SKIP: PTIX - already_done
+SKIP: PTLO - already_done
+SKIP: PTNQ - already_done
+SKIP: PTON - already_done
+SKIP: PUBM - already_done
+SKIP: PUI - already_done
+SUCCESS: PUK - 2261 bars
+SKIP: PULM - already_done
+SKIP: PVH - already_done
+SKIP: PVLA - already_done
+SKIP: PWP - already_done
+SUCCESS: PWR - 2261 bars
+SKIP: PX - already_done
+SKIP: PXI - already_done
+SKIP: PXLW - already_done
+SKIP: PXS - already_done
+SKIP: PY - already_done
+SKIP: PYPD - already_done
+SKIP: PYPL - already_done
+SKIP: PYPL_daily - already_done
+SKIP: PYXS - already_done
+SKIP: PYZ - already_done
+SKIP: PZZA - already_done
+SKIP: QABA - already_done
+SKIP: QAT - already_done
+SKIP: QCLN - already_done
+SKIP: QCLR - already_done
+SKIP: QCLS - already_done
+SKIP: QCOM - already_done
+SKIP: QCRH - already_done
+SKIP: QDEL - already_done
+SKIP: QFIN - already_done
+SKIP: QH - already_done
+SKIP: QIPT - already_done
+SKIP: QLYS - already_done
+SKIP: QMCO - already_done
+SKIP: QMOM - already_done
+SUCCESS: QNBK-QA - 498 bars
+SUCCESS: QNBTR-IS - 504 bars
+SKIP: QNCX - already_done
+SKIP: QNRX - already_done
+SKIP: QNST - already_done
+SKIP: QNTM - already_done
+SKIP: QQEW - already_done
+SKIP: QQJG - already_done
+SKIP: QQMG - already_done
+SUCCESS: QQQ - 1789 bars
+SKIP: QQQA - already_done
+SKIP: QQQE - already_done
+SKIP: QQQH - already_done
+SKIP: QQQJ - already_done
+SKIP: QQQM - already_done
+SKIP: QQQX - already_done
+SKIP: QQQ_daily - already_done
+SKIP: QQXT - already_done
+SKIP: QRHC - already_done
+SKIP: QRMI - already_done
+SKIP: QRVO - already_done
+SKIP: QS - already_done
+SKIP: QSI - already_done
+SUCCESS: QSR - 2261 bars
+SKIP: QTEC - already_done
+SKIP: QTR - already_done
+SKIP: QTRX - already_done
+SKIP: QTTB - already_done
+SKIP: QTUM - already_done
+SKIP: QUBT - already_done
+SKIP: QUIK - already_done
+SKIP: QURE - already_done
+SKIP: QVAL - already_done
+SKIP: QVCGA - already_done
+SKIP: QVCGP - already_done
+SKIP: QYLD - already_done
+SKIP: QYLG - already_done
+SKIP: R - already_done
+SUCCESS: RACE - 2261 bars
+SKIP: RAIL - already_done
+SKIP: RAND - already_done
+SKIP: RANI - already_done
+SKIP: RAPT - already_done
+SKIP: RARE - already_done
+SKIP: RAVE - already_done
+SKIP: RBB - already_done
+SKIP: RBBN - already_done
+SKIP: RBCAA - already_done
+SKIP: RBKB - already_done
+SUCCESS: RBLX - 1239 bars
+SKIP: RCAT - already_done
+SKIP: RCEL - already_done
+SKIP: RCKT - already_done
+SKIP: RCKY - already_done
+SUCCESS: RCL - 2261 bars
+SKIP: RCMT - already_done
+SKIP: RCON - already_done
+SKIP: RDCM - already_done
+SUCCESS: RDDT - 476 bars
+SKIP: RDGT - already_done
+SKIP: RDHL - already_done
+SKIP: RDI - already_done
+SKIP: RDIB - already_done
+SKIP: RDNT - already_done
+SKIP: RDNW - already_done
+SKIP: RDVT - already_done
+SKIP: RDVY - already_done
+SKIP: RDWR - already_done
+SKIP: REAL - already_done
+SKIP: REAX - already_done
+SKIP: REE - already_done
+SKIP: REFI - already_done
+SKIP: REFR - already_done
+SKIP: REG - already_done
+SUCCESS: REGN - 1255 bars
+SKIP: REI - already_done
+SKIP: REIT - already_done
+SKIP: REKR - already_done
+SKIP: RELI - already_done
+SUCCESS: RELIANCE-NS - 499 bars
+SKIP: RELL - already_done
+SUCCESS: RELX - 2261 bars
+SKIP: RELY - already_done
+SKIP: RENT - already_done
+SKIP: REPL - already_done
+SKIP: RETO - already_done
+SKIP: REVB - already_done
+SKIP: REYN - already_done
+SKIP: RF - already_done
+SKIP: RFDI - already_done
+SKIP: RFEM - already_done
+SKIP: RFEU - already_done
+SKIP: RFIL - already_done
+SKIP: RGC - already_done
+SKIP: RGCO - already_done
+SKIP: RGEN - already_done
+SKIP: RGLD - already_done
+SKIP: RGNX - already_done
+SKIP: RGP - already_done
+SKIP: RGS - already_done
+SKIP: RGTI - already_done
+SKIP: RHI - already_done
+SUCCESS: RHM-F - 510 bars
+SKIP: RICK - already_done
+SKIP: RIG - already_done
+SKIP: RIGL - already_done
+SKIP: RILY - already_done
+SKIP: RILYG - already_done
+SKIP: RILYK - already_done
+SKIP: RILYL - already_done
+SKIP: RILYN - already_done
+SKIP: RILYP - already_done
+SKIP: RILYT - already_done
+SKIP: RILYZ - already_done
+SKIP: RIME - already_done
+SKIP: RING - already_done
+SUCCESS: RIO - 2261 bars
+SKIP: RIOT - already_done
+SKIP: RIVN - already_done
+SKIP: RJET - already_done
+SUCCESS: RJF - 2261 bars
+SKIP: RKDA - already_done
+SUCCESS: RKLB - 1310 bars
+SUCCESS: RKT-L - 510 bars
+SUCCESS: RKT - 1387 bars
+SKIP: RL - already_done
+SKIP: RLAY - already_done
+SKIP: RLMD - already_done
+SKIP: RLYB - already_done
+SKIP: RMBI - already_done
+SKIP: RMBS - already_done
+SKIP: RMCF - already_done
+SKIP: RMCO - already_done
+SUCCESS: RMD - 2261 bars
+SKIP: RMNI - already_done
+SKIP: RMR - already_done
+SUCCESS: RMS-PA - 514 bars
+SKIP: RMSG - already_done
+SKIP: RMTI - already_done
+SKIP: RNA - already_done
+SKIP: RNAC - already_done
+SKIP: RNAZ - already_done
+SKIP: RNEM - already_done
+SKIP: RNRG - already_done
+SKIP: RNTX - already_done
+SKIP: RNW - already_done
+SKIP: RNWWW - already_done
+SKIP: RNXT - already_done
+SKIP: ROAD - already_done
+SKIP: ROBO - already_done
+SKIP: ROBT - already_done
+SKIP: ROCK - already_done
+SUCCESS: ROG-SW - 502 bars
+SKIP: ROIV - already_done
+SUCCESS: ROK - 2261 bars
+SKIP: ROKU - already_done
+SKIP: ROL - already_done
+SKIP: ROOT - already_done
+SUCCESS: ROP - 2261 bars
+SUCCESS: ROST - 2261 bars
+SKIP: RPAY - already_done
+SKIP: RPD - already_done
+SKIP: RPID - already_done
+SKIP: RPRX - already_done
+SKIP: RPTX - already_done
+SUCCESS: RR-L - 509 bars
+SKIP: RRBI - already_done
+SKIP: RRC - already_done
+SKIP: RRGB - already_done
+SKIP: RRR - already_done
+SUCCESS: RSG - 2261 bars
+SKIP: RSSS - already_done
+SKIP: RSVR - already_done
+SKIP: RSVRW - already_done
+SKIP: RTH - already_done
+SUCCESS: RTX - 2261 bars
+SKIP: RUM - already_done
+SKIP: RUN - already_done
+SKIP: RUSHA - already_done
+SKIP: RUSHB - already_done
+SKIP: RVMD - already_done
+SKIP: RVPH - already_done
+SKIP: RVSB - already_done
+SKIP: RVTY - already_done
+SKIP: RVYL - already_done
+SKIP: RWAY - already_done
+SUCCESS: RWE-DE - 510 bars
+SKIP: RXRX - already_done
+SKIP: RXST - already_done
+SKIP: RXT - already_done
+SKIP: RY - already_done
+SUCCESS: RYAAY - 2261 bars
+SKIP: RYM - already_done
+SKIP: RYTM - already_done
+SKIP: RZLT - already_done
+SKIP: RZLV - already_done
+SUCCESS: SAAB-B-ST - 502 bars
+SKIP: SABR - already_done
+SKIP: SABS - already_done
+SUCCESS: SAF-PA - 514 bars
+SKIP: SAFT - already_done
+SKIP: SAIA - already_done
+SKIP: SAIC - already_done
+SKIP: SAIH - already_done
+SKIP: SAMG - already_done
+SUCCESS: SAMPO-HE - 503 bars
+SUCCESS: SAN - 2261 bars
+SKIP: SANA - already_done
+SUCCESS: SAND-ST - 502 bars
+SKIP: SANG - already_done
+SKIP: SANM - already_done
+SUCCESS: SAP - 2261 bars
+SKIP: SARK - already_done
+SKIP: SATL - already_done
+SUCCESS: SATS - 2261 bars
+SKIP: SAVA - already_done
+SKIP: SBAC - already_done
+SKIP: SBCF - already_done
+SKIP: SBET - already_done
+SKIP: SBFG - already_done
+SKIP: SBGI - already_done
+SUCCESS: SBIN-NS - 499 bars
+SKIP: SBLK - already_done
+SKIP: SBLX - already_done
+SKIP: SBRA - already_done
+SUCCESS: SBUX - 2261 bars
+SUCCESS: SCCO - 2261 bars
+SKIP: SCHL - already_done
+SUCCESS: SCHN-SW - 502 bars
+SUCCESS: SCHW - 2261 bars
+SKIP: SCKT - already_done
+SKIP: SCLX - already_done
+SUCCESS: SCMN-SW - 502 bars
+SKIP: SCNI - already_done
+SKIP: SCNX - already_done
+SKIP: SCOR - already_done
+SKIP: SCVL - already_done
+SKIP: SCWO - already_done
+SKIP: SCYX - already_done
+SKIP: SCZ - already_done
+SKIP: SDA - already_done
+SKIP: SDG - already_done
+SKIP: SDGR - already_done
+SKIP: SDOT - already_done
+SKIP: SDST - already_done
+SKIP: SDVY - already_done
+SUCCESS: SDZ-SW - 502 bars
+SUCCESS: SE - 2089 bars
+SKIP: SEAT - already_done
+SKIP: SEATW - already_done
+SUCCESS: SEB-A-ST - 502 bars
+SKIP: SEDG - already_done
+SKIP: SEE - already_done
+SKIP: SEED - already_done
+SKIP: SEER - already_done
+SKIP: SEIC - already_done
+SKIP: SELF - already_done
+SKIP: SENEA - already_done
+SKIP: SENEB - already_done
+SKIP: SENS - already_done
+SKIP: SERA - already_done
+SKIP: SEVN - already_done
+SKIP: SFBC - already_done
+SKIP: SFIX - already_done
+SKIP: SFM - already_done
+SKIP: SFNC - already_done
+SKIP: SFST - already_done
+SKIP: SGA - already_done
+SKIP: SGBX - already_done
+SKIP: SGC - already_done
+SKIP: SGHT - already_done
+SKIP: SGLY - already_done
+SKIP: SGML - already_done
+SKIP: SGMO - already_done
+SUCCESS: SGO-PA - 514 bars
+SKIP: SGRP - already_done
+SKIP: SGRY - already_done
+SUCCESS: SHB-A-ST - 502 bars
+SKIP: SHBI - already_done
+SKIP: SHC - already_done
+SUCCESS: SHEL - 2261 bars
+SKIP: SHEN - already_done
+SKIP: SHFS - already_done
+SKIP: SHIP - already_done
+SUCCESS: SHL-DE - 510 bars
+SKIP: SHLS - already_done
+SKIP: SHOO - already_done
+SUCCESS: SHOP - 2261 bars
+SKIP: SHRY - already_done
+SKIP: SHV - already_done
+SUCCESS: SHW - 2261 bars
+SKIP: SHY - already_done
+SKIP: SIBN - already_done
+SKIP: SIDU - already_done
+SUCCESS: SIE-DE - 510 bars
+SKIP: SIEB - already_done
+SKIP: SIFY - already_done
+SKIP: SIG - already_done
+SKIP: SIGA - already_done
+SKIP: SIGI - already_done
+SKIP: SIGIP - already_done
+SKIP: SILC - already_done
+SKIP: SILO - already_done
+SKIP: SIMO - already_done
+SKIP: SINT - already_done
+SKIP: SIRI - already_done
+SKIP: SITM - already_done
+SKIP: SIXG - already_done
+SKIP: SJ - already_done
+SUCCESS: SJLD - 206 bars
+SKIP: SJM - already_done
+SKIP: SKIN - already_done
+SKIP: SKOR - already_done
+SKIP: SKYE - already_done
+SKIP: SKYT - already_done
+SKIP: SKYU - already_done
+SKIP: SKYW - already_done
+SKIP: SKYY - already_done
+SKIP: SLAB - already_done
+SUCCESS: SLB - 2261 bars
+SKIP: SLDB - already_done
+SKIP: SLDP - already_done
+SKIP: SLE - already_done
+SUCCESS: SLF - 2261 bars
+SKIP: SLG - already_done
+SKIP: SLGL - already_done
+SKIP: SLG_daily - already_done
+SUCCESS: SLHN-SW - 502 bars
+SKIP: SLI - already_done
+SKIP: SLM - already_done
+SKIP: SLMBP - already_done
+SKIP: SLN - already_done
+SKIP: SLNG - already_done
+SKIP: SLNH - already_done
+SKIP: SLNHP - already_done
+SKIP: SLNO - already_done
+SKIP: SLP - already_done
+SKIP: SLQD - already_done
+SKIP: SLRC - already_done
+SKIP: SLRX - already_done
+SKIP: SLS - already_done
+SKIP: SLSN - already_done
+SKIP: SLVO - already_done
+SKIP: SLXN - already_done
+SKIP: SMBC - already_done
+SKIP: SMCI - already_done
+SUCCESS: SMFG - 2261 bars
+SUCCESS: SMH - 1255 bars
+SKIP: SMID - already_done
+SKIP: SMLR - already_done
+SKIP: SMMT - already_done
+SKIP: SMPL - already_done
+SKIP: SMSI - already_done
+SKIP: SMTC - already_done
+SKIP: SMTI - already_done
+SKIP: SMX - already_done
+SKIP: SNA - already_done
+SKIP: SNAP - already_done
+SKIP: SNBR - already_done
+SKIP: SNCR - already_done
+SKIP: SNCY - already_done
+SKIP: SND - already_done
+SUCCESS: SNDK - 251 bars
+SKIP: SNDL - already_done
+SKIP: SNDX - already_done
+SKIP: SNES - already_done
+SKIP: SNEX - already_done
+SKIP: SNFCA - already_done
+SKIP: SNGX - already_done
+SKIP: SNOA - already_done
+SUCCESS: SNOW - 1359 bars
+SKIP: SNPS - already_done
+SKIP: SNSE - already_done
+SKIP: SNSR - already_done
+SKIP: SNT - already_done
+SKIP: SNTG - already_done
+SKIP: SNTI - already_done
+SUCCESS: SNY - 2261 bars
+SUCCESS: SO - 2261 bars
+SKIP: SOBR - already_done
+SKIP: SOCL - already_done
+SUCCESS: SOFI - 1284 bars
+SKIP: SOGP - already_done
+SKIP: SOHO - already_done
+SKIP: SOHOB - already_done
+SKIP: SOHON - already_done
+SKIP: SOHOO - already_done
+SKIP: SOHU - already_done
+SKIP: SONM - already_done
+SKIP: SONO - already_done
+SUCCESS: SONY - 2261 bars
+SKIP: SOPA - already_done
+SKIP: SOPH - already_done
+SKIP: SOTK - already_done
+SKIP: SOWG - already_done
+SKIP: SOXQ - already_done
+SKIP: SOXX - already_done
+SKIP: SPBC - already_done
+SKIP: SPC - already_done
+SKIP: SPCB - already_done
+SKIP: SPCX - already_done
+SKIP: SPFI - already_done
+SUCCESS: SPG - 2261 bars
+SUCCESS: SPGI - 2261 bars
+SKIP: SPOK - already_done
+SUCCESS: SPOT - 1978 bars
+SKIP: SPRB - already_done
+SKIP: SPRC - already_done
+SKIP: SPRO - already_done
+SKIP: SPRX - already_done
+SKIP: SPRY - already_done
+SKIP: SPSC - already_done
+SKIP: SPT - already_done
+SKIP: SPWH - already_done
+SKIP: SPY - already_done
+SUCCESS: SPY_daily - 251 bars
+SKIP: SQFT - already_done
+SKIP: SQFTP - already_done
+SKIP: SQLV - already_done
+SKIP: SQQQ - already_done
+SKIP: SRAD - already_done
+SKIP: SRCE - already_done
+SUCCESS: SRE - 2261 bars
+SUCCESS: SREN-SW - 502 bars
+SKIP: SRET - already_done
+SKIP: SRPT - already_done
+SKIP: SRRK - already_done
+SKIP: SRTA - already_done
+SKIP: SRTS - already_done
+SKIP: SRZN - already_done
+SKIP: SSBI - already_done
+SUCCESS: SSE-L - 510 bars
+SKIP: SSKN - already_done
+SKIP: SSM - already_done
+SKIP: SSNC - already_done
+SKIP: SSP - already_done
+SKIP: SSRM - already_done
+SKIP: SSSS - already_done
+SKIP: SSSSL - already_done
+SKIP: SSTI - already_done
+SKIP: SSYS - already_done
+SKIP: STAA - already_done
+SUCCESS: STAN-L - 510 bars
+SKIP: STBA - already_done
+SKIP: STE - already_done
+SKIP: STEP - already_done
+SKIP: STEX - already_done
+SKIP: STGW - already_done
+SKIP: STIM - already_done
+SKIP: STKE - already_done
+SKIP: STKH - already_done
+SKIP: STKL - already_done
+SKIP: STKS - already_done
+SKIP: STLD - already_done
+SKIP: STNC - already_done
+SKIP: STNE - already_done
+SKIP: STOK - already_done
+SKIP: STRA - already_done
+SKIP: STRL - already_done
+SKIP: STRO - already_done
+SKIP: STRR - already_done
+SKIP: STRRP - already_done
+SKIP: STRS - already_done
+SKIP: STRT - already_done
+SUCCESS: STT - 2261 bars
+SKIP: STTK - already_done
+SUCCESS: STX - 2261 bars
+SKIP: STZ - already_done
+SUCCESS: SU-PA - 514 bars
+SUCCESS: SU - 2261 bars
+SKIP: SUIG - already_done
+SKIP: SUNE - already_done
+SUCCESS: SUNPHARMA-NS - 499 bars
+SKIP: SUPN - already_done
+SKIP: SURG - already_done
+SKIP: SUSB - already_done
+SKIP: SUSC - already_done
+SKIP: SUSL - already_done
+SKIP: SVA - already_done
+SKIP: SVC - already_done
+SKIP: SVRA - already_done
+SKIP: SVRN - already_done
+SKIP: SW - already_done
+SKIP: SWAG - already_done
+SKIP: SWBI - already_done
+SUCCESS: SWED-A-ST - 502 bars
+SKIP: SWIM - already_done
+SKIP: SWK - already_done
+SKIP: SWKH - already_done
+SKIP: SWKS - already_done
+SKIP: SWVL - already_done
+SKIP: SXTC - already_done
+SKIP: SY - already_done
+SKIP: SYBT - already_done
+SKIP: SYBX - already_done
+SKIP: SYF - already_done
+SUCCESS: SYK - 2261 bars
+SUCCESS: SYM - 1240 bars
+SKIP: SYNA - already_done
+SKIP: SYPR - already_done
+SKIP: SYRE - already_done
+SUCCESS: SYY - 2261 bars
+SUCCESS: T - 2261 bars
+SKIP: TACT - already_done
+SUCCESS: TAK - 2261 bars
+SKIP: TALK - already_done
+SKIP: TANH - already_done
+SKIP: TAOP - already_done
+SKIP: TAOX - already_done
+SKIP: TAP - already_done
+SKIP: TARA - already_done
+SKIP: TARS - already_done
+SKIP: TASK - already_done
+SKIP: TATT - already_done
+SKIP: TAYD - already_done
+SKIP: TBBK - already_done
+SKIP: TBCH - already_done
+SKIP: TBHC - already_done
+SKIP: TBLA - already_done
+SKIP: TBLD - already_done
+SKIP: TBPH - already_done
+SKIP: TBRG - already_done
+SKIP: TC - already_done
+SKIP: TCBI - already_done
+SKIP: TCBIO - already_done
+SKIP: TCBK - already_done
+SKIP: TCBS - already_done
+SUCCESS: TCEHY - 2261 bars
+SKIP: TCMD - already_done
+SUCCESS: TCOM - 2261 bars
+SKIP: TCPC - already_done
+SKIP: TCRT - already_done
+SKIP: TCRX - already_done
+SUCCESS: TCS-NS - 499 bars
+SKIP: TCX - already_done
+SUCCESS: TD - 2261 bars
+SKIP: TDC - already_done
+SKIP: TDC_daily - already_done
+SKIP: TDG - already_done
+SKIP: TDIV - already_done
+SKIP: TDSB - already_done
+SKIP: TDSC - already_done
+SKIP: TDUP - already_done
+SKIP: TDY - already_done
+SKIP: TE - already_done
+SKIP: TEAD - already_done
+SUCCESS: TEAM - 2261 bars
+SKIP: TECH - already_done
+SKIP: TECTP - already_done
+SKIP: TECX - already_done
+SKIP: TEG - already_done
+SUCCESS: TEL - 2261 bars
+SKIP: TELA - already_done
+SKIP: TENB - already_done
+SKIP: TENX - already_done
+SUCCESS: TER - 2261 bars
+SKIP: TERN - already_done
+SUCCESS: TEVA - 2261 bars
+SUCCESS: TFC - 2261 bars
+SKIP: TFSL - already_done
+SKIP: TGNA - already_done
+SUCCESS: TGT - 2261 bars
+SKIP: TGTX - already_done
+SKIP: TH - already_done
+SKIP: THC - already_done
+SKIP: THCH - already_done
+SKIP: THFF - already_done
+SKIP: THRM - already_done
+SKIP: THRY - already_done
+SKIP: TIGO - already_done
+SKIP: TIGR - already_done
+SKIP: TIL - already_done
+SKIP: TILE - already_done
+SKIP: TIPT - already_done
+SKIP: TIRX - already_done
+SUCCESS: TITAN-NS - 499 bars
+SKIP: TITN - already_done
+SKIP: TIVC - already_done
+SUCCESS: TJX - 2261 bars
+SKIP: TKNO - already_done
+SKIP: TKO - already_done
+SKIP: TLF - already_done
+SKIP: TLPH - already_done
+SKIP: TLRY - already_done
+SKIP: TLS - already_done
+SKIP: TLSA - already_done
+SKIP: TLSI - already_done
+SKIP: TLSIW - already_done
+SKIP: TLT - already_done
+SUCCESS: TLX-DE - 510 bars
+SUCCESS: TM - 2261 bars
+SKIP: TMC - already_done
+SKIP: TMCI - already_done
+SKIP: TMCWW - already_done
+SKIP: TMDX - already_done
+SUCCESS: TMNL - 59 bars
+SUCCESS: TMNS - 59 bars
+SKIP: TMO - already_done
+SUCCESS: TMUS - 2261 bars
+SKIP: TNDM - already_done
+SKIP: TNGX - already_done
+SKIP: TNXP - already_done
+SKIP: TNYA - already_done
+SKIP: TOI - already_done
+SKIP: TOMZ - already_done
+SKIP: TONX - already_done
+SKIP: TOUR - already_done
+SKIP: TOWN - already_done
+SKIP: TPCS - already_done
+SKIP: TPL - already_done
+SKIP: TPR - already_done
+SKIP: TPST - already_done
+SKIP: TQQQ - already_done
+SKIP: TRAW - already_done
+SKIP: TRDA - already_done
+SKIP: TREE - already_done
+SUCCESS: TRGP - 2261 bars
+SUCCESS: TRI - 2261 bars
+SKIP: TRIB - already_done
+SKIP: TRIN - already_done
+SKIP: TRIP - already_done
+SKIP: TRMB - already_done
+SKIP: TRMD - already_done
+SKIP: TRMK - already_done
+SKIP: TRNS - already_done
+SKIP: TROO - already_done
+SKIP: TROW - already_done
+SUCCESS: TRP - 2261 bars
+SKIP: TRS - already_done
+SKIP: TRST - already_done
+SKIP: TRUE - already_done
+SKIP: TRUG - already_done
+SKIP: TRUP - already_done
+SUCCESS: TRV - 2261 bars
+SKIP: TRVG - already_done
+SKIP: TRVI - already_done
+SKIP: TSAT - already_done
+SKIP: TSBK - already_done
+SUCCESS: TSCO-L - 510 bars
+SKIP: TSCO - already_done
+SKIP: TSEM - already_done
+SKIP: TSEM_daily - already_done
+SKIP: TSHA - already_done
+SKIP: TSLA - already_done
+SUCCESS: TSM - 2261 bars
+SKIP: TSN - already_done
+SKIP: TSSI - already_done
+SUCCESS: TT - 2261 bars
+SKIP: TTD - already_done
+SUCCESS: TTE - 2261 bars
+SKIP: TTEC - already_done
+SKIP: TTEK - already_done
+SKIP: TTGT - already_done
+SKIP: TTMI - already_done
+SKIP: TTSH - already_done
+SUCCESS: TTWO - 2261 bars
+SKIP: TUR - already_done
+SKIP: TUSK - already_done
+SKIP: TVRD - already_done
+SKIP: TVTX - already_done
+SKIP: TW - already_done
+SKIP: TWAV - already_done
+SKIP: TWIN - already_done
+SKIP: TWLO - already_done
+SKIP: TWST - already_done
+SKIP: TXG - already_done
+SKIP: TXMD - already_done
+SKIP: TXN - already_done
+SKIP: TXRH - already_done
+SKIP: TXT - already_done
+SKIP: TYGO - already_done
+SKIP: TYL - already_done
+SKIP: TYRA - already_done
+SKIP: TZOO - already_done
+SUCCESS: U11-SI - 506 bars
+SKIP: UA - already_done
+SKIP: UAA - already_done
+SKIP: UAE - already_done
+SUCCESS: UAL - 2261 bars
+SKIP: UAN - already_done
+SKIP: UAVS - already_done
+SKIP: UBCP - already_done
+SUCCESS: UBER - 1700 bars
+SKIP: UBFO - already_done
+SKIP: UBND - already_done
+SUCCESS: UBS - 2261 bars
+SKIP: UBSI - already_done
+SUCCESS: UCB-VI - 510 bars
+SKIP: UCL - already_done
+SKIP: UCRD - already_done
+SKIP: UCTT - already_done
+SKIP: UCYB - already_done
+SKIP: UDMY - already_done
+SKIP: UDR - already_done
+SKIP: UEIC - already_done
+SKIP: UEVM - already_done
+SKIP: UFCS - already_done
+SKIP: UFO - already_done
+SKIP: UFPI - already_done
+SKIP: UFPT - already_done
+SKIP: UG - already_done
+SKIP: UGRO - already_done
+SKIP: UHG - already_done
+SKIP: UHS - already_done
+SUCCESS: UI - 2261 bars
+SKIP: UITB - already_done
+SKIP: UIVM - already_done
+SKIP: UK - already_done
+SUCCESS: UL - 2261 bars
+SKIP: ULBI - already_done
+SKIP: ULCC - already_done
+SKIP: ULH - already_done
+SKIP: ULTA - already_done
+SUCCESS: ULTRACEMCO-NS - 499 bars
+SKIP: ULVM - already_done
+SKIP: UMBF - already_done
+SUCCESS: UMG-AS - 514 bars
+SKIP: UNB - already_done
+SKIP: UNCY - already_done
+SUCCESS: UNH - 2261 bars
+SKIP: UNIT - already_done
+SKIP: UNM - already_done
+SUCCESS: UNP - 2261 bars
+SKIP: UNTY - already_done
+SKIP: UOKA - already_done
+SKIP: UONE - already_done
+SKIP: UONEK - already_done
+SKIP: UPBD - already_done
+SKIP: UPC - already_done
+SKIP: UPLD - already_done
+SUCCESS: UPS - 2261 bars
+SKIP: UPST - already_done
+SKIP: UPWK - already_done
+SKIP: UPXI - already_done
+SKIP: URBN - already_done
+SKIP: URGN - already_done
+SUCCESS: URI - 2261 bars
+SKIP: UROY - already_done
+SKIP: USAU - already_done
+SUCCESS: USB - 2261 bars
+SKIP: USCB - already_done
+SKIP: USEG - already_done
+SKIP: USIG - already_done
+SKIP: USIO - already_done
+SKIP: USLM - already_done
+SKIP: USMC - already_done
+SKIP: USOI - already_done
+SKIP: USTB - already_done
+SKIP: USVM - already_done
+SKIP: USXF - already_done
+SKIP: UTHR - already_done
+SKIP: UTMD - already_done
+SKIP: UTSI - already_done
+SKIP: UVSP - already_done
+SKIP: UXIN - already_done
+SUCCESS: V - 2261 bars
+SKIP: VABK - already_done
+SUCCESS: VALE - 2261 bars
+SKIP: VALN - already_done
+SKIP: VALU - already_done
+SKIP: VANI - already_done
+SKIP: VBIX - already_done
+SKIP: VBNK - already_done
+SKIP: VC - already_done
+SKIP: VCEL - already_done
+SKIP: VCIT - already_done
+SKIP: VCLT - already_done
+SKIP: VCSH - already_done
+SKIP: VCTR - already_done
+SKIP: VCYT - already_done
+SKIP: VECO - already_done
+SKIP: VEEA - already_done
+SKIP: VEEE - already_done
+SUCCESS: VEEV - 2261 bars
+SKIP: VELO - already_done
+SKIP: VEON - already_done
+SKIP: VERA - already_done
+SKIP: VERI - already_done
+SKIP: VERO - already_done
+SKIP: VERU - already_done
+SKIP: VERX - already_done
+SKIP: VFC - already_done
+SKIP: VFF - already_done
+SKIP: VFS - already_done
+SKIP: VGAS - already_done
+SKIP: VGIT - already_done
+SKIP: VGLT - already_done
+SKIP: VGSH - already_done
+SKIP: VHC - already_done
+SKIP: VIASP - already_done
+SKIP: VIAV - already_done
+SUCCESS: VIC-VN - 502 bars
+SUCCESS: VICI - 2040 bars
+SKIP: VICR - already_done
+SKIP: VIGI - already_done
+SKIP: VINP - already_done
+SKIP: VIOT - already_done
+SKIP: VIR - already_done
+SKIP: VIRC - already_done
+SKIP: VITL - already_done
+SKIP: VITL_daily - already_done
+SKIP: VIVK - already_done
+SKIP: VIVS - already_done
+SKIP: VKTX - already_done
+SKIP: VLGEA - already_done
+SUCCESS: VLO - 2261 bars
+SKIP: VLY - already_done
+SKIP: VLYPO - already_done
+SKIP: VLYPP - already_done
+SKIP: VMAR - already_done
+SKIP: VMBS - already_done
+SUCCESS: VMC - 2261 bars
+SKIP: VMD - already_done
+SKIP: VNCE - already_done
+SKIP: VNDA - already_done
+SKIP: VNET - already_done
+SKIP: VNO - already_done
+SKIP: VNOM - already_done
+SKIP: VNQI - already_done
+SUCCESS: VOD - 2261 bars
+SUCCESS: VOLV-A-ST - 502 bars
+SKIP: VONE - already_done
+SKIP: VONG - already_done
+SKIP: VONV - already_done
+SKIP: VOR - already_done
+SKIP: VOTE - already_done
+SUCCESS: VOW3-DE - 510 bars
+SKIP: VOXR - already_done
+SKIP: VRA - already_done
+SKIP: VRAR - already_done
+SKIP: VRDN - already_done
+SKIP: VREX - already_done
+SKIP: VRIG - already_done
+SKIP: VRME - already_done
+SKIP: VRNS - already_done
+SKIP: VRRM - already_done
+SKIP: VRSK - already_done
+SKIP: VRSN - already_done
+SUCCESS: VRT - 1893 bars
+SKIP: VRTX - already_done
+SKIP: VRTX_daily - already_done
+SKIP: VS - already_done
+SKIP: VSA - already_done
+SKIP: VSAT - already_done
+SKIP: VSCO - already_done
+SKIP: VSDA - already_done
+SKIP: VSEC - already_done
+SKIP: VSEE - already_done
+SKIP: VSMV - already_done
+SKIP: VSSYW - already_done
+SUCCESS: VST - 2261 bars
+SKIP: VSTA - already_done
+SKIP: VSTM - already_done
+SKIP: VTC - already_done
+SKIP: VTGN - already_done
+SKIP: VTHR - already_done
+SKIP: VTI - already_done
+SKIP: VTIP - already_done
+SUCCESS: VTR - 2261 bars
+SKIP: VTRS - already_done
+SKIP: VTSI - already_done
+SKIP: VTVT - already_done
+SKIP: VTWG - already_done
+SKIP: VTWO - already_done
+SKIP: VTWV - already_done
+SKIP: VTYX - already_done
+SKIP: VUZI - already_done
+SKIP: VVOS - already_done
+SKIP: VVPR - already_done
+SKIP: VWOB - already_done
+SKIP: VXUS - already_done
+SKIP: VYGR - already_done
+SKIP: VYMI - already_done
+SKIP: VYNE - already_done
+SUCCESS: VZ - 2261 bars
+SUCCESS: WAB - 2261 bars
+SKIP: WABC - already_done
+SKIP: WAFD - already_done
+SKIP: WAFDP - already_done
+SKIP: WAFU - already_done
+SKIP: WALD - already_done
+SKIP: WALDW - already_done
+SKIP: WASH - already_done
+SKIP: WAT - already_done
+SKIP: WATT - already_done
+SKIP: WAVE - already_done
+SKIP: WB - already_done
+SUCCESS: WBC-AX - 510 bars
+SUCCESS: WBD - 2261 bars
+SKIP: WCBR - already_done
+SKIP: WCLD - already_done
+SUCCESS: WCN - 2261 bars
+SUCCESS: WDAY - 2261 bars
+SUCCESS: WDC - 2261 bars
+SKIP: WDFC - already_done
+SUCCESS: WDS - 2261 bars
+SUCCESS: WEC - 2261 bars
+SUCCESS: WEGE3-SA - 504 bars
+SUCCESS: WELL - 2261 bars
+SKIP: WEN - already_done
+SKIP: WERN - already_done
+SKIP: WERN_daily - already_done
+SUCCESS: WES-AX - 510 bars
+SKIP: WEST - already_done
+SKIP: WEYS - already_done
+SUCCESS: WFC - 2261 bars
+SKIP: WFCF - already_done
+SKIP: WFRD - already_done
+SKIP: WGS - already_done
+SKIP: WHF - already_done
+SKIP: WHLR - already_done
+SKIP: WHLRD - already_done
+SUCCESS: WHLRL - 50 bars
+SKIP: WHLRP - already_done
+SKIP: WHR - already_done
+SKIP: WHWK - already_done
+SKIP: WILC - already_done
+SKIP: WIMI - already_done
+SKIP: WINA - already_done
+SKIP: WING - already_done
+SKIP: WIX - already_done
+SKIP: WKEY - already_done
+SKIP: WKHS - already_done
+SKIP: WKSP - already_done
+SKIP: WLDN - already_done
+SKIP: WLFC - already_done
+SUCCESS: WM - 2261 bars
+SUCCESS: WMB - 2261 bars
+SKIP: WMG - already_done
+SUCCESS: WMT - 2261 bars
+SKIP: WNEB - already_done
+SKIP: WNW - already_done
+SKIP: WOOD - already_done
+SKIP: WOOF - already_done
+SKIP: WORX - already_done
+SUCCESS: WPM - 2261 bars
+SKIP: WPRT - already_done
+SKIP: WRAP - already_done
+SKIP: WRB - already_done
+SKIP: WRLD - already_done
+SKIP: WSBC - already_done
+SKIP: WSC - already_done
+SKIP: WSFS - already_done
+SKIP: WSM - already_done
+SKIP: WST - already_done
+SKIP: WTBA - already_done
+SKIP: WTFC - already_done
+SKIP: WTO - already_done
+SUCCESS: WTW - 2261 bars
+SKIP: WU - already_done
+SKIP: WULF - already_done
+SKIP: WVE - already_done
+SKIP: WVVI - already_done
+SKIP: WVVIP - already_done
+SKIP: WWD - already_done
+SKIP: WY - already_done
+SKIP: WYNN - already_done
+SKIP: XAIR - already_done
+SUCCESS: XBI - 1255 bars
+SKIP: XBIO - already_done
+SKIP: XBIT - already_done
+SKIP: XBP - already_done
+SKIP: XCUR - already_done
+SUCCESS: XEL - 2261 bars
+SKIP: XELB - already_done
+SKIP: XENE - already_done
+SKIP: XERS - already_done
+SKIP: XFOR - already_done
+SKIP: XGN - already_done
+SKIP: XHG - already_done
+SUCCESS: XLB - 1255 bars
+FAIL: XLB_daily - insufficient_data
+SUCCESS: XLC - 1255 bars
+SUCCESS: XLE - 1255 bars
+FAIL: XLE_daily - insufficient_data
+SUCCESS: XLF - 1255 bars
+FAIL: XLF_daily - insufficient_data
+SUCCESS: XLI - 1255 bars
+FAIL: XLI_daily - insufficient_data
+SUCCESS: XLK - 1255 bars
+FAIL: XLK_daily - insufficient_data
+SKIP: XLO - already_done
+SUCCESS: XLP - 1255 bars
+FAIL: XLP_daily - insufficient_data
+SUCCESS: XLRE - 1255 bars
+FAIL: XLRE_daily - insufficient_data
+SUCCESS: XLU - 1255 bars
+FAIL: XLU_daily - insufficient_data
+SUCCESS: XLV - 1255 bars
+FAIL: XLV_daily - insufficient_data
+SUCCESS: XLY - 1255 bars
+FAIL: XLY_daily - insufficient_data
+SKIP: XMTR - already_done
+SKIP: XNCR - already_done
+SKIP: XNET - already_done
+SUCCESS: XOM - 2261 bars
+SKIP: XOMA - already_done
+SKIP: XOMAO - already_done
+SKIP: XOMAP - already_done
+SKIP: XOS - already_done
+SKIP: XOVR - already_done
+SKIP: XP - already_done
+SKIP: XPEL - already_done
+SKIP: XPEL_daily - already_done
+SKIP: XRAY - already_done
+SKIP: XRTX - already_done
+SKIP: XRX - already_done
+SKIP: XT - already_done
+SKIP: XTIA - already_done
+SKIP: XTKG - already_done
+SKIP: XTLB - already_done
+SKIP: XWEL - already_done
+SKIP: XWIN - already_done
+SKIP: XXII - already_done
+SUCCESS: XYL - 2261 bars
+SUCCESS: XYZ - 2261 bars
+SKIP: YDKG - already_done
+SKIP: YHGJ - already_done
+SKIP: YI - already_done
+SKIP: YJ - already_done
+SKIP: YLDE - already_done
+SKIP: YORW - already_done
+SKIP: YQ - already_done
+SKIP: YTRA - already_done
+SUCCESS: YUM - 2261 bars
+SKIP: YYAI - already_done
+SKIP: Z - already_done
+SKIP: ZBAI - already_done
+SKIP: ZBH - already_done
+SKIP: ZBRA - already_done
+SKIP: ZCMD - already_done
+SKIP: ZD - already_done
+SKIP: ZENV - already_done
+SKIP: ZEO - already_done
+SKIP: ZEUS - already_done
+SKIP: ZG - already_done
+SKIP: ZIM - already_done
+SKIP: ZION - already_done
+SKIP: ZIONP - already_done
+SKIP: ZIVO - already_done
+SKIP: ZKIN - already_done
+SKIP: ZLAB - already_done
+SKIP: ZM - already_done
+SKIP: ZNB - already_done
+SKIP: ZNTL - already_done
+SUCCESS: ZS - 1989 bars
+SKIP: ZTEK - already_done
+SUCCESS: ZTS - 2261 bars
+SKIP: ZUMZ - already_done
+SUCCESS: ZURN-SW - 502 bars
+SKIP: ZVRA - already_done
+SKIP: ZYME - already_done
+SKIP: ZYXI - already_done
+SUCCESS: ^VIX - 5029 bars
+FAIL: ^VIX_daily - insufficient_data
+
+
+Completed: 2026-02-19 10:43:01.977423
+Success: 709, Skip: 3533, Fail: 11

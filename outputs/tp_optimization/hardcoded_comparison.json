@@ -1,0 +1,86 @@
+{
+  "run_date": "2026-02-02 20:03:20",
+  "universe": [
+    "AAPL",
+    "MSFT",
+    "GOOGL",
+    "NVDA",
+    "TSLA",
+    "META",
+    "AMZN"
+  ],
+  "period": "2023-01-01 to 2024-12-31",
+  "engine": "THOR",
+  "results": [
+    {
+      "distribution_name": "classic",
+      "tp1_pct": 0.5,
+      "tp2_pct": 0.3,
+      "runner_pct": 0.2,
+      "sharpe": 0.6709742345102917,
+      "return": 0.015724936766476905,
+      "annualized_return": 0.015724936766476905,
+      "trades": 1,
+      "win_rate": 1.0,
+      "max_dd": 0.010372545891991219,
+      "engine": "THOR",
+      "status": "success"
+    },
+    {
+      "distribution_name": "conservative",
+      "tp1_pct": 0.4,
+      "tp2_pct": 0.35,
+      "runner_pct": 0.25,
+      "sharpe": 0.7047062360606765,
+      "return": 0.018096599354128884,
+      "annualized_return": 0.018096599354128884,
+      "trades": 1,
+      "win_rate": 1.0,
+      "max_dd": 0.010372545891991219,
+      "engine": "THOR",
+      "status": "success"
+    },
+    {
+      "distribution_name": "balanced",
+      "tp1_pct": 0.33,
+      "tp2_pct": 0.33,
+      "runner_pct": 0.34,
+      "sharpe": 0.7071346215642902,
+      "return": 0.019978381918586363,
+      "annualized_return": 0.019978381918586363,
+      "trades": 1,
+      "win_rate": 1.0,
+      "max_dd": 0.010372545891991219,
+      "engine": "THOR",
+      "status": "success"
+    },
+    {
+      "distribution_name": "aggressive_runner",
+      "tp1_pct": 0.25,
+      "tp2_pct": 0.3,
+      "runner_pct": 0.45,
+      "sharpe": 0.7000783740832662,
+      "return": 0.02215777221992754,
+      "annualized_return": 0.02215777221992754,
+      "trades": 1,
+      "win_rate": 1.0,
+      "max_dd": 0.010372545891991219,
+      "engine": "THOR",
+      "status": "success"
+    },
+    {
+      "distribution_name": "extreme",
+      "tp1_pct": 0.2,
+      "tp2_pct": 0.3,
+      "runner_pct": 0.5,
+      "sharpe": 0.6994946597268,
+      "return": 0.023444339310617623,
+      "annualized_return": 0.023444339310617623,
+      "trades": 1,
+      "win_rate": 1.0,
+      "max_dd": 0.010372545891991219,
+      "engine": "THOR",
+      "status": "success"
+    }
+  ]
+}

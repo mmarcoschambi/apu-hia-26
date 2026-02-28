@@ -1,184 +1,150 @@
-#!/usr/bin/env python3
-"""
-Script para obtener los tickers más líquidos según el rolling_dollar_vol_20
-"""
+import pandas as pd
 import sys
+import argparse
 from pathlib import Path
+import requests
 
-# Añadir el directorio raíz al path
-project_root = Path(__file__).resolve().parent
-sys.path.insert(0, str(project_root))
-
-from src.data.ticker_cache import TickerCache
-from datetime import datetime, timedelta
-
-def get_top_liquidity_tickers(limit=20, min_price=5.0, min_rolling_dollar_vol=15000000):
-    """
-    Obtiene los tickers más líquidos según el rolling_dollar_vol_20
-
-    Args:
-        limit: Número de tickers a retornar
-        min_price: Precio mínimo
-        min_rolling_dollar_vol: Volumen en dólares mínimo
-    """
-    cache = TickerCache()
-
-    # Buscar la fecha más reciente con datos disponibles
-    print("🔍 Buscando fecha más reciente con datos...")
-
-    # Primero, encontrar la fecha más reciente en la base de datos
-    date_query = """
-        SELECT DISTINCT date
-        FROM ohlcv_cache
-        WHERE rolling_dollar_vol_20 IS NOT NULL
-        ORDER BY date DESC
-        LIMIT 1
-    """
-    result = cache.conn.execute(date_query).fetchone()
-
-    if result:
-        recent_date = result[0]
-        print(f"📅 Fecha más reciente encontrada: {recent_date}")
-
-        try:
-            # Intentamos obtener tickers con el nuevo filtro de liquidez por fecha
-            top_tickers = cache.get_active_tickers(
-                sort_by='liquidity',
-                limit=limit,
-                date_filter=recent_date,
-                min_price=min_price,
-                min_rolling_dollar_vol=min_rolling_dollar_vol
-            )
-
-            print(f"\n🏆 TOP {len(top_tickers)} TICKERS MÁS LÍQUIDOS (Fecha: {recent_date})")
-            print("="*60)
-            print(f"{'Rank':<4} {'Ticker':<8} {'$Vol 20D (M)':<15}")
-            print("-"*60)
-
-            # Para mostrar el volumen, necesitamos consultar directamente la base de datos
-            for i, ticker in enumerate(top_tickers, 1):
-                # Consultar el rolling_dollar_vol_20 para este ticker en la fecha específica
-                query = """
-                    SELECT ticker, rolling_dollar_vol_20
-                    FROM ohlcv_cache
-                    WHERE ticker = ? AND date = ?
-                    ORDER BY rolling_dollar_vol_20 DESC
-                """
-                result = cache.conn.execute(query, (ticker, recent_date)).fetchone()
-
-                if result and result[1] is not None:
-                    vol_millions = result[1] / 1_000_000
-                    print(f"{i:<4} {result[0]:<8} ${vol_millions:>12.2f}M")
-                else:
-                    print(f"{i:<4} {ticker:<8} {'N/A':<15}")
-
-            cache.close()
-            return top_tickers
-
-        except Exception as e:
-            print(f"Error obteniendo tickers por liquidez: {e}")
-    else:
-        print("⚠️ No se encontraron datos con rolling_dollar_vol_20 en la base de datos")
-
-    # Si falla con date_filter o no hay datos, intentamos con el método anterior
-    print("\n📊 Obteniendo top tickers por volumen promedio histórico...")
+def get_from_8marketcap(limit=1000, min_price=5.0):
+    """Descarga top tickers de 8marketcap.com con paginación y filtro de precio"""
+    print(f"   📥 Descargando Top Market Cap desde 8marketcap.com (Price > ${min_price})...")
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+    
+    all_tickers = []
+    max_pages = 8  # Scrape up to page 8 to ensure we get enough tickers
+    
     try:
-        top_tickers = cache.get_active_tickers(sort_by='liquidity', limit=limit)
+        for page in range(1, max_pages + 1):
+            url = f'https://8marketcap.com/companies/?page={page}'
+            print(f"      📄 Scanning page {page}/{max_pages}...")
+            
+            try:
+                response = requests.get(url, headers=headers, timeout=30)
+                tables = pd.read_html(response.text)
+                
+                found_on_page = False
+                for table in tables:
+                    if 'Symbol' in table.columns and 'Price' in table.columns:
+                        # Clean and convert Price column
+                        # Remove '$', ',', and convert to float. Handle errors with coerce.
+                        table['Price_Clean'] = table['Price'].astype(str).str.replace('$', '', regex=False).str.replace(',', '', regex=False)
+                        table['Price_Clean'] = pd.to_numeric(table['Price_Clean'], errors='coerce')
+                        
+                        # Filter by min_price
+                        filtered_table = table[table['Price_Clean'] > min_price].copy()
+                        
+                        tickers = filtered_table['Symbol'].tolist()
+                        clean_tickers = [str(t).replace('.', '-') for t in tickers if str(t) != 'nan']
+                        
+                        all_tickers.extend(clean_tickers)
+                        found_on_page = True
+                        print(f"         ✅ Found {len(clean_tickers)} valid tickers (> ${min_price})")
+                        break
+                
+                if not found_on_page:
+                    print(f"         ⚠️ No valid table found on page {page}")
+            
+            except Exception as e:
+                print(f"         ⚠️ Error on page {page}: {e}")
+                continue
 
-        print(f"\n🏆 TOP {len(top_tickers)} TICKERS MÁS LÍQUIDOS (Promedio Histórico)")
-        print("="*60)
-        print(f"{'Rank':<4} {'Ticker':<8} {'$Vol Promedio (M)':<15}")
-        print("-"*60)
-
-        # Consultar el volumen promedio para estos tickers
-        for i, ticker in enumerate(top_tickers, 1):
-            query = """
-                SELECT ticker, AVG(close * volume) as avg_dollar_vol
-                FROM ohlcv_cache
-                WHERE ticker = ? AND close >= ?
-                GROUP BY ticker
-            """
-            result = cache.conn.execute(query, (ticker, min_price)).fetchone()
-
-            if result and result[1] is not None:
-                vol_millions = result[1] / 1_000_000
-                print(f"{i:<4} {result[0]:<8} ${vol_millions:>12.2f}M")
-            else:
-                print(f"{i:<4} {ticker:<8} {'N/A':<15}")
-
-        cache.close()
-        return top_tickers
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_tickers = [x for x in all_tickers if not (x in seen or seen.add(x))]
+        
+        print(f"   ✅ Total found from 8marketcap: {len(unique_tickers)} tickers")
+        return unique_tickers[:limit]
+        
     except Exception as e:
-        print(f"Error obteniendo tickers por volumen promedio: {e}")
-        cache.close()
+        print(f"   ⚠️ Error 8marketcap.com: {e}")
         return []
 
-def get_top_liquidity_by_date(date_str=None, limit=20, min_price=5.0, min_rolling_dollar_vol=15000000):
-    """
-    Obtiene los tickers más líquidos para una fecha específica
+def get_from_wikipedia(limit=1000):
+    """Descarga tickers de Wikipedia (S&P 500 + Nasdaq 100)"""
+    print("   📥 Descargando componentes S&P 500 + Nasdaq 100 desde Wikipedia...")
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+    
+    tickers = []
+    
+    try:
+        url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
+        response = requests.get(url, headers=headers, timeout=30)
+        sp500 = pd.read_html(response.text)[0]
+        tickers.extend(sp500['Symbol'].tolist())
+        print(f"   ✅ S&P 500: {len(sp500)} tickers")
+    except Exception as e:
+        print(f"   ⚠️ Error S&P 500: {e}")
 
-    Args:
-        date_str: Fecha específica en formato 'YYYY-MM-DD' o None para la más reciente
-        limit: Número de tickers a retornar
-        min_price: Precio mínimo
-        min_rolling_dollar_vol: Volumen en dólares mínimo
-    """
-    cache = TickerCache()
+    try:
+        url = 'https://en.wikipedia.org/wiki/NASDAQ-100'
+        response = requests.get(url, headers=headers, timeout=30)
+        tables = pd.read_html(response.text)
+        for t in tables:
+            if 'Ticker' in t.columns:
+                tickers.extend(t['Ticker'].tolist())
+                break
+            elif 'Symbol' in t.columns:
+                tickers.extend(t['Symbol'].tolist())
+                break
+        print(f"   ✅ Nasdaq 100 agregado")
+    except Exception as e:
+        print(f"   ⚠️ Error Nasdaq 100: {e}")
+    
+    clean_tickers = [str(t).replace('.', '-') for t in tickers]
+    
+    seen = set()
+    final_list = [x for x in clean_tickers if not (x in seen or seen.add(x))]
+    
+    print(f"   ✅ Total Wikipedia: {len(final_list)} tickers únicos")
+    return final_list[:limit]
 
-    # Si no se proporciona fecha, encontrar la más reciente
-    if date_str is None:
-        date_query = """
-            SELECT DISTINCT date
-            FROM ohlcv_cache
-            WHERE rolling_dollar_vol_20 IS NOT NULL
-            ORDER BY date DESC
-            LIMIT 1
-        """
-        result = cache.conn.execute(date_query).fetchone()
-        if result:
-            date_str = result[0]
-            print(f"📅 Fecha más reciente encontrada: {date_str}")
-        else:
-            print("❌ No se encontraron fechas con datos de rolling_dollar_vol_20")
-            cache.close()
-            return []
+def get_top_companies(source='wikipedia', limit=1000):
+    print(f"🌍 Obteniendo lista de empresas Top (fuente: {source})...")
+    
+    if source == '8marketcap':
+        tickers = get_from_8marketcap(limit)
+    elif source == 'wikipedia':
+        tickers = get_from_wikipedia(limit)
+    elif source == 'both':
+        tickers_wiki = get_from_wikipedia(limit)
+        tickers_8mc = get_from_8marketcap(limit)
+        
+        combined = tickers_wiki + tickers_8mc
+        seen = set()
+        tickers = [x for x in combined if not (x in seen or seen.add(x))]
+        print(f"   ✅ Combinado: {len(tickers)} tickers únicos")
+    else:
+        print(f"❌ Fuente no válida: {source}")
+        return []
+    
+    return tickers
 
-    # Consultar tickers líquidos para la fecha específica
-    query = """
-        SELECT ticker, rolling_dollar_vol_20
-        FROM ohlcv_cache
-        WHERE date = ? AND close >= ? AND rolling_dollar_vol_20 >= ?
-        ORDER BY rolling_dollar_vol_20 DESC
-        LIMIT ?
-    """
+def save_and_prompt(tickers):
+    filename = "top_global_tickers.txt"
+    with open(filename, 'w') as f:
+        for t in tickers:
+            f.write(f"{t}\n")
+            
+    print(f"\n💾 Lista guardada en: {filename}")
+    
+    print(f"\n📊 Resumen: {len(tickers)} tickers")
 
-    results = cache.conn.execute(query, (date_str, min_price, min_rolling_dollar_vol, limit)).fetchall()
-
-    print(f"\n🏆 TOP {len(results)} TICKERS MÁS LÍQUIDOS ({date_str})")
-    print("="*60)
-    print(f"{'Rank':<4} {'Ticker':<8} {'$Vol 20D (M)':<15} {'Precio':<10}")
-    print("-"*60)
-
-    for i, (ticker, dollar_vol, *_) in enumerate(results, 1):
-        vol_millions = dollar_vol / 1_000_000
-        # Obtener el precio actual para esta fecha
-        price_query = "SELECT close FROM ohlcv_cache WHERE ticker = ? AND date = ?"
-        price_result = cache.conn.execute(price_query, (ticker, date_str)).fetchone()
-        price = price_result[0] if price_result else "N/A"
-        print(f"{i:<4} {ticker:<8} ${vol_millions:>12.2f}M {price:>9.2f}")
-
-    cache.close()
-    return [row[0] for row in results]
+def main():
+    parser = argparse.ArgumentParser(description='Obtener lista de tickers de alta calidad')
+    parser.add_argument('--source', choices=['wikipedia', '8marketcap', 'both'], 
+                       default='wikipedia', help='Fuente de datos (default: wikipedia)')
+    parser.add_argument('--limit', type=int, default=1000, help='Límite de tickers')
+    
+    args = parser.parse_args()
+    
+    top_tickers = get_top_companies(source=args.source, limit=args.limit)
+    if top_tickers:
+        save_and_prompt(top_tickers)
 
 if __name__ == "__main__":
-    print("🔍 OBTENIENDO TOP DE TICKERS POR LIQUIDEZ...")
-
-    # Primero intentamos con la consulta directa por fecha
-    top_tickers = get_top_liquidity_by_date(limit=20)
-
-    if not top_tickers:
-        print("\n⚠️ No se encontraron tickers con los criterios de liquidez actuales.")
-        print("Intentando con volumen promedio...")
-        top_tickers = get_top_liquidity_tickers(limit=20)
-
-    print(f"\n✅ Se encontraron {len(top_tickers)} tickers líquidos")
+    main()

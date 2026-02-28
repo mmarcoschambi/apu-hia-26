@@ -1,0 +1,74 @@
+{
+  "timestamp": "20260115_165308",
+  "config": {
+    "k_folds": 2,
+    "fold_size": 100,
+    "l1_trials": 30,
+    "l2_trials": 20,
+    "in_start": "2021-01-01",
+    "in_end": "2022-12-31",
+    "val_start": "2023-01-01",
+    "val_end": "2023-06-30",
+    "oos_start": "2023-07-01",
+    "oos_end": "2024-12-31",
+    "equity": 100000,
+    "seed": 42,
+    "run_oos": true
+  },
+  "consensus_params": {
+    "min_volume": "200000",
+    "require_sma_trend": "False",
+    "max_stop_pct": "0.07",
+    "use_phases": "True",
+    "max_dist_sma20": "25.0",
+    "min_consolidation_days": "10",
+    "min_adr": "1.5",
+    "risk_dollars": "150",
+    "require_bullish_spy": "False",
+    "min_rvol": "1.0",
+    "tp2_r": "5.0",
+    "max_vix": "50.0",
+    "require_positive_rs": "False",
+    "min_dollar_volume": "10000000.0",
+    "max_exposure_pct": "0.3",
+    "tp1_r": "2.5",
+    "signal_type": "any",
+    "rvol_danger": "3.0",
+    "rvol_warning": "2.0",
+    "max_consolidation_range": "15.0",
+    "rvol_warning_size": "0.7",
+    "rvol_danger_size": "0.3"
+  },
+  "stability": {
+    "cv_mean": 0.4661621813941734,
+    "cv_std": 0.16533975319018612,
+    "stability_score": 64.53171025249267
+  },
+  "validation": {
+    "sharpe": 0.28931995579820724,
+    "degradation": -37.935772710492245,
+    "robustness": "MODERATE",
+    "metrics": {
+      "profit_factor": 1.150230950471998,
+      "total_trades": 1073,
+      "unique_entries": 357,
+      "total_return_pct": 3.227114067417869,
+      "sharpe_ratio": 0.28931995579820724,
+      "max_drawdown_pct": 12.138984327187181,
+      "win_rate_pct": 40.35414725069897,
+      "final_value": 10322711.406741787
+    }
+  },
+  "oos": {
+    "metrics": {
+      "profit_factor": 1.5373911542855199,
+      "total_trades": 1844,
+      "unique_entries": 614,
+      "total_return_pct": 22.020130710332666,
+      "sharpe_ratio": 0.9809903294843844,
+      "max_drawdown_pct": 7.497912246682045,
+      "win_rate_pct": 37.960954446854664,
+      "final_value": 12202013.071033267
+    }
+  }
+}

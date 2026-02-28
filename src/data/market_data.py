@@ -183,7 +183,8 @@ class MarketDataProvider:
                 rd_vol = row['rolling_dollar_vol_20'] if pd.notna(row['rolling_dollar_vol_20']) else 0.0
                 
                 self.sqlite_cache.conn.execute('''
-                    INSERT OR REPLACE INTO ohlcv_cache
+                    INSERT OR REPLACE INTO ohlcv_cache 
+                    (ticker, date, open, high, low, close, volume, dollar_volume, rolling_dollar_vol_20)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     symbol,
@@ -347,25 +348,46 @@ class MarketDataProvider:
 
     def get_earnings_dates(self, symbol: str) -> pd.DatetimeIndex:
         """
-        Get historical and future earnings dates
-        Returns a sorted DatetimeIndex
+        Get historical and future earnings dates.
+        Checks SQLite cache first, then attempts download.
+        Returns a sorted DatetimeIndex.
         """
-        cache_file = self.cache_dir / f"{symbol}_earnings.pkl"
-
-        if cache_file.exists():
-            return pickle.load(open(cache_file, "rb"))
-
+        # 1. Check SQLite Cache
         try:
-            # Use yfinance directly for earnings
-            ticker = yf.Ticker(symbol)
-            earnings = ticker.earnings_dates
-            
-            if earnings is not None and not earnings.empty:
-                # Extract index (dates) and sort
-                dates = pd.to_datetime(earnings.index).tz_localize(None).sort_values()
-                pickle.dump(dates, open(cache_file, "wb"))
+            cached_earnings = self.sqlite_cache.get_earnings_history(symbol)
+            if cached_earnings is not None and not cached_earnings.empty:
+                # logger.debug(f"Loaded earnings for {symbol} from SQLite")
+                dates = pd.to_datetime(cached_earnings['report_date']).sort_values()
                 return dates
         except Exception as e:
-            logger.warning(f"Could not fetch earnings for {symbol}: {e}")
+            logger.warning(f"Error reading earnings from SQLite for {symbol}: {e}")
+
+        # 2. Download via YFinance (Fallback)
+        try:
+            # Use yfinance directly for earnings
+            import warnings
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore")  # Suppress yfinance warnings
+                
+                ticker = yf.Ticker(symbol)
+                earnings = ticker.earnings_dates
+            
+            if earnings is not None and not earnings.empty:
+                # Save to SQLite for future use
+                df_to_save = pd.DataFrame()
+                df_to_save['report_date'] = earnings.index
+                df_to_save['eps_estimate'] = earnings['EPS Estimate'].values if 'EPS Estimate' in earnings.columns else None
+                df_to_save['eps_actual'] = earnings['Reported EPS'].values if 'Reported EPS' in earnings.columns else None
+                df_to_save['surprise_pct'] = earnings['Surprise(%)'].values if 'Surprise(%)' in earnings.columns else None
+                
+                # Save
+                self.sqlite_cache.save_earnings(symbol, df_to_save)
+                
+                # Return dates
+                dates = pd.to_datetime(earnings.index).tz_localize(None).sort_values()
+                return dates
+        except Exception as e:
+            # Silently fail - most warnings are just "no earnings found"
+            pass
         
         return pd.DatetimeIndex([])

@@ -1,322 +1,347 @@
 #!/usr/bin/env python3
 """
-Script para poblar el cache SQLite con datos históricos usando OpenBB
-Descarga datos históricos y calcula TODAS las métricas automáticamente:
-- OHLCV básico
-- Dollar volume (dollar_volume, rolling_dollar_vol_20)
-- Volume metrics (avg_volume_20)
-- ADR (adr_14, adr_pct_14)
-- SMAs (sma_50, sma_200)
-- Trend flags (price_above_sma50, price_above_sma200, sma50_above_sma200, trend_aligned)
-- Market cap (si está disponible)
+POPULATE HISTORICAL DATA (OPENBB VERSION)
+=========================================
+Script recomendado para poblar la base de datos con datos históricos y métricas calculadas.
+Reemplaza scripts antiguos.
 
 Uso:
-    python populate_historical_openbb.py --years 20
-    python populate_historical_openbb.py --years 5 --tickers AAPL MSFT GOOGL
-    python populate_historical_openbb.py --test  # Solo 10 tickers para prueba
+    python populate_historical_openbb.py --help
+    python populate_historical_openbb.py --test
+    python populate_historical_openbb.py --tickers AAPL MSFT
+    python populate_historical_openbb.py --years 2
 """
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from src.data.ticker_cache import TickerCache
-from src.data.openbb_data import OpenBBData
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
+import sys
+import argparse
 import time
 import logging
+import pandas as pd
+import numpy as np
+from pathlib import Path
+from datetime import datetime, timedelta
+from tqdm import tqdm
 
-logging.basicConfig(level=logging.INFO)
+# Configurar path
+project_root = Path(__file__).resolve().parent
+sys.path.insert(0, str(project_root))
+
+from src.data.universe_manager import UniverseManager
+from src.data.ticker_cache import TickerCache
+from config.settings import DATA_SOURCE, OPENBB_PROVIDER
+
+# Configurar logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("logs/populate_db.log"),
+        logging.StreamHandler()
+    ]
+)
 logger = logging.getLogger(__name__)
 
-
-class HistoricalDataPopulator:
-    """Poblador de datos históricos con todas las métricas calculadas"""
-    
-    def __init__(self):
-        self.cache = TickerCache()
-        self.openbb = OpenBBData()
-        
-    def calculate_all_metrics(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Calcula TODAS las métricas para un DataFrame de OHLCV
-        
-        Métricas calculadas:
-        - dollar_volume: close * volume
-        - rolling_dollar_vol_20: promedio móvil 20 días de dollar_volume
-        - avg_volume_20: promedio móvil 20 días de volume
-        - adr_14: Average Daily Range en $ (14 días)
-        - adr_pct_14: Average Daily Range en % (14 días)
-        - sma_50: Simple Moving Average 50 días
-        - sma_200: Simple Moving Average 200 días
-        - price_above_sma50: 1 si precio > SMA50, 0 si no
-        - price_above_sma200: 1 si precio > SMA200, 0 si no
-        - sma50_above_sma200: 1 si SMA50 > SMA200, 0 si no
-        - trend_aligned: 1 si todas las condiciones anteriores son True
-        """
-        # Normalizar nombres de columnas
-        df.columns = [c.lower() if isinstance(c, str) else str(c).lower() for c in df.columns]
-        
-        # 1. Dollar Volume
-        df['dollar_volume'] = df['close'] * df['volume']
-        df['rolling_dollar_vol_20'] = df['dollar_volume'].rolling(window=20, min_periods=1).mean()
-        
-        # 2. Average Volume
-        df['avg_volume_20'] = df['volume'].rolling(window=20, min_periods=1).mean()
-        
-        # 3. ADR (Average Daily Range)
-        df['daily_range'] = df['high'] - df['low']
-        df['daily_range_pct'] = (df['daily_range'] / df['low']) * 100
-        df['adr_14'] = df['daily_range'].rolling(window=14, min_periods=1).mean()
-        df['adr_pct_14'] = df['daily_range_pct'].rolling(window=14, min_periods=1).mean()
-        
-        # 4. SMAs
-        df['sma_50'] = df['close'].rolling(window=50, min_periods=1).mean()
-        df['sma_200'] = df['close'].rolling(window=200, min_periods=1).mean()
-        
-        # 5. Trend Flags
-        df['price_above_sma50'] = (df['close'] > df['sma_50']).astype(int)
-        df['price_above_sma200'] = (df['close'] > df['sma_200']).astype(int)
-        df['sma50_above_sma200'] = (df['sma_50'] > df['sma_200']).astype(int)
-        df['trend_aligned'] = (
-            (df['price_above_sma50'] == 1) & 
-            (df['sma50_above_sma200'] == 1)
-        ).astype(int)
-        
-        # Eliminar columnas temporales
-        df.drop(['daily_range', 'daily_range_pct'], axis=1, inplace=True)
-        
+def calculate_metrics(df):
+    """Calcula todas las métricas técnicas necesarias"""
+    if df.empty:
         return df
-    
-    def populate_ticker(self, ticker: str, start_date: str, end_date: str) -> dict:
-        """
-        Descarga y procesa datos para un ticker específico
-        
-        Returns:
-            dict con estadísticas del proceso
-        """
-        try:
-            # Descargar datos históricos usando OpenBB
-            logger.info(f"📥 {ticker:6} - Descargando desde OpenBB...")
-            df = self.openbb.get_historical_data(
-                symbol=ticker,
-                start_date=start_date,
-                end_date=end_date,
-                interval="1d"
-            )
-            
-            if df is None or df.empty:
-                logger.warning(f"⚠️  {ticker:6} - Sin datos")
-                return {'status': 'error', 'message': 'No data'}
-            
-            # Calcular todas las métricas
-            df = self.calculate_all_metrics(df)
-            
-            # Insertar en base de datos
-            rows_inserted = 0
-            for date, row in df.iterrows():
-                try:
-                    # Preparar valores, reemplazar NaN con None
-                    values = (
-                        ticker,
-                        date.strftime('%Y-%m-%d'),
-                        float(row['open']) if not pd.isna(row['open']) else None,
-                        float(row['high']) if not pd.isna(row['high']) else None,
-                        float(row['low']) if not pd.isna(row['low']) else None,
-                        float(row['close']) if not pd.isna(row['close']) else None,
-                        int(row['volume']) if not pd.isna(row['volume']) else 0,
-                        float(row['dollar_volume']) if not pd.isna(row['dollar_volume']) else None,
-                        float(row['rolling_dollar_vol_20']) if not pd.isna(row['rolling_dollar_vol_20']) else None,
-                        None,  # market_cap - se puede agregar después si está disponible
-                        float(row['avg_volume_20']) if not pd.isna(row['avg_volume_20']) else None,
-                        float(row['adr_14']) if not pd.isna(row['adr_14']) else None,
-                        float(row['adr_pct_14']) if not pd.isna(row['adr_pct_14']) else None,
-                        float(row['sma_50']) if not pd.isna(row['sma_50']) else None,
-                        float(row['sma_200']) if not pd.isna(row['sma_200']) else None,
-                        int(row['price_above_sma50']) if not pd.isna(row['price_above_sma50']) else 0,
-                        int(row['price_above_sma200']) if not pd.isna(row['price_above_sma200']) else 0,
-                        int(row['sma50_above_sma200']) if not pd.isna(row['sma50_above_sma200']) else 0,
-                        int(row['trend_aligned']) if not pd.isna(row['trend_aligned']) else 0
-                    )
-                    
-                    self.cache.conn.execute("""
-                        INSERT OR REPLACE INTO ohlcv_cache 
-                        (ticker, date, open, high, low, close, volume,
-                         dollar_volume, rolling_dollar_vol_20, market_cap, avg_volume_20,
-                         adr_14, adr_pct_14, sma_50, sma_200,
-                         price_above_sma50, price_above_sma200, sma50_above_sma200, trend_aligned)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, values)
-                    
-                    rows_inserted += 1
-                    
-                except Exception as e:
-                    logger.debug(f"Error insertando fila para {ticker} en {date}: {e}")
-                    continue
-            
-            self.cache.conn.commit()
-            
-            first_date = df.index.min()
-            last_date = df.index.max()
-            
-            logger.info(f"✅ {ticker:6} - {rows_inserted} días ({first_date.strftime('%Y-%m-%d')} a {last_date.strftime('%Y-%m-%d')})")
-            
-            return {
-                'status': 'success',
-                'ticker': ticker,
-                'rows': rows_inserted,
-                'first_date': first_date,
-                'last_date': last_date
-            }
-            
-        except Exception as e:
-            logger.error(f"❌ {ticker:6} - Error: {e}")
-            return {'status': 'error', 'ticker': ticker, 'message': str(e)}
-    
-    def check_existing_data(self, ticker: str, start_date: str) -> dict:
-        """Verifica si el ticker ya tiene suficientes datos históricos"""
-        cursor = self.cache.conn.execute("""
-            SELECT MIN(date) as first_date, MAX(date) as last_date, COUNT(*) as days
-            FROM ohlcv_cache
-            WHERE ticker = ?
-        """, (ticker,))
-        
-        row = cursor.fetchone()
-        if row and row[0]:
-            return {
-                'has_data': True,
-                'first_date': row[0],
-                'last_date': row[1],
-                'days': row[2]
-            }
-        
-        return {'has_data': False}
-    
-    def populate_all(self, tickers: list, years_back: int = 20, delay: float = 0.3, skip_existing: bool = True):
-        """
-        Pobla datos históricos para una lista de tickers
-        
-        Args:
-            tickers: Lista de símbolos a descargar
-            years_back: Años de histórico a descargar
-            delay: Segundos de pausa entre requests
-            skip_existing: Si True, omite tickers que ya tienen datos completos
-        """
-        start_date = (datetime.now() - timedelta(days=years_back*365)).strftime('%Y-%m-%d')
-        end_date = datetime.now().strftime('%Y-%m-%d')
-        
-        print("=" * 80)
-        print(f"📊 DESCARGA DE DATOS HISTÓRICOS CON OPENBB")
-        print("=" * 80)
-        print(f"Tickers a procesar: {len(tickers)}")
-        print(f"Período: {start_date} a {end_date} ({years_back} años)")
-        print(f"Delay: {delay}s entre requests")
-        print(f"Skip existing: {'Sí' if skip_existing else 'No'}")
-        print("=" * 80 + "\n")
-        
-        stats = {
-            'success': 0,
-            'skipped': 0,
-            'errors': 0,
-            'total': len(tickers)
-        }
-        
-        for idx, ticker in enumerate(tickers, 1):
-            # Progress
-            if idx % 10 == 0 or idx == len(tickers):
-                print(f"\n📊 Progreso: {idx}/{len(tickers)} | ✅ {stats['success']} | ⏭️ {stats['skipped']} | ❌ {stats['errors']}")
-            
-            # Check if already has data
-            if skip_existing:
-                existing = self.check_existing_data(ticker, start_date)
-                if existing['has_data']:
-                    # Check if data is complete enough
-                    first_date = pd.to_datetime(existing['first_date'])
-                    days = existing['days']
-                    
-                    # Si tiene datos desde hace al menos (years_back - 1) años y al menos 1500 días, skip
-                    cutoff_date = pd.to_datetime(start_date) + timedelta(days=365)
-                    if first_date < cutoff_date and days >= (years_back * 250 * 0.75):  # 75% de días de trading esperados
-                        logger.info(f"⏭️  {ticker:6} - Ya tiene datos completos ({days} días desde {first_date.strftime('%Y-%m-%d')})")
-                        stats['skipped'] += 1
-                        continue
-            
-            # Download and populate
-            result = self.populate_ticker(ticker, start_date, end_date)
-            
-            if result['status'] == 'success':
-                stats['success'] += 1
-            else:
-                stats['errors'] += 1
-            
-            # Rate limiting
-            time.sleep(delay)
-        
-        # Summary
-        print("\n" + "=" * 80)
-        print("✅ DESCARGA COMPLETADA")
-        print("=" * 80)
-        print(f"Exitosos:  {stats['success']}")
-        print(f"Omitidos:  {stats['skipped']} (ya tenían histórico completo)")
-        print(f"Errores:   {stats['errors']}")
-        print(f"Total:     {stats['total']}")
-        print("=" * 80)
-    
-    def close(self):
-        """Cierra conexiones"""
-        self.cache.close()
 
+    # 1. Dollar Volume
+    df['dollar_volume'] = df['Close'] * df['Volume']
+    df['rolling_dollar_vol_20'] = df['dollar_volume'].rolling(window=20).mean()
+    df['avg_volume_20'] = df['Volume'].rolling(window=20).mean()
+
+    # 2. Moving Averages
+    df['sma_50'] = df['Close'].rolling(window=50).mean()
+    df['sma_200'] = df['Close'].rolling(window=200).mean()
+    
+    # EMAs (para uso futuro)
+    df['ema_8'] = df['Close'].ewm(span=8, adjust=False).mean()
+    df['ema_21'] = df['Close'].ewm(span=21, adjust=False).mean()
+
+    # 3. ADR (Average Daily Range)
+    # Range diario en %
+    df['high_low_pct'] = (df['High'] - df['Low']) / df['Low']
+    # ADR 14 días (promedio del rango %)
+    df['adr_pct_14'] = df['high_low_pct'].rolling(window=14).mean() * 100
+    # ADR en $ (promedio del rango absoluto)
+    df['range_abs'] = df['High'] - df['Low']
+    df['adr_14'] = df['range_abs'].rolling(window=14).mean()
+
+    # 4. Trend Flags
+    # Se calculan solo si tenemos SMAs válidas
+    df['price_above_sma50'] = (df['Close'] > df['sma_50']).astype(int)
+    df['price_above_sma200'] = (df['Close'] > df['sma_200']).astype(int)
+    df['sma50_above_sma200'] = (df['sma_50'] > df['sma_200']).astype(int)
+    
+    # Trend Aligned: Precio > SMA50 > SMA200
+    df['trend_aligned'] = (
+        (df['price_above_sma50'] == 1) & 
+        (df['sma50_above_sma200'] == 1)
+    ).astype(int)
+
+    # Limpieza de columnas temporales
+    df.drop(columns=['high_low_pct', 'range_abs'], inplace=True, errors='ignore')
+
+    return df
+
+def fetch_data(ticker, start_date, end_date):
+    """Descarga datos usando OpenBB o yfinance como fallback"""
+    
+    # Handle VIX alias
+    if ticker == "VIX":
+        ticker = "^VIX"
+        
+    try:
+        # Intentar OpenBB solo si está configurado
+        if DATA_SOURCE == "openbb":
+            try:
+                from openbb import obb
+                # logger.info(f"Fetching {ticker} via OpenBB...")
+                result = obb.equity.price.historical(
+                    symbol=ticker,
+                    start_date=start_date,
+                    end_date=end_date,
+                    interval="1d",
+                    provider=OPENBB_PROVIDER
+                )
+                if result and hasattr(result, 'to_df'):
+                    df = result.to_df()
+                    if not df.empty:
+                        # Normalizar columnas
+                        df.rename(columns={
+                            'open': 'Open', 'high': 'High', 'low': 'Low', 
+                            'close': 'Close', 'volume': 'Volume'
+                        }, inplace=True)
+                        return df
+            except Exception as e:
+                logger.warning(f"OpenBB failed for {ticker}: {e}")
+
+        # Fallback a yfinance (Directo)
+        import yfinance as yf
+        
+        # Helper to try download
+        def try_download(symbol):
+            try:
+                # auto_adjust=True es CRÍTICO para manejar splits correctamente
+                d = yf.download(symbol, start=start_date, end=end_date, progress=False, auto_adjust=True)
+                if isinstance(d.columns, pd.MultiIndex):
+                    d.columns = d.columns.get_level_values(0)
+                return d
+            except TypeError:
+                # Catch "NoneType is not subscriptable" inside yfinance
+                return pd.DataFrame()
+            except Exception:
+                return pd.DataFrame()
+
+        df = try_download(ticker)
+        
+        # Fallback for international tickers: Try replacing last '-' with '.'
+        # Example: 005930-KS -> 005930.KS
+        if (df.empty or len(df) == 0) and '-' in ticker:
+            alt_ticker = ticker.rsplit('-', 1)
+            alt_ticker = '.'.join(alt_ticker)
+            logger.info(f"Retry with alternate ticker: {alt_ticker}")
+            df = try_download(alt_ticker)
+
+        return df
+
+    except Exception as e:
+        logger.error(f"Error fetching {ticker}: {e}")
+        return pd.DataFrame()
+
+def process_ticker(ticker, cache, start_date, end_date, force=False):
+    """Procesa un ticker individual: descarga, calcula, guarda"""
+    
+    # Verificar si ya está actualizado (opcional, por simplicidad descargamos por ahora)
+    # En una implementación más avanzada, chequearíamos la última fecha en DB
+    
+    # 1. Descargar
+    df = fetch_data(ticker, start_date, end_date)
+    
+    if df.empty or len(df) < 50: # Necesitamos al menos 50 días para SMA50
+        logger.warning(f"Insufficient data for {ticker}")
+        return False
+
+    # 2. Calcular Métricas
+    df = calculate_metrics(df)
+    
+    # 3. Guardar en SQLite
+    try:
+        # Iterar e insertar (eficiente con transacciones batch)
+        # Usamos el método execute de la conexión para mayor control
+        conn = cache.conn
+        
+        # Preparar datos
+        data_to_insert = []
+        for date, row in df.iterrows():
+            if pd.isna(row['Close']): continue
+            
+            # Helper para safe float
+            def get_val(key, default=None):
+                val = row.get(key, default)
+                return float(val) if pd.notna(val) else None
+
+            data_to_insert.append((
+                ticker,
+                date.strftime('%Y-%m-%d'),
+                get_val('Open'),
+                get_val('High'),
+                get_val('Low'),
+                get_val('Close'),
+                int(row['Volume']) if pd.notna(row['Volume']) else 0,
+                get_val('dollar_volume'),
+                get_val('rolling_dollar_vol_20'),
+                get_val('avg_volume_20'),
+                get_val('adr_14'),
+                get_val('adr_pct_14'),
+                get_val('sma_50'),
+                get_val('sma_200'),
+                get_val('price_above_sma50'),
+                get_val('price_above_sma200'),
+                get_val('sma50_above_sma200'),
+                get_val('trend_aligned'),
+                get_val('ema_8'),
+                get_val('ema_21')
+            ))
+        
+        # Ejecutar Batch Insert
+        conn.executemany('''
+            INSERT OR REPLACE INTO ohlcv_cache 
+            (ticker, date, open, high, low, close, volume, 
+             dollar_volume, rolling_dollar_vol_20, avg_volume_20,
+             adr_14, adr_pct_14, sma_50, sma_200,
+             price_above_sma50, price_above_sma200, sma50_above_sma200, trend_aligned,
+             ema_8, ema_21)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', data_to_insert)
+        
+        conn.commit()
+        return True
+
+    except Exception as e:
+        logger.error(f"Error saving {ticker}: {e}")
+        return False
 
 def main():
-    import argparse
-    
-    parser = argparse.ArgumentParser(description='Poblar cache con datos históricos de OpenBB')
-    parser.add_argument('--years', type=int, default=20, help='Años de histórico (default: 20)')
-    parser.add_argument('--delay', type=float, default=0.3, help='Delay entre requests (default: 0.3s)')
-    parser.add_argument('--tickers', nargs='+', help='Lista específica de tickers (ej: AAPL MSFT GOOGL)')
-    parser.add_argument('--test', action='store_true', help='Solo procesar primeros 10 tickers (test)')
-    parser.add_argument('--no-skip', action='store_true', help='No omitir tickers con datos existentes')
+    parser = argparse.ArgumentParser(description='Poblar base de datos histórica con métricas')
+    parser.add_argument('--test', action='store_true', help='Modo prueba (10 tickers)')
+    parser.add_argument('--tickers', nargs='+', help='Lista específica de tickers')
+    parser.add_argument('--years', type=int, default=2, help='Años de historia a descargar')
+    parser.add_argument('--delay', type=float, default=0.5, help='Delay entre requests')
+    parser.add_argument('--no-skip', action='store_true', help='No saltar tickers existentes (forzar update)')
     
     args = parser.parse_args()
     
-    populator = HistoricalDataPopulator()
+    # 1. Inicializar
+    cache = TickerCache()
+    manager = UniverseManager()
     
+    # Asegurar que la tabla tenga todas las columnas
+    # (El script TickerCache original podría no tener todas las columnas de métricas en create table)
+    # Hacemos una migración al vuelo si es necesario
     try:
-        # Determinar qué tickers procesar
-        if args.tickers:
-            # Lista específica de tickers
-            tickers = args.tickers
-            print(f"\n🎯 Procesando lista específica: {', '.join(tickers)}\n")
-        elif args.test:
-            # Modo test: primeros 10 tickers
-            print("\n🧪 MODO TEST: Solo primeros 10 tickers\n")
-            cursor = populator.cache.conn.execute("SELECT ticker FROM universe LIMIT 10")
-            tickers = [row[0] for row in cursor.fetchall()]
-        else:
-            # Todos los tickers del universo
-            cursor = populator.cache.conn.execute("SELECT ticker FROM universe ORDER BY ticker")
-            tickers = [row[0] for row in cursor.fetchall()]
-            
-            print(f"\n⚠️  Esto descargará datos para {len(tickers)} tickers.")
-            print(f"⏱️  Tiempo estimado: {len(tickers) * args.delay / 60:.1f} minutos")
-            response = input("\n¿Continuar? (y/n): ")
-            
-            if response.lower() != 'y':
-                print("❌ Cancelado")
-                return
-        
-        # Ejecutar población
-        populator.populate_all(
-            tickers=tickers,
-            years_back=args.years,
-            delay=args.delay,
-            skip_existing=not args.no_skip
-        )
-        
-    finally:
-        populator.close()
+        cache.conn.execute("ALTER TABLE ohlcv_cache ADD COLUMN adr_pct_14 REAL")
+    except:
+        pass
+    try:
+        cache.conn.execute("ALTER TABLE ohlcv_cache ADD COLUMN sma_50 REAL")
+    except:
+        pass
+    try:
+        cache.conn.execute("ALTER TABLE ohlcv_cache ADD COLUMN sma_200 REAL")
+    except:
+        pass
+    try:
+        cache.conn.execute("ALTER TABLE ohlcv_cache ADD COLUMN trend_aligned INTEGER")
+    except:
+        pass
+    try:
+        cache.conn.execute("ALTER TABLE ohlcv_cache ADD COLUMN price_above_sma50 INTEGER")
+    except:
+        pass
+    try:
+        cache.conn.execute("ALTER TABLE ohlcv_cache ADD COLUMN price_above_sma200 INTEGER")
+    except:
+        pass
+    try:
+        cache.conn.execute("ALTER TABLE ohlcv_cache ADD COLUMN sma50_above_sma200 INTEGER")
+    except:
+        pass
+    try:
+        cache.conn.execute("ALTER TABLE ohlcv_cache ADD COLUMN avg_volume_20 REAL")
+    except:
+        pass
+    try:
+        cache.conn.execute("ALTER TABLE ohlcv_cache ADD COLUMN adr_14 REAL")
+    except:
+        pass
+    try:
+        cache.conn.execute("ALTER TABLE ohlcv_cache ADD COLUMN market_cap REAL")
+    except:
+        pass
+    try:
+        cache.conn.execute("ALTER TABLE ohlcv_cache ADD COLUMN ema_8 REAL")
+    except:
+        pass
+    try:
+        cache.conn.execute("ALTER TABLE ohlcv_cache ADD COLUMN ema_21 REAL")
+    except:
+        pass
 
+    
+    # 2. Definir universo
+    if args.tickers:
+        tickers = args.tickers
+        print(f"🎯 Procesando {len(tickers)} tickers específicos")
+    elif args.test:
+        universe = manager.load_universe()
+        if not universe:
+            universe = manager.build_universe()
+        tickers = universe[:10]
+        print(f"🧪 Modo TEST: Procesando {len(tickers)} tickers")
+    else:
+        universe = manager.load_universe()
+        if not universe:
+            universe = manager.build_universe()
+        tickers = universe
+        print(f"🚀 Procesando universo completo: {len(tickers)} tickers")
+
+    # 3. Definir fechas
+    end_date = datetime.now().strftime('%Y-%m-%d')
+    start_date = (datetime.now() - timedelta(days=args.years*365)).strftime('%Y-%m-%d')
+    
+    print(f"📅 Rango: {start_date} -> {end_date}")
+    print(f"⏱️  Delay: {args.delay}s")
+    
+    # 4. Loop principal
+    success_count = 0
+    error_count = 0
+    
+    pbar = tqdm(tickers)
+    for ticker in pbar:
+        pbar.set_description(f"Procesando {ticker}")
+        
+        try:
+            if process_ticker(ticker, cache, start_date, end_date):
+                success_count += 1
+            else:
+                error_count += 1
+            
+            time.sleep(args.delay)
+            
+        except KeyboardInterrupt:
+            print("\n🛑 Interrumpido por usuario")
+            break
+        except Exception as e:
+            logger.error(f"Critical error on {ticker}: {e}")
+            error_count += 1
+
+    print("\n" + "="*50)
+    print("✅ PROCESO COMPLETADO")
+    print(f"Total procesados: {success_count}")
+    print(f"Errores: {error_count}")
+    print("="*50)
 
 if __name__ == "__main__":
     main()

@@ -55,6 +55,57 @@ class OpenBBData:
             logger.error(f"Error obteniendo datos para {symbol}: {str(e)}")
             return None
     
+    def get_earnings_history(self, symbol: str) -> Optional[pd.DataFrame]:
+        """
+        Obtener histórico de earnings reportados para un símbolo.
+        Usa yfinance directamente ya que OpenBB tiene restricciones de provider.
+        """
+        try:
+            import yfinance as yf
+            logger.info(f"Obteniendo earnings para {symbol} vía yfinance direct")
+            
+            ticker = yf.Ticker(symbol)
+            
+            # Obtener fechas de earnings con estimaciones
+            ed = ticker.earnings_dates
+            
+            if ed is not None and not ed.empty:
+                # Estandarizar
+                std_df = pd.DataFrame()
+                
+                # El index es la fecha del reporte
+                std_df['report_date'] = ed.index
+                
+                # Mapear columnas si existen
+                # Columnas típicas: 'EPS Estimate', 'Reported EPS', 'Surprise(%)'
+                col_map = {
+                    'eps_estimate': 'EPS Estimate',
+                    'eps_actual': 'Reported EPS',
+                    'surprise_pct': 'Surprise(%)'
+                }
+                
+                for target, source in col_map.items():
+                    if source in ed.columns:
+                        std_df[target] = ed[source].values
+                    else:
+                        std_df[target] = None
+                        
+                # Revenue difícil de alinear, dejamos en None
+                std_df['revenue'] = None
+                
+                # Asegurar tipos y orden
+                std_df['report_date'] = pd.to_datetime(std_df['report_date'])
+                std_df = std_df.sort_values('report_date', ascending=False)
+                
+                return std_df
+            else:
+                logger.warning(f"No se encontraron earnings para {symbol}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error obteniendo earnings para {symbol}: {str(e)}")
+            return None
+
     def get_intraday_data(
         self, 
         symbol: str, 

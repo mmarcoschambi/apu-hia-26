@@ -1,0 +1,65 @@
+{
+  "timestamp": "20260115_224641",
+  "config": {
+    "k_folds": 5,
+    "fold_size": 500,
+    "l1_trials": 50,
+    "l2_trials": 30,
+    "in_start": "2019-01-01",
+    "in_end": "2021-12-31",
+    "val_start": "2022-01-01",
+    "val_end": "2022-12-31",
+    "oos_start": "2023-01-01",
+    "oos_end": "2024-12-31",
+    "equity": 100000,
+    "seed": 42,
+    "run_oos": false
+  },
+  "consensus_params": {
+    "require_positive_rs": "False",
+    "min_adr": "1.0",
+    "rvol_danger_size": "0.4",
+    "max_consolidation_range": "20.0",
+    "max_exposure_pct": "0.25",
+    "rvol_danger": "3.0",
+    "signal_type": "any",
+    "tp1_r": "2.0",
+    "max_dist_sma20": "20.0",
+    "min_consolidation_days": "5",
+    "min_rvol": "1.0",
+    "min_dollar_volume": "10000000.0",
+    "tp2_r": "3.0",
+    "use_phases": "True",
+    "min_volume": "200000",
+    "require_bullish_spy": "False",
+    "max_stop_pct": "0.07",
+    "rvol_warning_size": "0.7",
+    "require_sma_trend": "False",
+    "max_vix": "40.0",
+    "risk_dollars": "150",
+    "rvol_warning": "2.5"
+  },
+  "stability": {
+    "cv_mean": 0.9347000329166484,
+    "cv_std": 0.06450049172286137,
+    "stability_score": 93.09933781412275
+  },
+  "validation": {
+    "sharpe": -0.4340805804211888,
+    "degradation": -146.44062962816838,
+    "robustness": "CRITICAL",
+    "metrics": {
+      "profit_factor": 0.7269379905753771,
+      "total_trades": 3164,
+      "unique_entries": 1054,
+      "total_return_pct": -3.434468479695918,
+      "sharpe_ratio": -0.4340805804211888,
+      "max_drawdown_pct": 7.9333603245600735,
+      "win_rate_pct": 32.90139064475348,
+      "final_value": 48282765.76015204
+    }
+  },
+  "oos": {
+    "metrics": {}
+  }
+}

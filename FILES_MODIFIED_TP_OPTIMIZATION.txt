@@ -1,0 +1,168 @@
+TP DISTRIBUTION OPTIMIZATION - FILES MODIFIED/CREATED
+======================================================
+
+Date: 2026-01-27
+Feature: Optimizable TP Distribution Percentages
+
+CORE ENGINES MODIFIED (3):
+===========================
+
+1. src/backtest/optimization_engine_v6_pro.py
+   - Added tp1_pct, tp2_pct, runner_pct parameters
+   - Updated _backtest_with_phases() signature
+   - Replaced hardcoded values with variables
+   - Lines modified: ~20
+
+2. src/backtest/optimization_engine_thor.py
+   - Added tp1_pct, tp2_pct, runner_pct extraction from params
+   - Updated 3-phase logic to use variables
+   - Lines modified: ~15
+
+3. src/backtest/vectorbt_engine_advanced.py
+   - Added tp1_pct, tp2_pct, runner_pct to constructor kwargs
+   - Stored as instance variables
+   - Updated phase exits to use self.tp*_pct
+   - Lines modified: ~20
+
+OPTIMIZATION SCRIPTS MODIFIED (2):
+===================================
+
+4. walk_forward_validation.py
+   - Added --tp-preset CLI argument
+   - Added tp_preset parameter to WalkForwardValidator.__init__()
+   - Added tp_presets dictionary with 5 presets
+   - Updated objective() function with TP optimization logic
+   - Added constraint: sum must be 0.95-1.05
+   - Updated optimize_window() to include preset values
+   - Lines modified: ~35
+
+5. run_dual_validation.sh
+   - Added --tp-preset argument parsing
+   - Updated help message
+   - Pass --tp-preset to walk_forward_validation.py
+   - Updated summary with TP distribution info
+   - Lines modified: ~30
+
+STREAMLIT UI MODIFIED (1):
+==========================
+
+6. app.py
+   - Added tp1_pct, tp2_pct, runner_pct to run_cached_backtest() signature
+   - Pass TP percentages to AdvancedVectorBTEngine
+   - Added "Exit Distribution" UI section with preset selector
+   - Added 3 number inputs for TP1%, TP2%, Runner%
+   - Added validation that percentages sum to ~100%
+   - Load TP percentages from validated_production_params.json
+   - Lines modified: ~45
+
+NEW FILES CREATED (10):
+=======================
+
+Testing:
+--------
+6. test_tp_percentages.py (NEW)
+   - Unit tests for 3 engines with custom TP percentages
+   - 3 test functions (V6_PRO, THOR, Advanced)
+   - 129 lines
+
+Scripts:
+--------
+7. analyze_tp_distributions.py (NEW)
+   - Theoretical impact analysis
+   - Compares 4 distributions across 5 scenarios
+   - Shows Alpha difference vs Classic
+   - 141 lines
+
+8. compare_tp_distributions.sh (NEW)
+   - Runs walk_forward with each preset
+   - Generates comparative report
+   - Identifies best distribution empirically
+   - 160 lines
+
+9. example_tp_distribution_usage.py (NEW)
+   - Production usage examples
+   - 3 examples (balanced, aggressive, load_optimized)
+   - 123 lines
+
+10. test_dual_validation_tp.sh (NEW)
+    - Quick test script for dual validation with TP
+    - 16 lines
+
+Documentation:
+--------------
+11. TP_DISTRIBUTION_GUIDE.md (NEW)
+    - Complete usage guide
+    - Explains each preset
+    - Usage examples and recommendations
+    - ~200 lines
+
+12. IMPLEMENTATION_SUMMARY_TP_OPTIMIZATION.md (NEW)
+    - Technical implementation summary
+    - Files modified, changes made
+    - Impact analysis, recommendations
+    - ~250 lines
+
+13. CHANGELOG_TP_OPTIMIZATION.md (NEW)
+    - Detailed changelog
+    - Version v2.1.0
+    - All changes documented
+    - ~200 lines
+
+14. TP_OPTIMIZATION_QUICKSTART.md (NEW)
+    - Quick reference card
+    - Immediate usage instructions
+    - ~80 lines
+
+15. STREAMLIT_TP_INTEGRATION.md (NEW)
+    - Streamlit integration guide
+    - UI controls explanation
+    - Workflow examples
+    - ~180 lines
+
+16. FILES_MODIFIED_TP_OPTIMIZATION.txt (NEW)
+    - This file
+    - Lists all changes made
+    - ~120 lines
+
+17. test_streamlit_tp_integration.py (NEW)
+    - Tests for Streamlit integration
+    - Validates app.py changes
+    - ~140 lines
+
+TOTAL CHANGES:
+==============
+
+Core Files Modified: 6 (was 5)
+New Files Created: 11 (was 10)
+Total Lines Added: ~1,750 (was ~1,550)
+Total Lines Modified in Core: ~165 (was ~120)
+
+BACKWARD COMPATIBILITY:
+=======================
+
+✅ 100% Backward Compatible
+
+Default values maintain original behavior:
+- tp1_pct = 0.5 (50%)
+- tp2_pct = 0.3 (30%)
+- runner_pct = 0.2 (20%)
+
+Scripts without --tp-preset use defaults.
+
+TESTING STATUS:
+===============
+
+✅ All modified files compile successfully
+✅ Unit tests pass for all 3 engines
+✅ Walk forward accepts new arguments
+✅ Dual validation script updated correctly
+✅ Presets work as expected
+
+READY FOR:
+==========
+
+✅ Production optimization
+✅ Empirical preset comparison
+✅ Scientific parameter search
+✅ Alpha maximization
+

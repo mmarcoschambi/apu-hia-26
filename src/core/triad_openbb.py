@@ -304,27 +304,37 @@ class TriadOpenBB:
         close_col = 'close' if 'close' in df.columns else 'Close'
         volume_col = 'volume' if 'volume' in df.columns else 'Volume'
         
-        df['sma_20'] = df[close_col].rolling(window=20).mean()
-        df['sma_50'] = df[close_col].rolling(window=50).mean()
+        # Solo calcular si no existe (pueden venir de la DB)
+        if 'sma_20' not in df.columns:
+            df['sma_20'] = df[close_col].rolling(window=20).mean()
+        
+        if 'sma_50' not in df.columns:
+            df['sma_50'] = df[close_col].rolling(window=50).mean()
         
         # EMAs para el Runner Trailing Stop (8 y 21)
-        df['ema_8'] = df[close_col].ewm(span=8, adjust=False).mean()
-        df['ema_21'] = df[close_col].ewm(span=21, adjust=False).mean()
+        # Si ya vienen de la DB, no recalcular (ahorra memoria y CPU)
+        if 'ema_8' not in df.columns:
+            df['ema_8'] = df[close_col].ewm(span=8, adjust=False).mean()
+        if 'ema_21' not in df.columns:
+            df['ema_21'] = df[close_col].ewm(span=21, adjust=False).mean()
         
         # SMA Volumen para confirmación
-        df['sma_volume_20'] = df[volume_col].rolling(window=20).mean()
+        if 'sma_volume_20' not in df.columns:
+            df['sma_volume_20'] = df[volume_col].rolling(window=20).mean()
         
         # RSI
-        delta = df[close_col].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rs = gain / loss
-        df['rsi'] = 100 - (100 / (1 + rs))
+        if 'rsi' not in df.columns:
+            delta = df[close_col].diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+            rs = gain / loss
+            df['rsi'] = 100 - (100 / (1 + rs))
         
         # Bandas Bollinger (para Camino 3)
-        df['middle_bb'] = df[close_col].rolling(window=20).mean()
-        bb_std = df[close_col].rolling(window=20).std()
-        df['upper_bb'] = df['middle_bb'] + (bb_std * 2)
-        df['lower_bb'] = df['middle_bb'] - (bb_std * 2)
+        if 'middle_bb' not in df.columns:
+            df['middle_bb'] = df[close_col].rolling(window=20).mean()
+            bb_std = df[close_col].rolling(window=20).std()
+            df['upper_bb'] = df['middle_bb'] + (bb_std * 2)
+            df['lower_bb'] = df['middle_bb'] - (bb_std * 2)
         
         return df

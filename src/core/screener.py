@@ -119,6 +119,19 @@ class InstitutionalScreener:
             if not vol_confirm:
                 return None, "No Volume Confirmation"
             
+            # --- CALCULAR MÉTRICAS DE RIESGO ---
+            # 1. Distancia a SMA20 (%)
+            sma_20 = current['sma_20'] if 'sma_20' in current else current[close_col]
+            dist_sma20_pct = ((current[close_col] - sma_20) / sma_20 * 100) if sma_20 > 0 else 0
+            
+            # 2. VolTrig - Clasificación de riesgo basada en RVOL
+            if rvol >= 3.0:
+                vol_trig = 'Danger'  # Alto riesgo
+            elif rvol >= 2.0:
+                vol_trig = 'Warning'  # Riesgo medio
+            else:
+                vol_trig = 'Safe'  # Riesgo bajo
+            
             return {
                 'symbol': symbol,
                 'date': date,
@@ -130,7 +143,10 @@ class InstitutionalScreener:
                 'rvol': rvol,
                 'rs_value': 0.0, # Placeholder or calc above
                 'entry_trigger': current[high_col],
-                'stop_loss': current[low_col]
+                'stop_loss': current[low_col],
+                'dist_sma20_pct': dist_sma20_pct,  # Nueva métrica
+                'vol_trig': vol_trig,  # Nueva métrica
+                'sma_20': sma_20  # Para contexto en daily_engine
             }, "OK"
 
         except Exception as e:

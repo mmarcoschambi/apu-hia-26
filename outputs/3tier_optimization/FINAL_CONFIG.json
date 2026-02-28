@@ -1,0 +1,99 @@
+{
+  "timestamp": "2026-02-26T14:13:21.173979",
+  "pipeline": "optimize_3tier",
+  "period": {
+    "start": "2022-01-01",
+    "end": "2024-12-31",
+    "initial_capital": 100000
+  },
+  "universe_size": 566,
+  "tier3_risk": {
+    "rvol_danger": 3.0,
+    "rvol_warning": 2.0,
+    "rvol_danger_size": 0.5,
+    "rvol_warning_size": 0.75,
+    "adr_high": 6.0,
+    "adr_med": 5.0,
+    "adr_high_size": 0.75,
+    "adr_med_size": 0.85,
+    "max_exposure_pct": 0.65,
+    "max_position_pct": 0.25,
+    "earnings_days": 5,
+    "earnings_cushion": 2,
+    "max_stop_pct_hard": 0.08,
+    "risk_fraction": 0.01,
+    "compounding_enabled": false
+  },
+  "tier2_filters": {
+    "min_rvol": 0.61,
+    "min_adr": 1.58,
+    "max_dist_sma20": 6.31,
+    "min_dollar_volume": 92371057.9670906,
+    "min_consolidation_days": 5,
+    "min_volume": 100000,
+    "_raw_derived": {
+      "rvol_raw": 0.61,
+      "adr_raw": 1.58,
+      "dist_sma20_raw": 6.31,
+      "dollar_volume_raw": 92371057.9670906
+    },
+    "_dollar_volume_stats": {
+      "p10": 108588459.14154053,
+      "p25": 170543067.77996063,
+      "median": 291883616.00723267,
+      "p75": 470721366.06521606,
+      "p90": 1121480961.2083435,
+      "max": 17804752640.30713,
+      "derived_raw": 92371057.9670906
+    },
+    "_rvol_stats": {
+      "p10": 0.68,
+      "median": 0.95,
+      "p90": 1.46,
+      "max": 2.14
+    },
+    "_adr_stats": {
+      "p10": 1.61,
+      "median": 2.24,
+      "p90": 3.81,
+      "max": 5.13
+    },
+    "_dist_sma20_stats": {
+      "p10": 0.54,
+      "median": 1.56,
+      "p90": 4.62,
+      "max": 8.94
+    }
+  },
+  "tier1_strategy": {
+    "tp1_r": 1.75,
+    "tp2_r": 3.25,
+    "tp1_pct": 0.45,
+    "tp2_pct": 0.3,
+    "runner_pct": 0.25
+  },
+  "optimization": {
+    "trials": 300,
+    "best_score": -10.847862266136675,
+    "best_trial_metrics": {
+      "total_return": 20.835140246391294,
+      "sharpe": 0.5888692056362601,
+      "max_dd": -14.450863349091442,
+      "win_rate": 57.77777777777777,
+      "trades": 97170,
+      "profit_factor": 1.184865602440056
+    }
+  },
+  "validation": {
+    "approved": "True",
+    "discovery_passed": true,
+    "validation_passed": true,
+    "production_passed": "True",
+    "pbo_score": 0.35905205905205906,
+    "sharpe_ratio": 2.1828901798059004,
+    "bootstrap_p5": 2.1404720567121918,
+    "bootstrap_p10": 8.48765022360646,
+    "max_drawdown_pct": 7.328524833899164,
+    "rejection_reasons": []
+  }
+}

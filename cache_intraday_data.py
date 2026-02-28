@@ -43,6 +43,16 @@ class IntradayCacheManager:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(exist_ok=True)
         self.conn = sqlite3.connect(self.db_path)
+        
+        # --- PERFORMANCE OPTIMIZATIONS ---
+        # Critical for Linux/WSL2 speed
+        self.conn.execute("PRAGMA journal_mode = WAL;")  # Write-Ahead Logging
+        self.conn.execute("PRAGMA synchronous = NORMAL;") # Faster writes
+        self.conn.execute("PRAGMA temp_store = MEMORY;")  # Temp files in RAM
+        self.conn.execute("PRAGMA mmap_size = 30000000000;") # 30GB mmap limit (Memory Mapping)
+        self.conn.execute("PRAGMA cache_size = -2000000;") # ~2GB Cache
+        # ---------------------------------
+        
         self._create_tables()
     
     def _create_tables(self):
@@ -105,9 +115,13 @@ class IntradayCacheManager:
             if df.empty:
                 logger.warning(f"⚠️ {ticker}: No data returned")
                 return pd.DataFrame()
+
+            # Fix for yfinance MultiIndex columns (e.g. ('Close', 'AAPL'))
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
             
             # Lowercase columns
-            df.columns = [c.lower() for c in df.columns]
+            df.columns = [str(c).lower() for c in df.columns]
             
             # Calculate VWAP if not present
             if 'vwap' not in df.columns:
@@ -171,7 +185,11 @@ class IntradayCacheManager:
             if df.empty:
                 return 0
             
-            df.columns = [c.lower() for c in df.columns]
+            # Fix for yfinance MultiIndex columns
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+
+            df.columns = [str(c).lower() for c in df.columns]
             df = df.reset_index()
             df['ticker'] = ticker
             

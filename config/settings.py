@@ -20,7 +20,7 @@ INTRADAY_TIMEFRAME = "5m"  # M5 for VWAP reclaim detection
 POSITION_TIMEFRAME = "1d"  # Daily for base analysis
 
 # Data Source Configuration
-DATA_SOURCE = "openbb"  # Options: "yfinance", "openbb"
+DATA_SOURCE = "yfinance"  # Options: "yfinance", "openbb"
 OPENBB_PROVIDER = "yfinance"  # Provider to use with OpenBB (yfinance, intrinio, etc.)
 
 # Data

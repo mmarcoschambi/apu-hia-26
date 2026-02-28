@@ -19,3 +19,14 @@ data/cache/
 .vscode/
 data/ticker_cache.db
 data/ticker_cache.db.backup
+
+# Large data files
+*.db
+*.sqlite
+*.csv
+!outputs/backtests/backtest_results.csv
+cvs/
+sp500/
+outputs/bolide_optimization/
+outputs/bolide_walkforward/
+outputs/bugatti_evo/

@@ -1,0 +1,261 @@
+
+╔════════════════════════════════════════════════════════════════════╗
+║          🏗️  ARQUITECTURA MODULAR - FEATURE SYSTEM                ║
+╚════════════════════════════════════════════════════════════════════╝
+
+
+┌────────────────────────────────────────────────────────────────────┐
+│                     ANTES (SIN MODULARIZAR)                        │
+└────────────────────────────────────────────────────────────────────┘
+
+  Nueva Feature
+        │
+        ├─────► THOR Engine (optimization_engine_thor.py)
+        │         • Editar __init__ (agregar param)
+        │         • Editar optimize() (agregar lógica)
+        │         • 15 min ⏰
+        │
+        ├─────► Advanced Engine (vectorbt_engine_advanced.py)
+        │         • Editar __init__ (agregar param)
+        │         • Editar calculate_entries() (agregar lógica)
+        │         • 15 min ⏰
+        │
+        └─────► Streamlit UI (app.py)
+                  • Agregar checkbox
+                  • Agregar sliders (params)
+                  • Conectar a engines
+                  • 10 min ⏰
+  
+  TOTAL: 40-60 min por feature ❌
+
+
+┌────────────────────────────────────────────────────────────────────┐
+│                  DESPUÉS (MODULARIZADO) ✅                         │
+└────────────────────────────────────────────────────────────────────┘
+
+  Nueva Feature
+        │
+        ▼
+  ┌──────────────────────────────────────┐
+  │  config/feature_flags.py             │  ⭐ SINGLE SOURCE OF TRUTH
+  │  ────────────────────────             │
+  │  FEATURES = {                         │  • Define una vez
+  │    'use_volume_surge': {              │  • Default values
+  │      'default': False,                │  • UI config
+  │      'impact': 'TBD',                 │  • Validation data
+  │      'ui': {...},                     │
+  │      'params': {...}                  │  1 min ⏰
+  │    }                                  │
+  │  }                                    │
+  └──────────────────────────────────────┘
+        │
+        ├──────────────┬──────────────┬──────────────┐
+        │              │              │              │
+        ▼              ▼              ▼              ▼
+  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐
+  │  THOR    │  │ Advanced │  │ App UI   │  │  Tests   │
+  │  Engine  │  │  Engine  │  │          │  │          │
+  └──────────┘  └──────────┘  └──────────┘  └──────────┘
+       │              │              │              │
+       │ import       │ import       │ import       │ auto
+       │ defaults     │ defaults     │ ui_config    │ generate
+       ▼              ▼              ▼              ▼
+  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐
+  │ Auto     │  │ Auto     │  │ Auto     │  │ Template │
+  │ loaded   │  │ loaded   │  │ generate │  │ ready    │
+  └──────────┘  └──────────┘  └──────────┘  └──────────┘
+       │              │              │              │
+       3 min          3 min          0 min          1 min
+  
+  TOTAL: 8-10 min por feature ✅
+
+
+╔════════════════════════════════════════════════════════════════════╗
+║                    WORKFLOW SIMPLIFICADO                           ║
+╚════════════════════════════════════════════════════════════════════╝
+
+  1️⃣  Auto-generar scaffold
+     ─────────────────────────────────────────────────────────────
+     $ python3 scripts/generate_feature_scaffold.py \
+         --name use_volume_surge_filter \
+         --param min_volume_surge:float:3.0
+     
+     ✅ Output: templates/feature_use_volume_surge.txt
+     ⏰ Time: 30 segundos
+
+
+  2️⃣  Editar feature_flags.py (copy/paste de template)
+     ─────────────────────────────────────────────────────────────
+     • Abrir templates/feature_*.txt
+     • Copy sección "CONFIG DEFINITION"
+     • Paste en config/feature_flags.py
+     
+     ⏰ Time: 1 min
+
+
+  3️⃣  Implementar lógica THOR (copy/paste + TODO)
+     ─────────────────────────────────────────────────────────────
+     • Abrir templates/feature_*.txt
+     • Copy sección "THOR IMPLEMENTATION"
+     • Paste en optimization_engine_thor.py
+     • Implementar TODOs (cálculo + filtro)
+     
+     ⏰ Time: 3 min
+
+
+  4️⃣  Implementar lógica Advanced (copy/paste + TODO)
+     ─────────────────────────────────────────────────────────────
+     • Copy sección "ADVANCED IMPLEMENTATION"
+     • Paste en vectorbt_engine_advanced.py
+     • Implementar TODOs (cálculo + filtro)
+     
+     ⏰ Time: 3 min
+
+
+  5️⃣  UI (SKIP - auto-generada!)
+     ─────────────────────────────────────────────────────────────
+     Si implementaste el auto-loop en app.py, no hace falta nada.
+     La feature aparece automáticamente en el sidebar.
+     
+     ⏰ Time: 0 min
+
+
+  6️⃣  Test & Validate
+     ─────────────────────────────────────────────────────────────
+     $ python3 test_convergence_quick.py
+     $ python3 validation_baseline.py --phase 2
+     
+     ⏰ Time: 2 min
+
+
+  TOTAL: ⚡ 10 min
+
+
+╔════════════════════════════════════════════════════════════════════╗
+║                  SYSTEM DE VALIDACIÓN                              ║
+╚════════════════════════════════════════════════════════════════════╝
+
+  Cada feature pasa por 4 fases automáticas:
+
+  Phase 1: CONVERGENCE TEST
+  ─────────────────────────────────────────────────────────────────
+    ✅ THOR vs Advanced < 20% diff en Sharpe
+    ✅ Trades similares (±30%)
+    
+    $ python3 validation_baseline.py --phase 1
+
+
+  Phase 2: FEATURE IMPACT
+  ─────────────────────────────────────────────────────────────────
+    📊 Sharpe Delta calculado
+    ✅ ENABLE si delta > +0.1
+    ⚪ NEUTRAL si delta ≈ 0.0
+    ❌ DISABLE si delta < -0.1
+    
+    $ python3 validation_baseline.py --phase 2
+
+
+  Phase 3: PRODUCTION CONFIG
+  ─────────────────────────────────────────────────────────────────
+    🔧 Auto-genera config con features habilitadas
+    
+    Automatic - no command needed
+
+
+  Phase 4: RE-OPTIMIZATION
+  ─────────────────────────────────────────────────────────────────
+    🔍 Re-optimiza parámetros CON la nueva feature
+    📊 Nuevos parámetros óptimos guardados
+    
+    $ python3 validation_baseline.py --phase 4
+
+
+  Phase 5: WALK FORWARD (opcional)
+  ─────────────────────────────────────────────────────────────────
+    🚀 Valida robustez en múltiples ventanas
+    
+    $ bash run_walk_forward.sh
+
+
+╔════════════════════════════════════════════════════════════════════╗
+║                    ARCHIVOS CLAVE                                  ║
+╚════════════════════════════════════════════════════════════════════╝
+
+  Centralización:
+  ┌──────────────────────────────────────────────────────────────┐
+  │ config/feature_flags.py                    ⭐ MAIN FILE      │
+  │ • Define todas las features                                  │
+  │ • Default values                                             │
+  │ • UI configuration                                           │
+  │ • Validation results                                         │
+  └──────────────────────────────────────────────────────────────┘
+
+  Generators:
+  ┌──────────────────────────────────────────────────────────────┐
+  │ scripts/generate_feature_scaffold.py       🤖 AUTO-GEN      │
+  │ • Auto-genera boilerplate                                    │
+  │ • Templates para THOR/Advanced/UI/Tests                     │
+  │ • Reduce 60 min → 10 min                                     │
+  └──────────────────────────────────────────────────────────────┘
+
+  Templates:
+  ┌──────────────────────────────────────────────────────────────┐
+  │ templates/feature_{name}.txt              📋 BOILERPLATE    │
+  │ • Código listo para copy/paste                              │
+  │ • Secciones marcadas (THOR/Advanced/UI/Test)               │
+  │ • TODOs para completar lógica específica                    │
+  └──────────────────────────────────────────────────────────────┘
+
+
+╔════════════════════════════════════════════════════════════════════╗
+║                 EJEMPLO: FEATURE EXISTENTE                         ║
+╚════════════════════════════════════════════════════════════════════╝
+
+  Feature: require_spy_above_sma50
+  
+  1. Definida en feature_flags.py:
+     ✅ default: False
+     ✅ impact: +0.35 Sharpe
+     ✅ verdict: ENABLE
+  
+  2. Implementada en THOR:
+     ✅ optimize() lee params['require_spy_above_sma50']
+     ✅ Aplica: base_filters &= (spy_close > spy_sma50)
+  
+  3. Implementada en Advanced:
+     ✅ __init__ recibe require_spy_above_sma50
+     ✅ Aplica: entries &= (self.spy_close > self.spy_sma50)
+  
+  4. UI en app.py:
+     ✅ Checkbox "SPY > SMA50 Filter"
+     ✅ Connected to both engines
+  
+  5. Validada:
+     ✅ Phase 1: Convergencia OK
+     ✅ Phase 2: +0.335 Sharpe delta
+     ✅ Phase 4: Incluida en parámetros óptimos
+
+
+╔════════════════════════════════════════════════════════════════════╗
+║                    QUICK REFERENCE                                 ║
+╚════════════════════════════════════════════════════════════════════╝
+
+  Agregar Feature:
+  ────────────────────────────────────────────────────────────────
+  1. python3 scripts/generate_feature_scaffold.py --name ...
+  2. Edit config/feature_flags.py (copy from template)
+  3. Edit src/backtest/optimization_engine_thor.py (3 min)
+  4. Edit src/backtest/vectorbt_engine_advanced.py (3 min)
+  5. python3 test_convergence_quick.py
+  6. python3 validation_baseline.py --phase 2
+  
+  Total: 10 min ⚡
+
+
+  Leer Documentación:
+  ────────────────────────────────────────────────────────────────
+  📖 GUIA_FEATURES_MODULARES.md     (completo)
+  📖 ARQUITECTURA_MODULAR.md        (overview)
+  📖 config/feature_flags.py        (código)
+
+
