@@ -9,7 +9,8 @@ Implements Triad Protocol with 3-phase exit system:
 
 import pandas as pd
 import numpy as np
-import vectorbt as vbt
+
+# import vectorbt as vbt  # Lazy load
 import yfinance as yf
 import gc
 from typing import List, Dict, Optional, Tuple
@@ -122,6 +123,106 @@ def prepare_numba_arrays(engine, release_dataframes: bool = False) -> Dict:
         if hasattr(engine, "ema_21") and engine.ema_21 is not None
         else np.zeros_like(arrays["close"])
     )
+
+    # ============================================
+    # ENTRY QUALITY SCORE - Trade quality prioritization
+    # Score = 0.4 * VWAP_proximity + 0.4 * Volume_strength + 0.2 * EMA10_trend
+    # VWAP_proximity = 50% MVWAP-20 + 50% AVWAP Monthly (MTD)
+    # MVWAP-20 = sum(close*volume, 20) / sum(volume, 20)
+    # AVWAP Monthly = Anchored VWAP from month start
+    # Used to prioritize entries when capital is constrained
+    # ============================================
+    try:
+        close_arr = arrays["close"]
+        volume_arr = arrays["volume"]
+        n_rows, n_cols = close_arr.shape
+
+        rvol_source = arrays.get("rvol", np.ones_like(close_arr))
+        ema10_source = arrays.get("ema_10", np.zeros_like(close_arr))
+
+        rvol_arr = (
+            rvol_source[:n_rows, :n_cols]
+            if rvol_source.shape != close_arr.shape
+            else rvol_source
+        )
+        ema10_arr = (
+            ema10_source[:n_rows, :n_cols]
+            if ema10_source.shape != close_arr.shape
+            else ema10_source
+        )
+
+        rvol_arr = np.nan_to_num(rvol_arr, nan=1.0)
+        ema10_arr = np.nan_to_num(ema10_arr, nan=0.0)
+
+        close_df = engine.close.ffill()
+        volume_df = engine.volume.fillna(0)
+
+        dollar_volume = close_df * volume_df
+        mvwap_20 = (
+            dollar_volume.rolling(20, min_periods=1).sum()
+            / volume_df.rolling(20, min_periods=1).sum()
+        ).replace([np.inf, -np.inf], np.nan)
+
+        dollar_vol = (close_df * volume_df).fillna(0)
+        cum_vol = volume_df.fillna(0)
+        month_key = close_df.index.to_period("M")
+        dollar_vol_mtd = dollar_vol.groupby(month_key, group_keys=False).cumsum()
+        cum_vol_mtd = cum_vol.groupby(month_key, group_keys=False).cumsum()
+        avwap_mtd = dollar_vol_mtd / cum_vol_mtd.replace(0, 1)
+        avwap_mtd = avwap_mtd.replace([np.inf, -np.inf], np.nan)
+
+        mvwap_20 = mvwap_20.ffill().fillna(close_df)
+        avwap_mtd = avwap_mtd.ffill().fillna(close_df)
+
+        mvwap_arr = mvwap_20.values.astype(np.float32)
+        avwap_arr = avwap_mtd.values.astype(np.float32)
+
+        mvwap_arr = (
+            mvwap_arr[:n_rows, :n_cols]
+            if mvwap_arr.shape != close_arr.shape
+            else mvwap_arr
+        )
+        avwap_arr = (
+            avwap_arr[:n_rows, :n_cols]
+            if avwap_arr.shape != close_arr.shape
+            else avwap_arr
+        )
+
+        mvwap_arr = np.nan_to_num(mvwap_arr, nan=close_arr)
+        avwap_arr = np.nan_to_num(avwap_arr, nan=close_arr)
+
+        mvwap_distance = np.abs(close_arr - mvwap_arr) / np.where(
+            mvwap_arr > 0, mvwap_arr, 1.0
+        )
+        avwap_distance = np.abs(close_arr - avwap_arr) / np.where(
+            avwap_arr > 0, avwap_arr, 1.0
+        )
+
+        mvwap_score = np.clip((0.05 - mvwap_distance) / 0.04, 0.0, 1.0)
+        avwap_score = np.clip((0.05 - avwap_distance) / 0.04, 0.0, 1.0)
+
+        vwap_score = 0.5 * mvwap_score + 0.5 * avwap_score
+
+        volume_score = np.clip((rvol_arr - 0.5) / 1.5, 0.0, 1.0)
+        ema10_score = np.where(close_arr > ema10_arr, 1.0, 0.0)
+
+        vwap_w = getattr(engine, "score_vwap_weight", 0.4)
+        vol_w = getattr(engine, "score_volume_weight", 0.4)
+        ema_w = getattr(engine, "score_ema_weight", 0.2)
+        entry_score = (
+            vwap_w * vwap_score + vol_w * volume_score + ema_w * ema10_score
+        ).astype(np.float32)
+        entry_score = np.nan_to_num(entry_score, nan=0.5)
+        arrays["entry_score"] = entry_score
+
+        logger.info(
+            f"   📊 Entry score calculated: mean={entry_score.mean():.3f}, std={entry_score.std():.3f}"
+        )
+    except Exception as e:
+        logger.warning(
+            f"   ⚠️ Could not calculate entry_score: {e}. Using uniform score."
+        )
+        arrays["entry_score"] = np.ones_like(arrays["close"], dtype=np.float32)
 
     # Market data arrays
     # OPTIMIZATION: Use float32
@@ -374,6 +475,10 @@ class AdvancedVectorBTEngine:
         signal_type: str = "breakout",  # 'breakout' (close > 20d high) or 'any' (close > SMA20)
         # NEW: Operation Mode
         mode: str = "production",  # 'production' (Pct Risk) or 'convergence' (Fixed $ Risk like THOR)
+        # NEW: Entry Quality Score weights (optimizable)
+        score_vwap_weight: float = 0.4,  # Weight for VWAP proximity (0.0-1.0)
+        score_volume_weight: float = 0.4,  # Weight for volume strength (0.0-1.0)
+        score_ema_weight: float = 0.2,  # Weight for EMA10 trend (0.0-1.0)
         **kwargs,
     ):
         self.universe = universe
@@ -464,6 +569,11 @@ class AdvancedVectorBTEngine:
 
         # Signal type
         self.signal_type = signal_type
+
+        # Entry Quality Score weights
+        self.score_vwap_weight = score_vwap_weight
+        self.score_volume_weight = score_volume_weight
+        self.score_ema_weight = score_ema_weight
 
         # Filter thresholds
         self.max_dist_sma20 = max_dist_sma20
@@ -1251,6 +1361,7 @@ class AdvancedVectorBTEngine:
             "earnings_risk_level": pos.get("earnings_risk_level", "UNKNOWN"),
             "vix_regime": pos.get("vix_regime", "UNKNOWN"),
             "spy_above_ema20": pos.get("spy_above_ema20", False),
+            "entry_score": pos.get("entry_score", 0.5),
         }
 
     def simulate_with_partial_exits(
@@ -1290,6 +1401,9 @@ class AdvancedVectorBTEngine:
             rvol_arr = numba_arrays.get("rvol", np.zeros_like(close_arr)).astype(
                 np.float32
             )
+            entry_score_arr = numba_arrays.get(
+                "entry_score", np.ones_like(close_arr)
+            ).astype(np.float32)
         else:
             # Fallback: Convert from DataFrames (legacy mode)
             logger.info("   🐌 Converting from DataFrames (legacy mode - float32)")
@@ -1316,6 +1430,8 @@ class AdvancedVectorBTEngine:
                 if hasattr(self, "rvol") and self.rvol is not None
                 else np.zeros_like(close_arr)
             )
+            # Entry score array for trade quality prioritization
+            entry_score_arr = np.ones_like(close_arr, dtype=np.float32)
 
             # Open es opcional pero recomendado para gaps
             if hasattr(self, "open"):
@@ -1456,6 +1572,7 @@ class AdvancedVectorBTEngine:
             ema21_arr=ema21_arr,
             adr_arr=adr_arr,
             rvol_arr=rvol_arr,
+            entry_score_arr=entry_score_arr,
             spy_close_arr=spy_close_arr,
             spy_sma50_arr=spy_sma50_arr,
             initial_capital=self.initial_capital,
@@ -1525,7 +1642,7 @@ class AdvancedVectorBTEngine:
         equity_curve = pd.Series(equity_curve_arr, index=close.index)
 
         if len(trades_log) > 0:
-            # Columnas: [dia_salida, ticker_idx, tipo_salida, precio_salida, shares, pnl, dia_entrada, riesgo_inicial, rvol, adr, vol]
+            # Columnas: [dia_salida, ticker_idx, tipo_salida, precio_salida, shares, pnl, dia_entrada, riesgo_inicial, rvol, adr, vol, entry_score]
             trades_df = pd.DataFrame(
                 trades_log,
                 columns=[
@@ -1540,6 +1657,7 @@ class AdvancedVectorBTEngine:
                     "context_rvol",
                     "context_adr",
                     "context_volume",
+                    "entry_score",
                 ],
             )
 
@@ -1616,6 +1734,88 @@ class AdvancedVectorBTEngine:
                     except Exception:
                         dist_vals.append(np.nan)
                 trades_df["dist_sma20_pct"] = dist_vals
+
+            # ═══════════════════════════════════════════════════════════════
+            # AGREGAR RS PERCENTILE Y POSITION SIZING DETAILS
+            # ═══════════════════════════════════════════════════════════════
+
+            # -- RS Percentile at Entry --
+            if self.use_rs_percentile and hasattr(self, "close"):
+                rs_percentile = self.calculate_rs_percentile(
+                    lookback_days=self.rs_lookback_days
+                )
+                rs_vals = []
+                for _, row in trades_df.iterrows():
+                    try:
+                        entry_date = row["entry_date"]
+                        sym = row["symbol"]
+                        if (
+                            entry_date in rs_percentile.index
+                            and sym in rs_percentile.columns
+                        ):
+                            rs_vals.append(float(rs_percentile.loc[entry_date, sym]))
+                        else:
+                            rs_vals.append(np.nan)
+                    except Exception:
+                        rs_vals.append(np.nan)
+                trades_df["rs_percentile"] = rs_vals
+
+            # -- Position Sizing Details --
+            # stop_distance = entry_price - stop_price
+            trades_df["stop_distance"] = trades_df["initial_risk"] / trades_df["shares"]
+            trades_df["stop_distance_pct"] = (
+                trades_df["stop_distance"] / trades_df["entry_price"]
+            ) * 100
+            trades_df["risk_per_share"] = trades_df["stop_distance"]
+
+            # -- VWAP Score Components (for Entry Quality analysis) --
+            if hasattr(self, "close") and hasattr(self, "volume"):
+                vwap_scores = []
+                vol_scores = []
+                ema_scores = []
+                for _, row in trades_df.iterrows():
+                    try:
+                        entry_date = row["entry_date"]
+                        sym = row["symbol"]
+                        entry_price = row["entry_price"]
+                        rvol = row["context_rvol"]
+
+                        # Volume Score
+                        vol_score = np.clip((rvol - 0.5) / 1.5, 0.0, 1.0)
+                        vol_scores.append(vol_score)
+
+                        # EMA10 Score (price > EMA10?)
+                        ema_score = (
+                            1.0
+                            if hasattr(self, "ema_10")
+                            and entry_date in self.ema_10.index
+                            and sym in self.ema_10.columns
+                            and entry_price > self.ema_10.loc[entry_date, sym]
+                            else 0.0
+                        )
+                        ema_scores.append(ema_score)
+
+                        # VWAP Score placeholder (requires MVWAP/AVWAP calculation)
+                        vwap_scores.append(np.nan)
+                    except Exception:
+                        vwap_scores.append(np.nan)
+                        vol_scores.append(np.nan)
+                        ema_scores.append(np.nan)
+
+                trades_df["score_volume"] = vol_scores
+                trades_df["score_ema10"] = ema_scores
+
+            # -- R-Multiple --
+            trades_df["r_multiple"] = trades_df["pnl"] / trades_df["initial_risk"]
+
+            # -- Win/Loss Category --
+            trades_df["outcome"] = trades_df["pnl"].apply(
+                lambda x: "WIN" if x > 0 else ("LOSS" if x < 0 else "BE")
+            )
+
+            # -- Big Win/Big Loss flags --
+            trades_df["is_big_win"] = trades_df["r_multiple"] >= 2.0
+            trades_df["is_big_loss"] = trades_df["r_multiple"] <= -1.0
 
         else:
             trades_df = pd.DataFrame(

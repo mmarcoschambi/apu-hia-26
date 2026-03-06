@@ -84,7 +84,11 @@ def get_cached_intraday_data(symbol: str, interval: str, days: int):
     return provider.get_intraday_data(symbol, interval=interval, days=days)
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(
+    ttl=3600,
+    show_spinner=False,
+    hash_funcs={list: lambda x: hash(tuple(sorted(x)))},  # Deterministic list hashing
+)
 def run_cached_backtest(
     universe,
     start_date,
@@ -182,10 +186,23 @@ def get_cache_date_range():
     return datetime(2020, 1, 1), datetime.now()
 
 
-def paginate_dataframe(df, page_size=20, key_prefix="df", **kwargs):
+def format_date_short(dt):
+    if pd.isna(dt):
+        return ""
+    if isinstance(dt, str):
+        dt = pd.to_datetime(dt)
+    return dt.strftime("%d/%m/%y")
+
+
+def paginate_dataframe(df, page_size=20, key_prefix="df", column_config=None, **kwargs):
     use_container_width = kwargs.pop("use_container_width", True)
     if len(df) <= page_size:
-        return st.dataframe(df, use_container_width=use_container_width, **kwargs)
+        return st.dataframe(
+            df,
+            use_container_width=use_container_width,
+            column_config=column_config,
+            **kwargs,
+        )
     total_pages = (len(df) // page_size) + 1
     page_number = st.number_input(
         f"Page (1-{total_pages})",
@@ -199,7 +216,10 @@ def paginate_dataframe(df, page_size=20, key_prefix="df", **kwargs):
     end_idx = min(start_idx + page_size, len(df))
     st.caption(f"Showing {start_idx + 1} to {end_idx} of {len(df)}")
     return st.dataframe(
-        df.iloc[start_idx:end_idx], use_container_width=use_container_width, **kwargs
+        df.iloc[start_idx:end_idx],
+        use_container_width=use_container_width,
+        column_config=column_config,
+        **kwargs,
     )
 
 
@@ -251,20 +271,55 @@ def run_vectorbt_backtest_ui(
             selection_start, selection_end = str(start_date), str(end_date)
             min_required_days = 100
             if max_symbols == 0:
-                query = "SELECT ticker FROM ohlcv_cache WHERE date BETWEEN ? AND ? GROUP BY ticker HAVING COUNT(*) >= ? ORDER BY ticker"
+                # DETERMINISTIC: Order by ticker AND first date to ensure consistency
+                query = """
+                    SELECT ticker 
+                    FROM ohlcv_cache 
+                    WHERE date BETWEEN ? AND ? 
+                    GROUP BY ticker 
+                    HAVING COUNT(*) >= ? 
+                    ORDER BY ticker ASC
+                """
                 cursor = conn.execute(
                     query, (selection_start, selection_end, min_required_days)
                 )
             else:
-                query = "SELECT ticker, AVG(dollar_volume) as avg_dv FROM ohlcv_cache WHERE date BETWEEN ? AND ? GROUP BY ticker HAVING COUNT(*) >= ? ORDER BY avg_dv DESC LIMIT ?"
+                # DETERMINISTIC: Order by avg_dv DESC, then ticker ASC for tie-breaking
+                query = """
+                    SELECT ticker
+                    FROM (
+                        SELECT ticker, AVG(dollar_volume) as avg_dv
+                        FROM ohlcv_cache 
+                        WHERE date BETWEEN ? AND ? 
+                        GROUP BY ticker 
+                        HAVING COUNT(*) >= ?
+                    )
+                    ORDER BY avg_dv DESC, ticker ASC
+                    LIMIT ?
+                """
                 cursor = conn.execute(
                     query,
                     (selection_start, selection_end, min_required_days, max_symbols),
                 )
             universe = [row[0] for row in cursor.fetchall()]
             conn.close()
+
+            # DETERMINISTIC: Sort universe to ensure consistency
+            universe = sorted(list(set(universe)))
+
+            # Log universe for debugging
+            import logging
+
+            logger = logging.getLogger(__name__)
+            universe_hash = hash(tuple(universe))
+            logger.info(f"🎯 Universe hash: {universe_hash} ({len(universe)} tickers)")
+
         if not universe:
             raise ValueError("No tickers found.")
+
+        # Sort universe one more time before caching (belt and suspenders)
+        universe = sorted(list(set(universe)))
+
         results, rejection_stats = run_cached_backtest(
             universe,
             str(start_date),
@@ -357,6 +412,7 @@ def run_vectorbt_backtest_ui(
                     "tp1_target": trades.get("tp1_target", np.nan),
                     "tp2_target": trades.get("tp2_target", np.nan),
                     "adjusted_risk_dollars": trades.get("adjusted_risk_dollars", 0),
+                    "entry_score": trades.get("entry_score", np.nan),
                 }
             )
             output_df.to_csv("outputs/backtests/backtest_results.csv", index=False)
@@ -871,6 +927,16 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
             else 0
         )
 
+        # Entry Score statistics
+        has_entry_score = "entry_score" in grouped_trades.columns
+        avg_entry_score = grouped_trades["entry_score"].mean() if has_entry_score else 0
+        high_score_trades = (
+            int((grouped_trades["entry_score"] >= 0.5).sum()) if has_entry_score else 0
+        )
+        low_score_trades = (
+            int((grouped_trades["entry_score"] < 0.3).sum()) if has_entry_score else 0
+        )
+
         # --- Row 1: Core metrics ---
         render_metric_cards(
             [
@@ -933,6 +999,35 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
             ]
         )
 
+        # --- Row 3: Entry Score Analysis ---
+        if has_entry_score:
+            st.markdown("### Entry Quality Score Analysis")
+            col_es1, col_es2, col_es3, col_es4 = st.columns(4)
+            with col_es1:
+                st.metric("Avg Entry Score", f"{avg_entry_score:.3f}")
+            with col_es2:
+                st.metric(
+                    "High Score (≥0.5)",
+                    f"{high_score_trades}",
+                    delta=f"{high_score_trades / total_trades * 100:.1f}%",
+                )
+            with col_es3:
+                st.metric(
+                    "Low Score (<0.3)",
+                    f"{low_score_trades}",
+                    delta=f"-{low_score_trades / total_trades * 100:.1f}%"
+                    if low_score_trades > 0
+                    else "0%",
+                    delta_color="inverse",
+                )
+            with col_es4:
+                corr = (
+                    grouped_trades["entry_score"].corr(grouped_trades["total_pnl"])
+                    if total_trades > 5
+                    else 0
+                )
+                st.metric("Score-PnL Corr", f"{corr:.3f}")
+
         # --- QuantStats Time-Series Metrics ---
         st.markdown("### Time-Series Analytics")
 
@@ -961,12 +1056,14 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
             )
 
             if qs_metrics:
+                # First row: Primary metrics
                 qs_col1, qs_col2, qs_col3, qs_col4 = st.columns(4)
 
                 with qs_col1:
-                    st.markdown("**Risk-Adjusted**")
+                    st.markdown("**Risk-Adjusted Returns**")
                     sharpe = qs_metrics.get("sharpe_ratio", 0)
                     sortino = qs_metrics.get("sortino_ratio", 0)
+                    calmar = qs_metrics.get("calmar_ratio", 0)
                     render_metric_cards(
                         [
                             {
@@ -977,17 +1074,26 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                                 "label": "Sortino",
                                 "value": f"{sortino:.2f}" if sortino else "N/A",
                             },
+                            {
+                                "label": "Calmar",
+                                "value": f"{calmar:.2f}" if calmar else "N/A",
+                            },
                         ]
                     )
 
                 with qs_col2:
-                    st.markdown("**Returns**")
+                    st.markdown("**Returns & Drawdown**")
+                    cagr = qs_metrics.get("cagr", 0)
                     total_ret = qs_metrics.get("total_return", 0)
                     max_dd = qs_metrics.get("max_drawdown", 0)
                     render_metric_cards(
                         [
                             {
-                                "label": "Return",
+                                "label": "CAGR",
+                                "value": f"{cagr * 100:+.2f}%" if cagr else "N/A",
+                            },
+                            {
+                                "label": "Total Return",
                                 "value": f"{total_ret * 100:+.2f}%"
                                 if total_ret
                                 else "N/A",
@@ -1000,33 +1106,149 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                     )
 
                 with qs_col3:
-                    st.markdown("**Benchmark Alpha**")
-                    alpha = qs_metrics.get("alpha", 0)
-                    beta = qs_metrics.get("beta", 0)
+                    st.markdown("**Trade Statistics**")
+                    total_trades = qs_metrics.get("total_trades", 0)
+                    win_rate = qs_metrics.get("win_rate", 0)
+                    profit_factor = qs_metrics.get("profit_factor", 0)
                     render_metric_cards(
                         [
                             {
-                                "label": f"Alpha vs {benchmark_ticker}",
-                                "value": f"{alpha:.2f}" if alpha is not None else "N/A",
+                                "label": "Total Trades",
+                                "value": f"{int(total_trades)}"
+                                if total_trades
+                                else "N/A",
                             },
                             {
-                                "label": f"Beta vs {benchmark_ticker}",
-                                "value": f"{beta:.2f}" if beta is not None else "N/A",
+                                "label": "Win Rate",
+                                "value": f"{win_rate * 100:.1f}%"
+                                if win_rate
+                                else "N/A",
+                            },
+                            {
+                                "label": "Profit Factor",
+                                "value": f"{profit_factor:.2f}"
+                                if profit_factor
+                                else "N/A",
                             },
                         ]
                     )
 
                 with qs_col4:
-                    st.markdown("**Outperformance**")
-                    excess = qs_metrics.get("excess_return", 0)
+                    st.markdown("**Risk Metrics**")
+                    var_95 = qs_metrics.get("var_95", 0)
+                    cvar_95 = qs_metrics.get("cvar_95", 0)
+                    vol = qs_metrics.get("volatility_annual", 0)
+                    render_metric_cards(
+                        [
+                            {
+                                "label": "VaR (95%)",
+                                "value": f"{var_95 * 100:.2f}%" if var_95 else "N/A",
+                            },
+                            {
+                                "label": "CVaR (95%)",
+                                "value": f"{cvar_95 * 100:.2f}%" if cvar_95 else "N/A",
+                            },
+                            {
+                                "label": "Volatility",
+                                "value": f"{vol * 100:.2f}%" if vol else "N/A",
+                            },
+                        ]
+                    )
+
+                # Second row: Additional metrics
+                st.markdown("---")
+                qs_col5, qs_col6, qs_col7, qs_col8 = st.columns(4)
+
+                with qs_col5:
+                    st.markdown("**Win/Loss Analysis**")
+                    avg_win = qs_metrics.get("avg_win", 0)
+                    avg_loss = qs_metrics.get("avg_loss", 0)
+                    avg_wl_ratio = qs_metrics.get("avg_win_loss_ratio", 0)
+                    render_metric_cards(
+                        [
+                            {
+                                "label": "Avg Win",
+                                "value": f"${avg_win:.0f}" if avg_win else "N/A",
+                            },
+                            {
+                                "label": "Avg Loss",
+                                "value": f"${avg_loss:.0f}" if avg_loss else "N/A",
+                            },
+                            {
+                                "label": "Win/Loss Ratio",
+                                "value": f"{avg_wl_ratio:.2f}"
+                                if avg_wl_ratio
+                                else "N/A",
+                            },
+                        ]
+                    )
+
+                with qs_col6:
+                    st.markdown("**Exposure & Streaks**")
+                    exposure = qs_metrics.get("exposure_time_pct", 0)
+                    max_cons_wins = qs_metrics.get("max_consecutive_wins", 0)
+                    max_cons_losses = qs_metrics.get("max_consecutive_losses", 0)
+                    render_metric_cards(
+                        [
+                            {
+                                "label": "Exposure Time",
+                                "value": f"{exposure:.1f}%" if exposure else "N/A",
+                            },
+                            {
+                                "label": "Max Consec. Wins",
+                                "value": f"{int(max_cons_wins)}"
+                                if max_cons_wins
+                                else "N/A",
+                            },
+                            {
+                                "label": "Max Consec. Losses",
+                                "value": f"{int(max_cons_losses)}"
+                                if max_cons_losses
+                                else "N/A",
+                            },
+                        ]
+                    )
+
+                with qs_col7:
+                    st.markdown("**Distribution**")
+                    skewness = qs_metrics.get("skewness", 0)
+                    kurtosis = qs_metrics.get("kurtosis", 0)
+                    avg_hold = qs_metrics.get("avg_holding_period", 0)
+                    render_metric_cards(
+                        [
+                            {
+                                "label": "Skewness",
+                                "value": f"{skewness:.3f}"
+                                if skewness is not None
+                                else "N/A",
+                            },
+                            {
+                                "label": "Kurtosis",
+                                "value": f"{kurtosis:.3f}"
+                                if kurtosis is not None
+                                else "N/A",
+                            },
+                            {
+                                "label": "Avg Hold Days",
+                                "value": f"{avg_hold:.1f}" if avg_hold else "N/A",
+                            },
+                        ]
+                    )
+
+                with qs_col8:
+                    st.markdown(f"**Benchmark vs {benchmark_ticker}**")
+                    alpha = qs_metrics.get("alpha", 0)
+                    beta = qs_metrics.get("beta", 0)
                     info_ratio = qs_metrics.get("information_ratio", 0)
                     render_metric_cards(
                         [
                             {
-                                "label": "Excess Return",
-                                "value": f"{excess * 100:+.2f}%"
-                                if excess is not None
-                                else "N/A",
+                                "label": "Alpha",
+                                "value": f"{alpha:.2f}" if alpha is not None else "N/A",
+                            },
+                            {
+                                "label": "Beta",
+                                "value": f"{beta:.2f}" if beta is not None else "N/A",
                             },
                             {
                                 "label": "Info Ratio",
@@ -1141,6 +1363,8 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                     "Top Winners ($)",
                     "Top Losers ($)",
                     "High R-Multiple",
+                    "High Entry Score",
+                    "Low Entry Score",
                 ],
                 index=0,
             )
@@ -1165,6 +1389,7 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                 "total_shares",
                 "exit_phases",
                 "hold_days",
+                "entry_score",
             ]
             if has_r:
                 show_cols.append("r_multiple")
@@ -1191,22 +1416,49 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                 display_df = display_source[show_cols].sort_values(
                     "r_multiple", ascending=False
                 )
+            elif quick_sort == "High Entry Score" and "entry_score" in show_cols:
+                display_df = display_source[show_cols].sort_values(
+                    "entry_score", ascending=False
+                )
+            elif quick_sort == "Low Entry Score" and "entry_score" in show_cols:
+                display_df = display_source[show_cols].sort_values(
+                    "entry_score", ascending=True
+                )
             else:
                 display_df = display_source[show_cols].sort_values(
                     "final_exit_date", ascending=False
                 )
         else:
-            # Partial exits view
+            # Partial exits view - ensure entry_score column is visible
+            partial_cols = [
+                "symbol",
+                "entry_date",
+                "exit_date",
+                "exit_phase",
+                "entry_price",
+                "exit_price",
+                "shares",
+                "pnl",
+                "entry_score",
+            ]
+            partial_cols = [c for c in partial_cols if c in df.columns]
+
             if quick_sort == "Latest First":
-                display_df = df.sort_values("exit_date", ascending=False)
+                display_df = df[partial_cols].sort_values("exit_date", ascending=False)
             elif quick_sort == "Oldest First":
-                display_df = df.sort_values("exit_date", ascending=True)
+                display_df = df[partial_cols].sort_values("exit_date", ascending=True)
             elif quick_sort == "Top Winners ($)":
-                display_df = df.sort_values("pnl", ascending=False)
+                display_df = df[partial_cols].sort_values("pnl", ascending=False)
             elif quick_sort == "Top Losers ($)":
-                display_df = df.sort_values("pnl", ascending=True)
+                display_df = df[partial_cols].sort_values("pnl", ascending=True)
+            elif quick_sort == "High Entry Score" and "entry_score" in partial_cols:
+                display_df = df[partial_cols].sort_values(
+                    "entry_score", ascending=False
+                )
+            elif quick_sort == "Low Entry Score" and "entry_score" in partial_cols:
+                display_df = df[partial_cols].sort_values("entry_score", ascending=True)
             else:
-                display_df = df.sort_values("exit_date", ascending=False)
+                display_df = df[partial_cols].sort_values("exit_date", ascending=False)
 
         selected_symbol = st.selectbox(
             "Filter Symbol", ["All"] + sorted(df["symbol"].unique().tolist())
@@ -1229,11 +1481,55 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                 & (display_df[date_col] <= filter_end)
             ]
 
-        # Display dataframe
-        if show_all:
-            st.dataframe(display_df, use_container_width=True, height=600)
+        if not display_df.empty:
+            display_df_display = display_df.copy()
+            date_cols = [c for c in display_df_display.columns if "date" in c.lower()]
+            for col in date_cols:
+                if col in display_df_display.columns:
+                    display_df_display[col] = display_df_display[col].apply(
+                        format_date_short
+                    )
+
+            has_score = "entry_score" in display_df_display.columns
         else:
-            paginate_dataframe(display_df, key_prefix="trades_log")
+            display_df_display = display_df
+            has_score = False
+
+        if show_all:
+            if has_score:
+                st.dataframe(
+                    display_df_display,
+                    use_container_width=True,
+                    height=600,
+                    column_config={
+                        "entry_score": st.column_config.ProgressColumn(
+                            "Entry Score",
+                            help="Quality score del setup de entrada (0-1)",
+                            format="%.3f",
+                            min_value=0.0,
+                            max_value=1.0,
+                        )
+                    },
+                )
+            else:
+                st.dataframe(display_df_display, use_container_width=True, height=600)
+        else:
+            if has_score:
+                paginate_dataframe(
+                    display_df_display,
+                    key_prefix="trades_log",
+                    column_config={
+                        "entry_score": st.column_config.ProgressColumn(
+                            "Entry Score",
+                            help="Quality score del setup de entrada (0-1)",
+                            format="%.3f",
+                            min_value=0.0,
+                            max_value=1.0,
+                        )
+                    },
+                )
+            else:
+                paginate_dataframe(display_df_display, key_prefix="trades_log")
 
         st.markdown("---")
         st.subheader("Trade Chart Viewer")

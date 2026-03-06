@@ -427,6 +427,7 @@ class OptimizationEngineTHOR:
             start_date=extended_start.strftime("%Y-%m-%d"),
             end_date=self.end_date.strftime("%Y-%m-%d"),
             cache=self.cache,
+            offline=self.offline_mode,
         )
 
         # Align to close index

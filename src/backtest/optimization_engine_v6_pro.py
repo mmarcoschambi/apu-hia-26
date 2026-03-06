@@ -249,7 +249,10 @@ class OptimizationEngineV6_PRO:
 
             # Use centralized loader
             spy_data, vix_data = load_spy_vix_data(
-                start_date=start_str, end_date=end_str, cache=self.cache
+                start_date=start_str,
+                end_date=end_str,
+                cache=self.cache,
+                offline=self.offline_mode,
             )
 
             # Align with ticker data

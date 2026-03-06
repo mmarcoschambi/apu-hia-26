@@ -17,6 +17,7 @@ def simulate_fast_core(
     ema21_arr,
     adr_arr,
     rvol_arr,
+    entry_score_arr,
     spy_close_arr,
     spy_sma50_arr,
     initial_capital,
@@ -82,6 +83,7 @@ def simulate_fast_core(
     pos_rvol = np.zeros(n_tickers, dtype=np.float32)
     pos_adr = np.zeros(n_tickers, dtype=np.float32)
     pos_vol = np.zeros(n_tickers, dtype=np.float32)
+    pos_entry_score = np.zeros(n_tickers, dtype=np.float32)  # Entry Quality Score
 
     # Flags de estado
     pos_tp1_done = np.zeros(n_tickers, dtype=np.bool_)
@@ -91,7 +93,9 @@ def simulate_fast_core(
     # Registro de trades - DYNAMIC RESIZING to save memory
     initial_max_trades = min(50000, n_days * 100)
     trade_log_idx = 0
-    trades_log = np.zeros((initial_max_trades, 11), dtype=np.float64)
+    trades_log = np.zeros(
+        (initial_max_trades, 12), dtype=np.float64
+    )  # 12 cols: day, ticker, exit_type, exit_price, exit_shares, pnl, entry_day, risk, rvol, adr, vol, entry_score
 
     # --- BUCLE PRINCIPAL (Día a Día) ---
     for t in range(n_days):
@@ -265,7 +269,7 @@ def simulate_fast_core(
                 # Registrar Trade - DYNAMIC RESIZING to save memory
                 if trade_log_idx >= trades_log.shape[0]:
                     new_size = trades_log.shape[0] * 2  # Double the capacity
-                    new_trades = np.zeros((new_size, 11), dtype=np.float64)
+                    new_trades = np.zeros((new_size, 12), dtype=np.float64)
                     new_trades[:trade_log_idx] = trades_log
                     trades_log = new_trades
                 trades_log[trade_log_idx, 0] = t
@@ -279,6 +283,9 @@ def simulate_fast_core(
                 trades_log[trade_log_idx, 8] = pos_rvol[i]  # CONTEXT RVOL
                 trades_log[trade_log_idx, 9] = pos_adr[i]  # CONTEXT ADR
                 trades_log[trade_log_idx, 10] = pos_vol[i]  # CONTEXT VOL
+                trades_log[trade_log_idx, 11] = pos_entry_score[
+                    i
+                ]  # ENTRY QUALITY SCORE
                 trade_log_idx += 1
 
                 # Actualizar Flags
@@ -307,12 +314,46 @@ def simulate_fast_core(
                     pos_tp2_done[i] = False
                     pos_be_done[i] = False
 
-        # 3. Procesar ENTRADAS (Entry Logic)
+        # 3. Procesar ENTRADAS (Entry Logic) - Prioritized by Quality Score
         invested_equity = current_equity - cash
         max_invested = current_equity * max_exposure_pct
 
         if invested_equity < max_invested:
+            # Find all tickers with entry signals today
+            entry_indices = np.zeros(n_tickers, dtype=np.int64)
+            entry_scores = np.zeros(n_tickers, dtype=np.float32)
+            num_entries = 0
+
             for i in range(n_tickers):
+                if not pos_active[i] and entries_arr[t, i]:
+                    entry_indices[num_entries] = i
+                    entry_scores[num_entries] = entry_score_arr[t, i]
+                    num_entries += 1
+
+            # Sort entries by score (descending) using simple selection sort
+            # This is efficient for small number of entries per day
+            for i in range(num_entries):
+                max_idx = i
+                max_score = entry_scores[i]
+                for j in range(i + 1, num_entries):
+                    if entry_scores[j] > max_score:
+                        max_idx = j
+                        max_score = entry_scores[j]
+                # Swap
+                if max_idx != i:
+                    entry_indices[i], entry_indices[max_idx] = (
+                        entry_indices[max_idx],
+                        entry_indices[i],
+                    )
+                    entry_scores[i], entry_scores[max_idx] = (
+                        entry_scores[max_idx],
+                        entry_scores[i],
+                    )
+
+            # Process entries in score order (highest quality first)
+            for idx in range(num_entries):
+                i = entry_indices[idx]
+
                 if pos_active[i]:
                     continue
 
@@ -378,6 +419,7 @@ def simulate_fast_core(
                         pos_rvol[i] = rvol_arr[t, i]
                         pos_adr[i] = adr_arr[t, i]
                         pos_vol[i] = volume_arr[t, i]
+                        pos_entry_score[i] = entry_score_arr[t, i]
 
                         # Definir Niveles basados en R
                         pos_stop_price[i] = curr_close - stop_dist

@@ -320,7 +320,8 @@ def run_baseline(
         "use_composite_sector_scoring": False,
         "use_earnings_calendar": False,
         "use_trailing_stop": False,
-        "require_positive_rs": False,
+        "require_positive_rs": False,  # OFF for baseline (loose filters)
+        "use_rs_percentile": False,  # OFF for baseline (loose filters)
         "use_adaptive_filtering": False,  # OFF for baseline (loose filters)
         "use_pit_universe": use_pit_universe,
     }
@@ -604,6 +605,12 @@ def derive_tier2_filters(
     derived["min_consolidation_days"] = 5  # Lowered from 10 for more trades
     derived["min_volume"] = 100_000  # Lowered from 300k for more trades
 
+    # ── RS Percentile (IBD-style) - Static values ──────────────────────
+    derived["require_positive_rs"] = True  # Activate RS filter
+    derived["use_rs_percentile"] = True  # Use IBD-style RS ranking
+    derived["min_rs_percentile"] = 70.0  # Top 30% of market
+    derived["rs_lookback_days"] = 60  # 3 months lookback
+
     # ── Summary of derived values with clamping status ────────────────────
     logger.info(f"\n  ═══════════════════════════════════════════════════════════")
     logger.info(f"  DERIVED TIER 2 FILTERS SUMMARY:")
@@ -730,7 +737,7 @@ def optimize_tier1(
         "use_earnings_calendar": False,
         "use_trailing_stop": False,
         "use_composite_sector_scoring": False,
-        "require_positive_rs": False,
+        # RS Percentile settings come from tier2_derived (Tier 2)
         "use_adaptive_filtering": True,  # Activa filtros TIER 1-2-3 con rechazos detallados
         "use_pit_universe": use_pit_universe,
     }
@@ -761,6 +768,23 @@ def optimize_tier1(
         tier1_params["tp1_pct"] = tp1_pct
         tier1_params["tp2_pct"] = tp2_pct
         tier1_params["runner_pct"] = runner_pct
+
+        # ── Entry Quality Score weights ────────────────────────────────
+        # Optimize: VWAP weight + Volume weight, EMA weight derived
+        # Range: 0.2 to 0.6 for each, must sum to 1.0
+        score_vwap_weight = trial.suggest_float("score_vwap_weight", 0.2, 0.6, step=0.1)
+        score_volume_weight = trial.suggest_float(
+            "score_volume_weight", 0.2, 0.6, step=0.1
+        )
+        score_ema_weight = round(1.0 - score_vwap_weight - score_volume_weight, 2)
+
+        # Constraint: EMA weight must be at least 0.1 (10%) and at most 0.4 (40%)
+        if score_ema_weight < 0.1 or score_ema_weight > 0.4:
+            return -999.0
+
+        tier1_params["score_vwap_weight"] = score_vwap_weight
+        tier1_params["score_volume_weight"] = score_volume_weight
+        tier1_params["score_ema_weight"] = score_ema_weight
 
         # Combine everything
         full_params = {**fixed_params, **tier1_params}
@@ -961,7 +985,10 @@ def export_to_streamlit_config(
             "max_consolidation_range": 15.0,
             "require_sector_strength": False,
             "sector_top_percentile": 0.4,
-            "require_positive_rs": False,
+            "require_positive_rs": tier2.get("require_positive_rs", True),
+            "use_rs_percentile": tier2.get("use_rs_percentile", True),
+            "min_rs_percentile": tier2.get("min_rs_percentile", 70.0),
+            "rs_lookback_days": tier2.get("rs_lookback_days", 60),
             "_source": f"Derived from baseline trades (keep_pct filter applied)",
             "_baseline_trades": optimization.get("baseline_trades", 0),
         },

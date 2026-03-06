@@ -1,0 +1,25 @@
+{
+  "run1": {
+    "run_name": "RUN 1",
+    "final_equity": 114789.51094436646,
+    "total_trades": 23,
+    "net_profit": 14789.510944366455,
+    "win_rate": 78.26086956521739,
+    "hit_tp1": 8,
+    "hit_tp2": 5,
+    "stopped_out": 5,
+    "runners": 5
+  },
+  "run2": {
+    "run_name": "RUN 2",
+    "final_equity": 114789.51094436646,
+    "total_trades": 23,
+    "net_profit": 14789.510944366455,
+    "win_rate": 78.26086956521739,
+    "hit_tp1": 8,
+    "hit_tp2": 5,
+    "stopped_out": 5,
+    "runners": 5
+  },
+  "is_deterministic": true
+}
