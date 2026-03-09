@@ -368,6 +368,51 @@ class InteractiveDashboard:
                 annotation_text=f"Base High: ${signal_data['base_high']:.2f}",
                 annotation_position="right",
             )
+            
+        # --- NEW: Pattern Visualization ---
+        pattern_type = signal_data.get("pattern_type", "NONE")
+        if pattern_type != "NONE" and pattern_type is not None:
+            pivot_price = signal_data.get("pivot_price")
+            confidence = signal_data.get("pattern_confidence", 0)
+            
+            # Draw Pivot Line
+            if pivot_price:
+                fig.add_hline(
+                    y=pivot_price,
+                    line_dash="dashdot",
+                    line_color="magenta",
+                    line_width=2.5,
+                    annotation_text=f"🔍 {pattern_type} PIVOT: ${pivot_price:.2f}",
+                    annotation_position="left",
+                )
+                
+            # Add Pattern Badge (Annotation)
+            fig.add_annotation(
+                x=entry_date_pd,
+                y=pivot_price if pivot_price else signal_data.get("entry_price"),
+                text=f"<b>{pattern_type} DETECTED</b><br>Confidence: {confidence:.1%}",
+                showarrow=True,
+                arrowhead=2,
+                arrowcolor="magenta",
+                ax=-60,
+                ay=-60,
+                bgcolor="rgba(255, 0, 255, 0.1)",
+                bordercolor="magenta",
+                borderwidth=2,
+                font=dict(size=12, color="magenta"),
+            )
+            
+            # Special logic for certain patterns (e.g., base consolidation)
+            if "BASE" in str(pattern_type).upper() or "VCP" in str(pattern_type).upper():
+                # Shade the pre-entry consolidation area
+                # Look back 20 days from entry
+                pattern_start = entry_date_pd - pd.Timedelta(days=20)
+                fig.add_vrect(
+                    x0=pattern_start, x1=entry_date_pd,
+                    fillcolor="magenta", opacity=0.05,
+                    layer="below", line_width=0,
+                )
+        # --- END PATTERN VISUALIZATION ---
 
         # Add Stop Loss / Session Low
         if signal_data.get("stop_loss"):

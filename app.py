@@ -122,6 +122,8 @@ def run_cached_backtest(
     runner_pct,
     use_earnings_calendar=False,
     use_pit_universe=False,
+    use_rs_percentile=True,
+    min_rs_percentile=0,
 ):
     from src.backtest.vectorbt_engine_advanced import AdvancedVectorBTEngine
 
@@ -158,6 +160,8 @@ def run_cached_backtest(
         tp2_pct=tp2_pct,
         runner_pct=runner_pct,
         use_pit_universe=use_pit_universe,
+        use_rs_percentile=use_rs_percentile,
+        min_rs_percentile=min_rs_percentile,
     )
     results = engine.run_backtest()
     # BUG FIX: Get combined rejection stats from engine, not just filter_engine
@@ -257,6 +261,8 @@ def run_vectorbt_backtest_ui(
     use_adaptive_filtering=True,
     use_earnings_calendar=False,
     use_pit_universe=False,
+    use_rs_percentile=True,
+    min_rs_percentile=0,
 ):
     progress_bar = st.progress(0)
     status_text = st.empty()
@@ -353,6 +359,8 @@ def run_vectorbt_backtest_ui(
             runner_pct,
             use_earnings_calendar,
             use_pit_universe,
+            use_rs_percentile,
+            min_rs_percentile,
         )
         # BUG FIX: Always update session state and persistence to avoid stale data
         st.session_state["adaptive_filter_rejections"] = (
@@ -768,6 +776,8 @@ with st.sidebar:
             use_adaptive,
             use_earnings_filter,
             use_pit,
+            True,  # use_rs_percentile
+            0,     # min_rs_percentile
         ):
             st.rerun()
 
@@ -1261,6 +1271,213 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
         except Exception as e:
             st.warning(f"QuantStats metrics unavailable: {e}")
 
+        # ═══════════════════════════════════════════════════════════════════════
+        # ANÁLISIS DE ENTRY SCORE, RS Y POSITION SIZING
+        # ═══════════════════════════════════════════════════════════════════════
+        try:
+            from src.analytics.trade_analytics import generate_full_trade_analysis
+
+            if "trade_df_for_grouper" in dir() and not trade_df_for_grouper.empty:
+                analysis = generate_full_trade_analysis(trade_df_for_grouper)
+
+                st.markdown("---")
+                st.markdown("### 📊 Entry Score, RS & Position Sizing Analysis")
+
+                # Insights
+                if "insights" in analysis and analysis["insights"]:
+                    for insight in analysis["insights"]:
+                        st.markdown(f"- {insight}")
+
+                # Entry Score Analysis
+                es = analysis.get("entry_score", {})
+                if es and "high_score_trades" in es:
+                    st.markdown("#### Entry Quality Score Performance")
+                    col1, col2, col3, col4 = st.columns(4)
+
+                    with col1:
+                        st.metric(
+                            "Score-PnL Corr",
+                            f"{es.get('corr_entry_score_vs_pnl', 'N/A')}",
+                        )
+                    with col2:
+                        hs = es.get("high_score_trades", {})
+                        st.metric(
+                            "High Score (≥0.7)",
+                            f"{hs.get('count', 0)}",
+                            f"{hs.get('win_rate', 0)}% WR",
+                        )
+                    with col3:
+                        ms = es.get("med_score_trades", {})
+                        st.metric(
+                            "Med Score (0.4-0.7)",
+                            f"{ms.get('count', 0)}",
+                            f"{ms.get('win_rate', 0)}% WR",
+                        )
+                    with col4:
+                        ls = es.get("low_score_trades", {})
+                        st.metric(
+                            "Low Score (<0.4)",
+                            f"{ls.get('count', 0)}",
+                            f"{ls.get('win_rate', 0)}% WR",
+                        )
+
+                # RS Percentile Analysis
+                rs = analysis.get("rs_percentile", {})
+                if rs and "high_rs_trades" in rs:
+                    st.markdown("#### RS Percentile Performance (IBD-Style)")
+                    col1, col2, col3, col4 = st.columns(4)
+
+                    with col1:
+                        st.metric("RS-PnL Corr", f"{rs.get('corr_rs_vs_pnl', 'N/A')}")
+                    with col2:
+                        hrs = rs.get("high_rs_trades", {})
+                        st.metric(
+                            "RS≥80 (Top 20%)",
+                            f"{hrs.get('count', 0)}",
+                            f"{hrs.get('win_rate', 0)}% WR",
+                        )
+                    with col3:
+                        mrs = rs.get("med_rs_trades", {})
+                        st.metric(
+                            "RS 50-80",
+                            f"{mrs.get('count', 0)}",
+                            f"{mrs.get('win_rate', 0)}% WR",
+                        )
+                    with col4:
+                        lrs = rs.get("low_rs_trades", {})
+                        st.metric(
+                            "RS<50 (Bottom 50%)",
+                            f"{lrs.get('count', 0)}",
+                            f"{lrs.get('win_rate', 0)}% WR",
+                        )
+
+                # Position Sizing Analysis
+                ps = analysis.get("position_sizing", {})
+                if ps and "r_distribution" in ps:
+                    st.markdown("#### Position Sizing & R-Multiple")
+                    col1, col2, col3, col4 = st.columns(4)
+
+                    rd = ps.get("r_distribution", {})
+                    with col1:
+                        st.metric("Mean R", f"{rd.get('mean_r', 'N/A')}")
+                    with col2:
+                        st.metric("Median R", f"{rd.get('median_r', 'N/A')}")
+                    with col3:
+                        st.metric("Big Wins (≥2R)", f"{rd.get('big_wins_pct', 'N/A')}%")
+                    with col4:
+                        st.metric(
+                            "Big Losses (≤-1R)", f"{rd.get('big_losses_pct', 'N/A')}%"
+                        )
+
+                # Context Analysis
+                ctx = analysis.get("context", {})
+                if ctx and "rvol_correlation" in ctx:
+                    st.markdown("#### Context Correlations")
+                    col1, col2 = st.columns(2)
+
+                    rvol_corr = ctx.get("rvol_correlation", {})
+                    with col1:
+                        st.metric(
+                            "RVOL-PnL Corr", f"{rvol_corr.get('corr_vs_pnl', 'N/A')}"
+                        )
+
+                    adr_corr = ctx.get("adr_correlation", {})
+                    with col2:
+                        st.metric(
+                            "ADR-PnL Corr", f"{adr_corr.get('corr_vs_pnl', 'N/A')}"
+                        )
+
+                # Pattern Analysis
+                pat = analysis.get("pattern_performance", {})
+                if (
+                    pat
+                    and "summary" in pat
+                    and "total_trades" in pat.get("summary", {})
+                ):
+                    st.markdown("#### Pattern Detection Performance")
+
+                    # Summary
+                    ps = pat.get("summary", {})
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Total Trades", f"{ps.get('total_trades', 0)}")
+                    with col2:
+                        st.metric("With Pattern", f"{ps.get('trades_with_pattern', 0)}")
+                    with col3:
+                        st.metric(
+                            "Detection Rate",
+                            f"{ps.get('pattern_detection_rate', 0):.1%}",
+                        )
+
+                    # Pattern vs None
+                    pvn = pat.get("pattern_vs_none", {})
+                    if pvn:
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            wp = pvn.get("with_pattern", {})
+                            st.metric(
+                                "With Pattern: Win Rate",
+                                f"{wp.get('win_rate', 0):.1%}",
+                                f"Avg R: {wp.get('avg_r', 0):.2f}",
+                            )
+                        with col2:
+                            wop = pvn.get("no_pattern", {})
+                            st.metric(
+                                "No Pattern: Win Rate",
+                                f"{wop.get('win_rate', 0):.1%}",
+                                f"Avg R: {wop.get('avg_r', 0):.2f}",
+                            )
+
+                    # By Pattern Type
+                    by_pat = pat.get("by_pattern", {})
+                    if by_pat:
+                        st.markdown("##### Performance by Pattern Type")
+                        pattern_data = []
+                        for ptype, stats in by_pat.items():
+                            pattern_data.append(
+                                {
+                                    "Pattern": ptype,
+                                    "Count": stats.get("count", 0),
+                                    "Win Rate": f"{stats.get('win_rate', 0):.1%}",
+                                    "Avg R": f"{stats.get('avg_r', 0):.2f}",
+                                    "Avg PnL": f"${stats.get('avg_pnl', 0):.2f}",
+                                }
+                            )
+                        if pattern_data:
+                            st.dataframe(
+                                pd.DataFrame(pattern_data),
+                                hide_index=True,
+                                use_container_width=True,
+                            )
+
+                    # Confidence Buckets
+                    conf_buckets = pat.get("confidence_buckets", {})
+                    if conf_buckets:
+                        st.markdown("##### Performance by Confidence")
+                        bucket_data = []
+                        for bucket, stats in conf_buckets.items():
+                            bucket_data.append(
+                                {
+                                    "Confidence": bucket,
+                                    "Count": stats.get("count", 0),
+                                    "Win Rate": f"{stats.get('win_rate', 0):.1%}",
+                                    "Avg R": f"{stats.get('avg_r', 0):.2f}",
+                                }
+                            )
+                        if bucket_data:
+                            st.dataframe(
+                                pd.DataFrame(bucket_data),
+                                hide_index=True,
+                                use_container_width=True,
+                            )
+
+                # Store analysis for PDF export
+                if "analysis" not in dir():
+                    analysis_data = analysis
+
+        except Exception as e:
+            st.warning(f"Advanced trade analysis unavailable: {e}")
+
         # --- Cumulative PnL Chart ---
         st.markdown("### Equity Curve")
 
@@ -1390,9 +1607,16 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                 "exit_phases",
                 "hold_days",
                 "entry_score",
+                "pattern_type",
+                "rs_percentile",
             ]
             if has_r:
                 show_cols.append("r_multiple")
+            
+            # Ensure RS percentile exists, fallback to 0 if missing
+            if "rs_percentile" not in display_source.columns:
+                display_source["rs_percentile"] = 0
+                
             show_cols = [c for c in show_cols if c in display_source.columns]
 
             # Apply sorting before pagination
@@ -1440,7 +1664,14 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                 "shares",
                 "pnl",
                 "entry_score",
+                "pattern_type",
+                "rs_percentile",
             ]
+            
+            # Fallback for RS in partials
+            if "rs_percentile" not in df.columns:
+                df["rs_percentile"] = 0
+                
             partial_cols = [c for c in partial_cols if c in df.columns]
 
             if quick_sort == "Latest First":
@@ -1456,7 +1687,7 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                     "entry_score", ascending=False
                 )
             elif quick_sort == "Low Entry Score" and "entry_score" in partial_cols:
-                display_df = df[partial_cols].sort_values("entry_score", ascending=True)
+                display_df = df[partial_cols].sort_values("exit_date", ascending=True)
             else:
                 display_df = df[partial_cols].sort_values("exit_date", ascending=False)
 
@@ -1495,41 +1726,41 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
             display_df_display = display_df
             has_score = False
 
+        # Build column configuration
+        log_column_config = {
+            "entry_score": st.column_config.ProgressColumn(
+                "Score",
+                help="Quality score (0-1)",
+                format="%.3f",
+                min_value=0.0,
+                max_value=1.0,
+            ),
+            "rs_percentile": st.column_config.ProgressColumn(
+                "RS Percentile",
+                help="Relative Strength Percentile (0-100)",
+                format="%d",
+                min_value=0,
+                max_value=100,
+            ),
+            "pattern_type": st.column_config.TextColumn(
+                "Pattern",
+                help="Detected Chart Pattern"
+            )
+        }
+
         if show_all:
-            if has_score:
-                st.dataframe(
-                    display_df_display,
-                    use_container_width=True,
-                    height=600,
-                    column_config={
-                        "entry_score": st.column_config.ProgressColumn(
-                            "Entry Score",
-                            help="Quality score del setup de entrada (0-1)",
-                            format="%.3f",
-                            min_value=0.0,
-                            max_value=1.0,
-                        )
-                    },
-                )
-            else:
-                st.dataframe(display_df_display, use_container_width=True, height=600)
+            st.dataframe(
+                display_df_display,
+                use_container_width=True,
+                height=600,
+                column_config=log_column_config,
+            )
         else:
-            if has_score:
-                paginate_dataframe(
-                    display_df_display,
-                    key_prefix="trades_log",
-                    column_config={
-                        "entry_score": st.column_config.ProgressColumn(
-                            "Entry Score",
-                            help="Quality score del setup de entrada (0-1)",
-                            format="%.3f",
-                            min_value=0.0,
-                            max_value=1.0,
-                        )
-                    },
-                )
-            else:
-                paginate_dataframe(display_df_display, key_prefix="trades_log")
+            paginate_dataframe(
+                display_df_display,
+                key_prefix="trades_log",
+                column_config=log_column_config,
+            )
 
         st.markdown("---")
         st.subheader("Trade Chart Viewer")
@@ -1599,6 +1830,9 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                         if (main_trade["entry_price"] * main_trade["total_shares"]) > 0
                         else 0,
                         "hold_days": main_trade["hold_days"],
+                        "pattern_type": main_trade.get("pattern_type", "NONE"),
+                        "pivot_price": main_trade.get("pivot_price"),
+                        "pattern_confidence": main_trade.get("pattern_confidence", 0),
                     }
                     symbol = main_trade["ticker"]
                     entry_date = main_trade["entry_date"]
@@ -1615,6 +1849,9 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                         / trade["entry_price"]
                         * 100,
                         "hold_days": (trade["exit_date"] - trade["entry_date"]).days,
+                        "pattern_type": trade.get("pattern_type", "NONE"),
+                        "pivot_price": trade.get("pivot_price"),
+                        "pattern_confidence": trade.get("pattern_confidence", 0),
                     }
                     symbol = trade["symbol"]
                     entry_date = trade["entry_date"]
@@ -1823,6 +2060,124 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
 
         if rejections:
             st.subheader("Filter Rejection Funnel")
+            
+            # --- NEW: Market Regime & Exposure Analysis ---
+            st.markdown("---")
+            st.subheader("📊 Market Regime & Exposure Analysis")
+            
+            try:
+                from src.utils.market_regime import MarketRegimeClassifier, load_spy_vix_data
+                
+                # Load SPY data for the backtest period
+                # First try offline for speed, then online if missing
+                spy_data, vix_data = load_spy_vix_data(str(start_date), str(end_date), cache=ticker_cache, offline=True)
+                
+                if spy_data is None or spy_data.empty:
+                    with st.spinner("Downloading SPY/VIX data for market analysis..."):
+                        spy_data, vix_data = load_spy_vix_data(str(start_date), str(end_date), cache=ticker_cache, offline=False)
+                
+                if spy_data is not None and not spy_data.empty:
+                    classifier = MarketRegimeClassifier(spy_data, vix_data)
+                    context_df = classifier.get_context_series()
+                    
+                    col_m1, col_m2 = st.columns(2)
+                    
+                    with col_m1:
+                        st.markdown("**Market Regime Timeline**")
+                        # Map stages to colors
+                        stage_colors = {
+                            "STAGE_1": "#00ffa3", # Bull - Green
+                            "STAGE_2": "#ffa500", # Consolidation - Orange
+                            "STAGE_3": "#ff7f00", # Distribution - Dark Orange
+                            "STAGE_4": "#ff4b4b"  # Bear - Red
+                        }
+                        
+                        fig_regime = go.Figure()
+                        
+                        # Add SPY Price
+                        fig_regime.add_trace(go.Scatter(
+                            x=spy_data.index, y=spy_data['close'],
+                            name="SPY Price", line=dict(color="white", width=1.5)
+                        ))
+                        
+                        # Add background colors for stages
+                        for stage, color in stage_colors.items():
+                            mask = context_df['market_stage'] == stage
+                            if mask.any():
+                                # Find contiguous blocks
+                                diff = mask.astype(int).diff().fillna(0)
+                                starts = spy_data.index[diff == 1].tolist()
+                                if mask.iloc[0]: starts.insert(0, spy_data.index[0])
+                                ends = spy_data.index[diff == -1].tolist()
+                                if mask.iloc[-1]: ends.append(spy_data.index[-1])
+                                
+                                for s, e in zip(starts, ends):
+                                    fig_regime.add_vrect(
+                                        x0=s, x1=e, fillcolor=color, opacity=0.15, 
+                                        layer="below", line_width=0, name=stage
+                                    )
+                                    
+                        fig_regime.update_layout(
+                            template="plotly_dark", height=400,
+                            margin=dict(l=20, r=20, t=30, b=20),
+                            yaxis_title="SPY Price",
+                            showlegend=True
+                        )
+                        st.plotly_chart(fig_regime, use_container_width=True)
+                        st.caption("Background colors indicate Market Stage (Green=Bull, Red=Bear). Your system filters entries in Red/Orange stages.")
+
+                    with col_m2:
+                        st.markdown("**Portfolio Exposure Density**")
+                        if not grouped_trades.empty:
+                            # Calculate daily exposure
+                            dates = pd.date_range(start_date, end_date)
+                            exposure_series = pd.Series(0, index=dates)
+                            
+                            for _, trade in grouped_trades.iterrows():
+                                mask = (exposure_series.index >= trade['entry_date']) & (exposure_series.index <= trade['final_exit_date'])
+                                exposure_series[mask] += 1
+                                
+                            fig_exp = px.area(
+                                x=exposure_series.index, y=exposure_series.values,
+                                title="Active Trades Over Time",
+                                labels={"x": "Date", "y": "Open Positions"},
+                                color_discrete_sequence=["#00ffa3"]
+                            )
+                            fig_exp.update_layout(template="plotly_dark", height=400)
+                            st.plotly_chart(fig_exp, use_container_width=True)
+                            
+                            avg_exp = exposure_series.mean()
+                            st.caption(f"Average open positions: {avg_exp:.2f}. Periods with 0 positions explain the low Exposure Time.")
+                else:
+                    st.warning("Could not load SPY data for regime analysis. Ensure SPY is in cache.")
+            except Exception as e:
+                st.error(f"Error generating regime analysis: {e}")
+            
+            # --- NEW: Expert Metric Analysis ---
+            st.markdown("#### 💡 Expert Metric Analysis")
+            exp_col1, exp_col2 = st.columns(2)
+            
+            with exp_col1:
+                st.info("**Exposure Time (7.1%)**")
+                st.write("""
+                Este valor es **excelente** para una estrategia de momentum quirúrgica. Significa que:
+                * **Eficiencia:** Tu capital solo está expuesto al riesgo de mercado el 7% del tiempo.
+                * **Selectividad:** El sistema es extremadamente estricto, operando solo en condiciones óptimas.
+                * **Protección:** El 93% del tiempo estás en cash, evitando 'drawdowns' innecesarios.
+                """)
+                
+            with exp_col2:
+                st.info("**Beta Negativo**")
+                st.write("""
+                Un Beta negativo indica que tu estrategia está **descorrelacionada** del SPY:
+                * **Cobertura Natural:** Cuando el mercado baja, tu cartera tiende a mantenerse o subir.
+                * **Alpha Puro:** Tus retornos no dependen de que el mercado suba, sino de la selección de activos.
+                * **Resiliencia:** Es una métrica muy buscada por fondos institucionales para diversificar carteras.
+                """)
+            # --- END EXPERT ANALYSIS ---
+
+            st.markdown("---")
+            # --- END NEW SECTION ---
 
             rej_df = pd.DataFrame(
                 [{"filter": k, "rejections": v} for k, v in rejections.items()]

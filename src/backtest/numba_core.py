@@ -94,8 +94,8 @@ def simulate_fast_core(
     initial_max_trades = min(50000, n_days * 100)
     trade_log_idx = 0
     trades_log = np.zeros(
-        (initial_max_trades, 12), dtype=np.float64
-    )  # 12 cols: day, ticker, exit_type, exit_price, exit_shares, pnl, entry_day, risk, rvol, adr, vol, entry_score
+        (initial_max_trades, 15), dtype=np.float64
+    )  # 15 cols: day, ticker, exit_type, exit_price, exit_shares, pnl, entry_day, risk, rvol, adr, vol, entry_score, stop_loss, tp1_target, tp2_target
 
     # --- BUCLE PRINCIPAL (Día a Día) ---
     for t in range(n_days):
@@ -269,7 +269,7 @@ def simulate_fast_core(
                 # Registrar Trade - DYNAMIC RESIZING to save memory
                 if trade_log_idx >= trades_log.shape[0]:
                     new_size = trades_log.shape[0] * 2  # Double the capacity
-                    new_trades = np.zeros((new_size, 12), dtype=np.float64)
+                    new_trades = np.zeros((new_size, 15), dtype=np.float64)
                     new_trades[:trade_log_idx] = trades_log
                     trades_log = new_trades
                 trades_log[trade_log_idx, 0] = t
@@ -286,6 +286,9 @@ def simulate_fast_core(
                 trades_log[trade_log_idx, 11] = pos_entry_score[
                     i
                 ]  # ENTRY QUALITY SCORE
+                trades_log[trade_log_idx, 12] = pos_stop_price[i]  # STOP LOSS
+                trades_log[trade_log_idx, 13] = pos_tp1_price[i]  # TP1 TARGET
+                trades_log[trade_log_idx, 14] = pos_tp2_price[i]  # TP2 TARGET
                 trade_log_idx += 1
 
                 # Actualizar Flags

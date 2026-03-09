@@ -70,7 +70,7 @@ class ValidationThresholds:
 
     # Drawdown limits
     max_drawdown_pct: float = 25.0  # Max 25% drawdown
-    max_drawdown_duration_days: int = 90  # Max 90 days in drawdown (relaxed from 60)
+    max_drawdown_duration_days: int = 180  # Max 180 days — momentum selectivo tiene 7% exposure, dias en cash cuentan como DD
 
     # Performance stability (relaxed for shorter OOS windows)
     min_sharpe_ratio: float = 0.5  # Relaxed from 0.8

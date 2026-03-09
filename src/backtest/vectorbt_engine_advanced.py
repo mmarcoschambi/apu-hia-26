@@ -125,94 +125,125 @@ def prepare_numba_arrays(engine, release_dataframes: bool = False) -> Dict:
     )
 
     # ============================================
-    # ENTRY QUALITY SCORE - Trade quality prioritization
-    # Score = 0.4 * VWAP_proximity + 0.4 * Volume_strength + 0.2 * EMA10_trend
-    # VWAP_proximity = 50% MVWAP-20 + 50% AVWAP Monthly (MTD)
-    # MVWAP-20 = sum(close*volume, 20) / sum(volume, 20)
-    # AVWAP Monthly = Anchored VWAP from month start
-    # Used to prioritize entries when capital is constrained
+    # ENTRY QUALITY SCORE v2 - RS Rank + 52wk Proximity
+    # Score = 0.70 * RS_rank_daily + 0.30 * proximity_52wk_high
+    #
+    # RS_rank_daily: percentil cross-sectional del RS de 60 dias
+    #   → responde "¿quién es el rey del momentum HOY?"
+    #   → 1.0 = mejor RS relativo, 0.0 = peor
+    #
+    # proximity_52wk_high: close / max(close, 252 dias)
+    #   → responde "¿quién tiene menos resistencia arriba?"
+    #   → 1.0 = en el máximo, 0.5 = a 50% de distancia
+    #
+    # Pesos optimizables por Optuna: score_rs_weight, score_proximity_weight
     # ============================================
     try:
         close_arr = arrays["close"]
-        volume_arr = arrays["volume"]
         n_rows, n_cols = close_arr.shape
 
-        rvol_source = arrays.get("rvol", np.ones_like(close_arr))
-        ema10_source = arrays.get("ema_10", np.zeros_like(close_arr))
-
-        rvol_arr = (
-            rvol_source[:n_rows, :n_cols]
-            if rvol_source.shape != close_arr.shape
-            else rvol_source
-        )
-        ema10_arr = (
-            ema10_source[:n_rows, :n_cols]
-            if ema10_source.shape != close_arr.shape
-            else ema10_source
-        )
-
-        rvol_arr = np.nan_to_num(rvol_arr, nan=1.0)
-        ema10_arr = np.nan_to_num(ema10_arr, nan=0.0)
-
         close_df = engine.close.ffill()
-        volume_df = engine.volume.fillna(0)
 
-        dollar_volume = close_df * volume_df
-        mvwap_20 = (
-            dollar_volume.rolling(20, min_periods=1).sum()
-            / volume_df.rolling(20, min_periods=1).sum()
-        ).replace([np.inf, -np.inf], np.nan)
+        # --- COMPONENTE 1: RS Rank del dia (cross-sectional percentile) ---
+        # Usar el RS ya calculado en el engine (performance 60d) si existe
+        # Si no, calcularlo directamente desde close
+        rs_lookback = getattr(engine, "rs_lookback_days", 60)
+        rs_raw = close_df.pct_change(rs_lookback)  # retorno 60 dias
+        # Rank cross-sectional: cada dia, rankear todos los tickers
+        # pct=True -> percentil 0.0 a 1.0, ascending=True -> mayor RS = 1.0
+        score_rs = rs_raw.rank(axis=1, pct=True, ascending=True)
+        score_rs = score_rs.ffill().fillna(0.5)  # neutral si no hay dato
 
-        dollar_vol = (close_df * volume_df).fillna(0)
-        cum_vol = volume_df.fillna(0)
-        month_key = close_df.index.to_period("M")
-        dollar_vol_mtd = dollar_vol.groupby(month_key, group_keys=False).cumsum()
-        cum_vol_mtd = cum_vol.groupby(month_key, group_keys=False).cumsum()
-        avwap_mtd = dollar_vol_mtd / cum_vol_mtd.replace(0, 1)
-        avwap_mtd = avwap_mtd.replace([np.inf, -np.inf], np.nan)
+        # --- COMPONENTE 2: Proximidad a máximo de 52 semanas ---
+        # close / rolling_max_252 -> 1.0 = en ATH, menor = más lejos
+        max_52wk = close_df.rolling(window=252, min_periods=50).max()
+        proximity_52wk = (close_df / max_52wk.replace(0, np.nan)).clip(0.0, 1.0)
+        proximity_52wk = proximity_52wk.ffill().fillna(0.5)
 
-        mvwap_20 = mvwap_20.ffill().fillna(close_df)
-        avwap_mtd = avwap_mtd.ffill().fillna(close_df)
+        # --- PONDERACION ---
+        rs_w = getattr(engine, "score_rs_weight", 0.70)
+        prox_w = getattr(engine, "score_proximity_weight", 0.30)
+        # Asegurar que suman 1.0
+        total_w = rs_w + prox_w
+        if total_w > 0:
+            rs_w = rs_w / total_w
+            prox_w = prox_w / total_w
 
-        mvwap_arr = mvwap_20.values.astype(np.float32)
-        avwap_arr = avwap_mtd.values.astype(np.float32)
-
-        mvwap_arr = (
-            mvwap_arr[:n_rows, :n_cols]
-            if mvwap_arr.shape != close_arr.shape
-            else mvwap_arr
-        )
-        avwap_arr = (
-            avwap_arr[:n_rows, :n_cols]
-            if avwap_arr.shape != close_arr.shape
-            else avwap_arr
-        )
-
-        mvwap_arr = np.nan_to_num(mvwap_arr, nan=close_arr)
-        avwap_arr = np.nan_to_num(avwap_arr, nan=close_arr)
-
-        mvwap_distance = np.abs(close_arr - mvwap_arr) / np.where(
-            mvwap_arr > 0, mvwap_arr, 1.0
-        )
-        avwap_distance = np.abs(close_arr - avwap_arr) / np.where(
-            avwap_arr > 0, avwap_arr, 1.0
-        )
-
-        mvwap_score = np.clip((0.05 - mvwap_distance) / 0.04, 0.0, 1.0)
-        avwap_score = np.clip((0.05 - avwap_distance) / 0.04, 0.0, 1.0)
-
-        vwap_score = 0.5 * mvwap_score + 0.5 * avwap_score
-
-        volume_score = np.clip((rvol_arr - 0.5) / 1.5, 0.0, 1.0)
-        ema10_score = np.where(close_arr > ema10_arr, 1.0, 0.0)
-
-        vwap_w = getattr(engine, "score_vwap_weight", 0.4)
-        vol_w = getattr(engine, "score_volume_weight", 0.4)
-        ema_w = getattr(engine, "score_ema_weight", 0.2)
-        entry_score = (
-            vwap_w * vwap_score + vol_w * volume_score + ema_w * ema10_score
-        ).astype(np.float32)
+        entry_score_df = rs_w * score_rs + prox_w * proximity_52wk
+        entry_score = entry_score_df.values.astype(np.float32)
         entry_score = np.nan_to_num(entry_score, nan=0.5)
+
+        # Recortar a shape correcto
+        if entry_score.shape != (n_rows, n_cols):
+            padded = np.full((n_rows, n_cols), 0.5, dtype=np.float32)
+            r = min(entry_score.shape[0], n_rows)
+            c = min(entry_score.shape[1], n_cols)
+            padded[:r, :c] = entry_score[:r, :c]
+            entry_score = padded
+
+        # ============================================
+        # PATTERN BONUS - Add bonus for detected patterns
+        # Pattern bonus is ADDITIVE: preserves timing semantics
+        # ============================================
+        if (
+            hasattr(engine, "pattern_confidence_matrix")
+            and engine.pattern_confidence_matrix is not None
+        ):
+            try:
+                conf_df = engine.pattern_confidence_matrix
+
+                # Get the dates and tickers from engine.close
+                close_df = engine.close
+
+                # Reindex pattern matrix to match close matrix
+                common_dates = close_df.index.intersection(conf_df.index)
+                common_tickers = [t for t in close_df.columns if t in conf_df.columns]
+
+                if len(common_dates) > 0 and len(common_tickers) > 0:
+                    # Extract pattern confidence for common dates/tickers
+                    pattern_conf = conf_df.loc[common_dates, common_tickers]
+
+                    # Align with close array (handle potential index mismatches)
+                    pattern_arr = pattern_conf.values.astype(np.float32)
+
+                    # Handle shape mismatch (may need to pad or trim)
+                    target_shape = close_arr.shape
+                    if pattern_arr.shape != target_shape:
+                        # Pad with zeros if needed
+                        padded = np.zeros(target_shape, dtype=np.float32)
+                        min_rows = min(pattern_arr.shape[0], target_shape[0])
+                        min_cols = min(pattern_arr.shape[1], target_shape[1])
+                        padded[:min_rows, :min_cols] = pattern_arr[:min_rows, :min_cols]
+                        pattern_arr = padded
+
+                    # Calculate pattern bonus based on confidence thresholds
+                    bonus_high = getattr(engine, "pattern_bonus_high", 0.30)
+                    bonus_med = getattr(engine, "pattern_bonus_med", 0.20)
+                    bonus_low = getattr(engine, "pattern_bonus_low", 0.10)
+
+                    pattern_bonus = np.where(
+                        pattern_arr >= 0.7,
+                        bonus_high,
+                        np.where(
+                            pattern_arr >= 0.5,
+                            bonus_med,
+                            np.where(pattern_arr >= 0.3, bonus_low, 0.0),
+                        ),
+                    )
+
+                    # Add bonus to base entry_score
+                    entry_score = np.clip(entry_score + pattern_bonus, 0.0, 1.0)
+
+                    # Log pattern bonus stats
+                    bonus_applied = (pattern_bonus > 0).sum()
+                    total_entries = pattern_arr.size
+                    logger.info(
+                        f"   🎯 Pattern bonus applied: {bonus_applied}/{total_entries} "
+                        f"({bonus_applied / total_entries * 100:.1f}%) entries with pattern"
+                    )
+            except Exception as e:
+                logger.warning(f"⚠️  Could not apply pattern bonus: {e}")
+
         arrays["entry_score"] = entry_score
 
         logger.info(
@@ -479,6 +510,14 @@ class AdvancedVectorBTEngine:
         score_vwap_weight: float = 0.4,  # Weight for VWAP proximity (0.0-1.0)
         score_volume_weight: float = 0.4,  # Weight for volume strength (0.0-1.0)
         score_ema_weight: float = 0.2,  # Weight for EMA10 trend (0.0-1.0)
+        # NEW: Pattern Detection Integration (Tier 2)
+        use_pattern_filter: bool = False,  # Filter entries without pattern (start False)
+        min_pattern_confidence: float = 0.5,  # Minimum confidence for filter
+        pattern_bonus_high: float = 0.30,  # Bonus for confidence >= 0.7
+        pattern_bonus_med: float = 0.20,  # Bonus for confidence >= 0.5
+        pattern_bonus_low: float = 0.10,  # Bonus for confidence >= 0.3
+        allowed_patterns: Optional[List[str]] = None,  # None = all patterns allowed
+        pattern_cache_path: str = "data/pattern_matrix.pkl",  # Path to precomputed patterns
         **kwargs,
     ):
         self.universe = universe
@@ -574,6 +613,17 @@ class AdvancedVectorBTEngine:
         self.score_vwap_weight = score_vwap_weight
         self.score_volume_weight = score_volume_weight
         self.score_ema_weight = score_ema_weight
+
+        # Pattern Detection Integration
+        self.use_pattern_filter = use_pattern_filter
+        self.min_pattern_confidence = min_pattern_confidence
+        self.pattern_bonus_high = pattern_bonus_high
+        self.pattern_bonus_med = pattern_bonus_med
+        self.pattern_bonus_low = pattern_bonus_low
+        self.allowed_patterns = allowed_patterns
+        self.pattern_cache_path = pattern_cache_path
+        self.pattern_confidence_matrix: Optional[pd.DataFrame] = None
+        self.pattern_type_matrix: Optional[pd.DataFrame] = None
 
         # Filter thresholds
         self.max_dist_sma20 = max_dist_sma20
@@ -684,6 +734,77 @@ class AdvancedVectorBTEngine:
                 )
                 logger.warning("   ⚠️  Continuing without market regime filter")
                 self.use_market_regime_filter = False
+
+    def _load_pattern_cache(self) -> None:
+        """
+        Load precomputed pattern cache and build aligned matrices.
+        Called from run_backtest() before prepare_numba_arrays.
+        """
+        import pickle
+        from pathlib import Path
+
+        cache_path = Path(self.pattern_cache_path)
+        if not cache_path.exists():
+            logger.warning(f"⚠️  Pattern cache not found: {cache_path}")
+            return
+
+        try:
+            with open(cache_path, "rb") as f:
+                matrix_data = pickle.load(f)
+
+            if isinstance(matrix_data, dict) and "confidence" in matrix_data:
+                conf_df = matrix_data["confidence"]
+                pt_df = matrix_data.get("pattern_type")
+            else:
+                logger.warning(f"⚠️  Pattern cache format unexpected")
+                return
+
+            # Filter to relevant date range
+            conf_df = conf_df.loc[conf_df.index >= self.start_date]
+            conf_df = conf_df.loc[conf_df.index <= self.end_date]
+
+            # Filter to universe tickers
+            available_tickers = [t for t in self.universe if t in conf_df.columns]
+            if len(available_tickers) < len(self.universe):
+                missing = set(self.universe) - set(available_tickers)
+                logger.warning(
+                    f"⚠️  {len(missing)} tickers not in pattern cache: {list(missing)[:5]}..."
+                )
+
+            conf_df = conf_df[available_tickers]
+            if pt_df is not None:
+                pt_df = pt_df[available_tickers]
+
+            self.pattern_confidence_matrix = conf_df
+            self.pattern_type_matrix = pt_df
+
+            # Stats
+            total_entries = conf_df.size
+            patterns_found = (conf_df > 0).sum().sum()
+            detection_rate = (
+                patterns_found / total_entries * 100 if total_entries > 0 else 0
+            )
+
+            logger.info(
+                f"✅ Pattern cache loaded: {len(available_tickers)} tickers, "
+                f"{len(conf_df)} dates, {patterns_found} patterns ({detection_rate:.1f}% detection)"
+            )
+
+            # Log pattern type distribution
+            if pt_df is not None:
+                type_counts = {}
+                for col in pt_df.columns:
+                    counts = pt_df[col].value_counts()
+                    for pt, cnt in counts.items():
+                        if pt != "NONE":
+                            type_counts[pt] = type_counts.get(pt, 0) + cnt
+                if type_counts:
+                    logger.info(
+                        f"   📊 Pattern distribution: {dict(sorted(type_counts.items(), key=lambda x: -x[1])[:5])}"
+                    )
+
+        except Exception as e:
+            logger.warning(f"⚠️  Failed to load pattern cache: {e}")
 
     def load_data(self) -> pd.DataFrame:
         """Load OHLCV data for all tickers with 1 year lookback for valid signals"""
@@ -803,7 +924,10 @@ class AdvancedVectorBTEngine:
             )
 
         # Update universe to only include loaded tickers
-        self.universe = list(all_data.keys())
+        # DETERMINISM FIX: sort alphabetically so column order is always identical
+        # regardless of thread completion order in ThreadPoolExecutor
+        self.universe = sorted(all_data.keys())
+        all_data = {t: all_data[t] for t in self.universe}
 
         # Build DataFrames
         close_data = {t: df["Close"] for t, df in all_data.items()}
@@ -1642,7 +1766,7 @@ class AdvancedVectorBTEngine:
         equity_curve = pd.Series(equity_curve_arr, index=close.index)
 
         if len(trades_log) > 0:
-            # Columnas: [dia_salida, ticker_idx, tipo_salida, precio_salida, shares, pnl, dia_entrada, riesgo_inicial, rvol, adr, vol, entry_score]
+            # Columnas: [dia_salida, ticker_idx, tipo_salida, precio_salida, shares, pnl, dia_entrada, riesgo_inicial, rvol, adr, vol, entry_score, stop_loss, tp1_target, tp2_target]
             trades_df = pd.DataFrame(
                 trades_log,
                 columns=[
@@ -1658,6 +1782,9 @@ class AdvancedVectorBTEngine:
                     "context_adr",
                     "context_volume",
                     "entry_score",
+                    "stop_loss",
+                    "tp1_target",
+                    "tp2_target",
                 ],
             )
 
@@ -1759,6 +1886,83 @@ class AdvancedVectorBTEngine:
                     except Exception:
                         rs_vals.append(np.nan)
                 trades_df["rs_percentile"] = rs_vals
+
+            # ═══════════════════════════════════════════════════════════════
+            # PATTERN INFO at Entry
+            # ═══════════════════════════════════════════════════════════════
+            if self.pattern_confidence_matrix is not None and len(trades_df) > 0:
+                pattern_conf = self.pattern_confidence_matrix
+                pattern_types = (
+                    self.pattern_type_matrix
+                    if self.pattern_type_matrix is not None
+                    else None
+                )
+
+                pattern_confidences = []
+                pattern_types_list = []
+
+                for _, row in trades_df.iterrows():
+                    try:
+                        entry_date = row["entry_date"]
+                        sym = row["symbol"]
+
+                        if (
+                            entry_date in pattern_conf.index
+                            and sym in pattern_conf.columns
+                        ):
+                            conf = float(pattern_conf.loc[entry_date, sym])
+                        else:
+                            conf = 0.0
+
+                        pattern_confidences.append(conf)
+
+                        # Pattern type
+                        if pattern_types is not None:
+                            if (
+                                entry_date in pattern_types.index
+                                and sym in pattern_types.columns
+                            ):
+                                ptype = str(pattern_types.loc[entry_date, sym])
+                            else:
+                                ptype = "NONE"
+                            pattern_types_list.append(ptype)
+                        else:
+                            pattern_types_list.append("NONE")
+
+                    except Exception:
+                        pattern_confidences.append(0.0)
+                        pattern_types_list.append("NONE")
+
+                trades_df["pattern_confidence"] = pattern_confidences
+                trades_df["pattern_type"] = pattern_types_list
+
+                # Calculate pattern_bonus applied (same logic as in entry_score)
+                bonus_high = getattr(self, "pattern_bonus_high", 0.30)
+                bonus_med = getattr(self, "pattern_bonus_med", 0.20)
+                bonus_low = getattr(self, "pattern_bonus_low", 0.10)
+
+                def calc_pattern_bonus(conf):
+                    if conf >= 0.7:
+                        return bonus_high
+                    elif conf >= 0.5:
+                        return bonus_med
+                    elif conf >= 0.3:
+                        return bonus_low
+                    return 0.0
+
+                trades_df["pattern_bonus"] = trades_df["pattern_confidence"].apply(
+                    calc_pattern_bonus
+                )
+
+                logger.info(
+                    f"   🎯 Pattern info added to trades: {len(trades_df)} trades"
+                )
+                logger.info(
+                    f"      Trades with pattern (conf > 0): {(trades_df['pattern_confidence'] > 0).sum()}"
+                )
+                logger.info(
+                    f"      Pattern distribution: {trades_df['pattern_type'].value_counts().head(5).to_dict()}"
+                )
 
             # -- Position Sizing Details --
             # stop_distance = entry_price - stop_price
@@ -2138,6 +2342,34 @@ class AdvancedVectorBTEngine:
             logger.info(
                 f"🛡️  PIT Universe filter: blocked {blocked} entries on non-member dates "
                 f"({entries_after} remaining)"
+            )
+            signal_types[~entries] = None
+
+        # =====================================================================
+        # PATTERN FILTER (optional - filter entries without pattern)
+        # =====================================================================
+        if self.use_pattern_filter and self.pattern_confidence_matrix is not None:
+            entries_before = entries.sum().sum()
+
+            # Build pattern mask from confidence matrix
+            pattern_conf = self.pattern_confidence_matrix
+
+            # Reindex to match entries
+            pattern_conf_aligned = pattern_conf.reindex(
+                index=entries.index, columns=entries.columns, fill_value=0.0
+            )
+
+            # Apply minimum confidence threshold
+            pattern_mask = pattern_conf_aligned >= self.min_pattern_confidence
+
+            # Apply filter
+            entries = entries & pattern_mask
+
+            entries_after = entries.sum().sum()
+            blocked = entries_before - entries_after
+            logger.info(
+                f"🎯 Pattern filter: blocked {blocked} entries without pattern "
+                f"(conf < {self.min_pattern_confidence}), {entries_after} remaining"
             )
             signal_types[~entries] = None
 
@@ -3240,6 +3472,13 @@ class AdvancedVectorBTEngine:
             Tuple of (equity_curve, trades_df)
         """
         logger.info("🔄 Running single-chunk backtest with Numba Core...")
+
+        # Load pattern cache if enabled
+        if (
+            getattr(self, "use_pattern_filter", False)
+            or getattr(self, "pattern_bonus_high", 0) > 0
+        ):
+            self._load_pattern_cache()
 
         # Prepare NumPy arrays (memory optimized)
         numba_arrays = prepare_numba_arrays(self)

@@ -611,6 +611,18 @@ def derive_tier2_filters(
     derived["min_rs_percentile"] = 70.0  # Top 30% of market
     derived["rs_lookback_days"] = 60  # 3 months lookback
 
+    # ── Pattern Detection (NOT in tier2_derived - comes from engine defaults or Optuna tier1) ───────
+    # Pattern params are NOT derived from data - they are optimized by Optuna or use engine defaults
+    # We only set the cache path here (not optimizable)
+    derived["use_pattern_filter"] = (
+        False  # Start without hard filter (comes from engine default)
+    )
+    derived["min_pattern_confidence"] = 0.5  # (comes from engine default)
+    # NOTE: pattern_bonus_high/med/low are NOT set here - they come from:
+    #   - Optuna (tier1_params) if optimizing
+    #   - Engine defaults if not optimizing
+    derived["pattern_cache_path"] = "data/pattern_matrix.pkl"
+
     # ── Summary of derived values with clamping status ────────────────────
     logger.info(f"\n  ═══════════════════════════════════════════════════════════")
     logger.info(f"  DERIVED TIER 2 FILTERS SUMMARY:")
@@ -752,7 +764,7 @@ def optimize_tier1(
         # Aligned with Streamlit proven parameters (1.5R / 3.5R)
         tier1_params = {
             "tp1_r": trial.suggest_float("tp1_r", 1.25, 2.0, step=0.25),
-            "tp2_r": trial.suggest_float("tp2_r", 3.0, 5.0, step=0.25),
+            "tp2_r": trial.suggest_float("tp2_r", 2.0, 3.5, step=0.25),
         }
 
         # Position distribution (must sum to ~1.0)
@@ -769,22 +781,19 @@ def optimize_tier1(
         tier1_params["tp2_pct"] = tp2_pct
         tier1_params["runner_pct"] = runner_pct
 
-        # ── Entry Quality Score weights ────────────────────────────────
-        # Optimize: VWAP weight + Volume weight, EMA weight derived
-        # Range: 0.2 to 0.6 for each, must sum to 1.0
-        score_vwap_weight = trial.suggest_float("score_vwap_weight", 0.2, 0.6, step=0.1)
-        score_volume_weight = trial.suggest_float(
-            "score_volume_weight", 0.2, 0.6, step=0.1
-        )
-        score_ema_weight = round(1.0 - score_vwap_weight - score_volume_weight, 2)
+        # Entry Quality Score v2: RS rank + 52wk proximity
+        # Optuna decide la proporcion optima entre las dos señales
+        score_rs_weight = trial.suggest_float("score_rs_weight", 0.4, 0.9, step=0.1)
+        score_proximity_weight = round(1.0 - score_rs_weight, 2)
+        tier1_params["score_rs_weight"] = score_rs_weight
+        tier1_params["score_proximity_weight"] = score_proximity_weight
 
-        # Constraint: EMA weight must be at least 0.1 (10%) and at most 0.4 (40%)
-        if score_ema_weight < 0.1 or score_ema_weight > 0.4:
-            return -999.0
-
-        tier1_params["score_vwap_weight"] = score_vwap_weight
-        tier1_params["score_volume_weight"] = score_volume_weight
-        tier1_params["score_ema_weight"] = score_ema_weight
+        # PATTERN BONUS: fijado en 0.0 para diagnostico
+        # El bonus distorsiona el entry score (High score WR < Med score WR)
+        # Una vez confirmado si aporta valor se re-activa
+        tier1_params["pattern_bonus_high"] = 0.0
+        tier1_params["pattern_bonus_med"] = 0.0
+        tier1_params["pattern_bonus_low"] = 0.0
 
         # Combine everything
         full_params = {**fixed_params, **tier1_params}
@@ -1199,8 +1208,21 @@ def run_pipeline(args) -> Dict[str, Any]:
             "use_earnings_calendar": False,
             "use_trailing_stop": False,
             "use_composite_sector_scoring": False,
-            "require_positive_rs": False,
-            "use_adaptive_filtering": True,  # Activa filtros TIER 1-2-3 con rechazos detallados
+            # RS — viene de tier2_derived (Phase 2), no de final_config
+            "require_positive_rs": tier2_derived.get("require_positive_rs", True),
+            "use_rs_percentile": tier2_derived.get("use_rs_percentile", True),
+            "min_rs_percentile": tier2_derived.get("min_rs_percentile", 70.0),
+            "rs_lookback_days": tier2_derived.get("rs_lookback_days", 60),
+            # Pattern bonus — viene de best_tier1 (Optuna)
+            "pattern_bonus_high": best_tier1.get("pattern_bonus_high", 0.0),
+            "pattern_bonus_med": best_tier1.get("pattern_bonus_med", 0.0),
+            "pattern_bonus_low": best_tier1.get("pattern_bonus_low", 0.0),
+            "use_pattern_filter": tier2_derived.get("use_pattern_filter", False),
+            "min_pattern_confidence": tier2_derived.get("min_pattern_confidence", 0.5),
+            "pattern_cache_path": tier2_derived.get(
+                "pattern_cache_path", "data/pattern_matrix.pkl"
+            ),
+            "use_adaptive_filtering": True,
             "use_pit_universe": use_pit,
         }
 
@@ -1360,6 +1382,37 @@ def run_pipeline(args) -> Dict[str, Any]:
     for k, v in best_tier1.items():
         logger.info(f"    {k}: {v}")
 
+    # ═══════════════════════════════════════════════════════════════════════
+    # REJECTIONS BY TIER (from best trial)
+    # ═══════════════════════════════════════════════════════════════════════
+    # Re-run best params to get rejection stats
+    try:
+        full_best_params = {**fixed_params, **best_tier1}
+        rejection_engine = AdvancedVectorBTEngine(
+            universe=universe,
+            start_date=args.start,
+            end_date=args.end,
+            initial_capital=args.capital,
+            **full_best_params,
+        )
+        rejection_engine.load_data()
+        rejection_engine.run_backtest()
+
+        rejection_stats = getattr(rejection_engine, "rejection_stats_tier", {})
+        if rejection_stats:
+            tier1_rejections = rejection_stats.get("TIER 1 (Market Safety)", 0)
+            tier2_rejections = rejection_stats.get("TIER 2 (Dynamic Quality)", 0)
+            tier3_rejections = rejection_stats.get("TIER 3 (Optional)", 0)
+            total_rejections = tier1_rejections + tier2_rejections + tier3_rejections
+
+            logger.info(f"\n  REJECTIONS BY TIER (Best Trial):")
+            logger.info(f"    Tier 1 (Market Safety): {tier1_rejections:,}")
+            logger.info(f"    Tier 2 (Quality Filter): {tier2_rejections:,}")
+            logger.info(f"    Tier 3 (Optional): {tier3_rejections:,}")
+            logger.info(f"    Total Rejections: {total_rejections:,}")
+    except Exception as e:
+        logger.warning(f"  Could not get rejection stats: {e}")
+
     if validation_result:
         if validation_result.promotion_approved:
             logger.info(f"\n  VALIDATION: APPROVED FOR PRODUCTION")
@@ -1371,7 +1424,7 @@ def run_pipeline(args) -> Dict[str, Any]:
                 try:
                     export_to_streamlit_config(
                         final_config=final_config,
-                        output_path="config/production_config.json",
+                        output_path=args.output,
                         backup=True,
                     )
                     logger.info(f"\n  🚀 Strategy exported to Streamlit app!")
@@ -1462,6 +1515,12 @@ Examples:
         "--use-pit-universe",
         action="store_true",
         help="Use Point-in-Time S&P 500 universe (eliminates survivorship bias)",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default="config/production_config.json",
+        help="Output path for Streamlit config (default: config/production_config.json)",
     )
 
     args = parser.parse_args()

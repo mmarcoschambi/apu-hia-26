@@ -106,6 +106,11 @@ class TradeGrouper:
             "tp1_target",
             "tp2_target",
             "entry_score",  # Entry Quality Score
+            "pattern_type",
+            "pattern_confidence",
+            "pivot_price",
+            "rs_percentile",
+            "rs_score",
         ]
 
         for col in optional_cols:
@@ -756,6 +761,24 @@ class QuantStatsAnalyzer:
                     except Exception as e2:
                         logger.error(f"❌ Both distribution plots failed: {e2}")
 
+                # Page 11: Trade Analytics (Entry Score, RS, Position Sizing)
+                try:
+                    from src.analytics.trade_analytics import (
+                        generate_full_trade_analysis,
+                    )
+
+                    if hasattr(self, "trade_log") and not self.trade_log.empty:
+                        analysis = generate_full_trade_analysis(self.trade_log)
+
+                        fig = self._create_trade_analysis_page(analysis)
+                        pdf.savefig(fig, bbox_inches="tight")
+                        plt.close(fig)
+                        logger.info(
+                            "✅ Page 11: Trade Analytics (Entry Score, RS, Position Sizing)"
+                        )
+                except Exception as e:
+                    logger.warning(f"⚠️ Skipped Trade Analytics page: {e}")
+
             logger.info(f"✅ PDF Report saved: {report_file}")
             return str(report_file)
         except Exception as e:
@@ -1228,6 +1251,184 @@ def analyze_backtest_with_quantstats(
 
 if __name__ == "__main__":
     import sys
+
+    print("Run analysis from command line or import QuantStatsAnalyzer")
+
+    def _create_trade_analysis_page(self, analysis: Dict) -> plt.Figure:
+        """Create trade analytics page for PDF report."""
+        fig, axes = plt.subplots(2, 2, figsize=(11, 14))
+        fig.suptitle(
+            "Trade Analytics: Entry Score, RS & Position Sizing",
+            fontsize=16,
+            fontweight="bold",
+            y=0.995,
+        )
+
+        # Helper functions
+        def fmt(val, suffix=""):
+            if val is None or (isinstance(val, float) and np.isnan(val)):
+                return "N/A"
+            return f"{val}{suffix}"
+
+        # Section 1: Entry Score Analysis
+        ax1 = axes[0, 0]
+        ax1.axis("off")
+
+        es = analysis.get("entry_score", {})
+        if es and "high_score_trades" in es:
+            es_data = [
+                ["Entry Score - PnL Corr", fmt(es.get("corr_entry_score_vs_pnl"))],
+                [
+                    "High Score (≥0.7)",
+                    f"{es['high_score_trades'].get('count', 0)} trades, {es['high_score_trades'].get('win_rate', 0)}% WR",
+                ],
+                [
+                    "Med Score (0.4-0.7)",
+                    f"{es['med_score_trades'].get('count', 0)} trades, {es['med_score_trades'].get('win_rate', 0)}% WR",
+                ],
+                [
+                    "Low Score (<0.4)",
+                    f"{es['low_score_trades'].get('count', 0)} trades, {es['low_score_trades'].get('win_rate', 0)}% WR",
+                ],
+                [
+                    "Top 10 Winners Avg Score",
+                    fmt(
+                        es.get("top_10_winners", {}).get("avg_entry_score"),
+                        " (R={})".format(
+                            es.get("top_10_winners", {}).get("avg_r_multiple")
+                        ),
+                    )
+                    if es.get("top_10_winners")
+                    else "N/A",
+                ],
+            ]
+            table1 = ax1.table(
+                cellText=es_data,
+                colLabels=["Entry Quality Score", "Value"],
+                cellLoc="left",
+                loc="center",
+                colWidths=[0.5, 0.5],
+            )
+            table1.auto_set_font_size(False)
+            table1.set_fontsize(9)
+            table1.scale(1, 2)
+            for (i, j), cell in table1.get_celld().items():
+                cell.set_facecolor("#2c3e50" if i == 0 else "#34495e")
+                cell.set_text_props(color="white")
+        else:
+            ax1.text(
+                0.5, 0.5, "No Entry Score Data", ha="center", va="center", fontsize=12
+            )
+
+        # Section 2: RS Percentile Analysis
+        ax2 = axes[0, 1]
+        ax2.axis("off")
+
+        rs = analysis.get("rs_percentile", {})
+        if rs and "high_rs_trades" in rs:
+            rs_data = [
+                ["RS Percentile - PnL Corr", fmt(rs.get("corr_rs_vs_pnl"))],
+                [
+                    "RS ≥80 (Top 20%)",
+                    f"{rs['high_rs_trades'].get('count', 0)} trades, {rs['high_rs_trades'].get('win_rate', 0)}% WR",
+                ],
+                [
+                    "RS 50-80",
+                    f"{rs['med_rs_trades'].get('count', 0)} trades, {rs['med_rs_trades'].get('win_rate', 0)}% WR",
+                ],
+                [
+                    "RS <50 (Bottom 50%)",
+                    f"{rs['low_rs_trades'].get('count', 0)} trades, {rs['low_rs_trades'].get('win_rate', 0)}% WR",
+                ],
+                ["Mean RS", fmt(rs.get("rs_distribution", {}).get("mean"))],
+            ]
+            table2 = ax2.table(
+                cellText=rs_data,
+                colLabels=["RS Percentile (IBD-Style)", "Value"],
+                cellLoc="left",
+                loc="center",
+                colWidths=[0.5, 0.5],
+            )
+            table2.auto_set_font_size(False)
+            table2.set_fontsize(9)
+            table2.scale(1, 2)
+            for (i, j), cell in table2.get_celld().items():
+                cell.set_facecolor("#2c3e50" if i == 0 else "#34495e")
+                cell.set_text_props(color="white")
+        else:
+            ax2.text(0.5, 0.5, "No RS Data", ha="center", va="center", fontsize=12)
+
+        # Section 3: Position Sizing & R-Multiple
+        ax3 = axes[1, 0]
+        ax3.axis("off")
+
+        ps = analysis.get("position_sizing", {})
+        if ps and "r_distribution" in ps:
+            rd = ps.get("r_distribution", {})
+            ps_data = [
+                ["Mean R-Multiple", fmt(rd.get("mean_r"))],
+                ["Median R-Multiple", fmt(rd.get("median_r"))],
+                ["Positive R Trades", fmt(rd.get("positive_r_pct"), "%")],
+                ["Big Wins (≥2R)", fmt(rd.get("big_wins_pct"), "%")],
+                ["Big Losses (≤-1R)", fmt(rd.get("big_losses_pct"), "%")],
+            ]
+            table3 = ax3.table(
+                cellText=ps_data,
+                colLabels=["Position Sizing", "Value"],
+                cellLoc="left",
+                loc="center",
+                colWidths=[0.5, 0.5],
+            )
+            table3.auto_set_font_size(False)
+            table3.set_fontsize(9)
+            table3.scale(1, 2)
+            for (i, j), cell in table3.get_celld().items():
+                cell.set_facecolor("#2c3e50" if i == 0 else "#34495e")
+                cell.set_text_props(color="white")
+        else:
+            ax3.text(
+                0.5,
+                0.5,
+                "No Position Sizing Data",
+                ha="center",
+                va="center",
+                fontsize=12,
+            )
+
+        # Section 4: Context Correlations
+        ax4 = axes[1, 1]
+        ax4.axis("off")
+
+        ctx = analysis.get("context", {})
+        if ctx:
+            rvol = ctx.get("rvol_correlation", {})
+            adr = ctx.get("adr_correlation", {})
+            dist = ctx.get("dist_sma20_correlation", {})
+            ctx_data = [
+                ["RVOL - PnL Corr", fmt(rvol.get("corr_vs_pnl"))],
+                ["ADR - PnL Corr", fmt(adr.get("corr_vs_pnl"))],
+                ["Dist SMA20 - PnL Corr", fmt(dist.get("corr_vs_pnl"))],
+                ["Mean RVOL", fmt(rvol.get("mean_rvol"))],
+                ["Mean ADR", fmt(adr.get("mean_adr"), "%")],
+            ]
+            table4 = ax4.table(
+                cellText=ctx_data,
+                colLabels=["Context Correlations", "Value"],
+                cellLoc="left",
+                loc="center",
+                colWidths=[0.5, 0.5],
+            )
+            table4.auto_set_font_size(False)
+            table4.set_fontsize(9)
+            table4.scale(1, 2)
+            for (i, j), cell in table4.get_celld().items():
+                cell.set_facecolor("#2c3e50" if i == 0 else "#34495e")
+                cell.set_text_props(color="white")
+        else:
+            ax4.text(0.5, 0.5, "No Context Data", ha="center", va="center", fontsize=12)
+
+        plt.tight_layout(rect=[0, 0, 1, 0.98])
+        return fig
 
     # Example usage
     if len(sys.argv) > 1:

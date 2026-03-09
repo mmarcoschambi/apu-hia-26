@@ -510,6 +510,7 @@ def generate_full_trade_analysis(trades_df: pd.DataFrame) -> Dict:
         "rs_percentile": analyze_rs_percentile_performance(trades_df),
         "position_sizing": analyze_position_sizing(trades_df),
         "context": analyze_context_correlations(trades_df),
+        "pattern_performance": analyze_pattern_performance(trades_df),
         "generated_at": pd.Timestamp.now().isoformat(),
         "total_trades": len(trades_df),
     }
@@ -551,3 +552,158 @@ def generate_full_trade_analysis(trades_df: pd.DataFrame) -> Dict:
     logger.info(f"   ✅ Análisis completado: {len(insights)} insights generados")
 
     return analysis
+
+
+def analyze_pattern_performance(trades_df: pd.DataFrame) -> Dict:
+    """
+    Analiza performance por tipo de patrón detectado.
+
+    Args:
+        trades_df: DataFrame con trades (debe tener columnas:
+                   pattern_type, pattern_confidence, pattern_bonus, pnl, r_multiple)
+
+    Returns:
+        Dict con estadísticas por tipo de patrón
+    """
+    if trades_df.empty:
+        return {"error": "Empty trades_df"}
+
+    # Check for pattern columns
+    has_pattern = (
+        "pattern_type" in trades_df.columns
+        and "pattern_confidence" in trades_df.columns
+    )
+    if not has_pattern:
+        return {"error": "Pattern columns not found in trades_df"}
+
+    df = trades_df.copy()
+
+    # Convert to numeric
+    df["pattern_confidence"] = pd.to_numeric(
+        df["pattern_confidence"], errors="coerce"
+    ).fillna(0)
+    df["pnl"] = pd.to_numeric(df["pnl"], errors="coerce").fillna(0)
+    df["r_multiple"] = pd.to_numeric(
+        df.get("r_multiple", df["pnl"] / 100), errors="coerce"
+    ).fillna(0)
+
+    # Fill missing pattern_type
+    df["pattern_type"] = df["pattern_type"].fillna("NONE")
+
+    result = {
+        "summary": {},
+        "by_pattern": {},
+        "pattern_vs_none": {},
+        "confidence_buckets": {},
+    }
+
+    # Summary stats
+    total_trades = len(df)
+    trades_with_pattern = len(df[df["pattern_confidence"] > 0])
+    trades_no_pattern = len(df[df["pattern_confidence"] == 0])
+
+    result["summary"] = {
+        "total_trades": total_trades,
+        "trades_with_pattern": trades_with_pattern,
+        "trades_without_pattern": trades_no_pattern,
+        "pattern_detection_rate": trades_with_pattern / total_trades
+        if total_trades > 0
+        else 0,
+    }
+
+    # Performance by pattern type
+    pattern_types = df["pattern_type"].unique()
+
+    for ptype in pattern_types:
+        pattern_trades = df[df["pattern_type"] == ptype]
+        if len(pattern_trades) == 0:
+            continue
+
+        winners = pattern_trades[pattern_trades["pnl"] > 0]
+        losers = pattern_trades[pattern_trades["pnl"] <= 0]
+
+        result["by_pattern"][ptype] = {
+            "count": len(pattern_trades),
+            "win_rate": len(winners) / len(pattern_trades)
+            if len(pattern_trades) > 0
+            else 0,
+            "avg_pnl": pattern_trades["pnl"].mean(),
+            "avg_r": pattern_trades["r_multiple"].mean(),
+            "median_r": pattern_trades["r_multiple"].median(),
+            "total_pnl": pattern_trades["pnl"].sum(),
+            "avg_confidence": pattern_trades["pattern_confidence"].mean(),
+        }
+
+    # Pattern vs No Pattern comparison
+    with_pattern = df[df["pattern_confidence"] > 0]
+    without_pattern = df[df["pattern_confidence"] == 0]
+
+    if len(with_pattern) > 0:
+        result["pattern_vs_none"]["with_pattern"] = {
+            "count": len(with_pattern),
+            "win_rate": len(with_pattern[with_pattern["pnl"] > 0]) / len(with_pattern),
+            "avg_r": with_pattern["r_multiple"].mean(),
+            "avg_pnl": with_pattern["pnl"].mean(),
+        }
+
+    if len(without_pattern) > 0:
+        result["pattern_vs_none"]["no_pattern"] = {
+            "count": len(without_pattern),
+            "win_rate": len(without_pattern[without_pattern["pnl"] > 0])
+            / len(without_pattern),
+            "avg_r": without_pattern["r_multiple"].mean(),
+            "avg_pnl": without_pattern["pnl"].mean(),
+        }
+
+    # Confidence buckets analysis
+    df["conf_bucket"] = pd.cut(
+        df["pattern_confidence"],
+        bins=[-0.01, 0.3, 0.5, 0.7, 1.01],
+        labels=["<0.3", "0.3-0.5", "0.5-0.7", "0.7+"],
+    )
+
+    for bucket in df["conf_bucket"].unique():
+        if pd.isna(bucket):
+            continue
+        bucket_trades = df[df["conf_bucket"] == bucket]
+        if len(bucket_trades) == 0:
+            continue
+
+        winners = bucket_trades[bucket_trades["pnl"] > 0]
+        result["confidence_buckets"][str(bucket)] = {
+            "count": len(bucket_trades),
+            "win_rate": len(winners) / len(bucket_trades),
+            "avg_r": bucket_trades["r_multiple"].mean(),
+            "avg_pnl": bucket_trades["pnl"].mean(),
+        }
+
+    # Pattern bonus effectiveness
+    if "pattern_bonus" in df.columns:
+        df["pattern_bonus"] = pd.to_numeric(
+            df["pattern_bonus"], errors="coerce"
+        ).fillna(0)
+
+        with_bonus = df[df["pattern_bonus"] > 0]
+        without_bonus = df[df["pattern_bonus"] == 0]
+
+        result["bonus_effectiveness"] = {
+            "trades_with_bonus": len(with_bonus),
+            "bonus_avg_r": with_bonus["r_multiple"].mean()
+            if len(with_bonus) > 0
+            else 0,
+            "trades_without_bonus": len(without_bonus),
+            "no_bonus_avg_r": without_bonus["r_multiple"].mean()
+            if len(without_bonus) > 0
+            else 0,
+            "improvement": (
+                with_bonus["r_multiple"].mean() - without_bonus["r_multiple"].mean()
+            )
+            if len(with_bonus) > 0 and len(without_bonus) > 0
+            else 0,
+        }
+
+    logger.info(
+        f"   ✅ Pattern analysis: {trades_with_pattern}/{total_trades} trades with pattern"
+    )
+
+    return result
