@@ -1,8 +1,8 @@
 {
-  "min_rvol": 0.58,
-  "min_adr": 1.58,
-  "max_dist_sma20": 11.99,
-  "min_dollar_volume": 99176909.89990234,
+  "min_rvol": 0.6,
+  "min_adr": 1.44,
+  "max_dist_sma20": 11.7,
+  "min_dollar_volume": 18854619.94934082,
   "min_consolidation_days": 5,
   "min_volume": 100000,
   "require_positive_rs": true,
@@ -13,36 +13,36 @@
   "min_pattern_confidence": 0.5,
   "pattern_cache_path": "data/pattern_matrix.pkl",
   "_raw_derived": {
-    "rvol_raw": 0.58,
-    "adr_raw": 1.58,
-    "dist_sma20_raw": 11.99,
-    "dollar_volume_raw": 99176909.89990234
+    "rvol_raw": 0.6,
+    "adr_raw": 1.44,
+    "dist_sma20_raw": 11.7,
+    "dollar_volume_raw": 18854619.94934082
   },
   "_dollar_volume_stats": {
-    "p10": 124913597.99045563,
-    "p25": 184976221.84734344,
-    "median": 585030582.6435089,
-    "p75": 1401864421.1608887,
-    "p90": 7404234639.511108,
-    "max": 67174269707.70068,
-    "derived_raw": 99176909.89990234
+    "p10": 38048325.86548805,
+    "p25": 111679820.91751099,
+    "median": 277142455.7800293,
+    "p75": 615748931.9152832,
+    "p90": 1625178587.2271738,
+    "max": 35466244896.69653,
+    "derived_raw": 18854619.94934082
   },
   "_rvol_stats": {
-    "p10": 0.64,
-    "median": 0.99,
-    "p90": 1.47,
-    "max": 3.7
+    "p10": 0.69,
+    "median": 1.02,
+    "p90": 1.82,
+    "max": 4.58
   },
   "_adr_stats": {
-    "p10": 1.72,
-    "median": 2.58,
-    "p90": 4.47,
+    "p10": 1.59,
+    "median": 2.44,
+    "p90": 4.36,
     "max": 10.34
   },
   "_dist_sma20_stats": {
-    "p10": 0.43,
-    "median": 3.1,
-    "p90": 9.47,
-    "max": 19.69
+    "p10": 0.88,
+    "median": 3.96,
+    "p90": 9.83,
+    "max": 18.74
   }
 }

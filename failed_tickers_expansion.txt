@@ -1,147 +1,386 @@
-# Failed tickers - 2026-02-19 11:01:31.033087
-# Total failed: 145
-AKAM: empty_response
-ALB: empty_response
-ALGN: empty_response
-ALK: empty_response
-ALLE: empty_response
-ALXN: empty_response
-AMCR: empty_response
-AMG: empty_response
-AMTM: empty_response
-ANSS: empty_response
-ATVI: empty_response
-AWK: empty_response
-BEN: empty_response
-BXP: empty_response
-CAG: empty_response
-CBOE: empty_response
-CBS: empty_response
-CDAY: download_error: No objects to concatenate
-CHD: empty_response
-CHRW: empty_response
-CHTR: empty_response
+# Failed tickers - 2026-03-10 03:27:28.041041
+# Total failed: 384
+CHSWQ: database is locked
+CHTR: database is locked
+CHTT: empty_response
+CHU: empty_response
+CHUBA: empty_response
+CHUX: empty_response
+CHUY: empty_response
+CHW: database is locked
+CHWY: database is locked
+CHX: empty_response
+CHY: empty_response
+CHYM: database is locked
+CHYR: empty_response
+CHZ: empty_response
+CHZS: empty_response
+CIA: empty_response
+CIAN: empty_response
+CIB: empty_response
+CIBN: empty_response
+CIBN1: empty_response
+CIC.A: empty_response
+CICC1: empty_response
+CICN: database is locked
+CIDI: database is locked
+CIEIQ: empty_response
+CIF: empty_response
+CIFC: database is locked
+CIFRW: empty_response
+CIG: empty_response
+CIG-C: empty_response
+CIG.A: empty_response
+CIGI: database is locked
+CIGL: database is locked
+CIH: empty_response
+CII: empty_response
+CIIC1: empty_response
+CIIT: database is locked
+CILE: empty_response
+CILJF: empty_response
+CIM: empty_response
+CIM-PA: empty_response
+CIM-PB: empty_response
+CIM-PC: empty_response
+CIM-PD: empty_response
+CIMT: database is locked
+CIN: empty_response
+CINC: empty_response
 CINF: empty_response
-CLX: empty_response
-CMA: empty_response
+CING: empty_response
+CINGW: database is locked
+CIO: database is locked
+CIO-PA: database is locked
+CIR: empty_response
+CIRX: empty_response
+CIS: empty_response
+CIS1: empty_response
+CISC: empty_response
+CISN: empty_response
+CISO: database is locked
+CIT: empty_response
+CIT.A: empty_response
+CITA1: database is locked
+CITC: empty_response
+CITE: empty_response
+CITEU: empty_response
+CITEW: empty_response
+CITGQ: empty_response
+CITP: empty_response
+CITR: empty_response
+CITZ: empty_response
+CIVB: database is locked
+CIVC: empty_response
+CIVI: empty_response
+CIVI1: empty_response
+CIVII: empty_response
+CIVIW: empty_response
+CIVX: empty_response
+CIX: empty_response
+CIXPF: empty_response
+CIXXF: empty_response
+CIZN: empty_response
+CJ: empty_response
+CJAX: empty_response
+CJBK: database is locked
+CJHBQ: empty_response
+CJJD: empty_response
+CJMB: database is locked
+CJML: empty_response
+CJPRF: empty_response
+CJPRY: empty_response
+CJRCF: empty_response
+CJREF: empty_response
+CKCRQ: database is locked
+CKEC: empty_response
+CKFB: empty_response
+CKFR: empty_response
+CKGRQ: empty_response
+CKH: empty_response
+CKNN: empty_response
+CKP: empty_response
+CKPT: empty_response
+CKR: empty_response
+CKSG: empty_response
+CKSW: empty_response
+CKUN: empty_response
+CKX: empty_response
+CKXE: empty_response
+CLA1: empty_response
+CLAA: empty_response
+CLAC: empty_response
+CLAC1: empty_response
+CLAR: empty_response
+CLAR1: empty_response
+CLAS: database is locked
+CLAS1: database is locked
+CLAY1: empty_response
+CLBH: database is locked
+CLBK: database is locked
+CLBR: empty_response
+CLBR-UN: empty_response
+CLBR-WT: empty_response
+CLBR.U: insufficient_data (22 days)
+CLBRQ: empty_response
+CLBTW: empty_response
+CLC: empty_response
+CLCD: database is locked
+CLCO: database is locked
+CLCP: empty_response
+CLCT: empty_response
+CLCXQ: empty_response
+CLDA: empty_response
+CLDB: empty_response
+CLDI: empty_response
+CLDI-WT: empty_response
+CLDPQ: empty_response
+CLDT: database is locked
+CLDT-PA: database is locked
+CLDVF: database is locked
+CLE: empty_response
+CLEU: empty_response
+CLEUF: empty_response
+CLEV: empty_response
+CLEV1: empty_response
+CLFC: database is locked
+CLFY: database is locked
+CLG1: empty_response
+CLG2: empty_response
+CLGDF: empty_response
+CLGN: empty_response
+CLGX: empty_response
+CLH: database is locked
+CLIC: database is locked
+CLIK: database is locked
+CLIM: empty_response
+CLIS: empty_response
+CLK: empty_response
+CLM: empty_response
+CLMB: database is locked
+CLMT: database is locked
+CLN1: empty_response
+CLNH1: empty_response
+CLNN: database is locked
+CLNNW: empty_response
+CLNV: empty_response
+CLNY1: empty_response
+CLOE: database is locked
+CLOER: database is locked
+CLOEU: empty_response
+CLOW: database is locked
+CLP: database is locked
+CLPR: database is locked
+CLPT: database is locked
+CLR: empty_response
+CLR.A: empty_response
+CLRB: database is locked
+CLRC: empty_response
+CLRCW: empty_response
+CLRD: empty_response
+CLRI: empty_response
+CLRK: database is locked
+CLRP: database is locked
+CLRT: empty_response
+CLRT1: empty_response
+CLSCQ: empty_response
+CLSD: empty_response
+CLSDQ: empty_response
+CLSH: database is locked
+CLSP: database is locked
+CLTR2: empty_response
+CLTS: empty_response
+CLTX1: empty_response
+CLTY: empty_response
+CLU: empty_response
+CLU1: empty_response
+CLUBQ: empty_response
+CLV1: empty_response
+CLV2: empty_response
+CLVSQ: empty_response
+CLVT: empty_response
+CLVV: empty_response
+CLW: empty_response
+CLW1: empty_response
+CLWA: empty_response
+CLWR: empty_response
+CLWY: database is locked
+CLX: database is locked
+CLYM: empty_response
+CLZR: empty_response
+CM1: empty_response
+CMA: database is locked
+CMAG: empty_response
+CMALQ: empty_response
+CMAN: empty_response
+CMAX: empty_response
+CMAXQ: empty_response
+CMAXW: empty_response
+CMBC: database is locked
+CMBT: empty_response
+CMC: database is locked
+CMCAF: empty_response
+CMCAF1: empty_response
+CMCAW: empty_response
+CMCI1: empty_response
+CMCO: database is locked
+CMD: empty_response
+CMD1: empty_response
+CMDB: empty_response
+CMDCQ: empty_response
+CMDN: empty_response
+CMDZQ: empty_response
+CMED1: empty_response
+CMEDQ: empty_response
+CMETS: empty_response
+CMGE: empty_response
+CMGO: empty_response
+CMGR: empty_response
+CMGT: empty_response
+CMH: empty_response
+CMHF: empty_response
 CMI: empty_response
+CMI1: empty_response
+CMKC: database is locked
+CMKG: empty_response
+CML: empty_response
+CMLK: empty_response
+CMLP: empty_response
+CMLP1: empty_response
+CMLS: empty_response
+CMLSQ: empty_response
+CMNR: empty_response
+CMO: empty_response
+CMOS: empty_response
+CMOT: empty_response
+CMP: empty_response
+CMPC: empty_response
+CMPI: empty_response
+CMPI1: empty_response
+CMPO: empty_response
+CMPOW: empty_response
+CMPP: empty_response
+CMPR: empty_response
+CMPS: empty_response
+CMRCQ: database is locked
+CMRF: empty_response
+CMRN: empty_response
+CMRO: insufficient_data (42 days)
+CMRX: insufficient_data (42 days)
 CMS: empty_response
+CMS-PB: empty_response
+CMS-PC: empty_response
+CMSA: empty_response
+CMSB: database is locked
+CMSS1: empty_response
+CMSV: empty_response
+CMSX: empty_response
+CMT: empty_response
+CMTA: empty_response
+CMTO: empty_response
+CMTV: empty_response
+CMTY: empty_response
+CMU: empty_response
+CMVT: empty_response
+CMWL: empty_response
+CMX: empty_response
+CMXC: empty_response
+CMZPF: empty_response
+CNBD: empty_response
+CNBF: empty_response
+CNBI2: empty_response
+CNBKA: empty_response
+CNBT: empty_response
+CNBX: empty_response
 CNC: empty_response
-CNP: empty_response
-COG: empty_response
-COO: empty_response
-COTY: empty_response
-CPAY: empty_response
-CPB: empty_response
-CTXS: empty_response
-CXO: empty_response
-CZR: empty_response
-DAY: empty_response
-DD: empty_response
-DPZ: empty_response
-DRE: empty_response
-DRI: empty_response
-DTE: empty_response
-DVA: empty_response
-DVN: empty_response
-DWDP: empty_response
-DXC: empty_response
-DXCM: empty_response
-ECL: empty_response
-EMR: empty_response
-ENPH: empty_response
-EPAM: empty_response
-EQIX: empty_response
-EQR: empty_response
-FB: empty_response
-FBHS: empty_response
-FCX: empty_response
-FDS: empty_response
-FE: empty_response
-FFIV: empty_response
-FI: empty_response
-FL: empty_response
-FLIR: empty_response
-FLR: empty_response
-FLS: empty_response
-FLT: empty_response
-FMC: empty_response
-HFC: empty_response
-HII: empty_response
-HOG: empty_response
-HRL: empty_response
-HRS: empty_response
-INFO: empty_response
-INVH: empty_response
-IP: empty_response
-IVZ: empty_response
-J: empty_response
-JBHT: empty_response
-JNPR: empty_response
-JWN: empty_response
-K: empty_response
-KEY: empty_response
-MAS: empty_response
-MAT: empty_response
-MCD: empty_response
-MGM: empty_response
-MHK: empty_response
-MKC: empty_response
-MKTX: empty_response
-MMM: empty_response
-MOH: empty_response
-MOS: empty_response
-MRNA: empty_response
-MRO: empty_response
-MTCH: empty_response
-MTD: empty_response
-MXIM: empty_response
-MYL: empty_response
-NBL: empty_response
-NCLH: empty_response
-NDSN: empty_response
-NFX: empty_response
-NI: empty_response
-NKTR: empty_response
-NLOK: empty_response
-NLSN: empty_response
-NOV: empty_response
-NRG: empty_response
-NTAP: empty_response
-NTRS: empty_response
-NVR: empty_response
-NWL: empty_response
-PFG: empty_response
-PHM: empty_response
-PKG: empty_response
-PKI: empty_response
-PNR: empty_response
-PRGO: download_error: No objects to concatenate
-PTC: download_error: No objects to concatenate
-PVH: download_error: No objects to concatenate
-PXD: download_error: No objects to concatenate
-QRVO: empty_response
-RE: empty_response
-REG: empty_response
-RF: empty_response
-RHI: empty_response
-RHT: empty_response
-SBNY: empty_response
-SCG: empty_response
-SIVB: empty_response
-SJM: empty_response
-SLG: empty_response
-TDG: empty_response
-TDY: empty_response
-TECH: empty_response
-TFX: empty_response
-TIF: empty_response
-UA: empty_response
-UAA: empty_response
-UDR: empty_response
-VAR: empty_response
-VFC: empty_response
-VIAB: empty_response
-VIAC: empty_response
-WLTW: empty_response
-WRB: empty_response
+CNCEQ: database is locked
+CNCK: empty_response
+CNCOY: empty_response
+CNCP: empty_response
+CNCT1: empty_response
+CNCX: empty_response
+CND: empty_response
+CNDA: empty_response
+CNDA-UN: empty_response
+CNDA-WT: empty_response
+CNDO1: empty_response
+CNDR: empty_response
+CNE: empty_response
+CNE1: empty_response
+CNEP: empty_response
+CNET: empty_response
+CNET1: database is locked
+CNEZF: empty_response
+CNF: empty_response
+CNFN: empty_response
+CNFR: empty_response
+CNGL: empty_response
+CNGL1: empty_response
+CNGL2: empty_response
+CNH: database is locked
+CNH1: empty_response
+CNIT1: empty_response
+CNL: empty_response
+CNL1: empty_response
+CNLG: database is locked
+CNLHO: empty_response
+CNLHP: empty_response
+CNLPL: empty_response
+CNLPM: empty_response
+CNLTL: database is locked
+CNM: database is locked
+CNMD: database is locked
+CNNB: empty_response
+CNNC: database is locked
+CNNE: database is locked
+CNNG: empty_response
+CNNN: empty_response
+CNO1: database is locked
+CNOB: database is locked
+CNOB1: empty_response
+CNOBP: database is locked
+CNP.B: empty_response
+CNPWM: empty_response
+CNPWP: empty_response
+CNQR: empty_response
+CNR: empty_response
+CNR1: empty_response
+CNR2: empty_response
+CNRD: empty_response
+CNROX: empty_response
+CNRS: empty_response
+CNS: empty_response
+CNSI1: empty_response
+CNSI2: empty_response
+CNSL: empty_response
+CNSO: empty_response
+CNSP: empty_response
+CNSP1: empty_response
+CNST: empty_response
+CNSTQ1: database is locked
+CNSW: database is locked
+CNTA: database is locked
+CNTFY: database is locked
+CNTG: empty_response
+CNTGF: database is locked
+CNTHN: database is locked
+CNTHP: database is locked
+CNTK: database is locked
+CNTO1: empty_response
+CNTV: database is locked
+CNTX: database is locked
+CNU: empty_response
+CNVCF: empty_response
+CNVEF: database is locked
+CNVO: database is locked
+CNVR: empty_response
+CNVR1: empty_response
+CNVS: empty_response
+CNVT: empty_response
+CNVY: database is locked
+CNXC: database is locked
+CNXM: empty_response
+CNXR: empty_response
+CNXS: empty_response
+CNXX: database is locked
+CNXXW: empty_response

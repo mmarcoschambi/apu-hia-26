@@ -402,32 +402,41 @@ def simulate_fast_core(
                     if shares <= 0:
                         continue
 
-                    cost = shares * curr_close
+                    # LOOK-AHEAD BIAS FIX: execute at next bar open, not today close
+                    # Signal detected at close of day t -> fill at open of day t+1
+                    if t + 1 < open_arr.shape[0]:
+                        next_open = open_arr[t + 1, i]
+                        if np.isnan(next_open) or next_open <= 0:
+                            next_open = curr_close  # fallback
+                    else:
+                        next_open = curr_close  # last day fallback
+
+                    cost = shares * next_open
 
                     # Verificar cash disponible
                     if cash >= cost:
-                        # Ejecutar Entrada
+                        # Ejecutar Entrada al open del dia siguiente
                         cash -= cost
                         pos_active[i] = True
                         pos_shares[i] = shares
                         pos_original_shares[i] = shares
-                        pos_entry_price[i] = curr_close
+                        pos_entry_price[i] = next_open
                         pos_stop_dist[i] = stop_dist
-                        pos_entry_day[i] = float(t)
+                        pos_entry_day[i] = float(t + 1)  # entry registered on next bar
                         pos_initial_risk[i] = risk_amt
                         pos_entry_atr[i] = curr_atr  # Store ATR for trailing
-                        pos_highest_close[i] = curr_close  # Initialize for trailing
+                        pos_highest_close[i] = next_open  # Initialize for trailing
 
-                        # Guardar Contexto (Snapshots)
+                        # Guardar Contexto (Snapshots at signal bar t)
                         pos_rvol[i] = rvol_arr[t, i]
                         pos_adr[i] = adr_arr[t, i]
                         pos_vol[i] = volume_arr[t, i]
                         pos_entry_score[i] = entry_score_arr[t, i]
 
-                        # Definir Niveles basados en R
-                        pos_stop_price[i] = curr_close - stop_dist
-                        pos_tp1_price[i] = curr_close + (stop_dist * tp1_r)
-                        pos_tp2_price[i] = curr_close + (stop_dist * tp2_r)
+                        # Definir Niveles basados en R (desde next_open)
+                        pos_stop_price[i] = next_open - stop_dist
+                        pos_tp1_price[i] = next_open + (stop_dist * tp1_r)
+                        pos_tp2_price[i] = next_open + (stop_dist * tp2_r)
 
                         # Reset Flags
                         pos_tp1_done[i] = False

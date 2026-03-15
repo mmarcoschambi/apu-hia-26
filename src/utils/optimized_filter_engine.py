@@ -49,6 +49,10 @@ def optimized_filter_entries_adaptive(entries_df, close_df, sma20_df, volume_df,
     total_entries_pre_filter = entries_df.sum().sum()
     rejected_by_tier = {'TIER1': 0, 'TIER2': 0, 'TIER3': 0}
     rejection_details = []
+    rejected_samples = []       # ML training data: sampled rejected entries with features
+    _SAMPLE_RATE = 0.02         # Keep 2% of rejections (=~3700 of 187k)
+    import random as _rnd
+    _rnd.seed(42)
     
     # Create a copy to avoid modifying the original
     filtered_entries = entries_df.copy()
@@ -138,6 +142,21 @@ def optimized_filter_entries_adaptive(entries_df, close_df, sma20_df, volume_df,
                         reason = f"TIER2_LowADR_Regime{thresholds['regime_name']}_{adr_arr[idx]:.1f}%"
                     else:
                         reason = f"TIER2_Overextended_Regime{thresholds['regime_name']}_{(price_arr[idx] - sma20_arr[idx]) / sma20_arr[idx] * 100:.1f}%"
+                    # Sample rejected entry features for ML training data
+                    if _rnd.random() < _SAMPLE_RATE:
+                        rejected_samples.append({
+                            "entry_date": date,
+                            "symbol": ticker,
+                            "context_rvol": float(rvol_arr[idx]),
+                            "context_adr": float(adr_arr[idx]),
+                            "dist_sma20_pct": float((price_arr[idx] - sma20_arr[idx]) / sma20_arr[idx] * 100) if sma20_arr[idx] > 0 else 0.0,
+                            "context_dollar_vol": float(dollar_vol_arr[idx]),
+                            "context_vol": float(volume_arr[idx]),
+                            "rejection_reason": reason,
+                            "pnl": -1.0,           # synthetic: rejected = bad
+                            "r_multiple": -1.0,    # target: would-be loser
+                            "outcome": "LOSS",
+                        })
                     
                     rejected_details.append((date, 'TIER2', reason, ticker, 1))
             
@@ -165,4 +184,6 @@ def optimized_filter_entries_adaptive(entries_df, close_df, sma20_df, volume_df,
         rejection_df = pd.DataFrame(rejection_details, 
                                              columns=['date', 'tier', 'reason', 'ticker', 'count'])
         
-        return filtered_entries, rejected_by_tier, rejection_df
+        # Build rejected samples DataFrame for ML enrichment
+    rejected_samples_df = pd.DataFrame(rejected_samples) if rejected_samples else pd.DataFrame()
+    return filtered_entries, rejected_by_tier, rejection_df, rejected_samples_df

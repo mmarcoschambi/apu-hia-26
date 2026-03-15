@@ -124,9 +124,14 @@ def run_cached_backtest(
     use_pit_universe=False,
     use_rs_percentile=True,
     min_rs_percentile=0,
+    use_ml_filter=False,
+    ml_filter_threshold=0.40,
+    ml_boost_weight=0.20,
 ):
     from src.backtest.vectorbt_engine_advanced import AdvancedVectorBTEngine
 
+    import time as _t
+    _t0 = _t.time()
     engine = AdvancedVectorBTEngine(
         universe=universe,
         start_date=start_date,
@@ -162,8 +167,16 @@ def run_cached_backtest(
         use_pit_universe=use_pit_universe,
         use_rs_percentile=use_rs_percentile,
         min_rs_percentile=min_rs_percentile,
+        use_ml_filter=use_ml_filter,
+        ml_filter_threshold=ml_filter_threshold,
+        ml_boost_weight=ml_boost_weight,
     )
+    _t1 = _t.time()
     results = engine.run_backtest()
+    _t2 = _t.time()
+    results["_perf_init_s"] = round(_t1 - _t0, 2)
+    results["_perf_backtest_s"] = round(_t2 - _t1, 2)
+    results["_perf_total_s"] = round(_t2 - _t0, 2)
     # BUG FIX: Get combined rejection stats from engine, not just filter_engine
     rejection_stats = (
         engine.get_rejection_stats() if hasattr(engine, "get_rejection_stats") else None
@@ -172,21 +185,39 @@ def run_cached_backtest(
     return results, rejection_stats
 
 
-ticker_cache = TickerCache()
+@st.cache_resource(show_spinner=False)
+def _get_ticker_cache():
+    return TickerCache()
+
+# Lazy load ticker cache - only when needed
+def get_ticker_cache():
+    if 'ticker_cache_instance' not in st.session_state:
+        st.session_state.ticker_cache_instance = _get_ticker_cache()
+    return st.session_state.ticker_cache_instance
 
 
 def get_cache_date_range():
+    """Get date range from cache - with fast fallback"""
     try:
-        cursor = ticker_cache.conn.execute(
-            "SELECT MIN(date), MAX(date) FROM ohlcv_cache"
+        cache = get_ticker_cache()
+        # Use LIMIT 1 optimization for MIN/MAX
+        cursor = cache.conn.execute(
+            "SELECT date FROM ohlcv_cache ORDER BY date ASC LIMIT 1"
         )
-        sqlite_min, sqlite_max = cursor.fetchone()
-        if sqlite_min and sqlite_max:
-            return datetime.strptime(sqlite_min, "%Y-%m-%d"), datetime.strptime(
-                sqlite_max, "%Y-%m-%d"
+        min_date = cursor.fetchone()
+        cursor = cache.conn.execute(
+            "SELECT date FROM ohlcv_cache ORDER BY date DESC LIMIT 1"
+        )
+        max_date = cursor.fetchone()
+        
+        if min_date and max_date:
+            return (
+                datetime.strptime(min_date[0], "%Y-%m-%d"),
+                datetime.strptime(max_date[0], "%Y-%m-%d")
             )
-    except:
+    except Exception as e:
         pass
+    # Fast fallback - don't block UI
     return datetime(2020, 1, 1), datetime.now()
 
 
@@ -263,6 +294,9 @@ def run_vectorbt_backtest_ui(
     use_pit_universe=False,
     use_rs_percentile=True,
     min_rs_percentile=0,
+    use_ml_filter=False,
+    ml_filter_threshold=0.40,
+    ml_boost_weight=0.20,
 ):
     progress_bar = st.progress(0)
     status_text = st.empty()
@@ -270,12 +304,22 @@ def run_vectorbt_backtest_ui(
     try:
         if tickers_list:
             universe = tickers_list
+            status_text.markdown(f"✅ Using manual list: {len(tickers_list)} tickers")
         else:
             import sqlite3
 
+            # Show database query progress
+            status_text.markdown("🔍 **Cargando universo desde base de datos...**")
+            progress_bar.progress(0.1)
+            
             conn = sqlite3.connect("./data/ticker_cache.db")
             selection_start, selection_end = str(start_date), str(end_date)
-            min_required_days = 100
+            # Adapt minimum required days to the backtest period length
+            import math as _math
+            _period_days = (pd.to_datetime(str(end_date)) - pd.to_datetime(str(start_date))).days
+            _trading_days_est = int(_period_days * 5 / 7)  # rough estimate
+            min_required_days = max(10, min(100, int(_trading_days_est * 0.5)))
+            
             if max_symbols == 0:
                 # DETERMINISTIC: Order by ticker AND first date to ensure consistency
                 query = """
@@ -290,28 +334,34 @@ def run_vectorbt_backtest_ui(
                     query, (selection_start, selection_end, min_required_days)
                 )
             else:
-                # DETERMINISTIC: Order by avg_dv DESC, then ticker ASC for tie-breaking
+                # OPTIMIZED: Use pre-computed rolling_dollar_vol_20 instead of AVG()
+                # This is MUCH faster since it avoids GROUP BY aggregation
                 query = """
-                    SELECT ticker
-                    FROM (
-                        SELECT ticker, AVG(dollar_volume) as avg_dv
-                        FROM ohlcv_cache 
-                        WHERE date BETWEEN ? AND ? 
-                        GROUP BY ticker 
-                        HAVING COUNT(*) >= ?
-                    )
-                    ORDER BY avg_dv DESC, ticker ASC
+                    SELECT DISTINCT ticker
+                    FROM ohlcv_cache 
+                    WHERE date BETWEEN ? AND ? 
+                    AND rolling_dollar_vol_20 IS NOT NULL
+                    GROUP BY ticker
+                    HAVING COUNT(*) >= ?
+                    ORDER BY MAX(rolling_dollar_vol_20) DESC, ticker ASC
                     LIMIT ?
                 """
                 cursor = conn.execute(
                     query,
                     (selection_start, selection_end, min_required_days, max_symbols),
                 )
+            
+            status_text.markdown(f"📥 **Extrayendo tickers** (límite: {'SIN LÍMITE' if max_symbols == 0 else max_symbols})...")
+            progress_bar.progress(0.15)
+            
             universe = [row[0] for row in cursor.fetchall()]
             conn.close()
 
             # DETERMINISTIC: Sort universe to ensure consistency
             universe = sorted(list(set(universe)))
+            
+            status_text.markdown(f"✅ **Universo cargado:** {len(universe)} tickers")
+            progress_bar.progress(0.2)
 
             # Log universe for debugging
             import logging
@@ -325,6 +375,9 @@ def run_vectorbt_backtest_ui(
 
         # Sort universe one more time before caching (belt and suspenders)
         universe = sorted(list(set(universe)))
+        
+        status_text.markdown(f"🚀 **Iniciando backtest:** {len(universe)} tickers de {start_date} a {end_date}")
+        progress_bar.progress(0.25)
 
         results, rejection_stats = run_cached_backtest(
             universe,
@@ -361,7 +414,23 @@ def run_vectorbt_backtest_ui(
             use_pit_universe,
             use_rs_percentile,
             min_rs_percentile,
+            use_ml_filter,
+            ml_filter_threshold,
+            ml_boost_weight,
         )
+        
+        # Update progress after backtest completes
+        status_text.markdown("✅ **Backtest completado - generando visualizaciones...**")
+        progress_bar.progress(0.9)
+        
+        # Performance timers display
+        _pi = results.get("_perf_init_s", 0)
+        _pb = results.get("_perf_backtest_s", 0)
+        _pt = results.get("_perf_total_s", 0)
+        if _pt > 0:
+            st.info(f"⏱ Performance | Engine init: **{_pi}s** | Backtest: **{_pb}s** | Total: **{_pt}s**")
+            st.sidebar.caption(f"⏱ init:{_pi}s bt:{_pb}s total:{_pt}s")
+
         # BUG FIX: Always update session state and persistence to avoid stale data
         st.session_state["adaptive_filter_rejections"] = (
             rejection_stats if rejection_stats else {}
@@ -426,6 +495,38 @@ def run_vectorbt_backtest_ui(
             output_df.to_csv("outputs/backtests/backtest_results.csv", index=False)
             # Also save full enriched trades for derive_tier2_filters.py
             trades.to_csv("outputs/backtests/complete_trades_clean.csv", index=False)
+
+            # RECALCULATE scorecard metrics from actual post-ML trades
+            # This fixes the bug where ML post-filter changes trades but metrics stay pre-ML
+            try:
+                _pnl = trades["pnl"]
+                _wins = _pnl[_pnl > 0]
+                _loss = _pnl[_pnl < 0]
+                _wр = len(_wins) / len(_pnl) if len(_pnl) > 0 else 0
+                _pf = (_wins.sum() / abs(_loss.sum())) if len(_loss) > 0 and abs(_loss.sum()) > 0 else float("inf")
+                _r = trades["r_multiple"].mean() if "r_multiple" in trades.columns else 0
+                # Equity curve for Sharpe/DD
+                _eq = results.get("equity_curve")
+                if _eq is not None and len(_eq) > 1:
+                    _ret = _eq.pct_change().dropna()
+                    _sharpe = (_ret.mean() / _ret.std() * (252**0.5)) if _ret.std() > 0 else 0
+                    _peak = _eq.cummax()
+                    _dd = ((_eq - _peak) / _peak).min()
+                else:
+                    _sharpe = results.get("sharpe_ratio", 0)
+                    _dd = results.get("max_drawdown", 0)
+                metrics_summary_real = {
+                    "sharpe_ratio": float(_sharpe),
+                    "win_rate": float(_wр),
+                    "profit_factor": float(_pf) if _pf != float("inf") else 9999.0,
+                    "max_drawdown": float(_dd),
+                    "annualized_return": results.get("annualized_return", 0),
+                    "avg_r": float(_r),
+                }
+                with open("outputs/backtests/backtest_metrics.json", "w") as _mf:
+                    json.dump(metrics_summary_real, _mf)
+            except Exception as _me:
+                pass  # Keep original metrics if recalc fails
             if "equity_curve" in results and results["equity_curve"] is not None:
                 results["equity_curve"].to_csv("outputs/backtests/equity_curve.csv")
         st.balloons()
@@ -519,17 +620,14 @@ def render_scorecard(metrics_dict):
      - AvgR: G>1.5, Y>1.0, R<1.0
     """
     sharpe = metrics_dict.get("sharpe_ratio", 0)
-    win_rate = (
-        metrics_dict.get("win_rate", 0) * 100
-        if metrics_dict.get("win_rate", 0) < 1
-        else metrics_dict.get("win_rate", 0)
-    )
-    pf = metrics_dict.get("profit_factor", 0)
-    max_dd = (
-        abs(metrics_dict.get("max_drawdown", 0)) * 100
-        if abs(metrics_dict.get("max_drawdown", 0)) < 1
-        else abs(metrics_dict.get("max_drawdown", 0))
-    )
+    _wr_raw = metrics_dict.get("win_rate", 0)
+    # win_rate stored as decimal (0.0-1.0) or percentage (0-100)
+    # If <= 1.0, treat as decimal and multiply by 100
+    win_rate = _wr_raw * 100 if _wr_raw <= 1.0 else _wr_raw
+    _pf_raw = metrics_dict.get("profit_factor", 0)
+    pf = float("inf") if _pf_raw >= 9999 else _pf_raw
+    _dd_raw = abs(metrics_dict.get("max_drawdown", 0))
+    max_dd = _dd_raw * 100 if _dd_raw <= 1.0 else _dd_raw
     avg_r = metrics_dict.get("avg_r", 0)
 
     def get_color(val, metric_type):
@@ -700,6 +798,19 @@ with st.sidebar:
             help="Use historical S&P 500 composition to eliminate survivorship bias. "
             "Only trades tickers that were ACTUALLY in the index on each date.",
         )
+        use_ml = st.checkbox(
+            "🤖 ML Entry Filter (LightGBM)",
+            value=False,
+            help="Aplica el modelo EntryScorer: bloquea entradas con prob<0.40 y boost entry_score en las que pasan. ROC-AUC: 0.807",
+        )
+        if use_ml:
+            ml_threshold = st.slider("ML threshold", 0.30, 0.60, 0.40, step=0.05,
+                help="Entradas con prob ML por debajo de este valor son bloqueadas")
+            ml_boost = st.slider("ML boost weight", 0.0, 0.40, 0.20, step=0.05,
+                help="entry_score += boost * ml_prob para entradas que pasan el filtro")
+        else:
+            ml_threshold = 0.40
+            ml_boost = 0.20
         min_rvol = st.slider(
             "Min RVOL",
             0.5,
@@ -777,7 +888,10 @@ with st.sidebar:
             use_earnings_filter,
             use_pit,
             True,  # use_rs_percentile
-            0,     # min_rs_percentile
+            0,  # min_rs_percentile
+            use_ml,
+            ml_threshold,
+            ml_boost,
         ):
             st.rerun()
 
@@ -829,41 +943,68 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
         and grouped_trades["r_multiple"].abs().sum() > 0
     )
 
-    t1, t2, t3, t4, t5 = st.tabs(
-        ["Performance", "Trade Log", "QuantStats", "Diagnostics", "Insights"]
+    t1, t2, t3, t4, t5, t6, t7 = st.tabs(
+        [
+            "Performance",
+            "Trade Log",
+            "QuantStats",
+            "Diagnostics",
+            "Insights",
+            "Market Regime",
+            "🎓 Anatomía del Trade",
+        ]
     )
 
     # --- Fetch Benchmark Data ---
     @st.cache_data(ttl=3600)
+    @st.cache_data(ttl=3600, show_spinner=False)
     def get_benchmark_returns(ticker, start, end):
+        """Fetch benchmark returns - tries cache first, then yfinance direct, then SQLite."""
+        import yfinance as yf
+        s_str = start.strftime("%Y-%m-%d") if isinstance(start, datetime) else str(start)[:10]
+        e_str = end.strftime("%Y-%m-%d") if isinstance(end, datetime) else str(end)[:10]
+
+        # 1. Try yfinance direct (most reliable, always fresh)
+        try:
+            df = yf.download(ticker, start=s_str, end=e_str,
+                             auto_adjust=True, progress=False, timeout=10)
+            if df is not None and not df.empty:
+                close = df["Close"] if "Close" in df.columns else df.iloc[:, 0]
+                if isinstance(close, pd.DataFrame):
+                    close = close.iloc[:, 0]
+                return close.pct_change().fillna(0)
+        except Exception:
+            pass
+
+        # 2. Try SQLite cache
+        try:
+            import sqlite3
+            conn_bm = sqlite3.connect("data/ticker_cache.db")
+            rows = conn_bm.execute(
+                "SELECT date, close FROM ohlcv_cache WHERE ticker=? AND date BETWEEN ? AND ? ORDER BY date",
+                (ticker, s_str, e_str)
+            ).fetchall()
+            conn_bm.close()
+            if rows:
+                bm_df = pd.DataFrame(rows, columns=["date", "close"])
+                bm_df["date"] = pd.to_datetime(bm_df["date"])
+                bm_df = bm_df.set_index("date")
+                return bm_df["close"].pct_change().fillna(0)
+        except Exception:
+            pass
+
+        # 3. Try MarketDataProvider
         try:
             from src.data.market_data import MarketDataProvider
-
             provider = MarketDataProvider()
-            # Convert dates to string for provider
-            s_str = (
-                start.strftime("%Y-%m-%d")
-                if isinstance(start, datetime)
-                else str(start)
-            )
-            e_str = end.strftime("%Y-%m-%d") if isinstance(end, datetime) else str(end)
-
-            # Try to get from provider
             df = provider.get_daily_data(ticker, start_date=s_str, end_date=e_str)
-            if df.empty:
-                # Fallback to yfinance directly
-                import yfinance as yf
-
-                df = yf.download(ticker, start=s_str, end=e_str, progress=False)
-
             if not df.empty:
-                if "Close" in df.columns:
-                    return df["Close"].pct_change().fillna(0)
-                elif "close" in df.columns:
-                    return df["close"].pct_change().fillna(0)
-        except Exception as e:
-            st.error(f"Error fetching benchmark: {e}")
-        return pd.Series()
+                close_col = "Close" if "Close" in df.columns else "close"
+                return df[close_col].pct_change().fillna(0)
+        except Exception:
+            pass
+
+        return pd.Series(dtype=float)
 
     benchmark_returns = get_benchmark_returns(benchmark_ticker, start_date, end_date)
 
@@ -1011,7 +1152,10 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
 
         # --- Row 3: Entry Score Analysis ---
         if has_entry_score:
-            st.markdown("### Entry Quality Score Analysis")
+            st.markdown("### Entry Quality Score v2 Analysis")
+            st.caption(
+                "Metodología: 70% RS Rank (60d Relative Strength) + 30% Proximidad a Máximo 52-Semanas."
+            )
             col_es1, col_es2, col_es3, col_es4 = st.columns(4)
             with col_es1:
                 st.metric("Avg Entry Score", f"{avg_entry_score:.3f}")
@@ -1020,6 +1164,7 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                     "High Score (≥0.5)",
                     f"{high_score_trades}",
                     delta=f"{high_score_trades / total_trades * 100:.1f}%",
+                    help="Trades con RS dominante y cercanía a máximos (Menor resistencia)",
                 )
             with col_es3:
                 st.metric(
@@ -1029,6 +1174,7 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                     if low_score_trades > 0
                     else "0%",
                     delta_color="inverse",
+                    help="Trades con RS débil o lejos de máximos",
                 )
             with col_es4:
                 corr = (
@@ -1036,7 +1182,11 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                     if total_trades > 5
                     else 0
                 )
-                st.metric("Score-PnL Corr", f"{corr:.3f}")
+                st.metric(
+                    "Score-PnL Corr",
+                    f"{corr:.3f}",
+                    help="Correlación entre Calidad de Entrada y PnL Final",
+                )
 
         # --- QuantStats Time-Series Metrics ---
         st.markdown("### Time-Series Analytics")
@@ -1281,7 +1431,10 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                 analysis = generate_full_trade_analysis(trade_df_for_grouper)
 
                 st.markdown("---")
-                st.markdown("### 📊 Entry Score, RS & Position Sizing Analysis")
+                st.markdown("### 📊 Entry Score v2, RS & Position Sizing Analysis")
+                st.info(
+                    "Entry Score v2 = 70% RS Rank (Cross-sectional) + 30% 52wk High Proximity. Prioriza ganadores de momentum con poca resistencia superior."
+                )
 
                 # Insights
                 if "insights" in analysis and analysis["insights"]:
@@ -1612,11 +1765,11 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
             ]
             if has_r:
                 show_cols.append("r_multiple")
-            
+
             # Ensure RS percentile exists, fallback to 0 if missing
             if "rs_percentile" not in display_source.columns:
                 display_source["rs_percentile"] = 0
-                
+
             show_cols = [c for c in show_cols if c in display_source.columns]
 
             # Apply sorting before pagination
@@ -1667,11 +1820,11 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                 "pattern_type",
                 "rs_percentile",
             ]
-            
+
             # Fallback for RS in partials
             if "rs_percentile" not in df.columns:
                 df["rs_percentile"] = 0
-                
+
             partial_cols = [c for c in partial_cols if c in df.columns]
 
             if quick_sort == "Latest First":
@@ -1730,7 +1883,7 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
         log_column_config = {
             "entry_score": st.column_config.ProgressColumn(
                 "Score",
-                help="Quality score (0-1)",
+                help="Entry Quality v2: 70% RS Rank + 30% 52wk High Proximity",
                 format="%.3f",
                 min_value=0.0,
                 max_value=1.0,
@@ -1743,9 +1896,8 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                 max_value=100,
             ),
             "pattern_type": st.column_config.TextColumn(
-                "Pattern",
-                help="Detected Chart Pattern"
-            )
+                "Pattern", help="Detected Chart Pattern"
+            ),
         }
 
         if show_all:
@@ -1871,7 +2023,32 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
     with t3:
         st.header(f"Performance vs {benchmark_ticker}")
 
-        if not grouped_trades.empty and not benchmark_returns.empty:
+        if grouped_trades.empty:
+            st.warning("No trades to analyze. Run a backtest first.")
+        elif benchmark_returns.empty:
+            st.warning(
+                f"Could not load {benchmark_ticker} benchmark data for this period. "
+                "This can happen in offline mode or when the date range has no cached SPY data. "
+                "Try running the backtest in online mode or with a longer date range."
+            )
+            # Still show strategy metrics without benchmark
+            st.markdown("### Strategy Metrics (no benchmark)")
+            try:
+                from src.analytics.quantstats_analyzer import QuantStatsAnalyzer
+                _analyzer_solo = QuantStatsAnalyzer(
+                    trade_log=trade_df_for_grouper,
+                    initial_capital=equity,
+                    benchmark_ticker=None,
+                )
+                _qs_m = _analyzer_solo.get_quantstats_metrics()
+                if _qs_m:
+                    _c1, _c2, _c3 = st.columns(3)
+                    _c1.metric("Sharpe", f"{_qs_m.get('sharpe', 0):.2f}")
+                    _c2.metric("Max DD", f"{_qs_m.get('max_drawdown', 0)*100:.2f}%")
+                    _c3.metric("CAGR", f"{_qs_m.get('cagr', 0)*100:.2f}%")
+            except Exception as _qe:
+                st.info(f"Metrics unavailable: {_qe}")
+        else:
             # Filter trades by date range
             if start_date and end_date:
                 filter_start = pd.to_datetime(start_date)
@@ -1936,17 +2113,20 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
             with col_q1:
                 # Underwater Plot
                 st.markdown("**Underwater Plot (Drawdowns)**")
-                dd = qs.stats.to_drawdown_series(strat_returns)
-                fig_dd = px.area(
-                    x=dd.index, y=dd * 100, color_discrete_sequence=["#ff4b4b"]
-                )
-                fig_dd.update_layout(
-                    template="plotly_dark",
-                    height=300,
-                    yaxis_title="Drawdown (%)",
-                    showlegend=False,
-                )
-                st.plotly_chart(fig_dd, use_container_width=True)
+                if len(strat_returns) > 0:
+                    dd = qs.stats.to_drawdown_series(strat_returns)
+                    fig_dd = px.area(
+                        x=dd.index, y=dd * 100, color_discrete_sequence=["#ff4b4b"]
+                    )
+                    fig_dd.update_layout(
+                        template="plotly_dark",
+                        height=300,
+                        yaxis_title="Drawdown (%)",
+                        showlegend=False,
+                    )
+                    st.plotly_chart(fig_dd, use_container_width=True)
+                else:
+                    st.info("Not enough data for drawdown analysis.")
 
             with col_q2:
                 # Rolling Beta
@@ -1988,14 +2168,18 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
 
             # --- Monthly Returns ---
             st.markdown("### Monthly Returns (%)")
-            monthly_ret = qs.stats.monthly_returns(strat_returns) * 100
-            # Format for display
-            st.dataframe(
-                monthly_ret.style.background_gradient(cmap="RdYlGn", axis=None).format(
-                    "{:.2f}%"
-                ),
-                use_container_width=True,
-            )
+            import pandas as pd
+            if len(strat_returns) > 0 and isinstance(strat_returns.index, pd.DatetimeIndex):
+                monthly_ret = qs.stats.monthly_returns(strat_returns) * 100
+                # Format for display
+                st.dataframe(
+                    monthly_ret.style.background_gradient(cmap="RdYlGn", axis=None).format(
+                        "{:.2f}%"
+                    ),
+                    use_container_width=True,
+                )
+            else:
+                st.info("Not enough valid date-indexed data for monthly returns.")
 
             # --- Report Generation ---
             st.markdown("---")
@@ -2013,11 +2197,6 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                                 file_name=os.path.basename(report_path),
                                 mime="application/pdf",
                             )
-        else:
-            st.info(
-                "Run backtest and ensure benchmark data is available for comparison."
-            )
-
     # =========================================================================
     # TAB 4: DIAGNOSTICS (Rejection funnel + filter analysis)
     # =========================================================================
@@ -2060,71 +2239,163 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
 
         if rejections:
             st.subheader("Filter Rejection Funnel")
-            
+            st.caption(
+                "Motivos por los cuales se descartaron candidatos durante el escaneo (Tier 1 & Tier 2)."
+            )
+
+            try:
+                # Convert rejections to a clean DataFrame for plotting with AGGREGATION
+                rej_items_raw = []
+                for k, v in rejections.items():
+                    if v > 0:
+                        # AGGREGATION LOGIC: Simplify complex reasons
+                        reason = k
+                        if "LowRVOL" in k:
+                            reason = "Low RVOL (Tier 2)"
+                        elif "LowADR" in k:
+                            reason = "Low ADR (Tier 2)"
+                        elif "Overextended" in k:
+                            reason = "Overextended (Tier 2)"
+                        elif "ShortConsolidation" in k:
+                            reason = "Short Consolidation (Tier 3)"
+                        elif "WeakSector" in k:
+                            reason = "Weak Sector (Tier 3)"
+                        elif "Earnings" in k:
+                            reason = "Earnings Risk"
+                        elif "MarketRegime" in k or "Regime" in k:
+                            reason = "Market Regime Risk"
+                        elif "TIER1" in k:
+                            reason = "Tier 1: Market Safety"
+                        elif "TIER2" in k:
+                            reason = "Tier 2: Dynamic Quality"
+                        elif "TIER3" in k:
+                            reason = "Tier 3: Secondary Filters"
+                        else:
+                            # Default cleaning
+                            reason = (
+                                k.replace("blocked_by_", "").replace("_", " ").title()
+                            )
+
+                        rej_items_raw.append({"Reason": reason, "Count": int(v)})
+
+                if rej_items_raw:
+                    # Group by the simplified reason to aggregate counts
+                    rej_df_raw = pd.DataFrame(rej_items_raw)
+                    rej_df = rej_df_raw.groupby("Reason")["Count"].sum().reset_index()
+                    rej_df = rej_df.sort_values("Count", ascending=True)
+
+                    fig_funnel = px.bar(
+                        rej_df,
+                        x="Count",
+                        y="Reason",
+                        orientation="h",
+                        title="Trade Rejection Distribution (Aggregated)",
+                        color="Count",
+                        color_continuous_scale="Reds",
+                        template="plotly_dark",
+                        text="Count",  # Show numbers on bars
+                    )
+                    fig_funnel.update_traces(textposition="outside")
+                    fig_funnel.update_layout(
+                        height=max(350, len(rej_df) * 40),
+                        margin=dict(l=20, r=40, t=60, b=20),
+                        xaxis_title="Number of Rejected Entries",
+                        yaxis_title="",
+                    )
+                    st.plotly_chart(fig_funnel, use_container_width=True)
+                else:
+                    st.info("No rejection data to display for this period.")
+            except Exception as e:
+                st.warning(f"Could not render funnel: {e}")
+
             # --- NEW: Market Regime & Exposure Analysis ---
             st.markdown("---")
             st.subheader("📊 Market Regime & Exposure Analysis")
-            
+
             try:
-                from src.utils.market_regime import MarketRegimeClassifier, load_spy_vix_data
-                
+                from src.utils.market_regime import (
+                    MarketRegimeClassifier,
+                    load_spy_vix_data,
+                )
+
                 # Load SPY data for the backtest period
                 # First try offline for speed, then online if missing
-                spy_data, vix_data = load_spy_vix_data(str(start_date), str(end_date), cache=ticker_cache, offline=True)
-                
+                spy_data, vix_data = load_spy_vix_data(
+                    str(start_date), str(end_date), cache=get_ticker_cache(), offline=True
+                )
+
                 if spy_data is None or spy_data.empty:
                     with st.spinner("Downloading SPY/VIX data for market analysis..."):
-                        spy_data, vix_data = load_spy_vix_data(str(start_date), str(end_date), cache=ticker_cache, offline=False)
-                
+                        spy_data, vix_data = load_spy_vix_data(
+                            str(start_date),
+                            str(end_date),
+                            cache=get_ticker_cache(),
+                            offline=False,
+                        )
+
                 if spy_data is not None and not spy_data.empty:
                     classifier = MarketRegimeClassifier(spy_data, vix_data)
                     context_df = classifier.get_context_series()
-                    
+
                     col_m1, col_m2 = st.columns(2)
-                    
+
                     with col_m1:
                         st.markdown("**Market Regime Timeline**")
                         # Map stages to colors
                         stage_colors = {
-                            "STAGE_1": "#00ffa3", # Bull - Green
-                            "STAGE_2": "#ffa500", # Consolidation - Orange
-                            "STAGE_3": "#ff7f00", # Distribution - Dark Orange
-                            "STAGE_4": "#ff4b4b"  # Bear - Red
+                            "STAGE_1": "#00ffa3",  # Bull - Green
+                            "STAGE_2": "#ffa500",  # Consolidation - Orange
+                            "STAGE_3": "#ff7f00",  # Distribution - Dark Orange
+                            "STAGE_4": "#ff4b4b",  # Bear - Red
                         }
-                        
+
                         fig_regime = go.Figure()
-                        
+
                         # Add SPY Price
-                        fig_regime.add_trace(go.Scatter(
-                            x=spy_data.index, y=spy_data['close'],
-                            name="SPY Price", line=dict(color="white", width=1.5)
-                        ))
-                        
+                        fig_regime.add_trace(
+                            go.Scatter(
+                                x=spy_data.index,
+                                y=spy_data["close"],
+                                name="SPY Price",
+                                line=dict(color="white", width=1.5),
+                            )
+                        )
+
                         # Add background colors for stages
                         for stage, color in stage_colors.items():
-                            mask = context_df['market_stage'] == stage
+                            mask = context_df["market_stage"] == stage
                             if mask.any():
                                 # Find contiguous blocks
                                 diff = mask.astype(int).diff().fillna(0)
                                 starts = spy_data.index[diff == 1].tolist()
-                                if mask.iloc[0]: starts.insert(0, spy_data.index[0])
+                                if mask.iloc[0]:
+                                    starts.insert(0, spy_data.index[0])
                                 ends = spy_data.index[diff == -1].tolist()
-                                if mask.iloc[-1]: ends.append(spy_data.index[-1])
-                                
+                                if mask.iloc[-1]:
+                                    ends.append(spy_data.index[-1])
+
                                 for s, e in zip(starts, ends):
                                     fig_regime.add_vrect(
-                                        x0=s, x1=e, fillcolor=color, opacity=0.15, 
-                                        layer="below", line_width=0, name=stage
+                                        x0=s,
+                                        x1=e,
+                                        fillcolor=color,
+                                        opacity=0.15,
+                                        layer="below",
+                                        line_width=0,
+                                        name=stage,
                                     )
-                                    
+
                         fig_regime.update_layout(
-                            template="plotly_dark", height=400,
+                            template="plotly_dark",
+                            height=400,
                             margin=dict(l=20, r=20, t=30, b=20),
                             yaxis_title="SPY Price",
-                            showlegend=True
+                            showlegend=True,
                         )
                         st.plotly_chart(fig_regime, use_container_width=True)
-                        st.caption("Background colors indicate Market Stage (Green=Bull, Red=Bear). Your system filters entries in Red/Orange stages.")
+                        st.caption(
+                            "Background colors indicate Market Stage (Green=Bull, Red=Bear). Your system filters entries in Red/Orange stages."
+                        )
 
                     with col_m2:
                         st.markdown("**Portfolio Exposure Density**")
@@ -2132,48 +2403,89 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                             # Calculate daily exposure
                             dates = pd.date_range(start_date, end_date)
                             exposure_series = pd.Series(0, index=dates)
-                            
+
                             for _, trade in grouped_trades.iterrows():
-                                mask = (exposure_series.index >= trade['entry_date']) & (exposure_series.index <= trade['final_exit_date'])
+                                mask = (
+                                    exposure_series.index >= trade["entry_date"]
+                                ) & (exposure_series.index <= trade["final_exit_date"])
                                 exposure_series[mask] += 1
-                                
+
                             fig_exp = px.area(
-                                x=exposure_series.index, y=exposure_series.values,
+                                x=exposure_series.index,
+                                y=exposure_series.values,
                                 title="Active Trades Over Time",
                                 labels={"x": "Date", "y": "Open Positions"},
-                                color_discrete_sequence=["#00ffa3"]
+                                color_discrete_sequence=["#00ffa3"],
                             )
                             fig_exp.update_layout(template="plotly_dark", height=400)
                             st.plotly_chart(fig_exp, use_container_width=True)
-                            
+
                             avg_exp = exposure_series.mean()
-                            st.caption(f"Average open positions: {avg_exp:.2f}. Periods with 0 positions explain the low Exposure Time.")
+                            st.caption(
+                                f"Average open positions: {avg_exp:.2f}. Periods with 0 positions explain the low Exposure Time."
+                            )
                 else:
-                    st.warning("Could not load SPY data for regime analysis. Ensure SPY is in cache.")
+                    st.warning(
+                        "Could not load SPY data for regime analysis. Ensure SPY is in cache."
+                    )
             except Exception as e:
                 st.error(f"Error generating regime analysis: {e}")
-            
-            # --- NEW: Expert Metric Analysis ---
-            st.markdown("#### 💡 Expert Metric Analysis")
+
+            # --- NEW: Expert Metric Analysis (Dynamic) ---
+            st.markdown("#### 💡 Análisis Experto de Métricas")
             exp_col1, exp_col2 = st.columns(2)
+
+            # Get actual values from metrics
+            exposure = qs_metrics.get("exposure_time_pct", 0) if qs_metrics else 0
+            beta_val = qs_metrics.get("beta", 0) if qs_metrics else 0
             
             with exp_col1:
-                st.info("**Exposure Time (7.1%)**")
-                st.write("""
-                Este valor es **excelente** para una estrategia de momentum quirúrgica. Significa que:
-                * **Eficiencia:** Tu capital solo está expuesto al riesgo de mercado el 7% del tiempo.
-                * **Selectividad:** El sistema es extremadamente estricto, operando solo en condiciones óptimas.
-                * **Protección:** El 93% del tiempo estás en cash, evitando 'drawdowns' innecesarios.
-                """)
-                
+                # Dynamic interpretation based on actual exposure
+                if exposure > 0:
+                    exposure_quality = "excelente" if exposure < 15 else "moderado" if exposure < 30 else "alto"
+                    in_market_pct = exposure
+                    in_cash_pct = 100 - exposure
+                    
+                    st.info(f"**Exposure Time ({exposure:.1f}%)**")
+                    st.write(f"""
+                    Este valor es **{exposure_quality}** para una estrategia de momentum quirúrgica:
+                    * **Eficiencia:** Capital en riesgo solo el {in_market_pct:.1f}% del tiempo.
+                    * **Selectividad:** Sistema estricto, opera solo en condiciones óptimas.
+                    * **Protección:** El {in_cash_pct:.1f}% del tiempo estás en cash, evitando drawdowns innecesarios.
+                    """)
+                else:
+                    st.info("**Exposure Time**")
+                    st.write("Métrica no disponible para este período.")
+
             with exp_col2:
-                st.info("**Beta Negativo**")
-                st.write("""
-                Un Beta negativo indica que tu estrategia está **descorrelacionada** del SPY:
-                * **Cobertura Natural:** Cuando el mercado baja, tu cartera tiende a mantenerse o subir.
-                * **Alpha Puro:** Tus retornos no dependen de que el mercado suba, sino de la selección de activos.
-                * **Resiliencia:** Es una métrica muy buscada por fondos institucionales para diversificar carteras.
-                """)
+                # Dynamic interpretation based on actual beta
+                if beta_val is not None and abs(beta_val) > 0.01:
+                    if beta_val < -0.1:
+                        beta_desc = "**fuertemente descorrelacionado negativo**"
+                        benefit = "Alta protección cuando el mercado cae"
+                    elif beta_val < 0:
+                        beta_desc = "**ligeramente descorrelacionado negativo**"
+                        benefit = "Cierta protección en caídas del mercado"
+                    elif beta_val < 0.5:
+                        beta_desc = "**baja correlación positiva**"
+                        benefit = "Independencia moderada del mercado"
+                    elif beta_val < 1.0:
+                        beta_desc = "**correlación positiva moderada**"
+                        benefit = "Se mueve con el mercado, pero con menor volatilidad"
+                    else:
+                        beta_desc = "**alta correlación con el mercado**"
+                        benefit = "Sigue de cerca los movimientos del SPY"
+                    
+                    st.info(f"**Beta ({beta_val:+.2f})**")
+                    st.write(f"""
+                    Tu estrategia está {beta_desc} del SPY:
+                    * **Carácter:** {benefit}.
+                    * **Alpha Puro:** Retornos generados por selección de activos, no por el mercado.
+                    * **Valor Institucional:** {'Alta resiliencia buscada por fondos' if beta_val < 0 else 'Diversificación moderada'}.
+                    """)
+                else:
+                    st.info("**Beta**")
+                    st.write("Métrica no disponible o beta cercano a cero (estrategia neutral).")
             # --- END EXPERT ANALYSIS ---
 
             st.markdown("---")
@@ -2286,58 +2598,940 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
     # =========================================================================
     # TAB 5: INSIGHTS (Dynamic from config)
     # =========================================================================
+    # TAB 5: INSIGHTS (Configuration Display - Dynamic)
+    # =========================================================================
     with t5:
-        st.header("Trading System Configuration")
+        st.header("⚙️ Configuración del Sistema")
+        st.caption(f"Parámetros activos cargados desde: `config/production_config.json`")
 
         col_i1, col_i2 = st.columns(2)
 
         with col_i1:
-            st.markdown("**Tier 1: Strategy (THOR Optimized)**")
-            st.info(
-                f"TP1: Sell {_t1.get('tp1_pct', 0) * 100:.0f}% at {_t1.get('tp1_r', 0)}R"
-            )
-            st.info(
-                f"TP2: Sell {_t1.get('tp2_pct', 0) * 100:.0f}% at {_t1.get('tp2_r', 0)}R"
-            )
-            st.info(
-                f"Runner: Hold {_t1.get('runner_pct', 0) * 100:.0f}% with trailing SMA20"
-            )
-            st.info(
-                f"Max Stop: {_t1.get('max_stop_pct', 0) * 100:.1f}% | Risk: ${_t1.get('risk_dollars', 0)}/trade"
-            )
+            st.markdown("### 🎯 Tier 1: Estrategia Core")
+            st.markdown(f"**Take Profit Multi-Fase:**")
+            
+            tp1_pct = _t1.get('tp1_pct', 0) * 100
+            tp2_pct = _t1.get('tp2_pct', 0) * 100
+            runner_pct = _t1.get('runner_pct', 0) * 100
+            tp1_r = _t1.get('tp1_r', 0)
+            tp2_r = _t1.get('tp2_r', 0)
+            
+            st.info(f"**TP1:** {tp1_pct:.0f}% de posición @ {tp1_r:.1f}R")
+            st.info(f"**TP2:** {tp2_pct:.0f}% de posición @ {tp2_r:.1f}R")
+            st.info(f"**Runner:** {runner_pct:.0f}% con EMA8/EMA21 crossover + ATR trailing")
+            
+            st.markdown("**Gestión de Riesgo:**")
+            max_stop = _t1.get('max_stop_pct', 0) * 100
+            risk_dollars = _t1.get('risk_dollars', 0)
+            st.info(f"Stop Loss Máximo: {max_stop:.1f}%")
+            st.info(f"Riesgo por Trade: ${risk_dollars:.0f}")
 
-            st.markdown("**Tier 2: Filters (Statistically Derived)**")
-            st.info(
-                f"Min RVOL: {_t2.get('min_rvol', 0)}x | Max Dist SMA20: {_t2.get('max_dist_sma20', 0)}%"
-            )
-            st.info(
-                f"Min ADR: {_t2.get('min_adr', 0)}% | Min $Volume: ${_t2.get('min_dollar_volume', 0):,.0f}"
-            )
+            st.markdown("---")
+            st.markdown("### 🔬 Tier 2: Filtros de Calidad")
+            
+            min_rvol = _t2.get('min_rvol', 0)
+            max_dist_sma20 = _t2.get('max_dist_sma20', 0)
+            min_adr = _t2.get('min_adr', 0)
+            min_dollar_vol = _t2.get('min_dollar_volume', 0)
+            
+            st.info(f"**RVOL Mínimo:** {min_rvol:.1f}x (volumen relativo)")
+            st.info(f"**Distancia Max SMA20:** {max_dist_sma20:.1f}% (evita sobreextensión)")
+            st.info(f"**ADR Mínimo:** {min_adr:.2f}% (rango promedio diario)")
+            st.info(f"**Volumen Mínimo:** ${min_dollar_vol:,.0f} (liquidez)")
 
         with col_i2:
-            st.markdown("**Tier 3: Risk Management (Fixed)**")
-            st.info(
-                f"RVOL Danger ({_t3.get('rvol_danger', 0)}x): Size to {_t3.get('rvol_danger_size', 0) * 100:.0f}%"
-            )
-            st.info(
-                f"RVOL Warning ({_t3.get('rvol_warning', 0)}x): Size to {_t3.get('rvol_warning_size', 0) * 100:.0f}%"
-            )
-            st.info(
-                f"Max Exposure: {_t3.get('max_exposure_pct', 0) * 100:.0f}% | Max Position: {_t3.get('max_position_pct', 0) * 100:.0f}%"
-            )
+            st.markdown("### 🛡️ Tier 3: Gestión de Riesgo")
+            
+            rvol_danger = _t3.get('rvol_danger', 0)
+            rvol_danger_size = _t3.get('rvol_danger_size', 0) * 100
+            rvol_warning = _t3.get('rvol_warning', 0)
+            rvol_warning_size = _t3.get('rvol_warning_size', 0) * 100
+            max_exposure = _t3.get('max_exposure_pct', 0) * 100
+            max_position = _t3.get('max_position_pct', 0) * 100
+            
+            st.markdown("**Ajustes por Volatilidad:**")
+            st.warning(f"**RVOL Peligro (≥{rvol_danger:.1f}x):** Reduce size a {rvol_danger_size:.0f}%")
+            st.warning(f"**RVOL Alerta (≥{rvol_warning:.1f}x):** Reduce size a {rvol_warning_size:.0f}%")
+            
+            st.markdown("**Límites de Cartera:**")
+            st.info(f"**Max Exposure Total:** {max_exposure:.0f}% del capital")
+            st.info(f"**Max Posición Individual:** {max_position:.0f}% del capital")
 
-            st.markdown("**Market Regime**")
-            st.info(
-                f"SPY > SMA50: {'Required' if _mr.get('require_spy_above_sma50') else 'Not Required'}"
-            )
-            st.info(f"Max VIX: {_mr.get('max_vix', 40)}")
+            st.markdown("---")
+            st.markdown("### 🌊 Market Regime Filter")
+            
+            require_spy_sma50 = _mr.get('require_spy_above_sma50', False)
+            max_vix = _mr.get('max_vix', 40)
+            
+            st.info(f"**SPY > SMA50:** {'✅ Requerido' if require_spy_sma50 else '❌ No requerido'}")
+            st.info(f"**VIX Máximo:** {max_vix:.0f} (por encima = BLOCKED)")
+            
+            st.markdown("**Reglas de Stage:**")
+            st.success("Stage 1 (Bull): 100% size")
+            st.warning("Stage 2 (Consolidation): 75% size")
+            st.error("Stage 3/4 (Distribution/Bear): BLOCKED")
 
-            st.markdown("**THOR Optimization Results**")
-            st.success(
-                f"Validation Sharpe: {_perf.get('sharpe_ratio', 0):.2f} | "
-                f"Win Rate: {_perf.get('win_rate_pct', 0):.2f}% | "
-                f"Trades: {_perf.get('total_trades', 0)} | "
-                f"Return: {_perf.get('total_return_pct', 0):.2f}%"
+            if _perf:
+                st.markdown("---")
+                st.markdown("### 📈 Performance de Validación")
+                st.caption("Resultados del último proceso de optimización")
+                
+                val_sharpe = _perf.get('sharpe_ratio', 0)
+                val_wr = _perf.get('win_rate_pct', 0)
+                val_trades = _perf.get('total_trades', 0)
+                val_return = _perf.get('total_return_pct', 0)
+                
+                perf_col1, perf_col2 = st.columns(2)
+                with perf_col1:
+                    st.metric("Sharpe Ratio", f"{val_sharpe:.2f}")
+                    st.metric("Win Rate", f"{val_wr:.1f}%")
+                with perf_col2:
+                    st.metric("Total Trades", f"{val_trades}")
+                    st.metric("Return", f"{val_return:+.2f}%")
+    with t6:
+        st.header("🌊 Market Regime — Cómo Funciona el Filtro")
+        st.caption(
+            "Esta pestaña explica cómo el sistema clasifica las condiciones del mercado día a día "
+            "y muestra qué días se permitieron trades o se bloquearon durante tu backtest."
+        )
+
+        with st.expander("¿Cómo funciona el Market Regime filter?", expanded=True):
+            col_edu1, col_edu2 = st.columns([1, 1])
+            with col_edu1:
+                st.markdown("""
+**El sistema clasifica cada día en uno de 4 Stages:**
+
+| Stage | Nombre | Condición | Acción |
+|-------|--------|-----------|--------|
+| Stage 1 | Bull Trend | SPY > SMA50 & SMA200, momentum > 3%, VIX < 20 | Tamaño completo |
+| Stage 2 | Consolidación | SPY saludable pero sin momentum claro | 75% size |
+| Stage 3 | Distribución | **2 de 3:** SPY < SMA50 · vol > 1.5 · VIX > 20 | BLOQUEADO |
+| Stage 4 | Bear Trend | SPY < SMA200 & SMA50, momentum < -5% | BLOQUEADO |
+
+**¿Por qué 2-de-3 para Stage 3?** Los mercados distribuyen *antes* de que el VIX explote.
+Si SPY está bajo SMA50 Y la volatilidad está elevada, es suficiente para parar el trading
+aunque el VIX no haya llegado a 25. El sistema viejo requería las 3 condiciones (AND),
+lo que significaba que el filtro actuaba demasiado tarde.
+""")
+            with col_edu2:
+                st.markdown("""
+**Las 3 señales monitoreadas diariamente:**
+
+**Price Action** — SPY vs SMA50 y SMA200
+Cuando el precio rompe bajo su promedio de 50 días, el dinero institucional está reduciendo exposición.
+
+**Volatility** — Promedio de 20 días del rango diario %
+Rangos intraday elevados destruyen setups de swing. Umbral: > 1.5% (reducido de 2.0).
+
+**VIX** — Volatilidad implícita de opciones del S&P 500
+VIX > 20 = mercado pagando prima por protección a corto plazo.
+Hard cap en 25: por encima de esto, no hay entradas sin importar otras señales.
+Sistema viejo usaba 35 como cap — eso es nivel pandemia/guerra, demasiado tarde.
+
+**VIX Term Structure:** Cuando VIX spot > VIX 3-meses (backwardation),
+el pánico institucional está confirmado — la señal de peligro más fuerte a corto plazo.
+""")
+
+        st.markdown("---")
+        st.subheader("Regime Timeline")
+
+        try:
+            from src.utils.market_regime import (
+                MarketRegimeClassifier,
+                load_spy_vix_data,
             )
+            import plotly.graph_objects as go
+            from plotly.subplots import make_subplots
+
+            spy_r, vix_r = load_spy_vix_data(
+                str(start_date), str(end_date), cache=get_ticker_cache(), offline=True
+            )
+            if spy_r is None or spy_r.empty:
+                with st.spinner("Downloading SPY/VIX..."):
+                    spy_r, vix_r = load_spy_vix_data(
+                        str(start_date),
+                        str(end_date),
+                        cache=get_ticker_cache(),
+                        offline=False,
+                    )
+
+            if spy_r is not None and not spy_r.empty:
+                clf = MarketRegimeClassifier(spy_r, vix_r)
+                ctx = clf.get_context_series()
+
+                STAGE_COLOR = {
+                    "STAGE_1": "#00c853",
+                    "STAGE_2": "#ffd600",
+                    "STAGE_3": "#ff6d00",
+                    "STAGE_4": "#d50000",
+                }
+                STAGE_LABEL = {
+                    "STAGE_1": "Stage 1 - Bull (trades permitidos)",
+                    "STAGE_2": "Stage 2 - Consolidación (trades permitidos)",
+                    "STAGE_3": "Stage 3 - Distribución (BLOQUEADO)",
+                    "STAGE_4": "Stage 4 - Bear (BLOQUEADO)",
+                }
+
+                total_days = len(ctx)
+                sc = ctx["market_stage"].value_counts()
+                tradeable = sc.get("STAGE_1", 0) + sc.get("STAGE_2", 0)
+                blocked = sc.get("STAGE_3", 0) + sc.get("STAGE_4", 0)
+
+                sm1, sm2, sm3, sm4, sm5 = st.columns(5)
+                sm1.metric("Total days", total_days)
+                sm2.metric(
+                    "Stage 1 Bull",
+                    sc.get("STAGE_1", 0),
+                    f"{sc.get('STAGE_1', 0) / total_days * 100:.0f}%",
+                )
+                sm3.metric(
+                    "Stage 2 Neutral",
+                    sc.get("STAGE_2", 0),
+                    f"{sc.get('STAGE_2', 0) / total_days * 100:.0f}%",
+                )
+                sm4.metric(
+                    "Stage 3 Dist.",
+                    sc.get("STAGE_3", 0),
+                    f"{sc.get('STAGE_3', 0) / total_days * 100:.0f}%",
+                )
+                sm5.metric(
+                    "Stage 4 Bear",
+                    sc.get("STAGE_4", 0),
+                    f"{sc.get('STAGE_4', 0) / total_days * 100:.0f}%",
+                )
+
+                tradeable_pct = tradeable / total_days * 100 if total_days else 0
+                st.progress(
+                    int(tradeable_pct),
+                    text=f"Días operables: {tradeable_pct:.0f}%  ({tradeable} abiertos / {blocked} bloqueados)",
+                )
+                
+                # Dynamic interpretation
+                st.markdown("#### 📊 Interpretación del Período")
+                if tradeable_pct >= 70:
+                    st.success(f"""
+                    ✅ **Período muy favorable** ({tradeable_pct:.0f}% días operables)
+                    
+                    El mercado estuvo en condiciones óptimas la mayoría del tiempo.
+                    Stage 1 dominante indica tendencia alcista sostenida.
+                    Excelente ambiente para estrategias de momentum.
+                    """)
+                elif tradeable_pct >= 50:
+                    st.info(f"""
+                    ⚖️ **Período mixto** ({tradeable_pct:.0f}% días operables)
+                    
+                    Mercado alternó entre fases operables y bloqueadas.
+                    Requiere selectividad — el sistema filtró días riesgosos.
+                    Ambiente normal para swing trading.
+                    """)
+                else:
+                    st.warning(f"""
+                    ⚠️ **Período desafiante** ({tradeable_pct:.0f}% días operables)
+                    
+                    El mercado estuvo en Stage 3/4 más de la mitad del tiempo.
+                    Alta volatilidad o tendencia bajista dominante.
+                    El filtro protegió capital evitando entradas peligrosas.
+                    """)
+
+                st.markdown("---")
+
+                fig = make_subplots(
+                    rows=3,
+                    cols=1,
+                    shared_xaxes=True,
+                    row_heights=[0.55, 0.25, 0.20],
+                    vertical_spacing=0.04,
+                    subplot_titles=(
+                        "Precio SPY + Stage de Mercado",
+                        "VIX (Volatilidad Implícita)",
+                        "Volatilidad (promedio 20d del rango %)",
+                    ),
+                )
+
+                fig.add_trace(
+                    go.Scatter(
+                        x=spy_r.index,
+                        y=spy_r["close"],
+                        name="SPY",
+                        line=dict(color="white", width=1.5),
+                    ),
+                    row=1,
+                    col=1,
+                )
+                fig.add_trace(
+                    go.Scatter(
+                        x=clf.spy.index,
+                        y=clf.spy["sma50"],
+                        name="SMA50",
+                        line=dict(color="#42a5f5", width=1, dash="dot"),
+                    ),
+                    row=1,
+                    col=1,
+                )
+                fig.add_trace(
+                    go.Scatter(
+                        x=clf.spy.index,
+                        y=clf.spy["sma200"],
+                        name="SMA200",
+                        line=dict(color="#ef5350", width=1, dash="dot"),
+                    ),
+                    row=1,
+                    col=1,
+                )
+
+                for stage, color in STAGE_COLOR.items():
+                    mask = ctx["market_stage"] == stage
+                    if not mask.any():
+                        continue
+                    diff = mask.astype(int).diff().fillna(0)
+                    starts = spy_r.index[diff == 1].tolist()
+                    if mask.iloc[0]:
+                        starts.insert(0, spy_r.index[0])
+                    ends = spy_r.index[diff == -1].tolist()
+                    if mask.iloc[-1]:
+                        ends.append(spy_r.index[-1])
+                    for s, e in zip(starts, ends):
+                        fig.add_vrect(
+                            x0=s,
+                            x1=e,
+                            fillcolor=color,
+                            opacity=0.13,
+                            layer="below",
+                            line_width=0,
+                            row=1,
+                            col=1,
+                        )
+
+                if vix_r is not None and not vix_r.empty:
+                    vx = vix_r.reindex(spy_r.index, method="ffill")
+                    fig.add_trace(
+                        go.Scatter(
+                            x=vx.index,
+                            y=vx["close"],
+                            name="VIX",
+                            line=dict(color="#ff9800", width=1.5),
+                            fill="tozeroy",
+                            fillcolor="rgba(255,152,0,0.08)",
+                        ),
+                        row=2,
+                        col=1,
+                    )
+                    fig.add_hline(
+                        y=20,
+                        line_dash="dash",
+                        line_color="#ffd600",
+                        annotation_text="VIX 20 (trigger Stage 3)",
+                        annotation_position="top left",
+                        row=2,
+                        col=1,
+                    )
+                    fig.add_hline(
+                        y=25,
+                        line_dash="dash",
+                        line_color="#ef5350",
+                        annotation_text="VIX 25 (límite absoluto)",
+                        annotation_position="top left",
+                        row=2,
+                        col=1,
+                    )
+
+                fig.add_trace(
+                    go.Scatter(
+                        x=clf.spy.index,
+                        y=clf.spy["volatility_20"],
+                        name="Vol 20d",
+                        line=dict(color="#ce93d8", width=1.2),
+                        fill="tozeroy",
+                        fillcolor="rgba(206,147,216,0.08)",
+                    ),
+                    row=3,
+                    col=1,
+                )
+                fig.add_hline(
+                    y=1.5,
+                    line_dash="dash",
+                    line_color="#ffd600",
+                    annotation_text="Umbral 1.5%",
+                    annotation_position="top left",
+                    row=3,
+                    col=1,
+                )
+
+                fig.update_layout(
+                    template="plotly_dark",
+                    height=700,
+                    margin=dict(l=20, r=20, t=60, b=20),
+                    legend=dict(
+                        orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
+                    ),
+                    hovermode="x unified",
+                )
+                fig.update_yaxes(title_text="Precio ($)", row=1, col=1)
+                fig.update_yaxes(title_text="VIX", row=2, col=1)
+                fig.update_yaxes(title_text="Rango (%)", row=3, col=1)
+                st.plotly_chart(fig, use_container_width=True)
+
+                lc1, lc2, lc3, lc4 = st.columns(4)
+                lc1.success("Stage 1 - Bull: entradas completas")
+                lc2.warning("Stage 2 - Consolidación: selectivo (75% size)")
+                lc3.error("Stage 3 - Distribución: BLOQUEADO (2-de-3)")
+                lc4.error("Stage 4 - Bear: BLOQUEADO")
+
+                st.markdown("---")
+                st.subheader("Transiciones de Stage")
+                st.caption(
+                    "Cada vez que el régimen de mercado cambió durante el período del backtest."
+                )
+                transitions = []
+                prev = None
+                for date, row_ctx in ctx.iterrows():
+                    curr = row_ctx["market_stage"]
+                    if curr != prev:
+                        transitions.append(
+                            {
+                                "Fecha": date.strftime("%Y-%m-%d"),
+                                "Nuevo Stage": STAGE_LABEL.get(curr, curr),
+                                "SPY": f"${row_ctx['spy_price']:.2f}",
+                                "VIX": f"{row_ctx['vix_value']:.1f}",
+                                "Vol 20d": f"{row_ctx['market_volatility']:.2f}%",
+                                "Trades Permitidos": "✅ Sí"
+                                if curr in ["STAGE_1", "STAGE_2"]
+                                else "🚫 No",
+                            }
+                        )
+                        prev = curr
+                if transitions:
+                    trans_df = pd.DataFrame(transitions)
+                    st.dataframe(trans_df, use_container_width=True)
+                    
+                    # Add educational context based on actual transitions
+                    st.markdown("#### 💡 Análisis de Transiciones")
+                    
+                    num_transitions = len(transitions)
+                    blocked_transitions = len([t for t in transitions if "STAGE_3" in t["Nuevo Stage"] or "STAGE_4" in t["Nuevo Stage"]])
+                    
+                    if num_transitions <= 5:
+                        st.success(f"""
+                        ✅ **Mercado estable** ({num_transitions} cambios de regime)
+                        
+                        Pocas transiciones indican un mercado con tendencia clara y sostenida.
+                        Ideal para estrategias direccionales como momentum.
+                        """)
+                    elif num_transitions <= 15:
+                        st.info(f"""
+                        ⚖️ **Mercado normal** ({num_transitions} cambios de regime)
+                        
+                        Alternancia típica entre fases alcistas y consolidación.
+                        El sistema se adapta automáticamente al cambio de condiciones.
+                        """)
+                    else:
+                        st.warning(f"""
+                        ⚠️ **Mercado volátil** ({num_transitions} cambios de regime)
+                        
+                        Muchas transiciones indican inestabilidad y cambios bruscos.
+                        El filtro de regime es crítico en estos períodos.
+                        """)
+                    
+                    if blocked_transitions > 0:
+                        st.error(f"""
+                        🛡️ **Protección activa:** {blocked_transitions} transiciones a Stage 3/4 bloqueadas
+                        
+                        El sistema detectó condiciones peligrosas y bloqueó nuevas entradas,
+                        protegiendo tu capital de drawdowns evitables.
+                        """)
+            else:
+                st.warning(
+                    "No se pudo cargar datos de SPY. Ejecuta un backtest primero para poblar el cache."
+                )
+        except Exception as e:
+            st.error(f"Market Regime tab error: {e}")
+            import traceback
+
+            st.code(traceback.format_exc())
+
+    # =========================================================================
+    # TAB 7: TRADE ANATOMY - EDUCATIONAL MODE
+    # =========================================================================
+    with t7:
+        st.markdown("## 🎓 Anatomía del Trade - Modo Educativo")
+        st.caption("Aprende cómo funciona el sistema analizando trades reales paso a paso")
+        
+        if not grouped_trades.empty:
+            # Trade selector
+            st.markdown("### 📍 Selecciona un Trade para Analizar")
+            
+            # Create dropdown with most interesting trades
+            interesting_trades = grouped_trades.copy()
+            interesting_trades['description'] = (
+                interesting_trades['ticker'] + " | " +
+                interesting_trades['entry_date'].astype(str) + " → " +
+                interesting_trades['final_exit_date'].astype(str) + " | PnL: $" +
+                interesting_trades['total_pnl'].round(2).astype(str)
+            )
+            
+            # Sort by absolute PnL to show most impactful trades
+            interesting_trades['abs_pnl'] = interesting_trades['total_pnl'].abs()
+            interesting_trades = interesting_trades.sort_values('abs_pnl', ascending=False)
+            
+            selected_trade_desc = st.selectbox(
+                "Trade:",
+                interesting_trades['description'].tolist(),
+                help="Ordenados por impacto (PnL absoluto)"
+            )
+            
+            # Get the selected trade
+            selected_idx = interesting_trades[
+                interesting_trades['description'] == selected_trade_desc
+            ].index[0]
+            trade = interesting_trades.loc[selected_idx]
+            
+            # Display trade overview
+            st.markdown("---")
+            outcome_emoji = "✅" if trade['total_pnl'] > 0 else "❌"
+            st.markdown(f"## {outcome_emoji} {trade['ticker']} - Análisis Completo")
+            
+            # Key metrics in columns
+            m1, m2, m3, m4, m5 = st.columns(5)
+            m1.metric("Entrada", f"${trade['entry_price']:.2f}")
+            m2.metric("PnL Total", f"${trade['total_pnl']:.2f}")
+            m3.metric("Días en Trade", f"{int(trade['hold_days'])}")
+            m4.metric("Entry Score", f"{trade.get('entry_score', 0):.2f}")
+            m5.metric("R-Multiple", f"{trade.get('r_multiple', 0):+.2f}R" if 'r_multiple' in trade else "N/A")
+            
+            # PHASE 1: PRE-ENTRADA
+            st.markdown("---")
+            st.markdown("### 🔍 FASE 1: Pre-Entrada (Screening)")
+            
+            col_pre1, col_pre2 = st.columns(2)
+            
+            with col_pre1:
+                st.markdown("#### ¿Qué buscaba el sistema?")
+                st.info(f"""
+                **Patrón:** {trade.get('pattern_type', 'N/A')}
+                
+                **Criterios de selección:**
+                1. **Base consolidada** - Precio entre soporte y resistencia
+                2. **AVWAP por debajo** - Precio no sobreextendido
+                3. **Volumen institucional** - Detecta acumulación
+                4. **Momentum relativo** - RS Percentile: {trade.get('rs_percentile', 0):.0f}
+                """)
+                
+            with col_pre2:
+                st.markdown("#### Filtros que Pasó")
+                # Show that this trade passed all filters
+                st.success(f"""
+                ✅ **Tier 1 (Market Safety)** - Régimen de mercado favorable
+                ✅ **Tier 2 (Quality)** - Calidad técnica suficiente
+                ✅ **Tier 3 (Risk)** - Risk/Reward aceptable
+                
+                **Entry Score:** {trade.get('entry_score', 0):.2f}/1.0
+                """)
+                
+                if trade.get('entry_score', 0) >= 0.7:
+                    st.write("🔥 **Score alto** - Setup de muy alta calidad")
+                elif trade.get('entry_score', 0) >= 0.4:
+                    st.write("⚠️ **Score medio** - Setup aceptable pero no ideal")
+                else:
+                    st.write("⚡ **Score bajo** - Setup marginal, riesgo elevado")
+            
+            # PHASE 2: ENTRADA
+            st.markdown("---")
+            st.markdown("### 🚀 FASE 2: Entrada (Trigger)")
+            
+            col_ent1, col_ent2 = st.columns(2)
+            
+            with col_ent1:
+                st.markdown("#### El Momento de Entrada")
+                entry_date_str = trade['entry_date'].strftime('%Y-%m-%d') if hasattr(trade['entry_date'], 'strftime') else str(trade['entry_date'])
+                st.write(f"""
+                **Fecha:** {entry_date_str}
+                **Precio:** ${trade['entry_price']:.2f}
+                **Shares:** {int(trade.get('total_shares', 0))}
+                **Capital Arriesgado:** ${int(trade.get('total_shares', 0) * trade['entry_price']):.0f}
+                
+                **Trigger:**
+                El precio rompió por encima del nivel de resistencia de la base consolidada,
+                confirmando que hay compradores institucionales entrando.
+                """)
+                
+            with col_ent2:
+                st.markdown("#### Position Sizing Dinámico")
+                shares = int(trade.get('total_shares', 0))
+                entry_price = trade['entry_price']
+                position_value = shares * entry_price
+                
+                st.write(f"""
+                **Cálculo de posición:**
+                * Shares: {shares}
+                * Precio entrada: ${entry_price:.2f}
+                * Valor posición: ${position_value:.2f}
+                
+                El sistema ajusta el tamaño basado en:
+                1. **Riesgo fijo ($)** - Define cuánto perder si salta el stop
+                2. **Distancia al stop** - Más lejos = menos shares
+                3. **Régimen de mercado** - Stage 2 = 75% size
+                """)
+            
+            # PHASE 3: GESTIÓN
+            st.markdown("---")
+            st.markdown("### 📊 FASE 3: Gestión del Trade")
+            
+            col_gest1, col_gest2 = st.columns(2)
+            
+            with col_gest1:
+                st.markdown("#### Sistema de Salidas Escalonadas")
+                
+                # Parse exit phases if available
+                exit_info = trade.get('exit_phases', 'N/A')
+                st.write(f"""
+                **Fases de salida:** {exit_info}
+                
+                El sistema usa **Take Profit dinámico** en 3 fases:
+                * **TP1 (33%)** - Toma ganancias tempranas, asegura capital
+                * **TP2 (33%)** - Captura el movimiento medio
+                * **TP3 (34%)** - Permite correr ganadores
+                
+                Cada fase tiene su propio trailing stop para proteger ganancias.
+                """)
+                
+            with col_gest2:
+                st.markdown("#### ¿Qué Pasó en Este Trade?")
+                
+                if trade['total_pnl'] > 0:
+                    st.success(f"""
+                    ✅ **Trade Ganador** (+${trade['total_pnl']:.2f})
+                    
+                    El precio continuó en la dirección esperada y el sistema
+                    ejecutó las salidas según el plan. Las múltiples fases
+                    permitieron capturar diferentes partes del movimiento.
+                    """)
+                else:
+                    st.error(f"""
+                    ❌ **Trade Perdedor** (${trade['total_pnl']:.2f})
+                    
+                    El precio no se movió como se esperaba. El stop loss
+                    protegió el capital al limitar la pérdida a un nivel
+                    predefinido. Es parte normal del trading.
+                    """)
+            
+            # PHASE 4: POST-MORTEM
+            st.markdown("---")
+            st.markdown("### 🔬 FASE 4: Post-Mortem (Aprendizaje)")
+            
+            col_pm1, col_pm2 = st.columns(2)
+            
+            with col_pm1:
+                st.markdown("#### Métricas de Performance")
+                
+                win_rate_pct = (grouped_trades['total_pnl'] > 0).sum() / len(grouped_trades) * 100
+                avg_win = grouped_trades[grouped_trades['total_pnl'] > 0]['total_pnl'].mean() if (grouped_trades['total_pnl'] > 0).any() else 0
+                avg_loss = grouped_trades[grouped_trades['total_pnl'] < 0]['total_pnl'].mean() if (grouped_trades['total_pnl'] < 0).any() else 0
+                
+                st.info(f"""
+                **Contexto del sistema completo:**
+                * Win Rate: {win_rate_pct:.1f}%
+                * Avg Win: ${avg_win:.2f}
+                * Avg Loss: ${avg_loss:.2f}
+                * Total Trades: {len(grouped_trades)}
+                
+                Este trade {'contribuyó positivamente' if trade['total_pnl'] > 0 else 'fue parte del costo de hacer negocios'}.
+                """)
+                
+            with col_pm2:
+                st.markdown("#### Lecciones Clave")
+                
+                # Dynamic lessons based on trade characteristics
+                lessons = []
+                
+                if trade.get('entry_score', 0) >= 0.7 and trade['total_pnl'] > 0:
+                    lessons.append("✅ **Score alto + ganador** - Sistema funcionó como esperado")
+                elif trade.get('entry_score', 0) < 0.4 and trade['total_pnl'] < 0:
+                    lessons.append("⚠️ **Score bajo + perdedor** - Confirmación de que scores bajos son más riesgosos")
+                elif trade.get('entry_score', 0) >= 0.7 and trade['total_pnl'] < 0:
+                    lessons.append("📚 **Score alto pero perdió** - Incluso buenos setups fallan (probabilidades)")
+                elif trade.get('entry_score', 0) < 0.4 and trade['total_pnl'] > 0:
+                    lessons.append("🎲 **Score bajo pero ganó** - Caso fortuito, no replicable")
+                
+                if trade['hold_days'] < 3:
+                    lessons.append("⚡ **Trade corto** - Sistema detectó debilidad y cortó rápido")
+                elif trade['hold_days'] > 10:
+                    lessons.append("🏃 **Trade extendido** - El momentum se mantuvo varios días")
+                
+                if trade.get('rs_percentile', 0) >= 80:
+                    lessons.append("🚀 **RS alto** - Líder relativo del mercado (IBD style)")
+                
+                for lesson in lessons:
+                    st.write(lesson)
+                
+                if not lessons:
+                    st.write("📊 Trade con características estándar del sistema")
+            
+            # EDUCATIONAL CONCEPTS
+            st.markdown("---")
+            st.markdown("### 📚 Conceptos Clave del Sistema")
+            
+            edu_tabs = st.tabs([
+                "Triad Protocol",
+                "Entry Score",
+                "R-Multiple",
+                "Market Regime",
+                "Position Sizing"
+            ])
+            
+            with edu_tabs[0]:
+                st.markdown("""
+                #### 🔱 Triad Protocol
+                
+                El sistema busca la confluencia de **3 niveles técnicos**:
+                
+                **1. Base (Consolidación)**
+                * Zona de precio donde la acción se consolida
+                * Identifica soporte/resistencia
+                * Mínimo 5 días de formación
+                
+                **2. AVWAP (Anchored VWAP)**
+                * Precio promedio ponderado desde el último pivot
+                * Muestra dónde están posicionados los institucionales
+                * Entrada ideal: precio cerca pero no muy por encima
+                
+                **3. VWAP (Daily)**
+                * Precio justo del día actual
+                * Referencia intraday para entradas precisas
+                
+                **¿Por qué funciona?**
+                Cuando precio rompe la base Y está cerca de AVWAP Y supera VWAP,
+                es señal de que institucionales están comprando activamente.
+                """)
+                
+            with edu_tabs[1]:
+                st.markdown("""
+                #### 🎯 Entry Score v2
+                
+                Califica la **calidad del setup** de 0.0 a 1.0 combinando:
+                
+                **Componentes (ponderados):**
+                * **Triad quality** (30%) - ¿Qué tan limpia está la estructura?
+                * **Volume confirmation** (25%) - ¿Hay volumen institucional?
+                * **RS Percentile** (25%) - ¿Es líder relativo?
+                * **Volatility & momentum** (20%) - ¿Tiene fuerza el movimiento?
+                
+                **Interpretación:**
+                * **≥0.7** - Setup de alta calidad, mayor probabilidad de éxito
+                * **0.4-0.7** - Setup aceptable, riesgo moderado
+                * **<0.4** - Setup marginal, alta probabilidad de fallo
+                
+                **Uso en producción:**
+                Puedes filtrar trades por score mínimo para mejorar consistencia.
+                """)
+                
+            with edu_tabs[2]:
+                st.markdown("""
+                #### 📏 R-Multiple (Risk Units)
+                
+                Mide **cuántas veces tu riesgo inicial ganaste o perdiste**.
+                
+                **Ejemplo:**
+                * Entrada: $100, Stop: $95 → Riesgo = $5
+                * Si sales en $110 → Ganaste $10 → **+2R**
+                * Si salta stop en $95 → Perdiste $5 → **-1R**
+                
+                **¿Por qué es importante?**
+                * **Normaliza trades** - Compara manzanas con manzanas
+                * **Win Rate ≠ Profit** - Puedes ganar 40% de trades y ser rentable con +3R avg
+                * **Objetivo:** Avg R-Multiple > +0.5R para rentabilidad sostenida
+                
+                **Estrategias ganadoras:**
+                * Corta perdedores rápido (-1R)
+                * Deja correr ganadores (+2R, +3R, +5R)
+                """)
+                
+            with edu_tabs[3]:
+                st.markdown("""
+                #### 🌊 Market Regime Filter
+                
+                El sistema **adapta su agresividad** según el estado del mercado (SPY):
+                
+                **Stage 1 - Bull Trend** 🟢
+                * SPY > SMA50 & SMA200
+                * Momentum fuerte
+                * **Acción:** Entradas completas (100% size)
+                
+                **Stage 2 - Consolidation** 🟡
+                * SPY saludable pero sin momentum claro
+                * **Acción:** Entradas reducidas (75% size)
+                
+                **Stage 3 - Distribution** 🔴
+                * 2 de 3: SPY < SMA50, Vol > 1.5%, VIX > 20
+                * Dinero institucional saliendo
+                * **Acción:** BLOQUEADO - No nuevas entradas
+                
+                **Stage 4 - Bear Trend** ⛔
+                * SPY < SMA200 & SMA50
+                * Tendencia bajista confirmada
+                * **Acción:** BLOQUEADO
+                
+                **Filosofía:**
+                No luches contra la marea. El mejor trade es el que no haces en mal ambiente.
+                """)
+                
+            with edu_tabs[4]:
+                st.markdown("""
+                #### 💰 Position Sizing Dinámico
+                
+                Cada trade tiene tamaño calculado para **riesgo fijo en dólares**.
+                
+                **Fórmula:**
+                ```
+                Shares = Risk_$ / (Entry - Stop_Loss)
+                ```
+                
+                **Ejemplo práctico:**
+                * Riesgo fijo: $100 por trade
+                * Entry: $50, Stop: $48
+                * Distancia: $2
+                * Shares = $100 / $2 = **50 shares**
+                
+                **Ventajas:**
+                1. **Riesgo consistente** - Cada trade arriesga lo mismo
+                2. **Adaptativo** - Stops más anchos = menos shares
+                3. **Protección de cuenta** - No apuestas todo en un trade
+                
+                **Ajustes por régimen:**
+                * Stage 1 (Bull): 100% del tamaño calculado
+                * Stage 2 (Consolidation): 75% del tamaño
+                * Stage 3/4: No entries
+                """)
+            
+            # LIVE EXECUTION TIMELINE
+            st.markdown("---")
+            st.markdown("### 📅 Timeline de Ejecución")
+            
+            # Get individual exits from original trade_df if available
+            if 'trade_df_for_grouper' in dir() and not trade_df_for_grouper.empty:
+                # Find all partial exits for this trade
+                partial_exits = trade_df_for_grouper[
+                    (trade_df_for_grouper['ticker'] == trade['ticker']) &
+                    (trade_df_for_grouper['entry_date'] == trade['entry_date'])
+                ].copy()
+                
+                if not partial_exits.empty:
+                    partial_exits = partial_exits.sort_values('exit_date')
+                    
+                    timeline_data = []
+                    timeline_data.append({
+                        "Evento": "🟢 ENTRADA",
+                        "Fecha": entry_date_str,
+                        "Precio": f"${trade['entry_price']:.2f}",
+                        "Shares": f"{int(trade['total_shares'])}",
+                        "PnL": "-",
+                        "Notas": "Apertura de posición completa"
+                    })
+                    
+                    for idx, exit_row in partial_exits.iterrows():
+                        exit_date_str = exit_row['exit_date'].strftime('%Y-%m-%d') if hasattr(exit_row['exit_date'], 'strftime') else str(exit_row['exit_date'])
+                        exit_price = exit_row.get('exit_price', 0)
+                        pnl = exit_row.get('pnl', 0)
+                        shares_exited = exit_row.get('shares', 0)
+                        exit_reason = exit_row.get('exit_reason', 'N/A')
+                        
+                        emoji = "🎯" if "TP" in str(exit_reason) else "🛑" if pnl < 0 else "📤"
+                        
+                        timeline_data.append({
+                            "Evento": f"{emoji} SALIDA",
+                            "Fecha": exit_date_str,
+                            "Precio": f"${exit_price:.2f}",
+                            "Shares": f"{int(shares_exited)}",
+                            "PnL": f"${pnl:.2f}",
+                            "Notas": str(exit_reason)
+                        })
+                    
+                    timeline_df = pd.DataFrame(timeline_data)
+                    st.dataframe(timeline_df, use_container_width=True, hide_index=True)
+                else:
+                    st.info("Timeline detallado no disponible para este trade")
+            
+            # KEY TAKEAWAYS
+            st.markdown("---")
+            st.markdown("### 💡 Conclusiones & Takeaways")
+            
+            final_col1, final_col2 = st.columns(2)
+            
+            with final_col1:
+                st.markdown("#### ¿Qué hizo bien el sistema?")
+                positives = []
+                
+                if trade.get('entry_score', 0) >= 0.6:
+                    positives.append("✅ Identificó setup de calidad")
+                if trade.get('rs_percentile', 0) >= 70:
+                    positives.append("✅ Seleccionó líder relativo fuerte")
+                if trade['hold_days'] >= 2:
+                    positives.append("✅ Dio espacio al trade para desarrollarse")
+                if trade['total_pnl'] > 0:
+                    positives.append("✅ Ejecutó plan de salida correctamente")
+                else:
+                    positives.append("✅ Cortó pérdida según plan (gestión de riesgo)")
+                
+                for p in positives:
+                    st.write(p)
+            
+            with final_col2:
+                st.markdown("#### Puntos de Mejora")
+                improvements = []
+                
+                if trade.get('entry_score', 0) < 0.4:
+                    improvements.append("⚠️ Entry score bajo - considerar umbral más alto")
+                if trade.get('rs_percentile', 0) < 50:
+                    improvements.append("⚠️ RS bajo - no era líder de mercado")
+                if trade['total_pnl'] < 0 and trade['hold_days'] < 2:
+                    improvements.append("⚠️ Stop muy ajustado o entrada prematura")
+                if abs(trade['total_pnl']) < 50:
+                    improvements.append("⚠️ PnL pequeño - ajustar risk/size o skip setups débiles")
+                
+                if improvements:
+                    for imp in improvements:
+                        st.write(imp)
+                else:
+                    st.success("✨ Ejecución sólida sin puntos críticos de mejora")
+            
+            # COMPARISON WITH PEERS
+            st.markdown("---")
+            st.markdown("### 📊 Comparación con Otros Trades")
+            
+            comp_col1, comp_col2, comp_col3 = st.columns(3)
+            
+            with comp_col1:
+                st.markdown("#### Por PnL")
+                rank_pnl = (grouped_trades['total_pnl'] >= trade['total_pnl']).sum()
+                st.metric(
+                    "Ranking",
+                    f"{rank_pnl} / {len(grouped_trades)}",
+                    f"Top {rank_pnl/len(grouped_trades)*100:.0f}%"
+                )
+                
+            with comp_col2:
+                st.markdown("#### Por Entry Score")
+                if 'entry_score' in grouped_trades.columns:
+                    rank_score = (grouped_trades['entry_score'] >= trade.get('entry_score', 0)).sum()
+                    st.metric(
+                        "Ranking",
+                        f"{rank_score} / {len(grouped_trades)}",
+                        f"Top {rank_score/len(grouped_trades)*100:.0f}%"
+                    )
+                else:
+                    st.write("N/A")
+                    
+            with comp_col3:
+                st.markdown("#### Por Días en Hold")
+                rank_hold = (grouped_trades['hold_days'] >= trade['hold_days']).sum()
+                st.metric(
+                    "Ranking",
+                    f"{rank_hold} / {len(grouped_trades)}",
+                    f"Top {rank_hold/len(grouped_trades)*100:.0f}%"
+                )
+            
+        else:
+            st.info("No hay trades disponibles. Ejecuta un backtest primero.")
+
+
 else:
     st.info("No backtest results found. Run a backtest to see analytics.")

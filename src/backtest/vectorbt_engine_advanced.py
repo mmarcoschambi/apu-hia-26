@@ -125,18 +125,18 @@ def prepare_numba_arrays(engine, release_dataframes: bool = False) -> Dict:
     )
 
     # ============================================
-    # ENTRY QUALITY SCORE v2 - RS Rank + 52wk Proximity
-    # Score = 0.70 * RS_rank_daily + 0.30 * proximity_52wk_high
+    # ENTRY QUALITY SCORE v3 - RS Multi-Timeframe + 52wk Proximity
     #
-    # RS_rank_daily: percentil cross-sectional del RS de 60 dias
-    #   → responde "¿quién es el rey del momentum HOY?"
-    #   → 1.0 = mejor RS relativo, 0.0 = peor
+    # Componentes:
+    #   RS_60d:  momentum medio plazo (quien lidera el mercado)
+    #   RS_20d:  momentum corto plazo (quien SIGUE liderando ahora)
+    #   52wk:    proximidad al maximo (menor resistencia arriba)
     #
-    # proximity_52wk_high: close / max(close, 252 dias)
-    #   → responde "¿quién tiene menos resistencia arriba?"
-    #   → 1.0 = en el máximo, 0.5 = a 50% de distancia
+    # Logica: si RS_60d alto pero RS_20d bajo -> stock cediendo momentum
+    #   (distribucion interna). Score penaliza divergencia.
     #
-    # Pesos optimizables por Optuna: score_rs_weight, score_proximity_weight
+    # Pesos: score_rs_weight controla 60d+20d vs 52wk
+    #        rs_short_weight controla 20d dentro del componente RS
     # ============================================
     try:
         close_arr = arrays["close"]
@@ -144,26 +144,32 @@ def prepare_numba_arrays(engine, release_dataframes: bool = False) -> Dict:
 
         close_df = engine.close.ffill()
 
-        # --- COMPONENTE 1: RS Rank del dia (cross-sectional percentile) ---
-        # Usar el RS ya calculado en el engine (performance 60d) si existe
-        # Si no, calcularlo directamente desde close
+        # --- COMPONENTE 1A: RS 60d (medio plazo) ---
         rs_lookback = getattr(engine, "rs_lookback_days", 60)
-        rs_raw = close_df.pct_change(rs_lookback)  # retorno 60 dias
-        # Rank cross-sectional: cada dia, rankear todos los tickers
-        # pct=True -> percentil 0.0 a 1.0, ascending=True -> mayor RS = 1.0
-        score_rs = rs_raw.rank(axis=1, pct=True, ascending=True)
-        score_rs = score_rs.ffill().fillna(0.5)  # neutral si no hay dato
+        rs_raw_60 = close_df.pct_change(rs_lookback)
+        score_rs_60 = rs_raw_60.rank(axis=1, pct=True, ascending=True)
+        score_rs_60 = score_rs_60.ffill().fillna(0.5)
 
-        # --- COMPONENTE 2: Proximidad a máximo de 52 semanas ---
-        # close / rolling_max_252 -> 1.0 = en ATH, menor = más lejos
+        # --- COMPONENTE 1B: RS 20d (corto plazo - momentum reciente) ---
+        rs_short = getattr(engine, "rs_short_lookback_days", 20)
+        rs_short_w = getattr(engine, "rs_short_weight", 0.35)
+        rs_raw_20 = close_df.pct_change(rs_short)
+        score_rs_20 = rs_raw_20.rank(axis=1, pct=True, ascending=True)
+        score_rs_20 = score_rs_20.ffill().fillna(0.5)
+
+        # --- RS combinado: (1 - rs_short_w) * RS_60d + rs_short_w * RS_20d ---
+        # rs_short_w=0 -> solo RS 60d (comportamiento anterior)
+        # rs_short_w=0.35 -> 65% RS_60d + 35% RS_20d
+        score_rs = (1.0 - rs_short_w) * score_rs_60 + rs_short_w * score_rs_20
+
+        # --- COMPONENTE 2: Proximidad a maximo de 52 semanas ---
         max_52wk = close_df.rolling(window=252, min_periods=50).max()
         proximity_52wk = (close_df / max_52wk.replace(0, np.nan)).clip(0.0, 1.0)
         proximity_52wk = proximity_52wk.ffill().fillna(0.5)
 
-        # --- PONDERACION ---
+        # --- PONDERACION FINAL ---
         rs_w = getattr(engine, "score_rs_weight", 0.70)
         prox_w = getattr(engine, "score_proximity_weight", 0.30)
-        # Asegurar que suman 1.0
         total_w = rs_w + prox_w
         if total_w > 0:
             rs_w = rs_w / total_w
@@ -181,6 +187,8 @@ def prepare_numba_arrays(engine, release_dataframes: bool = False) -> Dict:
             padded[:r, :c] = entry_score[:r, :c]
             entry_score = padded
 
+        # ============================================
+        # PATTERN BONUS - Add bonus for detected patterns
         # ============================================
         # PATTERN BONUS - Add bonus for detected patterns
         # Pattern bonus is ADDITIVE: preserves timing semantics
@@ -492,6 +500,13 @@ class AdvancedVectorBTEngine:
         use_rs_percentile: bool = False,  # Use IBD-style RS ranking (0-100 percentile)
         min_rs_percentile: float = 80.0,  # Minimum RS percentile (80 = Top 20%)
         rs_lookback_days: int = 60,  # Lookback for RS calculation (60 = 3 months)
+        rs_short_lookback_days: int = 20,  # Short-term RS lookback (20d = 1 month momentum)
+        rs_short_weight: float = 0.35,  # Weight of 20d RS in entry score (0 = disabled)
+        rs_divergence_block: bool = False, # Block entry if short RS diverges from long RS (experimental, opt-in)
+        use_ml_filter: bool = False,        # ML EntryScorer: filter + boost (LightGBM)
+        ml_filter_threshold: float = 0.40,  # Block entries with ML prob < threshold
+        ml_boost_weight: float = 0.20,      # entry_score += ml_boost_weight * ml_prob
+        _preloaded_regime_classifier=None,  # PERF: skip SPY/VIX reload in optimizer (inject from template)
         # NEW: SMA50/ATR Extension filter
         use_sma50_atr_filter: bool = False,  # Filter overextended stocks
         max_sma50_atr_extension: float = 2.0,  # Max ATR extension from SMA50
@@ -669,6 +684,12 @@ class AdvancedVectorBTEngine:
         self.use_rs_percentile = use_rs_percentile
         self.min_rs_percentile = min_rs_percentile
         self.rs_lookback_days = rs_lookback_days
+        self.rs_short_lookback_days = rs_short_lookback_days
+        self.rs_short_weight = rs_short_weight
+        self.rs_divergence_block = rs_divergence_block
+        self.use_ml_filter = use_ml_filter
+        self.ml_filter_threshold = ml_filter_threshold
+        self.ml_boost_weight = ml_boost_weight
 
         # NEW: SMA50/ATR Extension filter
         self.use_sma50_atr_filter = use_sma50_atr_filter
@@ -709,7 +730,11 @@ class AdvancedVectorBTEngine:
             )
 
         # Initialize market regime classifier if enabled
-        if self.use_market_regime_filter:
+        if _preloaded_regime_classifier is not None:
+            # PERF: reuse pre-loaded classifier (optimizer fast path, saves ~0.5s per trial)
+            self.market_regime_classifier = _preloaded_regime_classifier
+            logger.debug("   ⏩ Market regime classifier injected from template (skipping SPY/VIX reload)")
+        elif self.use_market_regime_filter:
             logger.info("=" * 60)
             logger.info("🌍 MARKET REGIME FILTER ENABLED")
             logger.info("=" * 60)
@@ -2021,6 +2046,52 @@ class AdvancedVectorBTEngine:
             trades_df["is_big_win"] = trades_df["r_multiple"] >= 2.0
             trades_df["is_big_loss"] = trades_df["r_multiple"] <= -1.0
 
+            # ================================================================
+            # ML POST-FILTER: score trades AFTER backtest with real entry features
+            # Architecture: run_backtest() -> trades_df (with all features) ->
+            #   ML scores each trade -> filter/boost applied to results dict
+            # ================================================================
+            if getattr(self, "use_ml_filter", False):
+                try:
+                    import pickle as _pkl, os as _os, pandas as _pd_ml
+                    _ml_path = "models/entry_scorer.pkl"
+                    if _os.path.exists(_ml_path):
+                        with open(_ml_path, "rb") as _mf:
+                            _obj = _pkl.load(_mf)
+                        _scorer = _obj["model"]
+                        _feats  = _obj.get("used_features", [])
+
+                        # Build feature df from trades_df (real entry features)
+                        _feat_cols = [c for c in _feats if c in trades_df.columns]
+                        _X = trades_df[_feat_cols].fillna(0)
+                        trades_df["ml_prob"] = _scorer.predict_proba(_X)[:, 1]
+
+                        _thresh = getattr(self, "ml_filter_threshold", 0.40)
+                        _boost  = getattr(self, "ml_boost_weight", 0.20)
+
+                        _n_before = len(trades_df)
+                        # Filter: keep only trades where ML prob >= threshold
+                        trades_df = trades_df[trades_df["ml_prob"] >= _thresh].copy()
+                        _n_after  = len(trades_df)
+                        _n_blocked = _n_before - _n_after
+
+                        # Boost entry_score on surviving trades (informational)
+                        if "entry_score" in trades_df.columns:
+                            trades_df["entry_score"] = (
+                                trades_df["entry_score"] + _boost * trades_df["ml_prob"]
+                            ).clip(0.0, 1.0)
+
+                        logger.info(
+                            f"   🤖 ML post-filter (thresh={_thresh}): "
+                            f"blocked {_n_blocked}/{_n_before} trades "
+                            f"| {_n_after} remaining "
+                            f"| WR before={(_n_before>0 and (trades_df['pnl']>0).sum()/_n_before or 0):.1%}"
+                        )
+                    else:
+                        logger.warning("   ⚠️ ML model not found -- skipping post-filter")
+                except Exception as _me:
+                    logger.warning(f"   ⚠️ ML post-filter error: {_me}")
+
         else:
             trades_df = pd.DataFrame(
                 columns=[
@@ -2179,8 +2250,11 @@ class AdvancedVectorBTEngine:
         """Execute backtest with partial exits"""
         logger.info("🎯 Starting advanced backtest with partial exits...")
 
-        # Load data
-        self.load_data()
+        # Load data (skip if already loaded -- avoids double load in optimize_3tier)
+        if not hasattr(self, "close") or self.close is None or len(self.close.columns) == 0:
+            self.load_data()
+        else:
+            logger.debug("   ⏩ Data already loaded, skipping load_data()")
 
         if len(self.close.columns) == 0:
             return self._empty_results()
@@ -2564,312 +2638,182 @@ class AdvancedVectorBTEngine:
             # ┌─────────────────────────────────────────────────────────────────┐
             # TIER 1: MARKET SAFETY FILTER (Vectorizado - 60x más rápido)
             # └─────────────────────────────────────────────────────────────────┘
-            # FIX: Iterate over unique dates to prevent indexing errors
-            for date in tqdm(
-                entries.index.unique(),
-                desc="   ⚡ Applying Adaptive Filter",
-                unit="day",
-            ):
-                if date in self.vix_close.index and date in self.spy_close.index:
-                    # Robust scalar extraction handling duplicates
-                    vix_series = self.vix_close.loc[date]
-                    vix_val = (
-                        float(vix_series.iloc[0])
-                        if isinstance(vix_series, pd.Series)
-                        else float(vix_series)
+            # ─── VECTORIZED TIER 1/2/3 FILTER (replaces day-by-day loop) ─────
+            # TIER 1: SPY > SMA50 AND VIX < max_vix  →  whole-day mask
+            if not hasattr(self, "spy_sma50"):
+                self.spy_sma50 = self.spy_close.rolling(window=50).mean()
+
+            # Align spy/vix to entries index
+            vix_aligned  = self.vix_close.reindex(entries.index).ffill()
+            spy_aligned  = self.spy_close.reindex(entries.index).ffill()
+            sma50_aligned = self.spy_sma50.reindex(entries.index).ffill()
+
+            # Scalar-safe extraction (Series or float)
+            def _to_series(s):
+                if isinstance(s, pd.DataFrame): return s.iloc[:, 0]
+                return s
+            vix_s   = _to_series(vix_aligned).astype(float)
+            spy_s   = _to_series(spy_aligned).astype(float)
+            sma50_s = _to_series(sma50_aligned).astype(float)
+
+            warmup_mask = sma50_s.isna()                       # dates before SMA50 ready
+            t1_block    = warmup_mask | (spy_s < sma50_s) | (vix_s >= self.max_vix_threshold)
+
+            # Apply TIER 1 as row-mask (all tickers blocked on bad days)
+            t1_block_2d = t1_block.values[:, None]             # (days, 1) → broadcasts
+            entries_before_t1 = entries.values.copy()
+            entries.values[t1_block_2d.repeat(entries.shape[1], axis=1)] = False
+
+            # Count rejections
+            t1_rejected = (entries_before_t1 & t1_block_2d).sum()
+            self.rejection_stats_tier["TIER1"] += int(t1_rejected)
+            # PERF FIX: vectorized rejection_details (eliminates ~800-iter Python loop)
+            t1_dates = entries.index[t1_block]
+            if len(t1_dates) > 0:
+                t1_loc = np.array([entries.index.get_loc(_d) for _d in t1_dates])
+                t1_cnts = entries_before_t1[t1_loc].sum(axis=1)
+                t1_reasons = np.where(warmup_mask.loc[t1_dates].values, "TIER1_WarmUp", "TIER1_MarketSafety")
+                for _d, _cnt, _r in zip(t1_dates[t1_cnts > 0], t1_cnts[t1_cnts > 0], t1_reasons[t1_cnts > 0]):
+                    rejected_details.append((_d, "TIER1", _r, "ALL", int(_cnt)))
+
+            logger.info(f"   ✅ TIER1 vectorized: {int(t1_rejected)} entries blocked")
+
+            # ─── TIER 2: Dynamic Quality Filter ────────────────────────────────
+            # Only run on dates that passed TIER 1
+            good_dates = entries.index[~t1_block]
+
+            if len(good_dates) > 0:
+                # Pre-compute VIX thresholds for all good dates (one call per unique VIX bucket)
+                vix_good = vix_s.loc[good_dates]
+                # Get thresholds vectorized — use median VIX per date → call get_dynamic_thresholds
+                # Unique VIX values to minimise redundant calls
+                unique_vix = vix_good.round(1).unique()
+                thresh_map = {}
+                for _v in unique_vix:
+                    thresh_map[_v] = get_dynamic_thresholds(
+                        float(_v),
+                        base_min_rvol=self.min_rvol,
+                        base_min_adr=self.min_adr,
+                        base_max_dist_sma20=self.max_dist_sma20,
+                        base_max_stop_pct=self.max_stop_pct,
+                        base_min_dollar_volume=self.min_dollar_volume,
+                        base_min_consolidation_days=self.min_consolidation_days,
                     )
 
-                    spy_series = self.spy_close.loc[date]
-                    spy_price = (
-                        float(spy_series.iloc[0])
-                        if isinstance(spy_series, pd.Series)
-                        else float(spy_series)
-                    )
+                # Align per-ticker arrays to entries columns
+                cols = entries.columns
+                close_g   = self.close.reindex(index=good_dates, columns=cols)
+                sma20_g   = self.sma_20.reindex(index=good_dates, columns=cols)
+                volume_g  = self.volume.reindex(index=good_dates, columns=cols)
+                avgvol_g  = self.avg_volume_20.reindex(index=good_dates, columns=cols)
+                adr_g     = self.adr_pct.reindex(index=good_dates, columns=cols) if hasattr(self, "adr_pct") else pd.DataFrame(5.0, index=good_dates, columns=cols)
 
-                    # Calculate SPY SMA50 if needed
-                    if not hasattr(self, "spy_sma50"):
-                        self.spy_sma50 = self.spy_close.rolling(window=50).mean()
+                # Vectorized RVOL, dist_sma20
+                avgvol_safe = avgvol_g.replace(0, np.nan)
+                rvol_g  = volume_g / avgvol_safe
+                sma20_safe = sma20_g.replace(0, np.nan)
+                dist_g  = (close_g - sma20_safe) / sma20_safe * 100
 
-                    spy_sma50_res = self.spy_sma50.loc[date]
-                    if isinstance(spy_sma50_res, pd.Series):
-                        spy_sma50_val = (
-                            float(spy_sma50_res.iloc[0])
-                            if not pd.isna(spy_sma50_res.iloc[0])
-                            else None
-                        )
-                    else:
-                        spy_sma50_val = (
-                            float(spy_sma50_res) if not pd.isna(spy_sma50_res) else None
-                        )
+                # Build per-date threshold arrays using pre-computed thresh_map
+                rvol_thr  = vix_good.round(1).map({v: thresh_map[v]["min_rvol"]           for v in unique_vix})
+                adr_thr   = vix_good.round(1).map({v: thresh_map[v]["min_adr"]            for v in unique_vix})
+                dist_thr  = vix_good.round(1).map({v: thresh_map[v]["max_dist_sma20"]     for v in unique_vix})
 
-                    spy_trend_strength = (
-                        (spy_price - spy_sma50_val) / spy_sma50_val
-                        if spy_sma50_val is not None and spy_sma50_val > 0
-                        else 0
-                    )
+                # Expand thresholds to (dates x tickers)
+                rvol_thr_2d = rvol_thr.values[:, None]
+                adr_thr_2d  = adr_thr.values[:, None]
+                dist_thr_2d = dist_thr.values[:, None]
 
-                    # TIER 1: Market Safety Filter (SPY > SMA50, VIX < 35)
-                    # Get current entries for this date to count actual rejections
-                    current_date_entries = entries.loc[date]
-                    entries_before_count = current_date_entries.sum()
+                fail_rvol = (rvol_g.values < rvol_thr_2d) | np.isnan(rvol_g.values)
+                fail_adr  = (adr_g.values  < adr_thr_2d)  | np.isnan(adr_g.values)
+                fail_dist = (dist_g.values > dist_thr_2d)  | np.isnan(dist_g.values)
+                fail_t2   = fail_rvol | fail_adr | fail_dist
 
-                    # Skip warm-up period if SMA50 is not available
-                    if spy_sma50_val is None:
-                        entries.loc[date, :] = False
-                        # FIX: Only count actual entries, not all tickers
-                        self.rejection_stats_tier["TIER1"] += int(entries_before_count)
-                        if entries_before_count > 0:
-                            rejected_details.append(
-                                (
-                                    date,
-                                    "TIER1",
-                                    "TIER1_WarmUp",
-                                    "ALL",
-                                    int(entries_before_count),
-                                )
-                            )
-                        continue
+                # Only reject entries that are still True
+                active_good = entries.loc[good_dates].values
+                to_reject   = fail_t2 & active_good
+                t2_rejected = int(to_reject.sum())
+                self.rejection_stats_tier["TIER2"] += t2_rejected
 
-                    should_trade = should_trade_long(
-                        spy_price, spy_sma50_val, vix_val, self.max_vix_threshold
-                    )
-                    if not should_trade:
-                        entries.loc[date, :] = False
-                        # FIX: Only count actual entries, not all tickers
-                        self.rejection_stats_tier["TIER1"] += int(entries_before_count)
-                        if entries_before_count > 0:
-                            rejected_details.append(
-                                (
-                                    date,
-                                    "TIER1",
-                                    "TIER1_MarketSafety",
-                                    "ALL",
-                                    int(entries_before_count),
-                                )
-                            )
-                            logger.debug(
-                                f"   🚫 {date.date()}: Market Safety Filter - Blocked {int(entries_before_count)} entries (SPY={spy_price:.2f}, SMA50={spy_sma50_val:.2f}, VIX={vix_val:.2f})"
-                            )
-                    else:
-                        # ┌─────────────────────────────────────────────────────────────────┐
-                        # TIER 2: DYNAMIC QUALITY FILTER (Vectorizado)
-                        # └─────────────────────────────────────────────────────────────────┘
-                        # Get data for all tickers at once (vectorized)
-                        try:
-                            # Helper to safely get 1D array even with duplicates
-                            def get_vals(df, d, cols):
-                                res = df.loc[d, cols]
-                                if isinstance(res, pd.DataFrame):
-                                    return res.iloc[0].values
-                                return res.values
+                # Apply mask
+                entries.loc[good_dates] = pd.DataFrame(
+                    active_good & ~fail_t2,
+                    index=good_dates, columns=cols
+                )
 
-                            # Use entries.columns to ensure alignment
-                            price_arr = get_vals(self.close, date, entries.columns)
-                            sma20_arr = get_vals(self.sma_20, date, entries.columns)
-                            volume_arr = get_vals(self.volume, date, entries.columns)
-                            avg_vol_arr = get_vals(
-                                self.avg_volume_20, date, entries.columns
-                            )
+                logger.info(f"   ✅ TIER2 vectorized: {t2_rejected} entries blocked")
 
-                            if hasattr(self, "adr_pct"):
-                                adr_arr = get_vals(self.adr_pct, date, entries.columns)
+                # ML TRAINING DATA: sample rejected entries with their features
+                # 2% sample of 187k = ~3700 rows -- enough signal, negligible overhead
+                if t2_rejected > 0 and getattr(self, "save_rejected_samples", True):
+                    try:
+                        import random as _rnd2
+                        _rnd2.seed(42)
+                        _rej_rows = []
+                        _flat_idx = np.argwhere(to_reject)  # (n, 2) array of [date_idx, col_idx]
+                        _sample_n = max(1, int(len(_flat_idx) * 0.02))
+                        _chosen   = _flat_idx[_rnd2.sample(range(len(_flat_idx)), min(_sample_n, len(_flat_idx)))]
+                        for _di, _ci in _chosen:
+                            _d   = good_dates[_di]
+                            _sym = cols[_ci]
+                            _rej_rows.append({
+                                "entry_date":       str(_d.date()),
+                                "symbol":           _sym,
+                                "context_rvol":     float(rvol_g.values[_di, _ci]),
+                                "context_adr":      float(adr_g.values[_di, _ci]),
+                                "dist_sma20_pct":   float(dist_g.values[_di, _ci]),
+                                "context_vol":      float(volume_g.values[_di, _ci]),
+                                "context_dollar_vol": float(close_g.values[_di, _ci] * volume_g.values[_di, _ci]),
+                                "entry_score":      0.0,   # rejected before scoring
+                                "stop_distance_pct": 4.0,  # unknown at rejection time
+                                "pattern_confidence": 0.0,
+                                "pattern_bonus":    0.0,
+                                "score_volume":     1.0,
+                                "score_ema10":      1.0,
+                                "initial_risk":     1000.0,
+                                "pnl":              -1.0,
+                                "r_multiple":       -1.0,
+                                "outcome":          "LOSS",
+                                "rejection_tier":   "TIER2",
+                            })
+                        if _rej_rows:
+                            _rej_df = pd.DataFrame(_rej_rows)
+                            _rej_path = "outputs/backtests/rejected_samples_ml.csv"
+                            import os as _os2
+                            if _os2.path.exists(_rej_path):
+                                _rej_df.to_csv(_rej_path, mode="a", header=False, index=False)
                             else:
-                                adr_arr = np.array([5.0] * len(entries.columns))
+                                _rej_df.to_csv(_rej_path, index=False)
+                            logger.info(f"   💾 ML: saved {len(_rej_rows)} rejected samples to {_rej_path}")
+                    except Exception as _re:
+                        logger.debug(f"   Rejected sample capture failed (non-critical): {_re}")
 
-                            if hasattr(self, "dollar_volume"):
-                                dollar_vol_arr = get_vals(
-                                    self.dollar_volume, date, entries.columns
-                                )
-                            else:
-                                dollar_vol_arr = price_arr * volume_arr
+                # Lightweight rejection details (one row per date, not per ticker — fast)
+                if t2_rejected > 0:
+                    t2_cnts = to_reject.sum(axis=1)
+                    mask2 = t2_cnts > 0
+                    for _d, _n in zip(good_dates[mask2], t2_cnts[mask2]):
+                        rejected_details.append((_d, "TIER2", "TIER2_DynamicQuality", f"{int(_n)}tickers", int(_n)))
 
-                            # Get VIX-based thresholds using validated params as base
-                            thresholds = get_dynamic_thresholds(
-                                vix_val,
-                                base_min_rvol=self.min_rvol,
-                                base_min_adr=self.min_adr,
-                                base_max_dist_sma20=self.max_dist_sma20,
-                                base_max_stop_pct=self.max_stop_pct,
-                                base_min_dollar_volume=self.min_dollar_volume,
-                                base_min_consolidation_days=self.min_consolidation_days,
-                            )
-                            rvol_threshold = thresholds["min_rvol"]
-                            adr_threshold = thresholds["min_adr"]
-                            dist_threshold = thresholds["max_dist_sma20"]
-                            dollar_vol_threshold = thresholds["min_dollar_volume"]
+            # ─── TIER 3: Consolidation filter (vectorized) ─────────────────────
+            if hasattr(self, "consolidation_days") and not self.consolidation_days.empty:
+                try:
+                    good_dates3  = entries.index[~t1_block]
+                    vix_good3    = vix_s.loc[good_dates3]
+                    consol_thr3  = vix_good3.round(1).map({v: thresh_map.get(v, get_dynamic_thresholds(float(v))).get("min_consolidation_days", self.min_consolidation_days) for v in vix_good3.round(1).unique()})
+                    consol_g     = self.consolidation_days.reindex(index=good_dates3, columns=entries.columns)
+                    fail_t3      = consol_g.values < consol_thr3.values[:, None]
+                    active_g3    = entries.loc[good_dates3].values
+                    to_rej3      = fail_t3 & active_g3
+                    t3_rejected  = int(to_rej3.sum())
+                    self.rejection_stats_tier["TIER3"] += t3_rejected
+                    entries.loc[good_dates3] = pd.DataFrame(
+                        active_g3 & ~fail_t3, index=good_dates3, columns=entries.columns
+                    )
+                    logger.info(f"   ✅ TIER3 vectorized: {t3_rejected} entries blocked")
+                except Exception as _e3:
+                    logger.warning(f"   ⚠️ TIER3 vectorized error (non-critical): {_e3}")
 
-                            # Safe casting and handling of NaN/None/Zero
-                            try:
-                                volume_arr = np.array(volume_arr, dtype=float)
-                                avg_vol_arr = np.array(avg_vol_arr, dtype=float)
-                                price_arr = np.array(price_arr, dtype=float)
-                                sma20_arr = np.array(sma20_arr, dtype=float)
-                                adr_arr = np.array(adr_arr, dtype=float)
-
-                                # Handle cases where original data was invalid (force fail if data missing)
-                                invalid_data_mask = (
-                                    np.isnan(avg_vol_arr)
-                                    | (avg_vol_arr <= 0)
-                                    | np.isnan(sma20_arr)
-                                    | (sma20_arr <= 0)
-                                )
-
-                                # Only process valid data
-                                valid_mask = ~invalid_data_mask
-                                avg_vol_safe = np.where(valid_mask, avg_vol_arr, 1.0)
-                                sma20_safe = np.where(valid_mask, sma20_arr, 1.0)
-
-                                # Calculate RVOL array (vectorized) - only for valid data
-                                rvol_arr = np.zeros_like(volume_arr, dtype=float)
-                                rvol_arr[valid_mask] = (
-                                    volume_arr[valid_mask] / avg_vol_safe[valid_mask]
-                                )
-
-                                # Vectorized comparisons
-                                tier2_fail_rvol = (
-                                    rvol_arr < rvol_threshold
-                                ) | invalid_data_mask
-                                tier2_fail_adr = (adr_arr < adr_threshold) | np.isnan(
-                                    adr_arr
-                                )
-                                tier2_fail_dist = (
-                                    (price_arr - sma20_safe) / sma20_safe * 100
-                                    > dist_threshold
-                                ) | invalid_data_mask
-
-                            except Exception as e_conv:
-                                logger.warning(
-                                    f"   ⚠️ Error converting data for TIER 2: {e_conv}"
-                                )
-                                # Fallback to prevent crash, assuming all fail if conversion fails
-                                rvol_arr = np.zeros_like(volume_arr)
-                                tier2_fail_rvol = np.ones_like(volume_arr, dtype=bool)
-                                tier2_fail_adr = np.ones_like(volume_arr, dtype=bool)
-                                tier2_fail_dist = np.ones_like(volume_arr, dtype=bool)
-
-                            # TIER 2: Combine failures
-                            tier2_fail_mask = (
-                                tier2_fail_rvol | tier2_fail_adr | tier2_fail_dist
-                            )
-
-                            # FIX: Only apply filter to tickers with actual entries
-                            current_date_entries = entries.loc[date].values
-                            entries_idx = np.where(current_date_entries)[0]
-
-                            if len(entries_idx) > 0:
-                                # Only count failures for tickers that had entries
-                                tier2_fail_entries_mask = tier2_fail_mask[entries_idx]
-                                tier2_rejected_count = tier2_fail_entries_mask.sum()
-
-                                if tier2_rejected_count > 0:
-                                    self.rejection_stats_tier["TIER2"] += int(
-                                        tier2_rejected_count
-                                    )
-                                    for idx in entries_idx[tier2_fail_entries_mask]:
-                                        ticker = entries.columns[idx]
-                                        if tier2_fail_rvol[idx]:
-                                            reason = f"TIER2_LowRVOL_Regime{thresholds['regime_name']}_{rvol_arr[idx]:.1f}x"
-                                        elif tier2_fail_adr[idx]:
-                                            reason = f"TIER2_LowADR_Regime{thresholds['regime_name']}_{adr_arr[idx]:.1f}%"
-                                        else:
-                                            reason = f"TIER2_Overextended_Regime{thresholds['regime_name']}_{(price_arr[idx] - sma20_arr[idx]) / sma20_arr[idx] * 100:.1f}%"
-                                        rejected_details.append(
-                                            (date, "TIER2", reason, ticker, 1)
-                                        )
-                                    # Only block entries that were actually active
-                                    entries.loc[
-                                        date,
-                                        entries.columns[
-                                            tier2_fail_mask & current_date_entries
-                                        ],
-                                    ] = False
-
-                        except Exception as e:
-                            logger.warning(f"   ⚠️ Error applying TIER 2 filters: {e}")
-
-                        # ┌─────────────────────────────────────────────────────────────────┐
-                        # TIER 3: OPTIONAL FILTERS (Configurables - Vectorizado)
-                        # └─────────────────────────────────────────────────────────────────┘
-                        # Only process TIER 3 for entries that passed TIER 1 and TIER 2
-                        if (
-                            len(entries.columns) > 0
-                        ):  # Only process if there are entries left
-                            try:
-                                # Get consolidation days and sector RS (vectorized if available)
-                                # FIX: Use self.consolidation_days DataFrame instead of non-existent method
-                                if (
-                                    hasattr(self, "consolidation_days")
-                                    and not self.consolidation_days.empty
-                                    and date in self.consolidation_days.index
-                                ):
-                                    consolidation_arr = get_vals(
-                                        self.consolidation_days, date, entries.columns
-                                    ).astype(float)
-                                else:
-                                    consolidation_arr = np.array(
-                                        [float(self.min_consolidation_days)]
-                                        * len(entries.columns)
-                                    )
-
-                                # Sector RS - default to 0 if not available
-                                sector_rs_arr = np.array([0.0] * len(entries.columns))
-
-                                # Get regime for consolidation and sector requirements
-                                thresholds = get_dynamic_thresholds(vix_val)
-                                consolidation_threshold = thresholds.get(
-                                    "min_consolidation_days",
-                                    self.min_consolidation_days,
-                                )
-                                require_sector_strong = thresholds.get(
-                                    "strict_sector", False
-                                )
-
-                                # Vectorized comparisons
-                                tier3_fail_consol = (
-                                    consolidation_arr < consolidation_threshold
-                                )
-                                tier3_fail_sector = require_sector_strong & (
-                                    sector_rs_arr < 0
-                                )
-                                tier3_fail_mask = tier3_fail_consol | tier3_fail_sector
-
-                                # FIX: Only apply filter to tickers with actual entries
-                                current_date_entries_t3 = entries.loc[date].values
-                                entries_idx_t3 = np.where(current_date_entries_t3)[0]
-
-                                if len(entries_idx_t3) > 0:
-                                    tier3_fail_entries_mask = tier3_fail_mask[
-                                        entries_idx_t3
-                                    ]
-                                    tier3_rejected_count = tier3_fail_entries_mask.sum()
-
-                                    if tier3_rejected_count > 0:
-                                        self.rejection_stats_tier["TIER3"] += int(
-                                            tier3_rejected_count
-                                        )
-                                        for idx in entries_idx_t3[
-                                            tier3_fail_entries_mask
-                                        ]:
-                                            ticker = entries.columns[idx]
-                                            if tier3_fail_consol[idx]:
-                                                reason = f"TIER3_ShortConsolidation_{consolidation_arr[idx]}d_Req{consolidation_threshold}d"
-                                            else:
-                                                reason = "TIER3_WeakSector"
-                                            rejected_details.append(
-                                                (date, "TIER3", reason, ticker, 1)
-                                            )
-                                        entries.loc[
-                                            date,
-                                            entries.columns[
-                                                tier3_fail_mask
-                                                & current_date_entries_t3
-                                            ],
-                                        ] = False
-
-                            except Exception as e:
-                                logger.warning(
-                                    f"   ⚠️ Error applying TIER 3 filters: {e}"
-                                )
 
             # Log summary statistics
             total_entries_post_filter = entries.sum().sum()
@@ -3192,6 +3136,23 @@ class AdvancedVectorBTEngine:
                 f"   ❌ Rechazadas por RS<{self.min_rs_percentile}: {rejected_low_rs}"
             )
             logger.info(f"   ✅ Entries finales: {total_entries_post_rs}")
+
+            # --- RS DIVERGENCE FILTER ---
+            # RS_60d high but RS_20d < 40: stock was a leader but losing momentum
+            if getattr(self, 'rs_divergence_block', False) and getattr(self, 'rs_short_weight', 0.35) > 0:
+                rs_short_lb = getattr(self, 'rs_short_lookback_days', 20)
+                rs_20d_raw = self.close.ffill().pct_change(rs_short_lb)
+                rs_20d_pct = rs_20d_raw.rank(axis=1, pct=True) * 100
+                rs_20d_pct = rs_20d_pct.reindex(entries.index).reindex(columns=entries.columns)
+                rs_60d_strong = rs_percentile >= self.min_rs_percentile
+                rs_20d_weak = rs_20d_pct < 40.0
+                divergence_mask = rs_60d_strong & rs_20d_weak
+                pre_div = entries.sum().sum()
+                entries = entries & ~divergence_mask
+                rejected_div = pre_div - entries.sum().sum()
+                if rejected_div > 0:
+                    logger.info(f'   RS divergence block: {rejected_div} entries removed (RS60d strong but RS20d < 40)')
+
 
         # ═══════════════════════════════════════════════════════════════
         # 📏 FILTRO 6: SMA50/ATR Extension (Avoid Overextended)

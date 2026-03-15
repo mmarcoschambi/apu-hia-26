@@ -272,12 +272,13 @@ class RobustnessMetrics:
 
     @staticmethod
     def calculate_probability_of_loss(
-        returns: np.ndarray, bootstrap_samples: int = 1000
+        returns: np.ndarray, bootstrap_samples: int = 1000, random_state: int = 42
     ) -> float:
         """
         Calculate probability of negative annual return via bootstrap.
 
         Returns probability (0-1) of losing money in a given year.
+        Uses fixed random_state for deterministic results.
         """
         returns = np.array(returns)
         n = len(returns)
@@ -285,10 +286,11 @@ class RobustnessMetrics:
         if n == 0:
             return 1.0
 
+        rng = np.random.RandomState(random_state)  # isolated RNG, no global state pollution
         negative_count = 0
 
         for _ in range(bootstrap_samples):
-            sample = np.random.choice(returns, size=n, replace=True)
+            sample = rng.choice(returns, size=n, replace=True)
             cumulative = np.prod(1 + sample) - 1
             if cumulative < 0:
                 negative_count += 1

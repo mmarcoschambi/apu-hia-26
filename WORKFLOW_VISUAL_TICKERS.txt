@@ -1,0 +1,417 @@
+═══════════════════════════════════════════════════════════════════════════════
+  🏎️  WORKFLOW VISUAL: Agregar Tickers desde JSON
+═══════════════════════════════════════════════════════════════════════════════
+
+
+                        ┌─────────────────────────────────┐
+                        │  scripts/universe/              │
+                        │  tickers_universo.json          │
+                        │  (22,662 tickers)               │
+                        └────────────┬────────────────────┘
+                                     │
+                                     ▼
+        ╔════════════════════════════════════════════════════════╗
+        ║  FASE 1: VALIDACIÓN Y DEDUPLICACIÓN                    ║
+        ╠════════════════════════════════════════════════════════╣
+        ║  Script: add_tickers_from_json.py                      ║
+        ║  - Lee JSON                                             ║
+        ║  - Consulta SQLite: data/ticker_cache.db                ║
+        ║  - Filtra duplicados                                    ║
+        ║  Output: new_tickers_to_add.txt (solo nuevos)          ║
+        ╚════════════════════════════════════════════════════════╝
+                                     │
+                        new_tickers_to_add.txt
+                        (ej: 21,500 nuevos)
+                                     │
+                                     ▼
+        ╔════════════════════════════════════════════════════════╗
+        ║  FASE 2: DESCARGA DATOS HISTÓRICOS                     ║
+        ╠════════════════════════════════════════════════════════╣
+        ║  Script: expand_universe.py                            ║
+        ║  - Descarga OHLCV desde Yahoo Finance                   ║
+        ║  - 5 workers paralelos (thread-safe)                    ║
+        ║  - Retry con backoff exponencial (rate limits)          ║
+        ║  - Valida: mínimo 50 días de data                       ║
+        ║  Output: data/ticker_cache.db (SQLite)                 ║
+        ║  Errors: failed_tickers_expansion.txt                  ║
+        ╚════════════════════════════════════════════════════════╝
+                                     │
+                          data/ticker_cache.db
+                          (OHLCV para 21K tickers)
+                                     │
+                                     ▼
+        ╔════════════════════════════════════════════════════════╗
+        ║  FASE 3: PRE-CÁLCULO DE INDICADORES                    ║
+        ╠════════════════════════════════════════════════════════╣
+        ║  Script: precompute_all_indicators.py                  ║
+        ║  - RSI (14)                                             ║
+        ║  - ATR (14)                                             ║
+        ║  - MACD (12, 26, 9)                                     ║
+        ║  - SMA (20, 50, 200)                                    ║
+        ║  - Dollar Volume                                        ║
+        ║  Output: data/precomputed_metrics.pkl                  ║
+        ║  Speedup: 40-57x vs on-the-fly                         ║
+        ╚════════════════════════════════════════════════════════╝
+                                     │
+                    data/precomputed_metrics.pkl
+                    (Indicadores pre-calculados)
+                                     │
+                                     ▼
+        ╔════════════════════════════════════════════════════════╗
+        ║  FASE 4: PRE-CÁLCULO DE PATRONES ⭐                    ║
+        ╠════════════════════════════════════════════════════════╣
+        ║  Script: precompute_patterns.py --merge                ║
+        ║  Patrones:                                              ║
+        ║    • VCP (Volatility Contraction Pattern)              ║
+        ║    • Cup & Handle                                       ║
+        ║    • Flat Base                                          ║
+        ║    • High Tight Flag                                    ║
+        ║  Features:                                              ║
+        ║    • Calcula cada 5 días (--step 5)                    ║
+        ║    • Checkpoint cada 10 tickers                         ║
+        ║    • Resume automático (--resume)                       ║
+        ║    • Merge mode (--merge) → preserva existentes        ║
+        ║  Output:                                                ║
+        ║    - data/pattern_cache.pkl                            ║
+        ║    - data/pattern_matrix.pkl                           ║
+        ║    - data/.pattern_progress.pkl (checkpoint)           ║
+        ╚════════════════════════════════════════════════════════╝
+                                     │
+                  data/pattern_cache.pkl + matrix
+                  (Patrones detectados)
+                                     │
+                                     ▼
+        ╔════════════════════════════════════════════════════════╗
+        ║  FASE 5: AUDITORÍA DE CALIDAD                          ║
+        ╠════════════════════════════════════════════════════════╣
+        ║  Script: audit_data_gaps.py                            ║
+        ║  - Detecta gaps en series temporales                    ║
+        ║  - Valida consistencia de precios                       ║
+        ║  - Identifica tickers con datos insuficientes           ║
+        ║  Output: gaps_report.csv                               ║
+        ╚════════════════════════════════════════════════════════╝
+                                     │
+                              gaps_report.csv
+                                     │
+                                     ▼
+                        ┌─────────────────────────────────┐
+                        │  ✅ UNIVERSO LISTO              │
+                        │  - Backtest (streamlit run app) │
+                        │  - Optimize (bugatti_optuna.py) │
+                        │  - Live scan (live_scanner.py)  │
+                        └─────────────────────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════════════════
+  🔄 FLUJO DE DATOS
+═══════════════════════════════════════════════════════════════════════════════
+
+JSON (22K)
+    ↓
+[Validación] → Filtra duplicados
+    ↓
+new_tickers_to_add.txt (21.5K nuevos)
+    ↓
+[Descarga] → Yahoo Finance API (retry + backoff)
+    ↓
+data/ticker_cache.db (SQLite)
+    ↓
+[Indicadores] → RSI, ATR, MACD, SMAs
+    ↓
+data/precomputed_metrics.pkl
+    ↓
+[Patrones] → VCP, Cup&Handle detection (--merge + --resume)
+    ↓
+data/pattern_cache.pkl + pattern_matrix.pkl
+    ↓
+[Auditoría] → Gaps, calidad
+    ↓
+gaps_report.csv
+    ↓
+✅ SISTEMA LISTO
+
+
+═══════════════════════════════════════════════════════════════════════════════
+  🛡️  VALIDACIONES AUTOMÁTICAS EN CADA FASE
+═══════════════════════════════════════════════════════════════════════════════
+
+FASE 1 - Validación:
+  ✓ Normaliza a uppercase
+  ✓ Elimina duplicados en JSON
+  ✓ Filtra tickers ya en DB (query SQL)
+  ✓ Genera lista limpia
+
+FASE 2 - Descarga:
+  ✓ Retry con backoff exponencial (429, 503, etc.)
+  ✓ Thread-safe (cada worker su propia conexión)
+  ✓ Valida mínimo 50 días de data
+  ✓ Detecta tickers delisted
+  ✓ Maneja MultiIndex de yfinance
+
+FASE 3 - Indicadores:
+  ✓ Valida mínimo 20 días para SMAs
+  ✓ Skips tickers sin datos suficientes
+  ✓ Crea backups antes de modificar
+
+FASE 4 - Patrones:
+  ✓ Checkpoint cada 10 tickers (auto-save)
+  ✓ Merge mode preserva cache existente
+  ✓ Valida mínimo 150 días de historia
+  ✓ Error handling por ticker (no falla todo)
+  ✓ Confidence scores normalizados [0-1]
+
+FASE 5 - Auditoría:
+  ✓ Detecta gaps mayores a 5 días
+  ✓ Valida rangos de precios (outliers)
+  ✓ Reporta tickers con <100 días
+
+
+═══════════════════════════════════════════════════════════════════════════════
+  ⚡ COMANDOS CLAVE
+═══════════════════════════════════════════════════════════════════════════════
+
+# TODO en un comando
+./expand_universe_complete.sh --source json
+
+# Paso a paso (más control)
+python3 add_tickers_from_json.py --source scripts/universe/tickers_universo.json
+python3 expand_universe.py --ticker-file new_tickers_to_add.txt --workers 5
+python3 precompute_all_indicators.py --tickers-file new_tickers_to_add.txt
+python3 precompute_patterns.py --tickers-file new_tickers_to_add.txt --merge
+python3 audit_data_gaps.py
+
+# Verificar
+python3 manage_universe.py --info
+python3 manage_universe.py --cache-info
+
+# Test con 3 tickers
+./test_workflow.sh
+
+
+═══════════════════════════════════════════════════════════════════════════════
+  📊 EJEMPLO DE OUTPUT
+═══════════════════════════════════════════════════════════════════════════════
+
+$ ./expand_universe_complete.sh --source json
+
+════════════════════════════════════════════════════════════════
+  🏎️  EXPAND UNIVERSE COMPLETE - Pipeline Automatizado
+════════════════════════════════════════════════════════════════
+
+  Período:  2020-01-01 → 2026-03-09
+  Workers:  5
+
+════════════════════════════════════════════════════════════════
+  📋 FASE 1: Validación y Deduplicación
+════════════════════════════════════════════════════════════════
+
+📂 Usando JSON: scripts/universe/tickers_universo.json
+📂 Loading tickers from JSON... ✅ 22662 tickers found
+🔍 Checking for duplicates in database... ✅ 1162 tickers already in DB
+
+📊 VALIDATION RESULTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Total in JSON:     22662
+Already in DB:     1162
+New to add:        21500
+
+✅ Validación completa: 21500 tickers nuevos a procesar
+
+════════════════════════════════════════════════════════════════
+  📥 FASE 2: Descarga de Datos Históricos
+════════════════════════════════════════════════════════════════
+
+Starting download of 21500 tickers with 5 workers...
+Progress: 1000/21500 | OK: 850 | Cached: 20 | Failed: 130 | ETA: 85320s
+
+... (continúa)
+
+RESULTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Downloaded: 19800
+Already cached: 450
+Failed: 1250
+Total tickers in cache: 21412
+
+✅ Descarga completada
+
+════════════════════════════════════════════════════════════════
+  📊 FASE 3: Pre-cálculo de Indicadores Técnicos
+════════════════════════════════════════════════════════════════
+
+🚀 PRECOMPUTE INDICATORS FOR ALL TICKERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 Found 21412 pickle files
+Precomputing: 100%|██████████████████| 21412/21412 [1:45:23<00:00, 3.38it/s]
+
+✅ Success: 20950
+⏭️  Skipped: 250 (already done)
+❌ Failed: 212
+
+✅ Indicadores pre-calculados
+
+════════════════════════════════════════════════════════════════
+  🎯 FASE 4: Pre-cálculo de Patrones Técnicos
+════════════════════════════════════════════════════════════════
+
+═══════════════════════════════════════════════════════════
+  PRECOMPUTE PATTERN CACHE
+  Tickers : 21500 | Periodo: 2020-01-01 -> 2026-03-09
+  Step    : cada 5 dias | Merge: True
+═══════════════════════════════════════════════════════════
+
+[MERGE] Cache existente: 1162 tickers
+[INFO] Por procesar: 20338 tickers
+
+Patrones: 100%|██████████████████| 20338/20338 [14:32:18<00:00, 2.58s/ticker]
+
+[OK] Cache guardado: data/pattern_cache.pkl (21500 tickers total)
+[INFO] Construyendo matrix (21500 tickers)...
+[OK] Matrix: (1500, 21500) | Conf media: 0.418 | Cobertura: 14.8%
+
+✅ Patrones pre-calculados
+
+════════════════════════════════════════════════════════════════
+  🔍 FASE 5: Auditoría de Calidad de Datos
+════════════════════════════════════════════════════════════════
+
+Analyzing gaps... 100%|██████████████| 21500/21500 [00:04:32<00:00, 78.9it/s]
+
+Gap Summary:
+  Tickers with gaps: 2,340 (10.9%)
+  Major gaps (>20 days): 124
+  Report saved: gaps_report.csv
+
+✅ Auditoría completa. Ver gaps_report.csv para detalles
+
+════════════════════════════════════════════════════════════════
+  ✅ PIPELINE COMPLETADO
+════════════════════════════════════════════════════════════════
+
+  📦 Archivos generados:
+     - data/ticker_cache.db         (OHLCV histórico)
+     - data/precomputed_metrics.pkl (Indicadores)
+     - data/pattern_cache.pkl       (Patrones por fecha)
+     - data/pattern_matrix.pkl      (Matriz de confidence)
+
+  🎯 Próximos pasos:
+     - Verificar universo: python3 manage_universe.py --info
+     - Ver cache info:     python3 manage_universe.py --cache-info
+     - Run backtest:       streamlit run app.py
+     - Optimize params:    python3 bugatti_optuna.py
+
+════════════════════════════════════════════════════════════════
+
+
+═══════════════════════════════════════════════════════════════════════════════
+  📊 ESTRUCTURA DE CACHE DE PATRONES
+═══════════════════════════════════════════════════════════════════════════════
+
+pattern_cache.pkl (Dict structure):
+{
+    "AAPL": {
+        Timestamp('2020-01-02'): {
+            "pattern_type": "VCP",
+            "confidence": 0.85,
+            "entry_price": 75.50,
+            "stop_loss": 73.20,
+            "pivot_price": 76.80
+        },
+        Timestamp('2020-01-07'): {
+            "pattern_type": "NONE",
+            "confidence": 0.0,
+            ...
+        },
+        ...
+    },
+    "MSFT": { ... },
+    ...
+}
+
+pattern_matrix.pkl (DataFrames):
+{
+    "confidence": DataFrame(
+        index=DatetimeIndex (business days),
+        columns=["AAPL", "MSFT", "NVDA", ...]
+        values=confidence scores [0.0 - 1.0]
+    ),
+    "pattern_type": DataFrame(
+        index=DatetimeIndex,
+        columns=tickers,
+        values=["VCP", "CUP_HANDLE", "FLAT_BASE", "HTF", "NONE"]
+    )
+}
+
+
+═══════════════════════════════════════════════════════════════════════════════
+  🎯 OPCIONES DE precompute_patterns.py
+═══════════════════════════════════════════════════════════════════════════════
+
+--merge              ⭐ CRÍTICO: Preserva cache existente
+--resume             Continúa desde checkpoint (.pattern_progress.pkl)
+--step 5             Calcula cada 5 días (optimización)
+--full               Procesa TODO el universo (top_500_momentum_tickers.txt)
+--tickers AAPL MSFT  Lista explícita de tickers
+--tickers-file FILE  Archivo con un ticker por línea
+--no-matrix          Skip construcción de matriz (más rápido)
+--start 2020-01-01   Fecha inicio
+--end 2026-03-09     Fecha fin
+
+Ejemplo completo:
+  python3 precompute_patterns.py \
+      --tickers-file new_tickers_to_add.txt \
+      --merge \
+      --resume \
+      --step 5 \
+      --start 2020-01-01 \
+      --end 2026-03-09
+
+
+═══════════════════════════════════════════════════════════════════════════════
+  ⏱️  TIEMPOS DE EJECUCIÓN POR FASE
+═══════════════════════════════════════════════════════════════════════════════
+
+Para 22K tickers:
+
+FASE 1: Validación           ~10 segundos      [█░░░░░░░░░░░░░░░░░░░]  0.02%
+FASE 2: Descarga             ~28 horas         [████████████░░░░░░░░] 58.3%
+FASE 3: Indicadores          ~2.5 horas        [██░░░░░░░░░░░░░░░░░░]  5.2%
+FASE 4: Patrones             ~15 horas         [███████░░░░░░░░░░░░░] 31.3%
+FASE 5: Auditoría            ~5 minutos        [░░░░░░░░░░░░░░░░░░░░]  0.2%
+                             ────────────
+                             ~48 horas TOTAL
+
+Optimización: Ejecutar en batches de 500 tickers (2-3 hrs cada uno)
+
+
+═══════════════════════════════════════════════════════════════════════════════
+  🚀 QUICK START
+═══════════════════════════════════════════════════════════════════════════════
+
+# Opción A: Todo automático (recomendado)
+./expand_universe_complete.sh --source json
+
+# Opción B: Test con 3 tickers primero
+./test_workflow.sh
+
+# Opción C: Batches de 500 (para 22K tickers)
+python3 add_tickers_from_json.py --source scripts/universe/tickers_universo.json
+split -l 500 new_tickers_to_add.txt batch_
+for batch in batch_*; do
+    ./expand_universe_complete.sh --tickers-file "$batch" --skip-audit
+    sleep 600
+done
+python3 audit_data_gaps.py
+
+
+═══════════════════════════════════════════════════════════════════════════════
+
+Archivos creados:
+  ✅ expand_universe_complete.sh         (pipeline automatizado)
+  ✅ test_workflow.sh                    (test rápido)
+  ✅ WORKFLOW_AGREGAR_TICKERS.md         (guía detallada)
+  ✅ RESUMEN_WORKFLOW_TICKERS.md         (quick reference)
+  ✅ RESPUESTA_WORKFLOW_TICKERS.md       (respuesta tu pregunta)
+  ✅ WORKFLOW_VISUAL_TICKERS.txt         (este diagrama)
+
+═══════════════════════════════════════════════════════════════════════════════

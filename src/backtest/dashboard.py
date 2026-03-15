@@ -305,6 +305,10 @@ class InteractiveDashboard:
         window_df["SMA_10"] = window_df["Close"].rolling(window=10).mean()
         window_df["SMA_20"] = window_df["Close"].rolling(window=20).mean()
 
+        # Calculate EMAs for runner trailing (EMA8/EMA21 crossover)
+        window_df["EMA_8"] = window_df["Close"].ewm(span=8, adjust=False).mean()
+        window_df["EMA_21"] = window_df["Close"].ewm(span=21, adjust=False).mean()
+
         # Calculate AVWAP
         historical_df = daily_df.iloc[: entry_idx + 1]
         avwap_data = self.indicators.calculate_avwap_from_ath(historical_df)
@@ -342,8 +346,30 @@ class InteractiveDashboard:
                 x=window_df.index,
                 y=window_df["SMA_20"],
                 mode="lines",
-                line=dict(color="#1E90FF", width=1.5),  # Dodger Blue
+                line=dict(color="#1E90FF", width=1.5),
                 name="SMA 20",
+            )
+        )
+
+        # Add EMA 8 (Runner trailing - fast)
+        fig.add_trace(
+            go.Scatter(
+                x=window_df.index,
+                y=window_df["EMA_8"],
+                mode="lines",
+                line=dict(color="#00CED1", width=1.5, dash="dash"),
+                name="EMA 8",
+            )
+        )
+
+        # Add EMA 21 (Runner trailing - slow)
+        fig.add_trace(
+            go.Scatter(
+                x=window_df.index,
+                y=window_df["EMA_21"],
+                mode="lines",
+                line=dict(color="#FF6347", width=1.5, dash="dash"),
+                name="EMA 21",
             )
         )
 
@@ -368,13 +394,13 @@ class InteractiveDashboard:
                 annotation_text=f"Base High: ${signal_data['base_high']:.2f}",
                 annotation_position="right",
             )
-            
+
         # --- NEW: Pattern Visualization ---
         pattern_type = signal_data.get("pattern_type", "NONE")
         if pattern_type != "NONE" and pattern_type is not None:
             pivot_price = signal_data.get("pivot_price")
             confidence = signal_data.get("pattern_confidence", 0)
-            
+
             # Draw Pivot Line
             if pivot_price:
                 fig.add_hline(
@@ -385,7 +411,7 @@ class InteractiveDashboard:
                     annotation_text=f"🔍 {pattern_type} PIVOT: ${pivot_price:.2f}",
                     annotation_position="left",
                 )
-                
+
             # Add Pattern Badge (Annotation)
             fig.add_annotation(
                 x=entry_date_pd,
@@ -401,16 +427,22 @@ class InteractiveDashboard:
                 borderwidth=2,
                 font=dict(size=12, color="magenta"),
             )
-            
+
             # Special logic for certain patterns (e.g., base consolidation)
-            if "BASE" in str(pattern_type).upper() or "VCP" in str(pattern_type).upper():
+            if (
+                "BASE" in str(pattern_type).upper()
+                or "VCP" in str(pattern_type).upper()
+            ):
                 # Shade the pre-entry consolidation area
                 # Look back 20 days from entry
                 pattern_start = entry_date_pd - pd.Timedelta(days=20)
                 fig.add_vrect(
-                    x0=pattern_start, x1=entry_date_pd,
-                    fillcolor="magenta", opacity=0.05,
-                    layer="below", line_width=0,
+                    x0=pattern_start,
+                    x1=entry_date_pd,
+                    fillcolor="magenta",
+                    opacity=0.05,
+                    layer="below",
+                    line_width=0,
                 )
         # --- END PATTERN VISUALIZATION ---
 

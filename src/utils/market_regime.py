@@ -145,7 +145,7 @@ class MarketRegimeClassifier:
 
         Rules:
         - Stage 4: Clear downtrend (price < SMA200, SMA50, momentum < -5%)
-        - Stage 3: Distribution (price < SMA50, high vol, VIX > 25)
+        - Stage 3: Distribution (2 of 3: SPY<SMA50, vol>1.5, VIX>20)
         - Stage 1: Clear uptrend (price > SMA200, SMA50, momentum > 3%, VIX < 20)
         - Stage 2: Consolidation (everything else)
         """
@@ -184,8 +184,12 @@ class MarketRegimeClassifier:
         ):
             return "STAGE_4"
 
-        # Stage 3: Distribution
-        elif spy_price < row["sma50"] and row["volatility_20"] > 2.0 and vix_value > 25:
+        # Stage 3: Distribution - 2 of 3 conditions (more robust than AND)
+        # Any 2 of: SPY<SMA50, volatility>1.5, VIX>20 = distribution signal
+        _spy_weak = spy_price < row["sma50"]
+        _vol_high = row["volatility_20"] > 1.5
+        _vix_high = vix_value > 20
+        if sum([_spy_weak, _vol_high, _vix_high]) >= 2:
             return "STAGE_3"
 
         # Stage 1: Clear bull trend

@@ -60,13 +60,24 @@ def analyze_entry_score_correlation(trades_df: pd.DataFrame) -> Dict:
         results["corr_entry_score_vs_r"] = round(corr_score_r, 4)
 
     # 3. Win Rate por cuartil de Entry Score
-    df_clean["score_quartile"] = pd.qcut(
-        df_clean["entry_score"], q=4, labels=["Q1", "Q2", "Q3", "Q4"], duplicates="drop"
-    )
+    try:
+        df_clean["score_quartile"] = pd.qcut(
+            df_clean["entry_score"], q=4, duplicates="drop"
+        )
+        # Rename categories if we have enough
+        if len(df_clean["score_quartile"].unique()) > 0:
+            cats = sorted(df_clean["score_quartile"].unique())
+            cat_map = {cat: f"Q{i+1}" for i, cat in enumerate(cats)}
+            df_clean["score_quartile_label"] = df_clean["score_quartile"].map(cat_map)
+        else:
+            df_clean["score_quartile_label"] = "All"
+    except Exception:
+        df_clean["score_quartile_label"] = "All"
 
     win_rate_by_quartile = {}
-    for quartile in ["Q1", "Q2", "Q3", "Q4"]:
-        q_df = df_clean[df_clean["score_quartile"] == quartile]
+    quartile_col = "score_quartile_label"
+    for quartile in sorted(df_clean[quartile_col].unique()):
+        q_df = df_clean[df_clean[quartile_col] == quartile]
         if len(q_df) > 0:
             wins = (q_df["pnl"] > 0).sum()
             win_rate_by_quartile[quartile] = {
@@ -166,16 +177,25 @@ def analyze_rs_percentile_performance(trades_df: pd.DataFrame) -> Dict:
     results["corr_rs_vs_pnl"] = round(corr_rs_pnl, 4)
 
     # 2. Win Rate por cuartil de RS
-    df_clean["rs_quartile"] = pd.qcut(
-        df_clean["rs_percentile"],
-        q=4,
-        labels=["Q1", "Q2", "Q3", "Q4"],
-        duplicates="drop",
-    )
+    try:
+        df_clean["rs_quartile"] = pd.qcut(
+            df_clean["rs_percentile"],
+            q=4,
+            duplicates="drop",
+        )
+        if len(df_clean["rs_quartile"].unique()) > 0:
+            cats = sorted(df_clean["rs_quartile"].unique())
+            cat_map = {cat: f"Q{i+1}" for i, cat in enumerate(cats)}
+            df_clean["rs_quartile_label"] = df_clean["rs_quartile"].map(cat_map)
+        else:
+            df_clean["rs_quartile_label"] = "All"
+    except Exception:
+        df_clean["rs_quartile_label"] = "All"
 
     win_rate_by_rs = {}
-    for quartile in ["Q1", "Q2", "Q3", "Q4"]:
-        q_df = df_clean[df_clean["rs_quartile"] == quartile]
+    quartile_col = "rs_quartile_label"
+    for quartile in sorted(df_clean[quartile_col].unique()):
+        q_df = df_clean[df_clean[quartile_col] == quartile]
         if len(q_df) > 0:
             wins = (q_df["pnl"] > 0).sum()
             win_rate_by_rs[quartile] = {
@@ -660,6 +680,7 @@ def analyze_pattern_performance(trades_df: pd.DataFrame) -> Dict:
         df["pattern_confidence"],
         bins=[-0.01, 0.3, 0.5, 0.7, 1.01],
         labels=["<0.3", "0.3-0.5", "0.5-0.7", "0.7+"],
+        duplicates="drop",
     )
 
     for bucket in df["conf_bucket"].unique():

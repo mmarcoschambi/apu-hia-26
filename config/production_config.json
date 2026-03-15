@@ -1,7 +1,7 @@
 {
   "_schema_version": "2.0",
   "_description": "Auto-exported from 3-Tier Optimization Pipeline",
-  "_last_updated": "2026-03-09T00:44:20.786964",
+  "_last_updated": "2026-03-12T21:50:34.504699",
   "_optimization_method": "3Tier_AdvancedVectorBT",
   "system": {
     "name": "Bugatti Trading System",
@@ -11,28 +11,28 @@
   },
   "=== TIER 1: STRATEGY (Optimized via Optuna) ===": {},
   "tier1_strategy": {
-    "tp1_r": 1.25,
-    "tp2_r": 2.0,
-    "tp1_pct": 0.5,
-    "tp2_pct": 0.3,
-    "runner_pct": 0.2,
+    "tp1_r": 1.75,
+    "tp2_r": 3.75,
+    "tp1_pct": 0.55,
+    "tp2_pct": 0.2,
+    "runner_pct": 0.25,
     "max_stop_pct": 0.08,
     "risk_dollars": 1000,
     "use_phases": true,
     "signal_type": "any",
     "_optimized_with": "3-Tier Pipeline (AdvancedVectorBT, 50 tickers)",
     "_trials": 300,
-    "_robust_score": -13.139431706685587,
-    "_sharpe_validation": 1.1613695750729962
+    "_robust_score": -28.56221535632509,
+    "_sharpe_validation": 1.0659245548533953
   },
   "=== TIER 2: FILTERS (Statistically Derived) ===": {},
   "tier2_filters": {
     "min_rvol": 0.58,
-    "min_adr": 1.58,
-    "max_dist_sma20": 11.99,
+    "min_adr": 1.49,
+    "max_dist_sma20": 12.84,
     "min_consolidation_days": 5,
     "min_volume": 100000,
-    "min_dollar_volume": 99176909.89990234,
+    "min_dollar_volume": 5941884.092140198,
     "max_consolidation_range": 15.0,
     "require_sector_strength": false,
     "sector_top_percentile": 0.4,
@@ -77,14 +77,14 @@
     "target_win_rate": 45.0,
     "max_acceptable_drawdown": 25.0,
     "validation_max_degradation_pct": 20.0,
-    "sharpe_ratio": 1.1613695750729962,
-    "total_trades": 11426,
-    "win_rate_pct": 71.81372549019608,
-    "total_return_pct": 139.07132749080657,
-    "max_drawdown_pct": 9.058772491657367,
-    "pbo_score": 0.46907536907536906,
-    "bootstrap_p5": -2.7142009775383817,
-    "bootstrap_p10": 1.3515142254982029
+    "sharpe_ratio": 1.0659245548533953,
+    "total_trades": 8396,
+    "win_rate_pct": 61.5625,
+    "total_return_pct": 78.45680767074226,
+    "max_drawdown_pct": 12.567943250955398,
+    "pbo_score": 0.41414141414141414,
+    "bootstrap_p5": -8.279651084138735,
+    "bootstrap_p10": -3.0938407381245985
   },
   "=== UI DEFAULTS (Override these for Streamlit) ===": {},
   "ui_defaults": {
@@ -385,6 +385,92 @@
       "pbo_score": 0.46907536907536906,
       "approved": "True",
       "notes": "50 tickers, 2019-01-01 to 2025-12-31"
+    },
+    {
+      "date": "2026-03-09",
+      "method": "3Tier_AdvancedVectorBT",
+      "trials": 300,
+      "sharpe": 1.0154966094437623,
+      "win_rate": 67.57532281205165,
+      "trades": 11426,
+      "pbo_score": 0.4662004662004662,
+      "approved": "True",
+      "notes": "50 tickers, 2019-01-01 to 2025-12-31"
+    },
+    {
+      "date": "2026-03-12",
+      "method": "3Tier_AdvancedVectorBT",
+      "trials": 300,
+      "sharpe": 0.9028506436462223,
+      "win_rate": 69.03846153846153,
+      "trades": 8153,
+      "pbo_score": 0.4133644133644134,
+      "approved": "True",
+      "notes": "50 tickers, 2021-01-01 to 2025-12-31"
+    },
+    {
+      "date": "2026-03-12",
+      "method": "3Tier_AdvancedVectorBT_RSv3",
+      "trials": 300,
+      "period": "2021-01-01 to 2025-12-31",
+      "tickers": 50,
+      "is_sharpe": 0.688,
+      "oos_sharpe": 0.4,
+      "pbo": 0.178,
+      "max_dd": 13.07,
+      "params": {
+        "tp1_r": 1.75,
+        "tp2_r": 3.25,
+        "tp1_pct": 0.55,
+        "tp2_pct": 0.25,
+        "score_rs_weight": 1.0,
+        "runner_pct": 0.2
+      },
+      "notes": "RS multi-timeframe entry score (v3), VIX cap 25, no-warmstart. Approved at relaxed Sharpe threshold (0.35) justified by PBO=17.8%."
+    },
+    {
+      "date": "2026-03-12",
+      "method": "3Tier_AdvancedVectorBT",
+      "trials": 250,
+      "sharpe": 0,
+      "win_rate": 0,
+      "trades": 0,
+      "pbo_score": 0.40621600621600623,
+      "approved": "True",
+      "notes": "50 tickers, 2021-01-01 to 2025-12-31"
+    },
+    {
+      "date": "2026-03-12",
+      "method": "3Tier_AdvancedVectorBT",
+      "trials": 300,
+      "sharpe": 1.285584702133181,
+      "win_rate": 70.10309278350515,
+      "trades": 3832,
+      "pbo_score": 0.3961149961149961,
+      "approved": "True",
+      "notes": "50 tickers, 2022-01-01 to 2024-12-31"
+    },
+    {
+      "date": "2026-03-12",
+      "method": "3Tier_AdvancedVectorBT",
+      "trials": 300,
+      "sharpe": 0.7883119455298025,
+      "win_rate": 68.55036855036855,
+      "trades": 8396,
+      "pbo_score": 0.4268065268065268,
+      "approved": "True",
+      "notes": "50 tickers, 2021-01-01 to 2025-12-31"
+    },
+    {
+      "date": "2026-03-12",
+      "method": "3Tier_AdvancedVectorBT",
+      "trials": 300,
+      "sharpe": 0.9049265666244649,
+      "win_rate": 61.5625,
+      "trades": 8396,
+      "pbo_score": 0.41414141414141414,
+      "approved": "True",
+      "notes": "50 tickers, 2021-01-01 to 2025-12-31"
     }
   ]
 }

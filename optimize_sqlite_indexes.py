@@ -50,6 +50,18 @@ def create_indexes():
             'table': 'ohlcv_cache',
             'columns': 'date, rolling_dollar_vol_20 DESC',
             'reason': 'Optimiza ordenamiento por liquidez en fecha específica'
+        },
+        {
+            'name': 'idx_ohlcv_ticker_date',
+            'table': 'ohlcv_cache',
+            'columns': 'ticker, date',
+            'reason': 'Acelera GROUP BY ticker + filtros de fecha'
+        },
+        {
+            'name': 'idx_ohlcv_dollar_volume',
+            'table': 'ohlcv_cache',
+            'columns': 'dollar_volume DESC',
+            'reason': 'Optimiza ordenamiento por dollar_volume (All Market query)'
         }
     ]
     

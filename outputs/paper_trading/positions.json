@@ -1,0 +1,18 @@
+{
+  "NEM": {
+    "ticker": "NEM",
+    "entry_date": "2026-03-15",
+    "entry_price": 127.0,
+    "shares": 99,
+    "shares_orig": 99,
+    "stop_price": 116.84,
+    "tp1_price": 144.78,
+    "tp2_price": 165.1,
+    "entry_score": 0.0,
+    "tp1_done": false,
+    "tp2_done": false,
+    "be_done": false,
+    "status": "OPEN",
+    "pnl": 0.0
+  }
+}
