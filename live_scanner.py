@@ -40,6 +40,23 @@ from src.core.market_context import MarketContext
 from src.core.pattern_screener import PatternScreener
 from src.utils.risk_manager import RiskManager
 
+# ── Multi-Screener System ──────────────────────────────────────────────────
+try:
+    from src.screeners import ScreenerRegistry, ScreenerPipeline
+    _SCREENERS_AVAILABLE = True
+except ImportError as _se:
+    _SCREENERS_AVAILABLE = False
+# ──────────────────────────────────────────────────────────────────────────
+
+# ── Multi-Screener System ──────────────────────────────────────────────────
+try:
+    from src.screeners import ScreenerRegistry, ScreenerPipeline
+    _SCREENERS_AVAILABLE = True
+except ImportError:
+    _SCREENERS_AVAILABLE = False
+    logger = logging.getLogger(__name__)  # puede que aún no esté definido
+# ──────────────────────────────────────────────────────────────────────────
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -560,6 +577,24 @@ def main():
     parser.add_argument('--static', action='store_true', help='Use static universe file (no download)')
     parser.add_argument('--processes', type=int, default=None, help='Number of parallel processes')
     parser.add_argument('--max-setups', type=int, default=5, help='Max setups in focus list')
+    parser.add_argument('--screener', type=str, default=None,
+                        help='Screener post-pattern. Opciones: minervini_trend, ema21_pullback, '
+                             'qullamaggie_momentum, vcp_enhanced. Combinar con + '
+                             '(ej. minervini_trend+vcp_enhanced)')
+    parser.add_argument('--screener-config', type=str, default=None,
+                        help='Path a JSON de configuracion del screener')
+    parser.add_argument('--screener-mode', type=str, default='all',
+                        choices=['all', 'any', 'sequential'],
+                        help='Modo de combinacion cuando se usan multiples screeners (default: all)')
+    parser.add_argument('--screener', type=str, default=None,
+                        help='Screener a aplicar post-pattern. Opciones: minervini_trend, '
+                             'ema21_pullback, qullamaggie_momentum, vcp_enhanced, o combinaciones '
+                             'separadas por + (ej. minervini_trend+vcp_enhanced)')
+    parser.add_argument('--screener-config', type=str, default=None,
+                        help='Path a JSON de configuración del screener')
+    parser.add_argument('--screener-mode', type=str, default='all',
+                        choices=['all', 'any', 'sequential'],
+                        help='Modo de combinación cuando se usan múltiples screeners (default: all)')
     
     args = parser.parse_args()
     
@@ -645,6 +680,104 @@ def main():
         print("\n❌ No patterns found")
         return
     
+    # PASO 4b: Screener Filter (opcional)
+    if args.screener and _SCREENERS_AVAILABLE and len(watchlist) > 0:
+        print("\n" + "="*80)
+        print(f"🔬 STEP 4b: SCREENER FILTER  [{args.screener}]")
+        print("="*80)
+
+        screener_names = [s.strip() for s in args.screener.split("+")]
+        try:
+            screener_instances = [
+                ScreenerRegistry.get(n, ScreenerRegistry.load_config(n, args.screener_config))
+                for n in screener_names
+            ]
+            active_screener = (
+                ScreenerPipeline(screener_instances, mode=args.screener_mode)
+                if len(screener_instances) > 1
+                else screener_instances[0]
+            )
+        except ValueError as e:
+            print(f"⚠️  Screener no disponible: {e}")
+            active_screener = None
+
+        if active_screener:
+            from src.data.ticker_cache import TickerCache
+            _tc = TickerCache()
+            filtered_rows = []
+            for _, row in watchlist.iterrows():
+                t = row['ticker']
+                try:
+                    df_t = _tc.get_ohlcv(t)
+                    if df_t is not None and len(df_t) > 0:
+                        result = active_screener.scan(t, df_t)
+                        if result.passed:
+                            row = row.copy()
+                            row['screener_score'] = result.score
+                            row['screener_reason'] = result.reason
+                            filtered_rows.append(row)
+                        else:
+                            logger.debug(f"{t} filtrado por screener: {result.reason}")
+                except Exception as exc:
+                    logger.debug(f"{t} error en screener: {exc}")
+
+            before = len(watchlist)
+            watchlist = pd.DataFrame(filtered_rows) if filtered_rows else watchlist.iloc[:0]
+            print(f"  Candidates antes: {before}  →  después: {len(watchlist)}")
+    elif args.screener and not _SCREENERS_AVAILABLE:
+        print("⚠️  Sistema de screeners no disponible (import error). Continuando sin filtro.")
+
+    # PASO 4b: Screener Filter (opcional)
+    if args.screener and _SCREENERS_AVAILABLE and len(watchlist) > 0:
+        print("\n" + "="*80)
+        print(f"STEP 4b: SCREENER FILTER  [{args.screener}]")
+        print("="*80)
+        screener_names = [s.strip() for s in args.screener.split("+")]
+        try:
+            screener_instances = [
+                ScreenerRegistry.get(n, ScreenerRegistry.load_config(n, args.screener_config))
+                for n in screener_names
+            ]
+            active_screener = (
+                ScreenerPipeline(screener_instances, mode=args.screener_mode)
+                if len(screener_instances) > 1
+                else screener_instances[0]
+            )
+        except ValueError as e:
+            print(f"  Screener no disponible: {e}")
+            active_screener = None
+
+        if active_screener:
+            try:
+                from src.data.ticker_cache import TickerCache
+                _tc = TickerCache()
+            except Exception:
+                _tc = None
+
+            filtered_rows = []
+            for _, row in watchlist.iterrows():
+                t = row['ticker']
+                try:
+                    df_t = _tc.get_ohlcv(t) if _tc else None
+                    if df_t is not None and len(df_t) > 0:
+                        result = active_screener.scan(t, df_t)
+                        if result.passed:
+                            row = row.copy()
+                            row['screener_score'] = result.score
+                            row['screener_reason'] = result.reason
+                            filtered_rows.append(row)
+                        else:
+                            logger.debug(f"{t} filtrado: {result.reason}")
+                except Exception as exc:
+                    logger.debug(f"{t} screener error: {exc}")
+
+            before = len(watchlist)
+            watchlist = pd.DataFrame(filtered_rows) if filtered_rows else watchlist.iloc[:0]
+            print(f"  Candidates antes: {before}  despues: {len(watchlist)}")
+
+    elif args.screener and not _SCREENERS_AVAILABLE:
+        print("  Sistema de screeners no disponible. Continuando sin filtro.")
+
     # PASO 5: Focus List
     print("\n" + "="*80)
     print("🎯 STEP 5: FOCUS LIST GENERATION")

@@ -101,7 +101,6 @@ class RobustnessMetrics:
         Returns:
             Dict with p5, p10, p50, p90, mean, std
         """
-        np.random.seed(random_state)
         returns = np.array(returns)
         n = len(returns)
 
@@ -115,14 +114,14 @@ class RobustnessMetrics:
                 "std": 0.0,
             }
 
-        bootstrapped = []
-        for _ in range(n_bootstrap):
-            sample = np.random.choice(returns, size=n, replace=True)
-            cumulative = np.prod(1 + sample) - 1
-            annualized = (1 + cumulative) ** (252 / n) - 1
-            bootstrapped.append(annualized * 100)
-
-        bootstrapped = np.array(bootstrapped)
+        # PERF: vectorizado con numpy RNG — ~10x mas rapido que loop Python
+        # np.random.default_rng es moderno, aislado, no poluta el estado global
+        rng = np.random.default_rng(random_state)
+        # Shape (n_bootstrap, n): cada fila es una muestra con reemplazo
+        indices = rng.integers(0, n, size=(n_bootstrap, n))
+        samples = returns[indices]                                 # (n_bootstrap, n)
+        cumulatives = np.prod(1.0 + samples, axis=1) - 1.0       # (n_bootstrap,)
+        bootstrapped = ((1.0 + cumulatives) ** (252.0 / n) - 1.0) * 100.0
 
         return {
             "p5": float(np.percentile(bootstrapped, 5)),
@@ -286,16 +285,12 @@ class RobustnessMetrics:
         if n == 0:
             return 1.0
 
-        rng = np.random.RandomState(random_state)  # isolated RNG, no global state pollution
-        negative_count = 0
-
-        for _ in range(bootstrap_samples):
-            sample = rng.choice(returns, size=n, replace=True)
-            cumulative = np.prod(1 + sample) - 1
-            if cumulative < 0:
-                negative_count += 1
-
-        return negative_count / bootstrap_samples
+        # PERF: vectorizado — sin loop Python, ~10x mas rapido
+        rng = np.random.default_rng(random_state)
+        indices = rng.integers(0, n, size=(bootstrap_samples, n))
+        samples = returns[indices]                          # (bootstrap_samples, n)
+        cumulatives = np.prod(1.0 + samples, axis=1) - 1.0
+        return float(np.mean(cumulatives < 0))
 
     @staticmethod
     def calculate_runner_stability(trades_df: pd.DataFrame) -> Dict[str, float]:

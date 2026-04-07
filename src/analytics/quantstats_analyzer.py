@@ -67,9 +67,18 @@ class TradeGrouper:
             f"📊 Grouping {len(trade_log)} trade events into complete trades..."
         )
 
-        # Ensure dates are datetime
-        trade_log["entry_date"] = pd.to_datetime(trade_log["entry_date"])
-        trade_log["exit_date"] = pd.to_datetime(trade_log["exit_date"])
+        # Ensure dates are datetime — handle epoch ms (from read_json) vs ns
+        for _col in ["entry_date", "exit_date"]:
+            if _col in trade_log.columns:
+                _s = trade_log[_col]
+                if pd.api.types.is_numeric_dtype(_s):
+                    _min = _s.dropna().min()
+                    if _min > 1e12:
+                        trade_log[_col] = pd.to_datetime(_s, unit="ms", errors="coerce")
+                    else:
+                        trade_log[_col] = pd.to_datetime(_s, errors="coerce")
+                else:
+                    trade_log[_col] = pd.to_datetime(_s, errors="coerce")
 
         # Group by (ticker, entry_date) - this identifies a single trade
         # Build aggregation dict dynamically based on available columns

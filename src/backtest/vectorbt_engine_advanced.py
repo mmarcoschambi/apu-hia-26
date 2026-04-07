@@ -9,6 +9,7 @@ Implements Triad Protocol with 3-phase exit system:
 
 import pandas as pd
 import numpy as np
+from pathlib import Path
 
 # import vectorbt as vbt  # Lazy load
 import yfinance as yf
@@ -142,42 +143,63 @@ def prepare_numba_arrays(engine, release_dataframes: bool = False) -> Dict:
         close_arr = arrays["close"]
         n_rows, n_cols = close_arr.shape
 
-        close_df = engine.close.ffill()
+        # MEMORY OPT: usar float32 desde el inicio para reducir RAM ~50%
+        close_df = engine.close.ffill().astype(np.float32)
 
         # --- COMPONENTE 1A: RS 60d (medio plazo) ---
         rs_lookback = getattr(engine, "rs_lookback_days", 60)
         rs_raw_60 = close_df.pct_change(rs_lookback)
-        score_rs_60 = rs_raw_60.rank(axis=1, pct=True, ascending=True)
+        score_rs_60 = rs_raw_60.rank(axis=1, pct=True, ascending=True).astype(
+            np.float32
+        )
         score_rs_60 = score_rs_60.ffill().fillna(0.5)
+        del rs_raw_60  # MEMORY OPT: liberar intermedio inmediatamente
 
         # --- COMPONENTE 1B: RS 20d (corto plazo - momentum reciente) ---
         rs_short = getattr(engine, "rs_short_lookback_days", 20)
         rs_short_w = getattr(engine, "rs_short_weight", 0.35)
         rs_raw_20 = close_df.pct_change(rs_short)
-        score_rs_20 = rs_raw_20.rank(axis=1, pct=True, ascending=True)
+        score_rs_20 = rs_raw_20.rank(axis=1, pct=True, ascending=True).astype(
+            np.float32
+        )
         score_rs_20 = score_rs_20.ffill().fillna(0.5)
+        del rs_raw_20  # MEMORY OPT: liberar intermedio inmediatamente
 
         # --- RS combinado: (1 - rs_short_w) * RS_60d + rs_short_w * RS_20d ---
         # rs_short_w=0 -> solo RS 60d (comportamiento anterior)
         # rs_short_w=0.35 -> 65% RS_60d + 35% RS_20d
         score_rs = (1.0 - rs_short_w) * score_rs_60 + rs_short_w * score_rs_20
+        del score_rs_60, score_rs_20  # MEMORY OPT: ya combinados, liberar
 
         # --- COMPONENTE 2: Proximidad a maximo de 52 semanas ---
         max_52wk = close_df.rolling(window=252, min_periods=50).max()
-        proximity_52wk = (close_df / max_52wk.replace(0, np.nan)).clip(0.0, 1.0)
+        proximity_52wk = (
+            (close_df / max_52wk.replace(0, np.nan)).clip(0.0, 1.0).astype(np.float32)
+        )
         proximity_52wk = proximity_52wk.ffill().fillna(0.5)
 
         # --- PONDERACION FINAL ---
-        rs_w = getattr(engine, "score_rs_weight", 0.70)
-        prox_w = getattr(engine, "score_proximity_weight", 0.30)
-        total_w = rs_w + prox_w
-        if total_w > 0:
-            rs_w = rs_w / total_w
-            prox_w = prox_w / total_w
+        # PERF: si optimize_3tier pre-computo el score para este trial,
+        # usarlo directamente (evita el calculo de RS/proximity otra vez).
+        if getattr(engine, "_entry_score_precomputed", None) is not None:
+            entry_score = engine._entry_score_precomputed
+            entry_score = np.nan_to_num(entry_score, nan=0.5)
+            # Clean up intermediates that were computed but not used
+            del score_rs, max_52wk, proximity_52wk
+        else:
+            rs_w = getattr(engine, "score_rs_weight", 0.70)
+            prox_w = getattr(engine, "score_proximity_weight", 0.30)
+            total_w = rs_w + prox_w
+            if total_w > 0:
+                rs_w = rs_w / total_w
+                prox_w = prox_w / total_w
 
-        entry_score_df = rs_w * score_rs + prox_w * proximity_52wk
-        entry_score = entry_score_df.values.astype(np.float32)
-        entry_score = np.nan_to_num(entry_score, nan=0.5)
+            entry_score_df = rs_w * score_rs + prox_w * proximity_52wk
+            entry_score = entry_score_df.values.astype(np.float32)
+            entry_score = np.nan_to_num(entry_score, nan=0.5)
+            del score_rs, max_52wk, proximity_52wk, entry_score_df
+
+        gc.collect()
 
         # Recortar a shape correcto
         if entry_score.shape != (n_rows, n_cols):
@@ -253,6 +275,8 @@ def prepare_numba_arrays(engine, release_dataframes: bool = False) -> Dict:
                 logger.warning(f"⚠️  Could not apply pattern bonus: {e}")
 
         arrays["entry_score"] = entry_score
+        del close_df
+        gc.collect()
 
         logger.info(
             f"   📊 Entry score calculated: mean={entry_score.mean():.3f}, std={entry_score.std():.3f}"
@@ -502,10 +526,10 @@ class AdvancedVectorBTEngine:
         rs_lookback_days: int = 60,  # Lookback for RS calculation (60 = 3 months)
         rs_short_lookback_days: int = 20,  # Short-term RS lookback (20d = 1 month momentum)
         rs_short_weight: float = 0.35,  # Weight of 20d RS in entry score (0 = disabled)
-        rs_divergence_block: bool = False, # Block entry if short RS diverges from long RS (experimental, opt-in)
-        use_ml_filter: bool = False,        # ML EntryScorer: filter + boost (LightGBM)
+        rs_divergence_block: bool = False,  # Block entry if short RS diverges from long RS (experimental, opt-in)
+        use_ml_filter: bool = False,  # ML EntryScorer: filter + boost (LightGBM)
         ml_filter_threshold: float = 0.40,  # Block entries with ML prob < threshold
-        ml_boost_weight: float = 0.20,      # entry_score += ml_boost_weight * ml_prob
+        ml_boost_weight: float = 0.20,  # entry_score += ml_boost_weight * ml_prob
         _preloaded_regime_classifier=None,  # PERF: skip SPY/VIX reload in optimizer (inject from template)
         # NEW: SMA50/ATR Extension filter
         use_sma50_atr_filter: bool = False,  # Filter overextended stocks
@@ -518,7 +542,23 @@ class AdvancedVectorBTEngine:
         atr_stop_multiplier: float = 1.5,  # ATR multiplier for initial stop (1.5-2.0)
         atr_trailing_multiplier: float = 2.5,  # ATR multiplier for trailing (2.0-3.0)
         # NEW: Signal type for convergence with THOR
-        signal_type: str = "breakout",  # 'breakout' (close > 20d high) or 'any' (close > SMA20)
+        signal_type: str = "breakout",  # breakout | vcp | (future: pocket_pivot | flat_base)
+        # VCP-specific parameters (Optuna-optimizable when signal_type="vcp")
+        vcp_pivot_window: int = 15,  # bars to look back for pivot high (10-25)
+        vcp_atr_short: int = 10,  # short ATR period for contraction check (5-15)
+        vcp_atr_long: int = 30,  # long ATR period for baseline (20-40)
+        vcp_atr_ratio: float = 0.85,  # max atr_short/atr_long threshold (0.6-0.95)
+        # VCP enhanced criteria (Minervini-style -- progressions + volume)
+        vcp_volume_dry_periods: int = 5,  # bars to measure vol dry-up in last contraction (3-10)
+        vcp_depth_max_pct: float = 15.0,  # max % depth of last contraction (8-20)
+        vcp_pivot_dist_max_pct: float = 8.0,  # max % distance current price below pivot (3-12)
+        vcp_require_vol_dry: bool = True,  # require volume dry-up in last contraction
+        # Pocket Pivot params (Gil Morales & Kacher)
+        pp_vol_lookback: int = 10,  # bars to find max down-day volume (5-15)
+        pp_vol_mult: float = 1.0,  # vol multiplier: today > mult * max_down_vol (1.0-2.0)
+        # Flat Base params
+        fb_min_weeks: int = 5,  # minimum weeks of consolidation (4-8)
+        fb_max_range: float = 7.0,  # max % range allowed in the base (3-10)
         # NEW: Operation Mode
         mode: str = "production",  # 'production' (Pct Risk) or 'convergence' (Fixed $ Risk like THOR)
         # NEW: Entry Quality Score weights (optimizable)
@@ -533,6 +573,8 @@ class AdvancedVectorBTEngine:
         pattern_bonus_low: float = 0.10,  # Bonus for confidence >= 0.3
         allowed_patterns: Optional[List[str]] = None,  # None = all patterns allowed
         pattern_cache_path: str = "data/pattern_matrix.pkl",  # Path to precomputed patterns
+        screener_cache_path: Optional[str] = None,
+        screener_name: Optional[str] = None,
         **kwargs,
     ):
         self.universe = universe
@@ -623,6 +665,20 @@ class AdvancedVectorBTEngine:
 
         # Signal type
         self.signal_type = signal_type
+        self.vcp_pivot_window = vcp_pivot_window
+        self.vcp_atr_short = vcp_atr_short
+        self.vcp_atr_long = vcp_atr_long
+        self.vcp_atr_ratio = vcp_atr_ratio
+        self.vcp_volume_dry_periods = vcp_volume_dry_periods
+        self.vcp_depth_max_pct = vcp_depth_max_pct
+        self.vcp_pivot_dist_max_pct = vcp_pivot_dist_max_pct
+        self.vcp_require_vol_dry = vcp_require_vol_dry
+        # Pocket Pivot
+        self.pp_vol_lookback = pp_vol_lookback
+        self.pp_vol_mult = pp_vol_mult
+        # Flat Base
+        self.fb_min_weeks = fb_min_weeks
+        self.fb_max_range = fb_max_range
 
         # Entry Quality Score weights
         self.score_vwap_weight = score_vwap_weight
@@ -637,8 +693,11 @@ class AdvancedVectorBTEngine:
         self.pattern_bonus_low = pattern_bonus_low
         self.allowed_patterns = allowed_patterns
         self.pattern_cache_path = pattern_cache_path
+        self.screener_cache_path = screener_cache_path
+        self.screener_name = screener_name
         self.pattern_confidence_matrix: Optional[pd.DataFrame] = None
         self.pattern_type_matrix: Optional[pd.DataFrame] = None
+        self.screener_cache_manager = None
 
         # Filter thresholds
         self.max_dist_sma20 = max_dist_sma20
@@ -733,7 +792,9 @@ class AdvancedVectorBTEngine:
         if _preloaded_regime_classifier is not None:
             # PERF: reuse pre-loaded classifier (optimizer fast path, saves ~0.5s per trial)
             self.market_regime_classifier = _preloaded_regime_classifier
-            logger.debug("   ⏩ Market regime classifier injected from template (skipping SPY/VIX reload)")
+            logger.debug(
+                "   ⏩ Market regime classifier injected from template (skipping SPY/VIX reload)"
+            )
         elif self.use_market_regime_filter:
             logger.info("=" * 60)
             logger.info("🌍 MARKET REGIME FILTER ENABLED")
@@ -831,8 +892,96 @@ class AdvancedVectorBTEngine:
         except Exception as e:
             logger.warning(f"⚠️  Failed to load pattern cache: {e}")
 
+    # ------------------------------------------------------------------ #
+    #  PERF helpers                                                        #
+    # ------------------------------------------------------------------ #
+
+    def clone_with_params(self, **new_params) -> "AdvancedVectorBTEngine":
+        """
+        Crea un clon superficial con parametros Tier 1 actualizados.
+
+        PERF: Evita re-instanciar el engine completo por trial (~40 ms ahorro).
+        Los DataFrames de datos (close, high, etc.) se comparten por referencia
+        porque son de solo lectura durante el backtest.
+
+        FASE 3 FIX: Explicitamente resetea estado mutable acumulado entre runs
+        para evitar leakage entre clones (regime_risk_multipliers, rejection stats,
+        filter_engine cache, etc.).
+
+        Uso tipico en optimize_3tier.objective():
+            engine = _template_engine.clone_with_params(**full_params)
+            results = engine.run_backtest()
+        """
+        import copy
+
+        clone = copy.copy(self)  # shallow copy — DataFrames compartidos (read-only)
+
+        # Reset mutable state that accumulates across runs (Fase 3: isolation fix)
+        clone.rejection_stats_tier = {}
+        clone.rejection_details_df = None
+        clone.regime_risk_multipliers = {}
+        clone.filter_engine = None
+        clone.voltrig_danger = None
+        clone.voltrig_warning = None
+        clone.voltrig_safe = None
+        clone.high_adr = None
+        clone.med_adr = None
+
+        for k, v in new_params.items():
+            setattr(clone, k, v)
+        return clone
+
+    def _compute_rs_scores(self) -> "np.ndarray":
+        """
+        Pre-computa el componente RS (multi-timeframe) como array float32.
+
+        Devuelve score_rs (shape n_rows x n_cols, norm 0-1) SIN ponderar —
+        los pesos score_rs_weight/score_proximity_weight varian por trial y
+        se aplican en optimize_3tier.objective().
+
+        Requiere load_data() previo (self.close debe existir).
+        """
+        import numpy as _np
+
+        close_df = self.close.ffill()
+
+        rs_lookback = getattr(self, "rs_lookback_days", 60)
+        rs_short = getattr(self, "rs_short_lookback_days", 20)
+        rs_short_w = getattr(self, "rs_short_weight", 0.35)
+
+        rs_raw_60 = close_df.pct_change(rs_lookback)
+        score_rs_60 = (
+            rs_raw_60.rank(axis=1, pct=True, ascending=True).ffill().fillna(0.5)
+        )
+
+        rs_raw_20 = close_df.pct_change(rs_short)
+        score_rs_20 = (
+            rs_raw_20.rank(axis=1, pct=True, ascending=True).ffill().fillna(0.5)
+        )
+
+        score_rs = (1.0 - rs_short_w) * score_rs_60 + rs_short_w * score_rs_20
+        return score_rs.values.astype(_np.float32)
+
+    def _compute_proximity_scores(self) -> "np.ndarray":
+        """
+        Pre-computa el componente proximidad a maximo 52-semanas como array float32.
+
+        Devuelve proximity_52wk (shape n_rows x n_cols, norm 0-1) SIN ponderar.
+        Requiere load_data() previo.
+        """
+        import numpy as _np
+
+        close_df = self.close.ffill()
+        max_52wk = close_df.rolling(window=252, min_periods=50).max()
+        proximity_52wk = (close_df / max_52wk.replace(0, _np.nan)).clip(0.0, 1.0)
+        return proximity_52wk.ffill().fillna(0.5).values.astype(_np.float32)
+
     def load_data(self) -> pd.DataFrame:
         """Load OHLCV data for all tickers with 1 year lookback for valid signals"""
+        import time
+
+        _lt0 = time.perf_counter()
+
         # Apply ticker blacklist
         original_count = len(self.universe)
         self.universe = filter_blacklisted_tickers(self.universe)
@@ -867,67 +1016,106 @@ class AdvancedVectorBTEngine:
             f"🛡️  Survivorship bias protection: PIT mask will determine eligibility quarterly"
         )
 
-        # Use ThreadPoolExecutor for parallel data fetching
-        # Reduced max_workers from 10 to 4 to avoid SQLite lock contention
-        def fetch_ticker(ticker):
-            try:
-                df = self.cache.get_ohlcv(
-                    ticker,
-                    fetch_start_date.strftime("%Y-%m-%d"),
-                    self.end_date.strftime("%Y-%m-%d"),
-                    offline=self.offline_mode,
-                )
+        # ──────────────────────────────────────────────────────────────────────
+        # PERF TAREA 1.3: BATCH QUERY — reemplaza 800 queries con 1 sola
+        # ──────────────────────────────────────────────────────────────────────
+        import os as _os
 
-                if df is not None and len(df) >= min_required_days:
-                    # Basic preprocessing
+        logger.info(f"⚡ Batch loading {len(self.universe)} tickers (1 SQL query)...")
+
+        try:
+            raw_batch = self.cache.get_ohlcv_batch(
+                self.universe,
+                fetch_start_date.strftime("%Y-%m-%d"),
+                self.end_date.strftime("%Y-%m-%d"),
+                offline=self.offline_mode,
+            )
+        except Exception as e:
+            logger.warning(
+                f"⚠️  Batch load failed ({e}), falling back to per-ticker fetch"
+            )
+            raw_batch = {}
+
+        # Tickers no cubiertos por batch → fallback individual (downloads nuevos)
+        missing_tickers = [t for t in self.universe if t not in raw_batch]
+        if missing_tickers:
+            logger.info(
+                f"   Downloading {len(missing_tickers)} tickers not in cache..."
+            )
+
+            def fetch_ticker(ticker):
+                try:
+                    df = self.cache.get_ohlcv(
+                        ticker,
+                        fetch_start_date.strftime("%Y-%m-%d"),
+                        self.end_date.strftime("%Y-%m-%d"),
+                        offline=self.offline_mode,
+                    )
+                    if df is not None and len(df) >= min_required_days:
+                        df = df.reset_index()
+                        index_col = df.columns[0]
+                        df.rename(columns={index_col: "date"}, inplace=True)
+                        df["date"] = pd.to_datetime(df["date"])
+                        df = df.set_index("date")
+                        partial = (
+                            f"{ticker} ({len(df)}/{expected_days} days)"
+                            if len(df) < expected_days * 0.8
+                            else None
+                        )
+                        return ticker, df, None, partial
+                    else:
+                        reason = (
+                            "None returned"
+                            if df is None
+                            else f"len={len(df)} < min={min_required_days}"
+                        )
+                        return ticker, None, reason, None
+                except Exception as e:
+                    return ticker, None, f"Exception: {str(e)}", None
+
+            # Para downloads: más workers OK (no hay lock contention con Parquet)
+            max_dl_workers = min(8, _os.cpu_count() or 4)
+            with ThreadPoolExecutor(max_workers=max_dl_workers) as executor:
+                futures = {executor.submit(fetch_ticker, t): t for t in missing_tickers}
+                for i, future in enumerate(as_completed(futures)):
+                    if (i + 1) % 50 == 0:
+                        logger.info(
+                            f"   Download progress: {i + 1}/{len(missing_tickers)}..."
+                        )
+                    ticker, df, failure_reason, partial_msg = future.result()
+                    if df is not None:
+                        raw_batch[ticker] = df
+                        if partial_msg:
+                            partial_data.append(partial_msg)
+                    else:
+                        if len(failed) < 10:
+                            logger.warning(f"❌ SKIP {ticker}: {failure_reason}")
+                        failed.append(f"{ticker} ({failure_reason})")
+
+        # Procesar batch en memoria (sin SQLite, sin locks)
+        for ticker, df in raw_batch.items():
+            try:
+                if not isinstance(df.index, pd.DatetimeIndex):
                     df = df.reset_index()
-                    # Fix: handle both 'Date' and 'date' index names
                     index_col = df.columns[0]
                     df.rename(columns={index_col: "date"}, inplace=True)
                     df["date"] = pd.to_datetime(df["date"])
                     df = df.set_index("date")
-
-                    # NOTE: Pre-history filtering removed - PIT mask handles eligibility
-                    # The PointInTimeUniverse will determine tradeable status quarterly
-                    # based on data availability at each rebalance date
-
-                    # Track incomplete data
-                    partial = None
-                    if len(df) < expected_days * 0.8:
-                        partial = f"{ticker} ({len(df)}/{expected_days} days)"
-
-                    return ticker, df, None, partial
-                else:
-                    reason = (
-                        "None returned"
-                        if df is None
-                        else f"len={len(df)} < min={min_required_days}"
-                    )
-                    return ticker, None, reason, None
-            except Exception as e:
-                return ticker, None, f"Exception: {str(e)}", None
-
-        logger.info(f"⚡ Fetching data for {len(self.universe)} tickers in parallel...")
-
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            future_to_ticker = {
-                executor.submit(fetch_ticker, t): t for t in self.universe
-            }
-
-            for i, future in enumerate(as_completed(future_to_ticker)):
-                if (i + 1) % 100 == 0:
-                    logger.info(f"   {i + 1}/{len(self.universe)}...")
-
-                ticker, df, failure_reason, partial_msg = future.result()
-
-                if df is not None:
+                # Dedup por ticker: algunos tickers en la DB tienen fechas
+                # duplicadas; si se dejan, contaminan el índice del DataFrame
+                # multiticker y rompen todos los reindex() posteriores.
+                if df.index.duplicated().any():
+                    df = df[~df.index.duplicated(keep="last")]
+                if len(df) >= min_required_days:
                     all_data[ticker] = df
-                    if partial_msg:
-                        partial_data.append(partial_msg)
+                    if len(df) < expected_days * 0.8:
+                        partial_data.append(
+                            f"{ticker} ({len(df)}/{expected_days} days)"
+                        )
                 else:
-                    if len(failed) < 10:
-                        logger.warning(f"❌ SKIP {ticker}: {failure_reason}")
-                    failed.append(f"{ticker} ({failure_reason})")
+                    failed.append(f"{ticker} (len={len(df)} < min={min_required_days})")
+            except Exception as e:
+                failed.append(f"{ticker} (processing error: {e})")
 
         if failed:
             logger.warning(f"⚠️  Skipped {len(failed)} tickers (insufficient data)")
@@ -967,6 +1155,17 @@ class AdvancedVectorBTEngine:
             0
         )  # Volume should be 0 if missing
 
+        # Deduplicate index: algunos tickers tienen fechas repetidas en la DB
+        # lo que contamina el DataFrame y rompe reindex() con duplicate labels.
+        for _df_attr in ("close", "high", "low", "volume"):
+            _df = getattr(self, _df_attr)
+            if _df.index.duplicated().any():
+                n_dups = _df.index.duplicated().sum()
+                logger.warning(
+                    f"⚠️  Duplicate dates in {_df_attr} index ({n_dups} rows) — keeping last"
+                )
+                setattr(self, _df_attr, _df[~_df.index.duplicated(keep="last")])
+
         # ============================================
         # MEMORY OPTIMIZATION: Convert to float32 (50% memory reduction)
         # ============================================
@@ -976,6 +1175,10 @@ class AdvancedVectorBTEngine:
         self.high = self.high.astype(np.float32)
         self.low = self.low.astype(np.float32)
         self.volume = self.volume.astype(np.float32)
+        del close_data, high_data, low_data, volume_data
+        import gc as _gc3
+
+        _gc3.collect()
 
         # Log memory usage for core DataFrames
         core_mem_mb = (
@@ -1006,11 +1209,6 @@ class AdvancedVectorBTEngine:
             )
 
             # NaN out price data for dates where ticker was NOT in the index.
-            # This prevents:
-            #   1. Indicators (SMA, RS) from computing on pre-IPO/post-delist phantom data
-            #   2. ffill() from propagating the last price forever after delisting
-            # We apply AFTER ffill so legitimate intra-membership gaps are filled,
-            # but pre-membership and post-membership data is removed.
             non_tradeable = ~self.tradeable_mask
             nan32 = np.float32(np.nan)
             self.close[non_tradeable] = nan32
@@ -1063,7 +1261,13 @@ class AdvancedVectorBTEngine:
             else pd.DataFrame(0, index=self.close.index, columns=self.close.columns)
         )
 
-        # ALIGNMENT FIX: Ensure all have same shape as Close to prevent ValueError
+        # DEDUP + ALIGNMENT FIX: dedup primero, luego reindex al close.index limpio.
+        # sma_20/sma_50/adr_pct pueden heredar fechas duplicadas de tickers con
+        # datos sucios en la DB; reindex() explota si el source tiene duplicados.
+        for _attr in ("sma_20", "sma_50", "adr_pct"):
+            _df = getattr(self, _attr)
+            if _df.index.duplicated().any():
+                setattr(self, _attr, _df[~_df.index.duplicated(keep="last")])
         self.sma_20 = self.sma_20.reindex(
             index=self.close.index, columns=self.close.columns
         )
@@ -1122,6 +1326,12 @@ class AdvancedVectorBTEngine:
                 self.trend_aligned[t] = df["trend_aligned"]
             else:
                 self.trend_aligned[t] = 0
+
+        # Free all_data -- both loops done, individual ticker dfs no longer needed
+        del all_data
+        import gc as _gc_ad
+
+        _gc_ad.collect()
 
         # Fill NaNs
         self.adr_pct = self.adr_pct.fillna(0)
@@ -1223,6 +1433,11 @@ class AdvancedVectorBTEngine:
 
             # Assign to internal variables
             if spy_data is not None and not spy_data.empty:
+                # Dedup SPY index before reindex (same root bug as tickers)
+                if spy_data.index.duplicated().any():
+                    n = spy_data.index.duplicated().sum()
+                    logger.warning(f"   SPY: deduplicating {n} duplicate dates")
+                    spy_data = spy_data[~spy_data.index.duplicated(keep="last")]
                 # Reindex SPY data to match close index
                 self.spy_close = spy_data["close"].reindex(self.close.index).ffill()
 
@@ -1240,6 +1455,11 @@ class AdvancedVectorBTEngine:
                 )
 
             if vix_data is not None and not vix_data.empty:
+                # Dedup VIX index before reindex
+                if vix_data.index.duplicated().any():
+                    n = vix_data.index.duplicated().sum()
+                    logger.warning(f"   VIX: deduplicating {n} duplicate dates")
+                    vix_data = vix_data[~vix_data.index.duplicated(keep="last")]
                 self.vix_close = vix_data["close"].reindex(self.close.index).ffill()
                 vix_aligned = vix_data.reindex(self.close.index).ffill()
             else:
@@ -1341,8 +1561,15 @@ class AdvancedVectorBTEngine:
                 "rvol",
                 "dist_sma20_pct",
                 "consolidation_days",
+                "consolidation_range",
                 "high_20",
                 "low_20",
+                "trend_aligned",
+                "ema_10",
+                "spy_close",
+                "vix_close",
+                "market_is_bullish",
+                "market_is_safe",
             ]:
                 if hasattr(self, attr) and getattr(self, attr) is not None:
                     df = getattr(self, attr)
@@ -1410,6 +1637,20 @@ class AdvancedVectorBTEngine:
 
         logger.info(f"Memory: ~{total_mem_mb:.1f} MB total after float32 conversion")
         # ============================================
+
+        # ── PERFORMANCE LOG: load_data timing + RSS ─────────────────────
+        try:
+            import time
+            import resource as _res
+
+            _load_secs = time.perf_counter() - _lt0
+            _rss_mb = _res.getrusage(_res.RUSAGE_SELF).ru_maxrss / 1024
+            logger.info(
+                f"⏱ load_data: {_load_secs:.1f}s | RSS: {_rss_mb:.0f} MB | "
+                f"DataFrames: {total_mem_mb:.0f} MB | Tickers: {len(self.close.columns)}"
+            )
+        except Exception:
+            pass
 
         return self.close
 
@@ -1863,7 +2104,30 @@ class AdvancedVectorBTEngine:
             ) * 100
 
             # Rellenar columnas faltantes para compatibilidad con Dashboard
-            trades_df["signal_type"] = "MOMENTUM"  # Genérico por ahora
+            # Mapear signal_type real desde signal_types DataFrame
+            if signal_types is not None:
+                signal_type_vals = []
+                for _, row in trades_df.iterrows():
+                    entry_idx = int(row["entry_day_idx"])
+                    col_idx = int(row["col_idx"])
+                    try:
+                        sig_type = signal_types.iloc[entry_idx, col_idx]
+                        signal_type_vals.append(
+                            sig_type if pd.notna(sig_type) else self.signal_type.upper()
+                        )
+                    except Exception:
+                        signal_type_vals.append(
+                            self.signal_type.upper()
+                            if hasattr(self, "signal_type")
+                            else "MOMENTUM"
+                        )
+                trades_df["signal_type"] = signal_type_vals
+            else:
+                trades_df["signal_type"] = (
+                    self.signal_type.upper()
+                    if hasattr(self, "signal_type")
+                    else "MOMENTUM"
+                )
 
             # Enriquecer con dist_sma20_pct para derive_tier2_filters.py
             if hasattr(self, "dist_sma20_pct") and isinstance(
@@ -2054,12 +2318,13 @@ class AdvancedVectorBTEngine:
             if getattr(self, "use_ml_filter", False):
                 try:
                     import pickle as _pkl, os as _os, pandas as _pd_ml
+
                     _ml_path = "models/entry_scorer.pkl"
                     if _os.path.exists(_ml_path):
                         with open(_ml_path, "rb") as _mf:
                             _obj = _pkl.load(_mf)
                         _scorer = _obj["model"]
-                        _feats  = _obj.get("used_features", [])
+                        _feats = _obj.get("used_features", [])
 
                         # Build feature df from trades_df (real entry features)
                         _feat_cols = [c for c in _feats if c in trades_df.columns]
@@ -2067,12 +2332,12 @@ class AdvancedVectorBTEngine:
                         trades_df["ml_prob"] = _scorer.predict_proba(_X)[:, 1]
 
                         _thresh = getattr(self, "ml_filter_threshold", 0.40)
-                        _boost  = getattr(self, "ml_boost_weight", 0.20)
+                        _boost = getattr(self, "ml_boost_weight", 0.20)
 
                         _n_before = len(trades_df)
                         # Filter: keep only trades where ML prob >= threshold
                         trades_df = trades_df[trades_df["ml_prob"] >= _thresh].copy()
-                        _n_after  = len(trades_df)
+                        _n_after = len(trades_df)
                         _n_blocked = _n_before - _n_after
 
                         # Boost entry_score on surviving trades (informational)
@@ -2085,10 +2350,12 @@ class AdvancedVectorBTEngine:
                             f"   🤖 ML post-filter (thresh={_thresh}): "
                             f"blocked {_n_blocked}/{_n_before} trades "
                             f"| {_n_after} remaining "
-                            f"| WR before={(_n_before>0 and (trades_df['pnl']>0).sum()/_n_before or 0):.1%}"
+                            f"| WR before={(_n_before > 0 and (trades_df['pnl'] > 0).sum() / _n_before or 0):.1%}"
                         )
                     else:
-                        logger.warning("   ⚠️ ML model not found -- skipping post-filter")
+                        logger.warning(
+                            "   ⚠️ ML model not found -- skipping post-filter"
+                        )
                 except Exception as _me:
                     logger.warning(f"   ⚠️ ML post-filter error: {_me}")
 
@@ -2251,7 +2518,11 @@ class AdvancedVectorBTEngine:
         logger.info("🎯 Starting advanced backtest with partial exits...")
 
         # Load data (skip if already loaded -- avoids double load in optimize_3tier)
-        if not hasattr(self, "close") or self.close is None or len(self.close.columns) == 0:
+        if (
+            not hasattr(self, "close")
+            or self.close is None
+            or len(self.close.columns) == 0
+        ):
             self.load_data()
         else:
             logger.debug("   ⏩ Data already loaded, skipping load_data()")
@@ -2360,29 +2631,244 @@ class AdvancedVectorBTEngine:
             # are handled by the Adaptive Filter Engine to avoid double-filtering
             base_entry = self.close > safe_sma20
 
-            # Add breakout requirement if signal_type='breakout'
+            # ================================================================
+            # SIGNAL TYPE ROUTING
+            # Each pattern has its own vectorized entry logic.
+            # Add new patterns as elif branches below.
+            # ================================================================
             if self.signal_type == "breakout":
                 breakout_signal = self.close > self.high.shift().rolling(20).max()
                 entries = base_entry & breakout_signal
-                logger.info(
-                    f"   🎯 Using BREAKOUT signal (close > 20d high) for THOR convergence"
+                logger.info("   Using BREAKOUT signal (close > 20d high)")
+
+            elif self.signal_type == "vcp":
+                # ─────────────────────────────────────────────────────
+                # VCP - Volatility Contraction Pattern v2 (Minervini)
+                # Conditions (all must be True on signal day):
+                #  1. atr_contracting : ATR(short)/ATR(long) < ratio
+                #  2. pivot_break     : close > N-bar rolling high
+                #  3. vol_dry         : recent vol < 80% of baseline
+                #  4. near_pivot      : price within pivot_dist_max% of pivot
+                #  5. tight_base      : rolling range% < depth_max_pct
+                # Optuna-tunable: vcp_pivot_window, vcp_atr_short,
+                #   vcp_atr_long, vcp_atr_ratio, vcp_volume_dry_periods,
+                #   vcp_depth_max_pct, vcp_pivot_dist_max_pct
+                # ─────────────────────────────────────────────────────
+                pivot_window = getattr(self, "vcp_pivot_window", 15)
+                atr_short = getattr(self, "vcp_atr_short", 10)
+                atr_long = getattr(self, "vcp_atr_long", 30)
+                atr_ratio_th = getattr(self, "vcp_atr_ratio", 0.85)
+                vol_dry_periods = getattr(self, "vcp_volume_dry_periods", 5)
+                depth_max_pct = getattr(self, "vcp_depth_max_pct", 15.0)
+                pivot_dist_max = getattr(self, "vcp_pivot_dist_max_pct", 8.0)
+                require_vol_dry = getattr(self, "vcp_require_vol_dry", True)
+
+                # True Range (vectorized)
+                prev_close = self.close.shift(1)
+                if isinstance(self.close, pd.DataFrame):
+                    tr = pd.DataFrame(
+                        {
+                            col: pd.concat(
+                                [
+                                    self.high[col] - self.low[col],
+                                    (self.high[col] - prev_close[col]).abs(),
+                                    (self.low[col] - prev_close[col]).abs(),
+                                ],
+                                axis=1,
+                            ).max(axis=1)
+                            for col in self.close.columns
+                        },
+                        index=self.close.index,
+                    )
+                else:
+                    tr = pd.concat(
+                        [
+                            self.high - self.low,
+                            (self.high - prev_close).abs(),
+                            (self.low - prev_close).abs(),
+                        ],
+                        axis=1,
+                    ).max(axis=1)
+
+                # 1. ATR contraction
+                atr_s = tr.rolling(atr_short).mean()
+                atr_l = tr.rolling(atr_long).mean().replace(0, float("nan"))
+                atr_contracting = (atr_s / atr_l) < atr_ratio_th
+
+                # 2. Pivot break
+                pivot_high = self.high.shift(1).rolling(pivot_window).max()
+                pivot_break = self.close > pivot_high.replace(0, float("nan"))
+
+                # 3. Volume dry-up: recent avg vol < 80% of medium-term baseline
+                vol_baseline = self.volume.rolling(pivot_window * 3).mean()
+                vol_recent_avg = self.volume.rolling(vol_dry_periods).mean()
+                vol_dry = (vol_recent_avg < vol_baseline * 0.80).fillna(False)
+
+                # 4. Price within pivot_dist_max% below pivot (not extended)
+                pivot_high_now = self.high.rolling(pivot_window).max()
+                dist_to_pivot_pct = (
+                    (pivot_high_now - self.close)
+                    / pivot_high_now.replace(0, float("nan"))
+                    * 100
                 )
+                near_pivot = (
+                    (dist_to_pivot_pct >= 0) & (dist_to_pivot_pct <= pivot_dist_max)
+                ).fillna(False)
+
+                # 5. Tight base: rolling range% < depth_max_pct
+                rolling_high = self.high.rolling(pivot_window).max()
+                rolling_low = self.low.rolling(pivot_window).min()
+                base_range_pct = (
+                    (rolling_high - rolling_low)
+                    / rolling_low.replace(0, float("nan"))
+                    * 100
+                )
+                tight_base = (base_range_pct < depth_max_pct).fillna(False)
+
+                # Combine
+                if require_vol_dry:
+                    entries = (
+                        base_entry
+                        & pivot_break
+                        & atr_contracting
+                        & vol_dry
+                        & near_pivot
+                        & tight_base
+                    )
+                else:
+                    entries = (
+                        base_entry
+                        & pivot_break
+                        & atr_contracting
+                        & near_pivot
+                        & tight_base
+                    )
+
+                logger.info(
+                    f"   VCP v2: pivot_win={pivot_window} atr_ratio<{atr_ratio_th}"
+                    f" depth<{depth_max_pct}% pivot_dist<{pivot_dist_max}%"
+                    f" vol_dry={require_vol_dry} -> entries={entries.sum().sum()}"
+                )
+                logger.info(
+                    f"      atr_contract={int(atr_contracting.sum().sum())}"
+                    f" pivot_break={int(pivot_break.sum().sum())}"
+                    f" vol_dry={int(vol_dry.sum().sum())}"
+                    f" near_pivot={int(near_pivot.sum().sum())}"
+                    f" tight_base={int(tight_base.sum().sum())}"
+                )
+
+            elif self.signal_type == "pocket_pivot":
+                # ─────────────────────────────────────────────────────
+                # POCKET PIVOT (Gil Morales & Chris Kacher)
+                # Entry criteria:
+                #  1. Up day: close > prev_close
+                #  2. Volume > pp_vol_mult * max(volume of down-days in last N bars)
+                #  3. Price above SMA20 (base_entry)
+                # Optuna: pp_vol_lookback (5-15), pp_vol_mult (1.0-2.0)
+                # ─────────────────────────────────────────────────────
+                pp_lookback = getattr(self, "pp_vol_lookback", 10)
+                pp_mult = getattr(self, "pp_vol_mult", 1.0)
+
+                # 1. Up day
+                up_day = self.close > self.close.shift(1).fillna(self.close)
+
+                # 2. Down days in lookback: close < open
+                if hasattr(self, "open") and self.open is not None:
+                    open_df = self.open
+                else:
+                    open_df = self.close.shift(1).fillna(self.close)
+                is_down = self.close < open_df
+
+                # Max down-day volume in lookback (shifted 1 to avoid lookahead)
+                down_vol = self.volume.where(is_down, other=float("nan"))
+                max_down_vol = (
+                    down_vol.rolling(pp_lookback, min_periods=1).max().shift(1)
+                )
+                max_down_vol = max_down_vol.fillna(
+                    self.volume.rolling(pp_lookback, min_periods=1).mean().shift(1)
+                )
+
+                vol_exceeds = self.volume > (pp_mult * max_down_vol)
+                entries = base_entry & up_day & vol_exceeds
+                logger.info(
+                    f"   Pocket Pivot: lookback={pp_lookback} mult={pp_mult}x"
+                    f" up_days={int(up_day.sum().sum())} vol_ok={int(vol_exceeds.sum().sum())}"
+                    f" -> entries={int(entries.sum().sum())}"
+                )
+
+            elif self.signal_type == "flat_base":
+                # ─────────────────────────────────────────────────────
+                # FLAT BASE
+                # Entry criteria:
+                #  1. Tight base: rolling range < fb_max_range% over min_bars
+                #  2. Flat (not cup): middle lows not lower than edges
+                #  3. Breakout: close > upper boundary of the base
+                #  4. Price above SMA20 (base_entry)
+                # Optuna: fb_min_weeks (4-8), fb_max_range (3-10%)
+                # ─────────────────────────────────────────────────────
+                fb_min_bars = getattr(self, "fb_min_weeks", 5) * 5
+                fb_max_rng = getattr(self, "fb_max_range", 7.0)
+
+                # Rolling range% across the base window
+                roll_high = self.high.rolling(
+                    fb_min_bars, min_periods=fb_min_bars
+                ).max()
+                roll_low = self.low.rolling(fb_min_bars, min_periods=fb_min_bars).min()
+                base_rng_pct = (
+                    (roll_high - roll_low) / roll_low.replace(0, float("nan")) * 100
+                )
+                is_tight = (base_rng_pct < fb_max_rng).fillna(False)
+
+                # Flat check: middle third lows not >2% below left/right thirds
+                third = max(fb_min_bars // 3, 5)
+                left_low = (
+                    self.low.rolling(third, min_periods=1)
+                    .min()
+                    .shift(fb_min_bars - third)
+                )
+                mid_low = self.low.rolling(third, min_periods=1).min().shift(third)
+                right_low = self.low.rolling(third, min_periods=1).min()
+                is_cup = (
+                    (mid_low < left_low * 0.98) & (mid_low < right_low * 0.98)
+                ).fillna(False)
+                is_flat = is_tight & (~is_cup)
+
+                # Breakout: close > rolling max of prior base (no lookahead)
+                upper_boundary = (
+                    self.high.shift(1)
+                    .rolling(fb_min_bars, min_periods=fb_min_bars)
+                    .max()
+                )
+                fb_breakout = (
+                    self.close > upper_boundary.replace(0, float("nan"))
+                ).fillna(False)
+
+                entries = base_entry & is_flat & fb_breakout
+                logger.info(
+                    f"   Flat Base: min_weeks={getattr(self, 'fb_min_weeks', 5)} max_range={fb_max_rng}%"
+                    f" tight={int(is_tight.sum().sum())} flat={int(is_flat.sum().sum())}"
+                    f" breakout={int(fb_breakout.sum().sum())} -> entries={int(entries.sum().sum())}"
+                )
+
             else:
                 entries = base_entry
-                logger.info(f"   🎯 Using TREND signal (close > SMA20)")
+                logger.info("   Using TREND signal (close > SMA20)")
 
             logger.info(
-                f"   📊 ADVANCED MODE entries (before Adaptive Filter): {entries.sum().sum()}"
+                f"   ADVANCED MODE entries (before filters): {entries.sum().sum()}"
             )
             logger.info(f"      Base entry passed: {base_entry.sum().sum()}")
-            if self.signal_type == "breakout":
-                logger.info(f"      Breakout passed: {breakout_signal.sum().sum()}")
 
-        # Signal types: Mark all as BREAKOUT for now
+        # Signal types: label entries with their signal type
         signal_types = pd.DataFrame(
             index=self.close.index, columns=self.close.columns, dtype=object
         )
-        signal_types[entries] = "BREAKOUT"
+        signal_label = (
+            self.signal_type.upper()
+            if hasattr(self, "signal_type") and self.signal_type
+            else "BREAKOUT"
+        )
+        signal_types[entries] = signal_label
 
         # =====================================================================
         # EARNINGS CALENDAR FILTER (applied before any mode-specific logic)
@@ -2446,6 +2932,53 @@ class AdvancedVectorBTEngine:
                 f"(conf < {self.min_pattern_confidence}), {entries_after} remaining"
             )
             signal_types[~entries] = None
+
+        # =====================================================================
+        # HISTORICAL SCREENER CACHE FILTER (point-in-time, no look-ahead)
+        # =====================================================================
+        screener_cache_name = self.screener_name
+        if self.screener_cache_path and screener_cache_name:
+            try:
+                if self.screener_cache_manager is None:
+                    from src.data.screener_cache import ScreenerCacheManager
+
+                    # screener_cache_path es el directorio del cache, no un archivo
+                    # usar directamente sin .parent
+                    _cache_dir = Path(self.screener_cache_path)
+                    if _cache_dir.is_file():
+                        _cache_dir = _cache_dir.parent
+                    self.screener_cache_manager = ScreenerCacheManager(_cache_dir)
+
+                cache_file = self.screener_cache_manager.cache_path(screener_cache_name)
+                if not cache_file.exists():
+                    logger.info(
+                        f"🧠 Screener cache not found for {screener_cache_name}; skipping historical filter"
+                    )
+                else:
+                    cache_mask = self.screener_cache_manager.build_mask(
+                        screener_cache_name,
+                        entries.index,
+                        list(entries.columns),
+                    )
+                    if cache_mask is None:
+                        logger.info(
+                            f"🧠 Screener cache metadata mismatch for {screener_cache_name}; skipping historical filter"
+                        )
+                    else:
+                        entries_before = entries.sum().sum()
+                        entries = entries & cache_mask.reindex(
+                            index=entries.index,
+                            columns=entries.columns,
+                            fill_value=False,
+                        )
+                        entries_after = entries.sum().sum()
+                        blocked = entries_before - entries_after
+                        logger.info(
+                            f"🧠 Screener cache filter: blocked {blocked} entries using {screener_cache_name} historical cache ({entries_after} remaining)"
+                        )
+                        signal_types[~entries] = None
+            except Exception as e:
+                logger.warning(f"⚠️ Screener cache filter unavailable: {e}")
 
         # =====================================================================
         # BASELINE MODE: Use NUMBA CORE directly (same as Advanced mode)
@@ -2520,7 +3053,12 @@ class AdvancedVectorBTEngine:
                 if len(trades_df) > 0
                 else 0
             )
-            profit_factor = total_profit / total_loss if total_loss > 0 else 0
+            if total_loss > 0:
+                profit_factor = total_profit / total_loss
+            elif total_profit > 0:
+                profit_factor = 999.0
+            else:
+                profit_factor = 0.0
 
             logger.info(
                 f"   📊 BASELINE trades: {int(unique_entries)} entries -> {all_exits_count} exits"
@@ -2644,23 +3182,27 @@ class AdvancedVectorBTEngine:
                 self.spy_sma50 = self.spy_close.rolling(window=50).mean()
 
             # Align spy/vix to entries index
-            vix_aligned  = self.vix_close.reindex(entries.index).ffill()
-            spy_aligned  = self.spy_close.reindex(entries.index).ffill()
+            vix_aligned = self.vix_close.reindex(entries.index).ffill()
+            spy_aligned = self.spy_close.reindex(entries.index).ffill()
             sma50_aligned = self.spy_sma50.reindex(entries.index).ffill()
 
             # Scalar-safe extraction (Series or float)
             def _to_series(s):
-                if isinstance(s, pd.DataFrame): return s.iloc[:, 0]
+                if isinstance(s, pd.DataFrame):
+                    return s.iloc[:, 0]
                 return s
-            vix_s   = _to_series(vix_aligned).astype(float)
-            spy_s   = _to_series(spy_aligned).astype(float)
+
+            vix_s = _to_series(vix_aligned).astype(float)
+            spy_s = _to_series(spy_aligned).astype(float)
             sma50_s = _to_series(sma50_aligned).astype(float)
 
-            warmup_mask = sma50_s.isna()                       # dates before SMA50 ready
-            t1_block    = warmup_mask | (spy_s < sma50_s) | (vix_s >= self.max_vix_threshold)
+            warmup_mask = sma50_s.isna()  # dates before SMA50 ready
+            t1_block = (
+                warmup_mask | (spy_s < sma50_s) | (vix_s >= self.max_vix_threshold)
+            )
 
             # Apply TIER 1 as row-mask (all tickers blocked on bad days)
-            t1_block_2d = t1_block.values[:, None]             # (days, 1) → broadcasts
+            t1_block_2d = t1_block.values[:, None]  # (days, 1) → broadcasts
             entries_before_t1 = entries.values.copy()
             entries.values[t1_block_2d.repeat(entries.shape[1], axis=1)] = False
 
@@ -2672,8 +3214,14 @@ class AdvancedVectorBTEngine:
             if len(t1_dates) > 0:
                 t1_loc = np.array([entries.index.get_loc(_d) for _d in t1_dates])
                 t1_cnts = entries_before_t1[t1_loc].sum(axis=1)
-                t1_reasons = np.where(warmup_mask.loc[t1_dates].values, "TIER1_WarmUp", "TIER1_MarketSafety")
-                for _d, _cnt, _r in zip(t1_dates[t1_cnts > 0], t1_cnts[t1_cnts > 0], t1_reasons[t1_cnts > 0]):
+                t1_reasons = np.where(
+                    warmup_mask.loc[t1_dates].values,
+                    "TIER1_WarmUp",
+                    "TIER1_MarketSafety",
+                )
+                for _d, _cnt, _r in zip(
+                    t1_dates[t1_cnts > 0], t1_cnts[t1_cnts > 0], t1_reasons[t1_cnts > 0]
+                ):
                     rejected_details.append((_d, "TIER1", _r, "ALL", int(_cnt)))
 
             logger.info(f"   ✅ TIER1 vectorized: {int(t1_rejected)} entries blocked")
@@ -2702,43 +3250,52 @@ class AdvancedVectorBTEngine:
 
                 # Align per-ticker arrays to entries columns
                 cols = entries.columns
-                close_g   = self.close.reindex(index=good_dates, columns=cols)
-                sma20_g   = self.sma_20.reindex(index=good_dates, columns=cols)
-                volume_g  = self.volume.reindex(index=good_dates, columns=cols)
-                avgvol_g  = self.avg_volume_20.reindex(index=good_dates, columns=cols)
-                adr_g     = self.adr_pct.reindex(index=good_dates, columns=cols) if hasattr(self, "adr_pct") else pd.DataFrame(5.0, index=good_dates, columns=cols)
+                close_g = self.close.reindex(index=good_dates, columns=cols)
+                sma20_g = self.sma_20.reindex(index=good_dates, columns=cols)
+                volume_g = self.volume.reindex(index=good_dates, columns=cols)
+                avgvol_g = self.avg_volume_20.reindex(index=good_dates, columns=cols)
+                adr_g = (
+                    self.adr_pct.reindex(index=good_dates, columns=cols)
+                    if hasattr(self, "adr_pct")
+                    else pd.DataFrame(5.0, index=good_dates, columns=cols)
+                )
 
                 # Vectorized RVOL, dist_sma20
                 avgvol_safe = avgvol_g.replace(0, np.nan)
-                rvol_g  = volume_g / avgvol_safe
+                rvol_g = volume_g / avgvol_safe
                 sma20_safe = sma20_g.replace(0, np.nan)
-                dist_g  = (close_g - sma20_safe) / sma20_safe * 100
+                dist_g = (close_g - sma20_safe) / sma20_safe * 100
 
                 # Build per-date threshold arrays using pre-computed thresh_map
-                rvol_thr  = vix_good.round(1).map({v: thresh_map[v]["min_rvol"]           for v in unique_vix})
-                adr_thr   = vix_good.round(1).map({v: thresh_map[v]["min_adr"]            for v in unique_vix})
-                dist_thr  = vix_good.round(1).map({v: thresh_map[v]["max_dist_sma20"]     for v in unique_vix})
+                rvol_thr = vix_good.round(1).map(
+                    {v: thresh_map[v]["min_rvol"] for v in unique_vix}
+                )
+                adr_thr = vix_good.round(1).map(
+                    {v: thresh_map[v]["min_adr"] for v in unique_vix}
+                )
+                dist_thr = vix_good.round(1).map(
+                    {v: thresh_map[v]["max_dist_sma20"] for v in unique_vix}
+                )
 
                 # Expand thresholds to (dates x tickers)
                 rvol_thr_2d = rvol_thr.values[:, None]
-                adr_thr_2d  = adr_thr.values[:, None]
+                adr_thr_2d = adr_thr.values[:, None]
                 dist_thr_2d = dist_thr.values[:, None]
 
                 fail_rvol = (rvol_g.values < rvol_thr_2d) | np.isnan(rvol_g.values)
-                fail_adr  = (adr_g.values  < adr_thr_2d)  | np.isnan(adr_g.values)
-                fail_dist = (dist_g.values > dist_thr_2d)  | np.isnan(dist_g.values)
-                fail_t2   = fail_rvol | fail_adr | fail_dist
+                fail_adr = (adr_g.values < adr_thr_2d) | np.isnan(adr_g.values)
+                fail_dist = (dist_g.values > dist_thr_2d) | np.isnan(dist_g.values)
+                fail_t2 = fail_rvol | fail_adr | fail_dist
 
                 # Only reject entries that are still True
                 active_good = entries.loc[good_dates].values
-                to_reject   = fail_t2 & active_good
+                to_reject = fail_t2 & active_good
                 t2_rejected = int(to_reject.sum())
                 self.rejection_stats_tier["TIER2"] += t2_rejected
 
                 # Apply mask
                 entries.loc[good_dates] = pd.DataFrame(
-                    active_good & ~fail_t2,
-                    index=good_dates, columns=cols
+                    active_good & ~fail_t2, index=good_dates, columns=cols
                 )
 
                 logger.info(f"   ✅ TIER2 vectorized: {t2_rejected} entries blocked")
@@ -2748,72 +3305,112 @@ class AdvancedVectorBTEngine:
                 if t2_rejected > 0 and getattr(self, "save_rejected_samples", True):
                     try:
                         import random as _rnd2
+
                         _rnd2.seed(42)
                         _rej_rows = []
-                        _flat_idx = np.argwhere(to_reject)  # (n, 2) array of [date_idx, col_idx]
+                        _flat_idx = np.argwhere(
+                            to_reject
+                        )  # (n, 2) array of [date_idx, col_idx]
                         _sample_n = max(1, int(len(_flat_idx) * 0.02))
-                        _chosen   = _flat_idx[_rnd2.sample(range(len(_flat_idx)), min(_sample_n, len(_flat_idx)))]
+                        _chosen = _flat_idx[
+                            _rnd2.sample(
+                                range(len(_flat_idx)), min(_sample_n, len(_flat_idx))
+                            )
+                        ]
                         for _di, _ci in _chosen:
-                            _d   = good_dates[_di]
+                            _d = good_dates[_di]
                             _sym = cols[_ci]
-                            _rej_rows.append({
-                                "entry_date":       str(_d.date()),
-                                "symbol":           _sym,
-                                "context_rvol":     float(rvol_g.values[_di, _ci]),
-                                "context_adr":      float(adr_g.values[_di, _ci]),
-                                "dist_sma20_pct":   float(dist_g.values[_di, _ci]),
-                                "context_vol":      float(volume_g.values[_di, _ci]),
-                                "context_dollar_vol": float(close_g.values[_di, _ci] * volume_g.values[_di, _ci]),
-                                "entry_score":      0.0,   # rejected before scoring
-                                "stop_distance_pct": 4.0,  # unknown at rejection time
-                                "pattern_confidence": 0.0,
-                                "pattern_bonus":    0.0,
-                                "score_volume":     1.0,
-                                "score_ema10":      1.0,
-                                "initial_risk":     1000.0,
-                                "pnl":              -1.0,
-                                "r_multiple":       -1.0,
-                                "outcome":          "LOSS",
-                                "rejection_tier":   "TIER2",
-                            })
-                        if _rej_rows:
+                            _rej_rows.append(
+                                {
+                                    "entry_date": str(_d.date()),
+                                    "symbol": _sym,
+                                    "context_rvol": float(rvol_g.values[_di, _ci]),
+                                    "context_adr": float(adr_g.values[_di, _ci]),
+                                    "dist_sma20_pct": float(dist_g.values[_di, _ci]),
+                                    "context_vol": float(volume_g.values[_di, _ci]),
+                                    "context_dollar_vol": float(
+                                        close_g.values[_di, _ci]
+                                        * volume_g.values[_di, _ci]
+                                    ),
+                                    "entry_score": 0.0,  # rejected before scoring
+                                    "stop_distance_pct": 4.0,  # unknown at rejection time
+                                    "pattern_confidence": 0.0,
+                                    "pattern_bonus": 0.0,
+                                    "score_volume": 1.0,
+                                    "score_ema10": 1.0,
+                                    "initial_risk": 1000.0,
+                                    "pnl": -1.0,
+                                    "r_multiple": -1.0,
+                                    "outcome": "LOSS",
+                                    "rejection_tier": "TIER2",
+                                }
+                            )
+                        if _rej_rows and getattr(self, "log_rejections", True):
                             _rej_df = pd.DataFrame(_rej_rows)
                             _rej_path = "outputs/backtests/rejected_samples_ml.csv"
                             import os as _os2
+
                             if _os2.path.exists(_rej_path):
-                                _rej_df.to_csv(_rej_path, mode="a", header=False, index=False)
+                                _rej_df.to_csv(
+                                    _rej_path, mode="a", header=False, index=False
+                                )
                             else:
                                 _rej_df.to_csv(_rej_path, index=False)
-                            logger.info(f"   💾 ML: saved {len(_rej_rows)} rejected samples to {_rej_path}")
+                            logger.info(
+                                f"   💾 ML: saved {len(_rej_rows)} rejected samples to {_rej_path}"
+                            )
                     except Exception as _re:
-                        logger.debug(f"   Rejected sample capture failed (non-critical): {_re}")
+                        logger.debug(
+                            f"   Rejected sample capture failed (non-critical): {_re}"
+                        )
 
                 # Lightweight rejection details (one row per date, not per ticker — fast)
                 if t2_rejected > 0:
                     t2_cnts = to_reject.sum(axis=1)
                     mask2 = t2_cnts > 0
                     for _d, _n in zip(good_dates[mask2], t2_cnts[mask2]):
-                        rejected_details.append((_d, "TIER2", "TIER2_DynamicQuality", f"{int(_n)}tickers", int(_n)))
+                        rejected_details.append(
+                            (
+                                _d,
+                                "TIER2",
+                                "TIER2_DynamicQuality",
+                                f"{int(_n)}tickers",
+                                int(_n),
+                            )
+                        )
 
             # ─── TIER 3: Consolidation filter (vectorized) ─────────────────────
-            if hasattr(self, "consolidation_days") and not self.consolidation_days.empty:
+            if (
+                hasattr(self, "consolidation_days")
+                and not self.consolidation_days.empty
+            ):
                 try:
-                    good_dates3  = entries.index[~t1_block]
-                    vix_good3    = vix_s.loc[good_dates3]
-                    consol_thr3  = vix_good3.round(1).map({v: thresh_map.get(v, get_dynamic_thresholds(float(v))).get("min_consolidation_days", self.min_consolidation_days) for v in vix_good3.round(1).unique()})
-                    consol_g     = self.consolidation_days.reindex(index=good_dates3, columns=entries.columns)
-                    fail_t3      = consol_g.values < consol_thr3.values[:, None]
-                    active_g3    = entries.loc[good_dates3].values
-                    to_rej3      = fail_t3 & active_g3
-                    t3_rejected  = int(to_rej3.sum())
+                    good_dates3 = entries.index[~t1_block]
+                    vix_good3 = vix_s.loc[good_dates3]
+                    consol_thr3 = vix_good3.round(1).map(
+                        {
+                            v: thresh_map.get(v, get_dynamic_thresholds(float(v))).get(
+                                "min_consolidation_days", self.min_consolidation_days
+                            )
+                            for v in vix_good3.round(1).unique()
+                        }
+                    )
+                    consol_g = self.consolidation_days.reindex(
+                        index=good_dates3, columns=entries.columns
+                    )
+                    fail_t3 = consol_g.values < consol_thr3.values[:, None]
+                    active_g3 = entries.loc[good_dates3].values
+                    to_rej3 = fail_t3 & active_g3
+                    t3_rejected = int(to_rej3.sum())
                     self.rejection_stats_tier["TIER3"] += t3_rejected
                     entries.loc[good_dates3] = pd.DataFrame(
                         active_g3 & ~fail_t3, index=good_dates3, columns=entries.columns
                     )
-                    logger.info(f"   ✅ TIER3 vectorized: {t3_rejected} entries blocked")
+                    logger.info(
+                        f"   ✅ TIER3 vectorized: {t3_rejected} entries blocked"
+                    )
                 except Exception as _e3:
                     logger.warning(f"   ⚠️ TIER3 vectorized error (non-critical): {_e3}")
-
 
             # Log summary statistics
             total_entries_post_filter = entries.sum().sum()
@@ -2843,11 +3440,12 @@ class AdvancedVectorBTEngine:
                 )
                 self.rejection_details_df = rejection_df
 
-                # Save to CSV for detailed analysis
-                rejection_df.to_csv(
-                    "outputs/backtests/adaptive_filter_rejections_detailed.csv",
-                    index=False,
-                )
+                # Save to CSV for detailed analysis (skip during optimization)
+                if getattr(self, "log_rejections", True):
+                    rejection_df.to_csv(
+                        "outputs/backtests/adaptive_filter_rejections_detailed.csv",
+                        index=False,
+                    )
 
             # Print summary
             print("\n" + "=" * 70)
@@ -3139,11 +3737,16 @@ class AdvancedVectorBTEngine:
 
             # --- RS DIVERGENCE FILTER ---
             # RS_60d high but RS_20d < 40: stock was a leader but losing momentum
-            if getattr(self, 'rs_divergence_block', False) and getattr(self, 'rs_short_weight', 0.35) > 0:
-                rs_short_lb = getattr(self, 'rs_short_lookback_days', 20)
+            if (
+                getattr(self, "rs_divergence_block", False)
+                and getattr(self, "rs_short_weight", 0.35) > 0
+            ):
+                rs_short_lb = getattr(self, "rs_short_lookback_days", 20)
                 rs_20d_raw = self.close.ffill().pct_change(rs_short_lb)
                 rs_20d_pct = rs_20d_raw.rank(axis=1, pct=True) * 100
-                rs_20d_pct = rs_20d_pct.reindex(entries.index).reindex(columns=entries.columns)
+                rs_20d_pct = rs_20d_pct.reindex(entries.index).reindex(
+                    columns=entries.columns
+                )
                 rs_60d_strong = rs_percentile >= self.min_rs_percentile
                 rs_20d_weak = rs_20d_pct < 40.0
                 divergence_mask = rs_60d_strong & rs_20d_weak
@@ -3151,8 +3754,9 @@ class AdvancedVectorBTEngine:
                 entries = entries & ~divergence_mask
                 rejected_div = pre_div - entries.sum().sum()
                 if rejected_div > 0:
-                    logger.info(f'   RS divergence block: {rejected_div} entries removed (RS60d strong but RS20d < 40)')
-
+                    logger.info(
+                        f"   RS divergence block: {rejected_div} entries removed (RS60d strong but RS20d < 40)"
+                    )
 
         # ═══════════════════════════════════════════════════════════════
         # 📏 FILTRO 6: SMA50/ATR Extension (Avoid Overextended)
@@ -3191,11 +3795,23 @@ class AdvancedVectorBTEngine:
         # Calculate ATR
         atr = self.calculate_atr(14)
 
+        # ── PERFORMANCE LOG: Pre-simulation memory snapshot ─────────────
+        import time
+        import resource as _res2
+
+        _bt0 = time.perf_counter()
+        _rss_pre_mb = _res2.getrusage(_res2.RUSAGE_SELF).ru_maxrss / 1024
+        total_days = len(self.close)
+        logger.info(
+            f"💾 Pre-simulation RSS: {_rss_pre_mb:.0f} MB | "
+            f"Entries shape: {entries.shape} | Days: {total_days}"
+        )
+
         # =====================================================================
         # MEMORY OPTIMIZATION: Chunking for multi-year backtests
         # =====================================================================
         # Auto-detect if we need chunking based on date range
-        total_days = len(self.close)
+        # total_days ya definido arriba
         # MEMORY FIX: Reduced from 750 to 500 (~2 years) for better memory management
         # For 8+ year backtests, this prevents OOM kills by processing in smaller chunks
         chunk_size_days = 500  # ~2 years of trading data per chunk
@@ -3287,7 +3903,12 @@ class AdvancedVectorBTEngine:
             if len(trades_df) > 0
             else 0
         )
-        profit_factor = total_profit / total_loss if total_loss > 0 else 0
+        if total_loss > 0:
+            profit_factor = total_profit / total_loss
+        elif total_profit > 0:
+            profit_factor = 999.0
+        else:
+            profit_factor = 0.0
 
         results = {
             "total_return": total_return,
@@ -3303,6 +3924,12 @@ class AdvancedVectorBTEngine:
             "equity_curve": equity_curve,
             "trades": trades_df,
             "trades_df": trades_df,  # Add alias for compatibility
+            "n_loaded": len(self.universe),
+            "n_with_trades": (
+                int(trades_df["symbol"].nunique())
+                if not trades_df.empty and "symbol" in trades_df.columns
+                else 0
+            ),
         }
 
         logger.info(f"✅ Backtest complete!")
@@ -3316,6 +3943,19 @@ class AdvancedVectorBTEngine:
         logger.info(
             f"   Trades: {int(unique_entries)} entries → {int(all_exits_count)} total exits (including partial)"
         )
+
+        # ── PERFORMANCE LOG: Simulation timing + RSS ────────────────────
+        try:
+            import time
+            import resource as _res3
+
+            _sim_secs = time.perf_counter() - _bt0
+            _rss_post_mb = _res3.getrusage(_res3.RUSAGE_SELF).ru_maxrss / 1024
+            logger.info(
+                f"⏱ Simulation: {_sim_secs:.1f}s | RSS peak: {_rss_post_mb:.0f} MB"
+            )
+        except Exception:
+            pass
 
         return results
 
@@ -3376,6 +4016,8 @@ class AdvancedVectorBTEngine:
             "equity_curve": pd.Series(),
             "trades": empty_trades,
             "trades_df": empty_trades,
+            "n_loaded": 0,
+            "n_with_trades": 0,
         }
 
     def get_rejection_stats(self) -> Dict[str, int]:
@@ -3441,14 +4083,34 @@ class AdvancedVectorBTEngine:
         ):
             self._load_pattern_cache()
 
+        # Save index/columns BEFORE release_dataframes destroys self.close
+        # These are needed by simulate_with_partial_exits to map day_idx -> date
+        # and col_idx -> ticker symbol
+        _close_index = self.close.index if hasattr(self, "close") else None
+        _close_columns = self.close.columns if hasattr(self, "close") else None
+
         # Prepare NumPy arrays (memory optimized)
-        numba_arrays = prepare_numba_arrays(self)
+        numba_arrays = prepare_numba_arrays(self, release_dataframes=True)
+
+        # Reconstruct a minimal close DataFrame with correct index/columns
+        # This is only used for index mapping (date/ticker lookup), not computation
+        if not hasattr(self, "close") or self.close is None:
+            if _close_index is not None and _close_columns is not None:
+                import numpy as _np_rc
+
+                self.close = pd.DataFrame(
+                    _np_rc.empty(
+                        (len(_close_index), len(_close_columns)), dtype="float32"
+                    ),
+                    index=_close_index,
+                    columns=_close_columns,
+                )
 
         # Run simulation
         equity_curve, trades_df = self.simulate_with_partial_exits(
             entries=entries,
             close=self.close
-            if hasattr(self, "close")
+            if hasattr(self, "close") and self.close is not None
             else pd.DataFrame(numba_arrays["close"]),
             atr=atr,
             avwap=avwap,

@@ -20,10 +20,15 @@ import random
 import pickle
 import shutil
 import quantstats as qs
-import matplotlib.pyplot as plt
+# matplotlib importado de forma lazy (evita 200-500ms en cold start de Streamlit)
+# Se importa dentro de las funciones que lo usan (ver generate_pdf_report, etc.)
 
-# Fix for Linux font issues in QuantStats/Matplotlib
-try:
+
+# Fix for Linux font issues — import lazy here too
+def _init_matplotlib():
+    """Inicializa matplotlib de forma lazy (evita overhead en cold start)."""
+    import matplotlib.pyplot as plt
+
     plt.rcParams["font.family"] = "sans-serif"
     plt.rcParams["font.sans-serif"] = [
         "DejaVu Sans",
@@ -31,8 +36,10 @@ try:
         "Bitstream Vera Sans",
         "Arial",
     ]
-except Exception:
-    pass
+    return plt
+
+
+# No llamar _init_matplotlib() aqui: mantener import realmente lazy.
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -55,9 +62,72 @@ from config.defaults import (
     reload_config,
 )
 
+# ──────────────────────────────────────────────────────────────────────
+# DASHBOARD UI LAYER — Fase 1-4: Ingesta robusta, estado aislado,
+# vista filtrada y caché para multi-activo/multi-patrón
+# ──────────────────────────────────────────────────────────────────────
+from src.ui.dashboard_data_adapter import DashboardDataAdapter, get_adapter
+from src.ui.session_state import DashboardState, ALL_LABEL
+from src.ui.filtered_view import get_filtered_trades, get_scope_label, get_scope_info
+from src.ui.dashboard_cache import (
+    DashboardCache,
+    cached_load_optimizer_config,
+    cached_load_trades,
+    cached_build_index,
+)
+
+# --- LOAD COMBO RANKING (optional production selector) ---
+_combo_top5_path = Path("config/combos/top5.json")
+try:
+    with open(_combo_top5_path, "r", encoding="utf-8") as _cf:
+        _combo_top5 = json.load(_cf)
+    if not isinstance(_combo_top5, list):
+        _combo_top5 = []
+except Exception:
+    _combo_top5 = []
+
+
+def _normalize_combo_config(raw: dict) -> dict:
+    """Normalize combo JSON keys to match app.py expected structure."""
+    cfg = dict(raw)
+    # tier1_exits -> tier1_strategy
+    if "tier1_exits" in cfg and "tier1_strategy" not in cfg:
+        cfg["tier1_strategy"] = dict(cfg.pop("tier1_exits"))
+    # tier3_fixed -> tier3_risk
+    if "tier3_fixed" in cfg and "tier3_risk" not in cfg:
+        cfg["tier3_risk"] = dict(cfg.pop("tier3_fixed"))
+    return cfg
+
+
+def _load_selected_strategy_config() -> dict:
+    """Load active strategy config from the selected combo or production fallback."""
+    selected_label = st.session_state.get("active_combo_label")
+    if _combo_top5 and selected_label:
+        for combo in _combo_top5:
+            label = (
+                f"{combo.get('combo', combo.get('combo_name', 'combo'))} "
+                f"★ {combo.get('combo_score', combo.get('score', 0.0)):.2f}"
+            )
+            if label == selected_label:
+                export_path = combo.get("export_path")
+                if export_path and Path(export_path).exists():
+                    try:
+                        with open(export_path, "r", encoding="utf-8") as f:
+                            raw = json.load(f)
+                        return _normalize_combo_config(raw)
+                    except Exception:
+                        break
+    return load_production_config()
+
+
 # --- LOAD PRODUCTION CONFIG (Single source of truth) ---
-_raw_config = load_production_config()
+_raw_config = _load_selected_strategy_config()
 _engine_params = flatten_config(_raw_config)
+
+# Track if a combo is active (for UI gating)
+_combo_is_active = _raw_config.get("combo_name") is not None
+_combo_source = _raw_config.get("combo_name", "production_config.json")
+_combo_screener = _raw_config.get("screener", _raw_config.get("pattern", "N/A"))
 
 # Extract tier-level configs with defaults from centralized system
 # This ensures fallbacks are ALWAYS synchronized with production_config.json
@@ -73,6 +143,213 @@ _mr = {
 }
 _perf = _raw_config.get("performance", {})
 
+# --- LOAD VCP CONFIG (separate golden config for VCP pattern) ---
+_vcp_config_path = "config/vcp_config.json"
+try:
+    import json as _json
+
+    with open(_vcp_config_path) as _vf:
+        _vcp_raw = _json.load(_vf)
+    _vcp_t1 = _vcp_raw.get("tier1_strategy", {})
+    _vcp_t2 = _vcp_raw.get("tier2_filters", {})
+    _vcp_ve = _vcp_raw.get("vcp_entry", {})
+    _vcp_mr = _vcp_raw.get("market_regime", {})
+    _vcp_oos = _vcp_raw.get("_oos_validation", {})
+    _vcp_available = True
+except Exception:
+    _vcp_available = False
+    _vcp_t1 = _vcp_t2 = _vcp_ve = _vcp_mr = _vcp_oos = {}
+
+# --- BREAKOUT CONFIG ---
+try:
+    import json as _json_bk
+
+    with open("config/breakout_config.json") as _bkf:
+        _bk_raw = _json_bk.load(_bkf)
+    _bk_t1 = _bk_raw.get("tier1_strategy", {})
+    _bk_t2 = _bk_raw.get("tier2_filters", {})
+    _bk_oos = _bk_raw.get("_oos_validation", {})
+    _breakout_available = True
+except Exception:
+    _breakout_available = True  # fallback to production_config
+    _bk_t1 = _bk_t2 = _bk_oos = {}
+
+# --- POCKET PIVOT CONFIG ---
+try:
+    import json as _json_pp
+
+    with open("config/pocket_pivot_config.json") as _ppf:
+        _pp_raw = _json_pp.load(_ppf)
+    _pp_t1 = _pp_raw.get("tier1_strategy", {})
+    _pp_t2 = _pp_raw.get("tier2_filters", {})
+    _pp_ve = _pp_raw.get("extra_params", _pp_raw.get("vcp_entry", {}))
+    _pp_oos = _pp_raw.get("_oos_validation", {})
+    _pp_available = True
+except Exception:
+    _pp_available = False
+    _pp_t1 = _pp_t2 = _pp_ve = _pp_oos = {}
+
+# --- FLAT BASE CONFIG ---
+try:
+    import json as _json_fb
+
+    with open("config/flat_base_config.json") as _fbf:
+        _fb_raw = _json_fb.load(_fbf)
+    _fb_t1 = _fb_raw.get("tier1_strategy", {})
+    _fb_t2 = _fb_raw.get("tier2_filters", {})
+    _fb_ve = _fb_raw.get("extra_params", _fb_raw.get("vcp_entry", {}))
+    _fb_oos = _fb_raw.get("_oos_validation", {})
+    _fb_available = True
+except Exception:
+    _fb_available = False
+    _fb_t1 = _fb_t2 = _fb_ve = _fb_oos = {}
+
+
+# ──────────────────────────────────────────────────────────────────────
+# DASHBOARD DATA LAYER — Ingesta robusta + estado aislado
+# ──────────────────────────────────────────────────────────────────────
+
+# Resolve trade events path first (used by adapter + legacy code)
+_TRADE_EVENTS_PATH = (
+    "outputs/backtests/complete_trades_clean.csv"
+    if os.path.exists("outputs/backtests/complete_trades_clean.csv")
+    else "outputs/backtests/backtest_results.csv"
+)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# ML TRADE SCORER
+# ──────────────────────────────────────────────────────────────────────
+# ML TRADE SCORER
+# ──────────────────────────────────────────────────────────────────────
+@st.cache_resource
+def load_trade_scorer():
+    """Cargar modelo trade_scorer_lgbm.pkl si existe."""
+    import pickle
+
+    model_path = Path("models/trade_scorer_lgbm.pkl")
+    if not model_path.exists():
+        return None
+    try:
+        with open(model_path, "rb") as f:
+            payload = pickle.load(f)
+        return payload
+    except Exception as e:
+        st.warning(f"No se pudo cargar modelo ML: {e}")
+        return None
+
+
+def score_trades_ml(trades_df, model_payload):
+    """Agregar columna ml_score a trades_df usando el modelo ML."""
+    if model_payload is None:
+        return trades_df
+    model = model_payload.get("model")
+    features = model_payload.get("features", [])
+    if model is None or not features:
+        return trades_df
+    try:
+        # MEMORY OPT: no copiar el DF entero, solo las columnas relevantes
+        # Las columnas que necesitamos para scoring son pocas vs el DF completo
+        score_cols = [
+            c
+            for c in trades_df.columns
+            if c in features
+            or c
+            in [
+                "entry_date",
+                "context_rvol",
+                "context_adr",
+                "context_dollar_vol",
+                "rs_60d",
+                "rs_20d",
+                "signal_type",
+                "market_stage_ml",
+                "vix_regime",
+                "entry_stage",
+                "sector_strength",
+            ]
+        ]
+        df = trades_df[score_cols].copy()  # copy solo columnas necesarias
+
+        # Ensure datetime for calendar-derived features
+        if "entry_date" in df.columns:
+            df["entry_date"] = pd.to_datetime(df["entry_date"], errors="coerce")
+            if "month" not in df.columns:
+                df["month"] = df["entry_date"].dt.month
+            if "weekday" not in df.columns:
+                df["weekday"] = df["entry_date"].dt.weekday
+
+        # Lightweight derived numeric features (no external data)
+        if (
+            "rvol_adr_ratio" not in df.columns
+            and "context_rvol" in df.columns
+            and "context_adr" in df.columns
+        ):
+            df["rvol_adr_ratio"] = df["context_rvol"] / (df["context_adr"] + 0.01)
+
+        if "log_dollar_vol" not in df.columns and "context_dollar_vol" in df.columns:
+            df["log_dollar_vol"] = np.log1p(
+                pd.to_numeric(df["context_dollar_vol"], errors="coerce").fillna(0)
+            )
+
+        if (
+            "rs_divergence" not in df.columns
+            and "rs_60d" in df.columns
+            and "rs_20d" in df.columns
+        ):
+            df["rs_divergence"] = pd.to_numeric(
+                df["rs_60d"], errors="coerce"
+            ) - pd.to_numeric(df["rs_20d"], errors="coerce")
+
+        if (
+            "rs_momentum_flag" not in df.columns
+            and "rs_60d" in df.columns
+            and "rs_20d" in df.columns
+        ):
+            rs60 = pd.to_numeric(df["rs_60d"], errors="coerce")
+            rs20 = pd.to_numeric(df["rs_20d"], errors="coerce")
+            df["rs_momentum_flag"] = ((rs20 > rs60) & (rs60 > 60)).astype(float)
+
+        # Encoders (optional) - if not present in payload we default to 0
+        encoders = model_payload.get("encoders", {})
+
+        def _encode_to_col(src_col: str, dst_col: str, encoder_key: str) -> None:
+            if dst_col in df.columns:
+                return
+            mapping = encoders.get(encoder_key)
+            if mapping and src_col in df.columns:
+                df[dst_col] = df[src_col].astype(str).map(mapping).fillna(0).astype(int)
+            else:
+                df[dst_col] = 0
+
+        if "signal_type_enc" in features:
+            _encode_to_col("signal_type", "signal_type_enc", "signal_type")
+        if "market_stage_ml_enc" in features:
+            _encode_to_col("market_stage_ml", "market_stage_ml_enc", "market_stage_ml")
+        if "vix_regime_enc" in features:
+            _encode_to_col("vix_regime", "vix_regime_enc", "vix_regime")
+        if "entry_stage_enc" in features:
+            _encode_to_col("entry_stage", "entry_stage_enc", "entry_stage")
+        if "sector_strength_enc" in features:
+            _encode_to_col("sector_strength", "sector_strength_enc", "sector_strength")
+
+        # Build feature matrix; missing cols get filled with 0
+        X = df.reindex(columns=features)
+        X = X.apply(pd.to_numeric, errors="ignore")
+        X = X.fillna(X.median(numeric_only=True)).fillna(0)
+
+        scores = model.predict_proba(X)[:, 1]
+        result = trades_df.copy()
+        result["ml_score"] = pd.to_numeric(scores, errors="coerce").clip(0, 1)
+        return result
+    except Exception:
+        return trades_df
+
+
+# --- CARGAR MODELO ML AL INICIO ---
+_ML_MODEL = load_trade_scorer()
+
+
 # --- PERFORMANCE OPTIMIZATION WRAPPERS ---
 
 
@@ -82,6 +359,123 @@ def get_cached_intraday_data(symbol: str, interval: str, days: int):
 
     provider = MarketDataProvider()
     return provider.get_intraday_data(symbol, interval=interval, days=days)
+
+
+@st.cache_data(show_spinner=False)
+def _cached_group_trades(df_json: str) -> "pd.DataFrame":
+    """Cache del TradeGrouper — evita reagrupar trades en cada rerun de Streamlit."""
+    from io import StringIO
+
+    df = pd.read_json(
+        StringIO(df_json),
+        convert_dates=["entry_date", "exit_date", "final_exit_date"],
+    )
+    trade_df = df.rename(columns={"symbol": "ticker"})
+    return TradeGrouper.group_partial_trades(trade_df)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# DASHBOARD DATA LAYER — Ingesta robusta + estado aislado
+# (must be after _cached_group_trades definition)
+# ──────────────────────────────────────────────────────────────────────
+
+
+# 1) Adapter: carga trades CSV con normalización canónica
+# MEMORY OPT: cachear usando mtime del CSV como key — se invalida cuando el backtest
+# escribe un CSV nuevo, sin necesidad de TTL fijo que cause lag en el dashboard.
+def _get_csv_mtime(path: str) -> float:
+    """Retorna mtime del CSV para usar como cache key."""
+    import os as _os
+
+    try:
+        return _os.path.getmtime(path)
+    except Exception:
+        return 0.0
+
+
+@st.cache_data(show_spinner=False)
+def _load_trades_cached(path: str, _mtime: float = 0.0) -> pd.DataFrame:
+    """Carga y normaliza el CSV de trades. Cache se invalida al cambiar el archivo."""
+    adapter = get_adapter()
+    return adapter.load_trades_csv(path)
+
+
+@st.cache_data(show_spinner=False)
+def _build_index_cached(path: str, _mtime: float = 0.0) -> dict:
+    """Construye índice asset→patrones. Cache se invalida al cambiar el archivo."""
+    adapter = get_adapter()
+    trades = _load_trades_cached(path, _mtime)
+    if trades.empty:
+        return {"ALL": ["any"]}
+    return adapter.build_asset_pattern_index(trades)
+
+
+_adapter = get_adapter()
+_trades_csv_mtime = _get_csv_mtime(_TRADE_EVENTS_PATH)
+_trades_df = (
+    _load_trades_cached(_TRADE_EVENTS_PATH, _trades_csv_mtime)
+    if os.path.exists(_TRADE_EVENTS_PATH)
+    else pd.DataFrame()
+)
+
+# 2) Índice activo → patrones (para selectores dependientes)
+_asset_pattern_index = (
+    _build_index_cached(_TRADE_EVENTS_PATH, _trades_csv_mtime)
+    if os.path.exists(_TRADE_EVENTS_PATH) and not _trades_df.empty
+    else {"ALL": ["any"]}
+)
+
+# 3) Session state: árbol de estado con selectores dependientes
+_dash_state = DashboardState(st.session_state)
+_dash_state.init()
+
+# 4) Vista filtrada: TODAS las visualizaciones consumen esta vista
+_selected_asset = _dash_state.selected_asset
+_selected_pattern = _dash_state.selected_pattern
+_view_df, _scope_label, _n_view_trades = get_scope_info(
+    _trades_df, _selected_asset, _selected_pattern
+)
+
+# 5) Grouped trades (legacy TradeGrouper) sobre la vista filtrada
+if not _view_df.empty:
+    # MEMORY OPT: evitar copias dobles del view DF en cada rerun
+    # _view_for_grouper: renombrar sin copy si ya tiene 'ticker', sino rename crea copia mínima
+    if "symbol" in _view_df.columns and "ticker" not in _view_df.columns:
+        _view_for_grouper = _view_df.rename(columns={"symbol": "ticker"})
+    else:
+        _view_for_grouper = _view_df
+    grouped_trades = _cached_group_trades(_view_for_grouper.to_json())
+    if not grouped_trades.empty:
+        g_numeric_cols = grouped_trades.select_dtypes(include=[np.number]).columns
+        grouped_trades[g_numeric_cols] = grouped_trades[g_numeric_cols].round(2)
+    # MEMORY OPT: df = alias de _view_df con tipos de fecha corregidos (sin copy completo)
+    df = _view_df
+    if "entry_date" in df.columns:
+        # Solo convertir si no es datetime ya (evita operacion innecesaria)
+        if not pd.api.types.is_datetime64_any_dtype(df["entry_date"]):
+            df = df.copy()  # copy lazy: solo si realmente necesitamos mutar
+            df["entry_date"] = pd.to_datetime(df["entry_date"])
+    if "exit_date" in df.columns:
+        if not pd.api.types.is_datetime64_any_dtype(df["exit_date"]):
+            if df is _view_df:  # no hicimos copy aun
+                df = df.copy()
+            df["exit_date"] = pd.to_datetime(df["exit_date"])
+    trade_df_for_grouper = _view_for_grouper
+else:
+    grouped_trades = pd.DataFrame()
+    df = pd.DataFrame()
+    trade_df_for_grouper = pd.DataFrame()
+
+has_r = (
+    (
+        "r_multiple" in grouped_trades.columns
+        and grouped_trades["r_multiple"].abs().sum() > 0
+    )
+    if not grouped_trades.empty
+    else False
+)
+
+_dash_cache = DashboardCache()
 
 
 @st.cache_data(
@@ -127,10 +521,27 @@ def run_cached_backtest(
     use_ml_filter=False,
     ml_filter_threshold=0.40,
     ml_boost_weight=0.20,
+    # VCP / pattern params
+    signal_type="breakout",
+    vcp_pivot_window=15,
+    vcp_atr_short=10,
+    vcp_atr_long=30,
+    vcp_atr_ratio=0.85,
+    vcp_volume_dry_periods=5,
+    vcp_depth_max_pct=15.0,
+    vcp_pivot_dist_max_pct=8.0,
+    vcp_require_vol_dry=True,
+    # Pocket Pivot params
+    pp_vol_lookback=10,
+    pp_vol_mult=1.0,
+    # Flat Base params
+    fb_min_weeks=5,
+    fb_max_range=7.0,
 ):
     from src.backtest.vectorbt_engine_advanced import AdvancedVectorBTEngine
 
     import time as _t
+
     _t0 = _t.time()
     engine = AdvancedVectorBTEngine(
         universe=universe,
@@ -170,6 +581,19 @@ def run_cached_backtest(
         use_ml_filter=use_ml_filter,
         ml_filter_threshold=ml_filter_threshold,
         ml_boost_weight=ml_boost_weight,
+        signal_type=signal_type,
+        vcp_pivot_window=vcp_pivot_window,
+        vcp_atr_short=vcp_atr_short,
+        vcp_atr_long=vcp_atr_long,
+        vcp_atr_ratio=vcp_atr_ratio,
+        vcp_volume_dry_periods=vcp_volume_dry_periods,
+        vcp_depth_max_pct=vcp_depth_max_pct,
+        vcp_pivot_dist_max_pct=vcp_pivot_dist_max_pct,
+        vcp_require_vol_dry=vcp_require_vol_dry,
+        pp_vol_lookback=pp_vol_lookback,
+        pp_vol_mult=pp_vol_mult,
+        fb_min_weeks=fb_min_weeks,
+        fb_max_range=fb_max_range,
     )
     _t1 = _t.time()
     results = engine.run_backtest()
@@ -189,9 +613,10 @@ def run_cached_backtest(
 def _get_ticker_cache():
     return TickerCache()
 
+
 # Lazy load ticker cache - only when needed
 def get_ticker_cache():
-    if 'ticker_cache_instance' not in st.session_state:
+    if "ticker_cache_instance" not in st.session_state:
         st.session_state.ticker_cache_instance = _get_ticker_cache()
     return st.session_state.ticker_cache_instance
 
@@ -209,11 +634,11 @@ def get_cache_date_range():
             "SELECT date FROM ohlcv_cache ORDER BY date DESC LIMIT 1"
         )
         max_date = cursor.fetchone()
-        
+
         if min_date and max_date:
             return (
                 datetime.strptime(min_date[0], "%Y-%m-%d"),
-                datetime.strptime(max_date[0], "%Y-%m-%d")
+                datetime.strptime(max_date[0], "%Y-%m-%d"),
             )
     except Exception as e:
         pass
@@ -286,17 +711,33 @@ def run_vectorbt_backtest_ui(
     tp1_r,
     tp2_r,
     require_spy_above_sma50,
-    tp1_pct,
-    tp2_pct,
-    runner_pct,
-    use_adaptive_filtering=True,
-    use_earnings_calendar=False,
-    use_pit_universe=False,
-    use_rs_percentile=True,
-    min_rs_percentile=0,
-    use_ml_filter=False,
-    ml_filter_threshold=0.40,
-    ml_boost_weight=0.20,
+    tp1_p,
+    tp2_p,
+    run_p,
+    use_adaptive,
+    use_earnings_filter,
+    _use_pit,
+    use_rs_percentile,
+    min_rs_percentile,
+    _use_ml,
+    _ml_threshold,
+    _ml_boost,
+    # Signal type routing
+    signal_type,
+    vcp_pivot_window,
+    vcp_atr_short,
+    vcp_atr_long,
+    vcp_atr_ratio,
+    vcp_volume_dry_periods,
+    vcp_depth_max_pct,
+    vcp_pivot_dist_max_pct,
+    vcp_require_vol_dry,
+    pp_vol_lookback,
+    pp_vol_mult,
+    fb_min_weeks,
+    fb_max_range,
+    min_required_days_override=None,
+    universe_selection_method="static",
 ):
     progress_bar = st.progress(0)
     status_text = st.empty()
@@ -311,55 +752,131 @@ def run_vectorbt_backtest_ui(
             # Show database query progress
             status_text.markdown("🔍 **Cargando universo desde base de datos...**")
             progress_bar.progress(0.1)
-            
+
             conn = sqlite3.connect("./data/ticker_cache.db")
             selection_start, selection_end = str(start_date), str(end_date)
             # Adapt minimum required days to the backtest period length
             import math as _math
-            _period_days = (pd.to_datetime(str(end_date)) - pd.to_datetime(str(start_date))).days
+
+            _period_days = (
+                pd.to_datetime(str(end_date)) - pd.to_datetime(str(start_date))
+            ).days
             _trading_days_est = int(_period_days * 5 / 7)  # rough estimate
-            min_required_days = max(10, min(100, int(_trading_days_est * 0.5)))
-            
+            _auto_min_days = max(10, min(100, int(_trading_days_est * 0.5)))
+            min_required_days = (
+                int(min_required_days_override)
+                if min_required_days_override is not None
+                else _auto_min_days
+            )
+
+            # ── US-ONLY FILTER: exclude tickers with exchange suffix ─────
+            # Tickers US no tienen sufijo: AAPL, MSFT, SPY
+            # Tickers internacionales tienen sufijo: 005930-KS, 300750-SZ, 0981-HK
+            # Esto se hace en SQL para no cargar datos innecesarios a RAM
+            us_filter_clause = " AND ticker NOT LIKE '%-%' " if us_only else ""
+
             if max_symbols == 0:
-                # DETERMINISTIC: Order by ticker AND first date to ensure consistency
-                query = """
-                    SELECT ticker 
-                    FROM ohlcv_cache 
-                    WHERE date BETWEEN ? AND ? 
-                    GROUP BY ticker 
-                    HAVING COUNT(*) >= ? 
-                    ORDER BY ticker ASC
-                """
-                cursor = conn.execute(
-                    query, (selection_start, selection_end, min_required_days)
-                )
+                if universe_selection_method == "static":
+                    # Universo estático: solo tickers presentes al inicio del período
+                    query = f"""
+                        SELECT ticker 
+                        FROM ohlcv_cache 
+                        WHERE date BETWEEN ? AND ? 
+                        {us_filter_clause}
+                        GROUP BY ticker 
+                        HAVING COUNT(*) >= ? 
+                        ORDER BY ticker ASC
+                    """
+                    cursor = conn.execute(
+                        query, (selection_start, selection_end, min_required_days)
+                    )
+                else:
+                    # Rebalance mensual: universo rotado cada mes
+                    # Nota: usamos umbral mensual de 15 días (no min_required_days)
+                    query = f"""
+                        WITH monthly_universe AS (
+                            SELECT 
+                                ticker,
+                                AVG(rolling_dollar_vol_20) as avg_adv
+                            FROM ohlcv_cache 
+                            WHERE date BETWEEN ? AND ? 
+                            AND rolling_dollar_vol_20 IS NOT NULL
+                            {us_filter_clause}
+                            GROUP BY ticker, strftime('%Y-%m', date)
+                            HAVING COUNT(*) >= 15
+                        )
+                        SELECT DISTINCT ticker 
+                        FROM monthly_universe 
+                        ORDER BY avg_adv DESC, ticker ASC
+                    """
+                    cursor = conn.execute(query, (selection_start, selection_end))
             else:
-                # OPTIMIZED: Use pre-computed rolling_dollar_vol_20 instead of AVG()
-                # This is MUCH faster since it avoids GROUP BY aggregation
-                query = """
-                    SELECT DISTINCT ticker
-                    FROM ohlcv_cache 
-                    WHERE date BETWEEN ? AND ? 
-                    AND rolling_dollar_vol_20 IS NOT NULL
-                    GROUP BY ticker
-                    HAVING COUNT(*) >= ?
-                    ORDER BY MAX(rolling_dollar_vol_20) DESC, ticker ASC
-                    LIMIT ?
-                """
-                cursor = conn.execute(
-                    query,
-                    (selection_start, selection_end, min_required_days, max_symbols),
-                )
-            
-            status_text.markdown(f"📥 **Extrayendo tickers** (límite: {'SIN LÍMITE' if max_symbols == 0 else max_symbols})...")
+                if universe_selection_method == "static":
+                    # Universo estático con límite: ranking por liquidez inicial
+                    query = f"""
+                        WITH universe_rank AS (
+                            SELECT 
+                                ticker,
+                                AVG(rolling_dollar_vol_20) as initial_adv,
+                                COUNT(*) as day_count
+                            FROM ohlcv_cache 
+                            WHERE date BETWEEN ? AND date(date, '+63 days') 
+                            AND rolling_dollar_vol_20 IS NOT NULL
+                            {us_filter_clause}
+                            GROUP BY ticker
+                            HAVING day_count >= ?
+                        )
+                        SELECT ticker 
+                        FROM universe_rank 
+                        ORDER BY initial_adv DESC, ticker ASC 
+                        LIMIT ?
+                    """
+                    cursor = conn.execute(
+                        query, (selection_start, min_required_days, max_symbols)
+                    )
+                else:
+                    # Rebalance mensual con límite
+                    query = f"""
+                        WITH monthly_universe AS (
+                            SELECT 
+                                ticker,
+                                AVG(rolling_dollar_vol_20) as avg_adv
+                            FROM ohlcv_cache 
+                            WHERE date BETWEEN ? AND ? 
+                            AND rolling_dollar_vol_20 IS NOT NULL
+                            {us_filter_clause}
+                            GROUP BY ticker, strftime('%Y-%m', date)
+                            HAVING COUNT(*) >= 15
+                        ),
+                        ticker_rank AS (
+                            SELECT 
+                                ticker,
+                                AVG(avg_adv) as overall_adv
+                            FROM monthly_universe 
+                            GROUP BY ticker
+                            ORDER BY overall_adv DESC
+                            LIMIT ?
+                        )
+                        SELECT DISTINCT ticker 
+                        FROM ticker_rank 
+                        ORDER BY overall_adv DESC, ticker ASC
+                    """
+                    cursor = conn.execute(
+                        query,
+                        (selection_start, selection_end, max_symbols),
+                    )
+
+            status_text.markdown(
+                f"📥 **Extrayendo tickers** (límite: {'SIN LÍMITE' if max_symbols == 0 else max_symbols})..."
+            )
             progress_bar.progress(0.15)
-            
+
             universe = [row[0] for row in cursor.fetchall()]
             conn.close()
 
             # DETERMINISTIC: Sort universe to ensure consistency
             universe = sorted(list(set(universe)))
-            
+
             status_text.markdown(f"✅ **Universo cargado:** {len(universe)} tickers")
             progress_bar.progress(0.2)
 
@@ -375,8 +892,10 @@ def run_vectorbt_backtest_ui(
 
         # Sort universe one more time before caching (belt and suspenders)
         universe = sorted(list(set(universe)))
-        
-        status_text.markdown(f"🚀 **Iniciando backtest:** {len(universe)} tickers de {start_date} a {end_date}")
+
+        status_text.markdown(
+            f"🚀 **Iniciando backtest:** {len(universe)} tickers de {start_date} a {end_date}"
+        )
         progress_bar.progress(0.25)
 
         results, rejection_stats = run_cached_backtest(
@@ -403,32 +922,57 @@ def run_vectorbt_backtest_ui(
             earnings_days,
             earnings_cushion,
             offline_mode,
-            use_adaptive_filtering,
+            use_adaptive,
             tp1_r,
             tp2_r,
             require_spy_above_sma50,
-            tp1_pct,
-            tp2_pct,
-            runner_pct,
-            use_earnings_calendar,
-            use_pit_universe,
+            tp1_p,
+            tp2_p,
+            run_p,
+            use_earnings_filter,
+            _use_pit,
             use_rs_percentile,
             min_rs_percentile,
-            use_ml_filter,
-            ml_filter_threshold,
-            ml_boost_weight,
+            _use_ml,
+            _ml_threshold,
+            _ml_boost,
+            # Signal params (passed through function signature)
+            signal_type,
+            vcp_pivot_window,
+            vcp_atr_short,
+            vcp_atr_long,
+            vcp_atr_ratio,
+            vcp_volume_dry_periods,
+            vcp_depth_max_pct,
+            vcp_pivot_dist_max_pct,
+            vcp_require_vol_dry,
+            pp_vol_lookback,
+            pp_vol_mult,
+            fb_min_weeks,
+            fb_max_range,
         )
-        
+
         # Update progress after backtest completes
-        status_text.markdown("✅ **Backtest completado - generando visualizaciones...**")
+        status_text.markdown(
+            "✅ **Backtest completado - generando visualizaciones...**"
+        )
         progress_bar.progress(0.9)
-        
+
+        # Universe funnel display
+        st.info(
+            f"📊 **Universo** | Elegibles SQL: **{len(universe)}** | "
+            f"Cargados engine: **{results.get('n_loaded', '?')}** | "
+            f"Con trades: **{results.get('n_with_trades', '?')}**"
+        )
+
         # Performance timers display
         _pi = results.get("_perf_init_s", 0)
         _pb = results.get("_perf_backtest_s", 0)
         _pt = results.get("_perf_total_s", 0)
         if _pt > 0:
-            st.info(f"⏱ Performance | Engine init: **{_pi}s** | Backtest: **{_pb}s** | Total: **{_pt}s**")
+            st.info(
+                f"⏱ Performance | Engine init: **{_pi}s** | Backtest: **{_pb}s** | Total: **{_pt}s**"
+            )
             st.sidebar.caption(f"⏱ init:{_pi}s bt:{_pb}s total:{_pt}s")
 
         # BUG FIX: Always update session state and persistence to avoid stale data
@@ -474,22 +1018,61 @@ def run_vectorbt_backtest_ui(
             exit_price_col = (
                 "exit_price" if "exit_price" in trades.columns else "Avg Exit Price"
             )
+
+            # Robust column extraction -- handles ticker/symbol and datetime formats
+            def _get_col(df, *names, default=None):
+                for n in names:
+                    if n in df.columns:
+                        return df[n]
+                return pd.Series([default] * len(df), index=df.index)
+
+            _sym = _get_col(trades, "ticker", "symbol", "Ticker", "Symbol")
+            _sym = _sym.astype(str)  # ensure string, not int index
+
+            def _parse_dates(s):
+                """Handle both string dates and nanosecond timestamps."""
+                try:
+                    parsed = pd.to_datetime(s)
+                    # If dates look like epoch (year < 2000), treat as nanoseconds
+                    if parsed.dt.year.min() < 2000:
+                        parsed = pd.to_datetime(s.astype("int64") // 10**9, unit="s")
+                    return parsed
+                except Exception:
+                    return pd.to_datetime(s, errors="coerce")
+
+            _entry_dates = _parse_dates(trades[entry_date_col])
+            _exit_dates = _parse_dates(trades[exit_date_col])
+
             output_df = pd.DataFrame(
                 {
-                    "symbol": trades[symbol_col],
-                    "entry_date": pd.to_datetime(trades[entry_date_col]),
-                    "exit_date": pd.to_datetime(trades[exit_date_col]),
+                    "symbol": _sym,
+                    "entry_date": _entry_dates,
+                    "exit_date": _exit_dates,
                     "entry_price": trades[entry_price_col],
                     "exit_price": trades[exit_price_col],
                     "shares": trades["shares"],
                     "pnl": trades["pnl"],
-                    "exit_phase": trades.get("exit_phase", "FULL"),
-                    "signal_type": trades.get("entry_signal", "MOMENTUM"),
-                    "stop_loss": trades.get("stop_loss", np.nan),
-                    "tp1_target": trades.get("tp1_target", np.nan),
-                    "tp2_target": trades.get("tp2_target", np.nan),
-                    "adjusted_risk_dollars": trades.get("adjusted_risk_dollars", 0),
-                    "entry_score": trades.get("entry_score", np.nan),
+                    "exit_phase": trades["exit_phase"]
+                    if "exit_phase" in trades.columns
+                    else "FULL",
+                    "signal_type": trades["entry_signal"]
+                    if "entry_signal" in trades.columns
+                    else signal_type,
+                    "stop_loss": trades["stop_loss"]
+                    if "stop_loss" in trades.columns
+                    else np.nan,
+                    "tp1_target": trades["tp1_target"]
+                    if "tp1_target" in trades.columns
+                    else np.nan,
+                    "tp2_target": trades["tp2_target"]
+                    if "tp2_target" in trades.columns
+                    else np.nan,
+                    "adjusted_risk_dollars": trades["adjusted_risk_dollars"]
+                    if "adjusted_risk_dollars" in trades.columns
+                    else 0,
+                    "entry_score": trades["entry_score"]
+                    if "entry_score" in trades.columns
+                    else np.nan,
                 }
             )
             output_df.to_csv("outputs/backtests/backtest_results.csv", index=False)
@@ -503,13 +1086,21 @@ def run_vectorbt_backtest_ui(
                 _wins = _pnl[_pnl > 0]
                 _loss = _pnl[_pnl < 0]
                 _wр = len(_wins) / len(_pnl) if len(_pnl) > 0 else 0
-                _pf = (_wins.sum() / abs(_loss.sum())) if len(_loss) > 0 and abs(_loss.sum()) > 0 else float("inf")
-                _r = trades["r_multiple"].mean() if "r_multiple" in trades.columns else 0
+                _pf = (
+                    (_wins.sum() / abs(_loss.sum()))
+                    if len(_loss) > 0 and abs(_loss.sum()) > 0
+                    else float("inf")
+                )
+                _r = (
+                    trades["r_multiple"].mean() if "r_multiple" in trades.columns else 0
+                )
                 # Equity curve for Sharpe/DD
                 _eq = results.get("equity_curve")
                 if _eq is not None and len(_eq) > 1:
                     _ret = _eq.pct_change().dropna()
-                    _sharpe = (_ret.mean() / _ret.std() * (252**0.5)) if _ret.std() > 0 else 0
+                    _sharpe = (
+                        (_ret.mean() / _ret.std() * (252**0.5)) if _ret.std() > 0 else 0
+                    )
                     _peak = _eq.cummax()
                     _dd = ((_eq - _peak) / _peak).min()
                 else:
@@ -530,66 +1121,45 @@ def run_vectorbt_backtest_ui(
             if "equity_curve" in results and results["equity_curve"] is not None:
                 results["equity_curve"].to_csv("outputs/backtests/equity_curve.csv")
         st.balloons()
+
+        # FIX: Clear cached data loaders so dashboard picks up new CSV files
+        _load_trades_cached.clear()
+        _build_index_cached.clear()
+        _cached_group_trades.clear()
+
+        # Force rerun to reload dashboard with fresh trade data
+        st.rerun()
         return True
     except Exception as e:
         st.error(f"Error: {e}")
         import traceback
 
         st.error(traceback.format_exc())
+
+        # Clean up stale output files to avoid showing old results
+        stale_files = [
+            "outputs/backtests/backtest_results.csv",
+            "outputs/backtests/complete_trades_clean.csv",
+            "outputs/backtests/equity_curve.csv",
+            "outputs/backtests/backtest_metrics.json",
+        ]
+        for stale_file in stale_files:
+            if os.path.exists(stale_file):
+                try:
+                    os.remove(stale_file)
+                except:
+                    pass
+
         return False
 
 
 # --- CUSTOM CSS ---
 st.set_page_config(page_title="Momentum V2 Dashboard", page_icon="📈", layout="wide")
-st.markdown(
-    """
-<style>
-    .stApp { background-color: var(--background-color); color: var(--text-color); }
-    .metric-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
-    .metric-card { 
-        background-color: var(--secondary-background-color); 
-        padding: 20px 16px; 
-        border-radius: 12px; 
-        border: 1px solid rgba(255,255,255,0.1); 
-        border-left: 4px solid var(--primary-color); 
-        transition: 0.3s; 
-    }
-    .metric-card:hover { transform: translateY(-4px); border-color: var(--primary-color); box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
-    .metric-label { color: #8899a6; font-size: 0.75rem; text-transform: uppercase; font-weight: 600; margin-bottom: 6px; }
-    .metric-value { color: var(--text-color); font-size: 1.5rem; font-weight: 700; }
-    .metric-value.positive { color: #00ffa3; }
-    .metric-value.negative { color: #ff4b4b; }
-    [data-testid="stSidebar"] { background-color: var(--secondary-background-color); border-right: 1px solid rgba(255,255,255,0.1); }
-    
-    /* Better Scrollbars */
-    ::-webkit-scrollbar { width: 8px; height: 8px; }
-    ::-webkit-scrollbar-track { background: rgba(0,0,0,0); }
-    ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: #484f58; }
-    
-    /* Scorecard / Semáforo Styles */
-    .scorecard-container { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
-    .scorecard-item { 
-        padding: 12px 16px; 
-        border-radius: 8px; 
-        flex: 1; 
-        min-width: 140px; 
-        text-align: center;
-        border: 1px solid rgba(255,255,255,0.1);
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        transition: 0.3s;
-    }
-    .score-green { background-color: rgba(0, 255, 163, 0.1); border-color: #00ffa3; color: #00ffa3; box-shadow: 0 0 10px rgba(0, 255, 163, 0.1); }
-    .score-yellow { background-color: rgba(255, 165, 0, 0.1); border-color: #ffa500; color: #ffa500; box-shadow: 0 0 10px rgba(255, 165, 0, 0.1); }
-    .score-red { background-color: rgba(255, 75, 75, 0.1); border-color: #ff4b4b; color: #ff4b4b; box-shadow: 0 0 10px rgba(255, 75, 75, 0.1); }
-    .score-label { font-size: 0.7rem; text-transform: uppercase; font-weight: 700; opacity: 0.9; margin-bottom: 4px; }
-    .score-value { font-size: 1.2rem; font-weight: 800; }
-</style>
-""",
-    unsafe_allow_html=True,
-)
+CSS_FILE = Path(__file__).parent / "assets" / "custom.css"
+if CSS_FILE.exists():
+    st.markdown(f"<style>{CSS_FILE.read_text()}</style>", unsafe_allow_html=True)
+else:
+    st.warning("⚠️ CSS file not found: assets/custom.css")
 
 
 def render_metric_cards(metrics):
@@ -690,19 +1260,181 @@ def render_scorecard(metrics_dict):
     st.markdown(html, unsafe_allow_html=True)
 
 
-# --- SIDEBAR (Wired to production_config.json) ---
+# --- SIDEBAR (Wired to production_config.json / combo ranking) ---
 with st.sidebar:
     st.title("Momentum V2")
     st.caption("Institutional Trading Engine")
 
-    # Show loaded config version
-    st.caption(f"Config: THOR-Optimized | Sharpe: {_perf.get('sharpe_ratio', 0):.2f}")
+    # ── EXECUTION MODE ───────────────────────────────────────────────
+    _exec_mode = st.radio(
+        "Execution Mode",
+        ["Combo", "Pattern"],
+        horizontal=True,
+        help="Combo: screener×pattern optimized | Pattern: production_config + pattern override",
+    )
+
+    if _exec_mode == "Combo":
+        # ── COMBO MODE ───────────────────────────────────────────────
+        if _combo_top5:
+            _combo_options = []
+            for combo in _combo_top5:
+                label = (
+                    f"{combo.get('combo', combo.get('combo_name', 'combo'))} "
+                    f"★ {combo.get('combo_score', combo.get('score', 0.0)):.2f}"
+                )
+                _combo_options.append(label)
+            current_combo = st.session_state.get(
+                "active_combo_label", _combo_options[0]
+            )
+            if current_combo not in _combo_options:
+                current_combo = _combo_options[0]
+            _combo_sel = st.selectbox(
+                "Active Combo",
+                _combo_options,
+                index=_combo_options.index(current_combo),
+                key="active_combo_label",
+            )
+            st.caption("Combo config loaded — Strategy selector disabled")
+
+            # Show combo metadata
+            st.info(f"Source: {_combo_source}")
+            if _combo_screener:
+                st.caption(f"Screener/Pattern: {_combo_screener}")
+
+            # Force _use_any so Strategy overrides are skipped
+            _strategy_sel = "Any (producción)"
+            _use_vcp = _use_pp = _use_fb = _use_breakout = False
+            _use_any = True
+        else:
+            st.warning("No combos available in top5.json")
+            _combo_sel = None
+            _strategy_sel = "Any (producción)"
+            _use_vcp = _use_pp = _use_fb = _use_breakout = False
+            _use_any = True
+    else:
+        # ── PATTERN MODE ─────────────────────────────────────────────
+        _combo_sel = None
+        st.session_state["active_combo_label"] = None
+
+        # ── STRATEGY SELECTOR ────────────────────────────────────────
+        _strategy_options = ["Any (producción)", "Breakout"]
+        if _vcp_available:
+            _v_sh = _vcp_oos.get("oos_sharpe", 0)
+            _v_ok = str(_vcp_oos.get("passed", "False")) == "True"
+            _strategy_options.append(
+                f"VCP {'✅' if _v_ok else '⚠'}  Sharpe {_v_sh:.2f} OOS"
+            )
+        if _pp_available:
+            _p_sh = _pp_oos.get("oos_sharpe", 0)
+            _p_ok = str(_pp_oos.get("passed", "False")) == "True"
+            _strategy_options.append(
+                f"Pocket Pivot {'✅' if _p_ok else '⚠'}  Sharpe {_p_sh:.2f} OOS"
+                if _p_sh
+                else "Pocket Pivot (sin validar)"
+            )
+        if _fb_available:
+            _f_sh = _fb_oos.get("oos_sharpe", 0)
+            _f_ok = str(_fb_oos.get("passed", "False")) == "True"
+            _strategy_options.append(
+                f"Flat Base {'✅' if _f_ok else '⚠'}  Sharpe {_f_sh:.2f} OOS"
+                if _f_sh
+                else "Flat Base (sin validar)"
+            )
+        _strategy_sel = st.selectbox(
+            "Strategy",
+            _strategy_options,
+            index=0,
+            help="Any: señal permisiva | Breakout: close>20d_high | VCP: Minervini | Pocket Pivot | Flat Base",
+        )
+        _use_vcp = _strategy_sel.startswith("VCP") and _vcp_available
+        _use_pp = _strategy_sel.startswith("Pocket") and _pp_available
+        _use_fb = _strategy_sel.startswith("Flat") and _fb_available
+        _use_breakout = _strategy_sel.startswith("Breakout")
+        _use_any = _strategy_sel.startswith("Any")
+
+    if _use_vcp:
+        _t1 = {**_t1, **_vcp_t1}
+        _t2 = {**_t2, **_vcp_t2}
+        st.success("VCP config loaded")
+    elif _use_pp:
+        _t1 = {**_t1, **_pp_t1}
+        _t2 = {**_t2, **_pp_t2}
+        st.success("Pocket Pivot config loaded")
+    elif _use_fb:
+        _t1 = {**_t1, **_fb_t1}
+        _t2 = {**_t2, **_fb_t2}
+        st.success("Flat Base config loaded")
+    elif _use_breakout:
+        if _bk_t1:
+            _t1 = {**_t1, **_bk_t1}
+            _t2 = {**_t2, **_bk_t2}
+        st.info("Breakout: close > 20d high — config independiente de Any")
+
+    if _use_vcp:
+        _vcp_is = _vcp_oos.get("is_sharpe_comparable", 0)
+        st.caption(
+            f"VCP | IS: {_vcp_is:.2f} -> OOS: {_vcp_oos.get('oos_sharpe', 0):.2f}"
+        )
+    elif _use_pp:
+        st.caption(f"Pocket Pivot | OOS: {_pp_oos.get('oos_sharpe', 'sin validar')}")
+    elif _use_fb:
+        st.caption(f"Flat Base | OOS: {_fb_oos.get('oos_sharpe', 'sin validar')}")
+    elif _use_breakout:
+        _bk_oos_sh = _bk_oos.get("oos_sharpe", 0)
+        _bk_cap = f"OOS: {_bk_oos_sh:.2f}" if _bk_oos_sh else "sin validar"
+        st.caption(f"Breakout | {_bk_cap}")
+    else:
+        st.caption(f"Any | Sharpe: {_perf.get('sharpe_ratio', 0):.2f}")
+
+    # Strategy-specific params (shown only when that strategy is active)
+    if _use_vcp and _vcp_available:
+        with st.expander("VCP Entry Params", expanded=False):
+            _ve = _vcp_ve
+            st.caption(f"pivot_window: {_ve.get('vcp_pivot_window', 10)} bars")
+            st.caption(f"atr_ratio: < {_ve.get('vcp_atr_ratio', 0.8)}")
+            st.caption(f"depth_max: {_ve.get('vcp_depth_max_pct', 18)}%")
+            st.caption(f"pivot_dist: {_ve.get('vcp_pivot_dist_max_pct', 5)}%")
+            st.caption(f"vol_dry: {_ve.get('vcp_require_vol_dry', True)}")
+            _vv = _vcp_oos
+            if _vv.get("oos_sharpe"):
+                st.metric(
+                    "OOS Sharpe",
+                    f"{_vv.get('oos_sharpe', 0):.2f}",
+                    f"WR {_vv.get('oos_win_rate', 0):.0f}%",
+                )
+    elif _use_pp and _pp_available:
+        with st.expander("Pocket Pivot Params", expanded=False):
+            st.caption(f"vol_lookback: {_pp_ve.get('pp_vol_lookback', 10)} bars")
+            st.caption(f"vol_mult: {_pp_ve.get('pp_vol_mult', 1.0)}x")
+            if _pp_oos.get("oos_sharpe"):
+                st.metric("OOS Sharpe", f"{_pp_oos.get('oos_sharpe', 0):.2f}")
+    elif _use_fb and _fb_available:
+        with st.expander("Flat Base Params", expanded=False):
+            st.caption(f"min_weeks: {_fb_ve.get('fb_min_weeks', 5)}")
+            st.caption(f"max_range: {_fb_ve.get('fb_max_range', 7.0)}%")
+            if _fb_oos.get("oos_sharpe"):
+                st.metric("OOS Sharpe", f"{_fb_oos.get('oos_sharpe', 0):.2f}")
 
     if st.button("Clear Cache", use_container_width=True):
         st.cache_data.clear()
         st.cache_resource.clear()
+        _dash_cache.invalidate()
         st.toast("Cache Cleared")
     st.markdown("---")
+
+    # ── MULTI-ASSET / MULTI-PATTERN SELECTORS ────────────────────────
+    if not _trades_df.empty:
+        with st.expander("🔍 Segmentar por Activo / Patrón", expanded=True):
+            _dash_state.render_asset_selector(
+                asset_list=sorted(_trades_df["symbol"].dropna().unique().tolist())
+                if "symbol" in _trades_df.columns
+                else [],
+                pattern_index=_asset_pattern_index,
+            )
+            _dash_state.render_pattern_selector(pattern_index=_asset_pattern_index)
+            _dash_state.render_scope_badge()
+            st.caption(f"{_n_view_trades} trades en vista actual")
+        st.markdown("---")
 
     with st.expander("Market & Universe", expanded=True):
         cache_min, cache_max = get_cache_date_range()
@@ -712,6 +1444,54 @@ with st.sidebar:
             "Source", ["Manual", "All Market", "Sector"], horizontal=True
         )
         tickers_input = st.text_area("Tickers (CSV)", "APP, PLTR", height=70)
+
+        # ── MEMORY SAVER: US-only filter ─────────────────────────────────
+        # Tickers US no tienen sufijo de exchange (ej: AAPL vs 005930-KS)
+        # Filtrar en query SQL reduce RAM cargando menos columnas en DataFrames
+        us_only = st.checkbox(
+            "US Market Only",
+            value=True,
+            help="Solo tickers de exchanges US (NYSE/NASDAQ). "
+            "Reduce RAM significativamente al excluir Asia/Europa/Latam.",
+        )
+
+        # ── MEMORY SAVER: Cap de universo ────────────────────────────────
+        if scan_mode == "All Market":
+            max_symbols_ui = st.slider(
+                "Max Tickers",
+                min_value=50,
+                max_value=3000,
+                value=200,
+                step=50,
+                help="Limite superior de tickers. Menos = menos RAM.",
+            )
+        else:
+            max_symbols_ui = 0  # Manual o Sector: sin limite forzado
+
+        # ── UNIVERSE SELECTION (Look-ahead bias fix) ─────────────────────────
+        st.write("🔍 **Selección de Universo (sin look-ahead):**")
+        universe_selection = st.selectbox(
+            "Método de selección",
+            ["Estático (inicio período)", "Rebalance Mensual"],
+            index=0,
+            help="Estático: universo fijo desde inicio. Rebalance: universo rotado cada mes.",
+        )
+
+        # ── MIN DAYS OVERRIDE ────────────────────────────────────────────
+        min_days_ui = st.slider(
+            "Min días en rango",
+            min_value=10,
+            max_value=300,
+            value=100,
+            step=10,
+            help="Días mínimos que debe tener el ticker en el rango. Bajar amplía IPOs tardíos.",
+        )
+        # ── MEMORY SAVER: Low-memory mode ────────────────────────────────
+        low_memory_mode = st.checkbox(
+            "Low Memory Mode",
+            value=False,
+            help="Reduce RAM: limita a 150 tickers, desactiva PIT universe y ML filter.",
+        )
 
     with st.expander("Risk Management", expanded=False):
         equity = st.number_input(
@@ -804,30 +1584,47 @@ with st.sidebar:
             help="Aplica el modelo EntryScorer: bloquea entradas con prob<0.40 y boost entry_score en las que pasan. ROC-AUC: 0.807",
         )
         if use_ml:
-            ml_threshold = st.slider("ML threshold", 0.30, 0.60, 0.40, step=0.05,
-                help="Entradas con prob ML por debajo de este valor son bloqueadas")
-            ml_boost = st.slider("ML boost weight", 0.0, 0.40, 0.20, step=0.05,
-                help="entry_score += boost * ml_prob para entradas que pasan el filtro")
+            ml_threshold = st.slider(
+                "ML threshold",
+                0.30,
+                0.60,
+                0.40,
+                step=0.05,
+                help="Entradas con prob ML por debajo de este valor son bloqueadas",
+            )
+            ml_boost = st.slider(
+                "ML boost weight",
+                0.0,
+                0.40,
+                0.20,
+                step=0.05,
+                help="entry_score += boost * ml_prob para entradas que pasan el filtro",
+            )
         else:
             ml_threshold = 0.40
             ml_boost = 0.20
-        min_rvol = st.slider(
-            "Min RVOL",
-            0.5,
-            3.0,
-            float(_t2.get("min_rvol", 0.91)),
-            step=0.1,
-        )
-        max_dist = st.slider(
-            "Max Dist SMA20%",
-            1.0,
-            30.0,
-            float(_t2.get("max_dist_sma20", 8.94)),
-            step=0.1,
-        )
-        st.caption(
-            f"Min ADR: {_t2.get('min_adr', 1.97)}% | Min $Vol: ${_t2.get('min_dollar_volume', 20000000):,.0f}"
-        )
+        # PERF Item 5: st.form agrupa los sliders Tier 2.
+        # Los cambios se acumulan y solo se aplican al presionar "Apply".
+        # Esto evita un rerun completo por cada movimiento de slider.
+        with st.form("tier2_params_form"):
+            min_rvol = st.slider(
+                "Min RVOL",
+                0.5,
+                3.0,
+                float(_t2.get("min_rvol", 0.91)),
+                step=0.1,
+            )
+            max_dist = st.slider(
+                "Max Dist SMA20%",
+                1.0,
+                30.0,
+                float(_t2.get("max_dist_sma20", 8.94)),
+                step=0.1,
+            )
+            st.caption(
+                f"Min ADR: {_t2.get('min_adr', 1.97)}% | Min $Vol: ${_t2.get('min_dollar_volume', 20000000):,.0f}"
+            )
+            st.form_submit_button("Apply Tier 2 Params", use_container_width=True)
 
     with st.expander("Tier 3 Risk (Fixed)", expanded=False):
         st.caption("Institutional risk parameters - not editable")
@@ -848,6 +1645,24 @@ with st.sidebar:
     benchmark_ticker = st.selectbox("Benchmark", ["SPY", "QQQ", "IWM", "DIA"], index=0)
 
     if st.button("RUN BACKTEST", use_container_width=True, type="primary"):
+        # ── LOW MEMORY MODE overrides ────────────────────────────────────
+        if low_memory_mode:
+            _max_sym = 150
+            _use_pit = False
+            _use_ml = False
+            _ml_threshold = 0.40
+            _ml_boost = 0.20
+        else:
+            _max_sym = (
+                max_symbols_ui
+                if scan_mode == "All Market"
+                else (3000 if scan_mode == "Sector" else 0)
+            )
+            _use_pit = use_pit
+            _use_ml = use_ml
+            _ml_threshold = ml_threshold
+            _ml_boost = ml_boost
+
         manual_list = [s.strip().upper() for s in tickers_input.split(",") if s.strip()]
         if run_vectorbt_backtest_ui(
             start_date,
@@ -859,7 +1674,7 @@ with st.sidebar:
             max_exp,
             risk_dollars if not use_compounding else 0,
             manual_list if scan_mode == "Manual" else None,
-            0 if scan_mode == "All Market" else 500,
+            _max_sym,
             True,  # offline_mode
             max_dist,
             min_rvol,
@@ -886,64 +1701,59 @@ with st.sidebar:
             run_p,
             use_adaptive,
             use_earnings_filter,
-            use_pit,
+            _use_pit,
             True,  # use_rs_percentile
             0,  # min_rs_percentile
-            use_ml,
-            ml_threshold,
-            ml_boost,
+            _use_ml,
+            _ml_threshold,
+            _ml_boost,
+            # Signal type routing
+            (
+                "vcp"
+                if _use_vcp
+                else "pocket_pivot"
+                if _use_pp
+                else "flat_base"
+                if _use_fb
+                else "breakout"
+                if _use_breakout
+                else "any"
+            ),
+            # VCP params
+            int(_vcp_ve.get("vcp_pivot_window", 15)) if _use_vcp else 15,
+            int(_vcp_ve.get("vcp_atr_short", 10)) if _use_vcp else 10,
+            int(_vcp_ve.get("vcp_atr_long", 30)) if _use_vcp else 30,
+            float(_vcp_ve.get("vcp_atr_ratio", 0.85)) if _use_vcp else 0.85,
+            int(_vcp_ve.get("vcp_volume_dry_periods", 5)) if _use_vcp else 5,
+            float(_vcp_ve.get("vcp_depth_max_pct", 15.0)) if _use_vcp else 15.0,
+            float(_vcp_ve.get("vcp_pivot_dist_max_pct", 8.0)) if _use_vcp else 8.0,
+            bool(_vcp_ve.get("vcp_require_vol_dry", True)) if _use_vcp else True,
+            # PP params
+            int(_pp_ve.get("pp_vol_lookback", 10)) if _use_pp else 10,
+            float(_pp_ve.get("pp_vol_mult", 1.0)) if _use_pp else 1.0,
+            # FB params
+            int(_fb_ve.get("fb_min_weeks", 5)) if _use_fb else 5,
+            float(_fb_ve.get("fb_max_range", 7.0)) if _use_fb else 7.0,
+            min_required_days_override=min_days_ui,
+            universe_selection_method=universe_selection,
         ):
             st.rerun()
+
+    # ── CACHE TIMINGS (debug) ────────────────────────────────────────
+    _dash_cache.render_timing_sidebar()
 
 # --- MAIN PAGE ---
 st.title("Institutional Dashboard")
 
 # Calculate results summary if they exist for the top bar
 top_net_pnl = 0
-if os.path.exists("outputs/backtests/backtest_results.csv"):
-    try:
-        _temp_df = pd.read_csv("outputs/backtests/backtest_results.csv")
-        top_net_pnl = _temp_df["pnl"].sum()
-    except:
-        pass
-
-# Config summary bar
-cc1, cc2, cc3, cc4, cc5, cc6 = st.columns(6)
-cc1.metric("TP1/TP2", f"{_t1.get('tp1_r', 0):.2f}R / {_t1.get('tp2_r', 0):.2f}R")
-cc2.metric("Max Stop", f"{_t1.get('max_stop_pct', 0) * 100:.2f}%")
-cc3.metric("Risk", f"${_t1.get('risk_dollars', 0):.2f}")
-cc4.metric("SPY>SMA50", "ON" if _mr.get("require_spy_above_sma50") else "OFF")
-cc5.metric("Val Sharpe", f"{_perf.get('sharpe_ratio', 0):.2f}")
-cc6.metric("Final Equity", f"${(equity + top_net_pnl):,.2f}", f"{top_net_pnl:+,.2f}")
-st.markdown("---")
-
-if os.path.exists("outputs/backtests/backtest_results.csv"):
-    df = pd.read_csv("outputs/backtests/backtest_results.csv")
-    df["entry_date"] = pd.to_datetime(df["entry_date"])
-    df["exit_date"] = pd.to_datetime(df["exit_date"])
-
-    # Round numeric columns for cleaner UI
-    numeric_cols = df.select_dtypes(include=[np.number]).columns
-    df[numeric_cols] = df[numeric_cols].round(2)
-
-    # --- GROUP PARTIAL EXITS INTO COMPLETE TRADES ---
-    # The CSV has one row per partial exit (TP1, TP2, RUNNER, STOP).
-    # TradeGrouper merges them into single complete trades.
-    trade_df_for_grouper = df.rename(columns={"symbol": "ticker"})
-    grouped_trades = TradeGrouper.group_partial_trades(trade_df_for_grouper)
-
-    # Round grouped trades as well
-    if not grouped_trades.empty:
-        g_numeric_cols = grouped_trades.select_dtypes(include=[np.number]).columns
-        grouped_trades[g_numeric_cols] = grouped_trades[g_numeric_cols].round(2)
-
-    # R-multiples availability check (shared across tabs)
-    has_r = (
-        "r_multiple" in grouped_trades.columns
-        and grouped_trades["r_multiple"].abs().sum() > 0
-    )
-
-    t1, t2, t3, t4, t5, t6, t7 = st.tabs(
+_TRADE_EVENTS_PATH = (
+    "outputs/backtests/complete_trades_clean.csv"
+    if os.path.exists("outputs/backtests/complete_trades_clean.csv")
+    else "outputs/backtests/backtest_results.csv"
+)
+if not _trades_df.empty:
+    t1, t2, t3, t4, t5, t6, t7, t8 = st.tabs(
         [
             "Performance",
             "Trade Log",
@@ -952,22 +1762,37 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
             "Insights",
             "Market Regime",
             "🎓 Anatomía del Trade",
+            "📊 Estrategias",
         ]
     )
 
+    # Scope badge — muestra qué activo/patrón se está visualizando
+    if _scope_label != "🌐 Global":
+        st.caption(f"Segmento activo: **{_scope_label}** ({_n_view_trades} trades)")
+
     # --- Fetch Benchmark Data ---
-    @st.cache_data(ttl=3600)
     @st.cache_data(ttl=3600, show_spinner=False)
     def get_benchmark_returns(ticker, start, end):
         """Fetch benchmark returns - tries cache first, then yfinance direct, then SQLite."""
         import yfinance as yf
-        s_str = start.strftime("%Y-%m-%d") if isinstance(start, datetime) else str(start)[:10]
+
+        s_str = (
+            start.strftime("%Y-%m-%d")
+            if isinstance(start, datetime)
+            else str(start)[:10]
+        )
         e_str = end.strftime("%Y-%m-%d") if isinstance(end, datetime) else str(end)[:10]
 
         # 1. Try yfinance direct (most reliable, always fresh)
         try:
-            df = yf.download(ticker, start=s_str, end=e_str,
-                             auto_adjust=True, progress=False, timeout=10)
+            df = yf.download(
+                ticker,
+                start=s_str,
+                end=e_str,
+                auto_adjust=True,
+                progress=False,
+                timeout=10,
+            )
             if df is not None and not df.empty:
                 close = df["Close"] if "Close" in df.columns else df.iloc[:, 0]
                 if isinstance(close, pd.DataFrame):
@@ -976,15 +1801,13 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
         except Exception:
             pass
 
-        # 2. Try SQLite cache
+        # 2. Try SQLite cache (reusa conexion existente de _get_ticker_cache)
         try:
-            import sqlite3
-            conn_bm = sqlite3.connect("data/ticker_cache.db")
-            rows = conn_bm.execute(
+            _tc = _get_ticker_cache()
+            rows = _tc.conn.execute(
                 "SELECT date, close FROM ohlcv_cache WHERE ticker=? AND date BETWEEN ? AND ? ORDER BY date",
-                (ticker, s_str, e_str)
+                (ticker, s_str, e_str),
             ).fetchall()
-            conn_bm.close()
             if rows:
                 bm_df = pd.DataFrame(rows, columns=["date", "close"])
                 bm_df["date"] = pd.to_datetime(bm_df["date"])
@@ -996,6 +1819,7 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
         # 3. Try MarketDataProvider
         try:
             from src.data.market_data import MarketDataProvider
+
             provider = MarketDataProvider()
             df = provider.get_daily_data(ticker, start_date=s_str, end_date=e_str)
             if not df.empty:
@@ -1012,6 +1836,29 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
     # TAB 1: PERFORMANCE (Full QuantStats integration)
     # =========================================================================
     with t1:
+        # Strategy context banner
+        _cur_sig_label = (
+            "VCP"
+            if _use_vcp
+            else "Pocket Pivot"
+            if _use_pp
+            else "Flat Base"
+            if _use_fb
+            else "Breakout"
+            if _use_breakout
+            else "Any"
+        )
+        _oos_ref = (
+            _vcp_oos.get("oos_sharpe")
+            if _use_vcp
+            else _pp_oos.get("oos_sharpe")
+            if _use_pp
+            else _fb_oos.get("oos_sharpe")
+            if _use_fb
+            else None
+        )
+        _oos_badge = f" | OOS ref: {_oos_ref:.2f}" if _oos_ref else ""
+        st.caption(f"Strategy activa: **{_cur_sig_label}**{_oos_badge}")
         # --- Trade-based metrics (from grouped complete trades) ---
         total_trades = len(grouped_trades)
         winners = (
@@ -1188,6 +2035,41 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                     help="Correlación entre Calidad de Entrada y PnL Final",
                 )
 
+        # --- ML TradeScorer Summary ---
+        if _ML_MODEL is not None:
+            st.markdown("### 🤖 ML TradeScorer")
+            oof_auc = _ML_MODEL.get("oof_auc", 0)
+            oof_std = _ML_MODEL.get("oof_auc_std", 0)
+            n_trades = _ML_MODEL.get("n_trades", 0)
+            positive_rate = _ML_MODEL.get("positive_rate", 0)
+            threshold_top30 = _ML_MODEL.get("threshold_top30", 0)
+            features = _ML_MODEL.get("features", [])
+            feat_imp = _ML_MODEL.get("feature_importance", {})
+
+            col_ml1, col_ml2, col_ml3, col_ml4 = st.columns(4)
+            with col_ml1:
+                st.metric(
+                    "OOF AUC",
+                    f"{oof_auc:.3f}",
+                    delta=f"±{oof_std:.3f}" if oof_std else None,
+                    help="ROC-AUC out-of-fold - >0.55 útil, >0.60 sólido",
+                )
+            with col_ml2:
+                st.metric("Training Trades", f"{n_trades:,}")
+            with col_ml3:
+                st.metric("Win Rate (train)", f"{positive_rate:.1%}")
+            with col_ml4:
+                st.metric("Threshold P70", f"{threshold_top30:.2f}")
+
+            # Top features
+            if feat_imp:
+                top_feats = sorted(feat_imp.items(), key=lambda x: x[1], reverse=True)[
+                    :5
+                ]
+                feat_str = " | ".join([f"{f}: {v:.1f}" for f, v in top_feats])
+                st.caption(f"Top features: {feat_str}")
+            st.caption(f"Features usadas: {len(features)}")
+
         # --- QuantStats Time-Series Metrics ---
         st.markdown("### Time-Series Analytics")
 
@@ -1203,16 +2085,34 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
             else:
                 filtered_trades_t1 = trade_df_for_grouper
 
+            # Session state cache para QuantStats — evita recalcular en cada rerun.
+            # Usa key estable: (min_date, max_date, n_rows, date_sum) para evitar ordenar listas largas.
+            _ed = pd.to_datetime(filtered_trades_t1["entry_date"], errors="coerce")
+            _ed_num = _ed.view("int64")
+            _ed_num = pd.Series(_ed_num).dropna().astype("int64")
+            _qs_key = (
+                "qs_"
+                f"{int(_ed_num.min()) if len(_ed_num) else 0}_"
+                f"{int(_ed_num.max()) if len(_ed_num) else 0}_"
+                f"{len(filtered_trades_t1)}_"
+                f"{int(_ed_num.sum()) if len(_ed_num) else 0}"
+            )
+            if _qs_key not in st.session_state:
+                _analyzer = QuantStatsAnalyzer(
+                    trade_log=filtered_trades_t1,
+                    initial_capital=equity if "equity" in dir() else 100000,
+                    benchmark_ticker=benchmark_ticker,
+                )
+                st.session_state[_qs_key] = _analyzer.get_quantstats_metrics(
+                    benchmark_data=benchmark_returns
+                    if not benchmark_returns.empty
+                    else None
+                )
+            qs_metrics = st.session_state[_qs_key]
             analyzer = QuantStatsAnalyzer(
                 trade_log=filtered_trades_t1,
                 initial_capital=equity if "equity" in dir() else 100000,
                 benchmark_ticker=benchmark_ticker,
-            )
-            # Pass benchmark returns if available
-            qs_metrics = analyzer.get_quantstats_metrics(
-                benchmark_data=benchmark_returns
-                if not benchmark_returns.empty
-                else None
             )
 
             if qs_metrics:
@@ -1715,6 +2615,18 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
     # TAB 2: TRADE LOG
     # =========================================================================
     with t2:
+        # ML Model Info
+        if _ML_MODEL is not None:
+            oof_auc = _ML_MODEL.get("oof_auc", 0)
+            n_trades = _ML_MODEL.get("n_trades", 0)
+            st.info(
+                f"🤖 **TradeScorer ML**: OOF AUC={oof_auc:.3f} | Trained on {n_trades:,} trades | Ordena por 'High ML Score' para ver predicciones"
+            )
+        else:
+            st.caption(
+                "💡 Ejecuta `python3 train_trade_scorer.py` para entrenar el modelo ML"
+            )
+
         # Quick Sort / Filter Options
         st.markdown("### 🔍 Filter & Sort")
         q_col1, q_col2, q_col3 = st.columns(3)
@@ -1725,17 +2637,20 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
             )
 
         with q_col2:
+            sort_options = [
+                "Latest First",
+                "Oldest First",
+                "Top Winners ($)",
+                "Top Losers ($)",
+                "High R-Multiple",
+                "High Entry Score",
+                "Low Entry Score",
+            ]
+            if _ML_MODEL is not None:
+                sort_options.append("High ML Score")
             quick_sort = st.selectbox(
                 "Quick Sort (Entire Dataset)",
-                [
-                    "Latest First",
-                    "Oldest First",
-                    "Top Winners ($)",
-                    "Top Losers ($)",
-                    "High R-Multiple",
-                    "High Entry Score",
-                    "Low Entry Score",
-                ],
+                sort_options,
                 index=0,
             )
 
@@ -1747,64 +2662,99 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
             )
 
         if view_mode == "Complete Trades":
-            display_source = grouped_trades.copy()
-            display_source = display_source.rename(columns={"ticker": "symbol"})
-            # Select most useful columns
-            show_cols = [
-                "symbol",
-                "entry_date",
-                "final_exit_date",
-                "entry_price",
-                "total_pnl",
-                "total_shares",
-                "exit_phases",
-                "hold_days",
-                "entry_score",
-                "pattern_type",
-                "rs_percentile",
-            ]
-            if has_r:
-                show_cols.append("r_multiple")
-
-            # Ensure RS percentile exists, fallback to 0 if missing
-            if "rs_percentile" not in display_source.columns:
-                display_source["rs_percentile"] = 0
-
-            show_cols = [c for c in show_cols if c in display_source.columns]
-
-            # Apply sorting before pagination
-            if quick_sort == "Latest First":
-                display_df = display_source[show_cols].sort_values(
-                    "final_exit_date", ascending=False
-                )
-            elif quick_sort == "Oldest First":
-                display_df = display_source[show_cols].sort_values(
-                    "final_exit_date", ascending=True
-                )
-            elif quick_sort == "Top Winners ($)":
-                display_df = display_source[show_cols].sort_values(
-                    "total_pnl", ascending=False
-                )
-            elif quick_sort == "Top Losers ($)":
-                display_df = display_source[show_cols].sort_values(
-                    "total_pnl", ascending=True
-                )
-            elif quick_sort == "High R-Multiple" and "r_multiple" in show_cols:
-                display_df = display_source[show_cols].sort_values(
-                    "r_multiple", ascending=False
-                )
-            elif quick_sort == "High Entry Score" and "entry_score" in show_cols:
-                display_df = display_source[show_cols].sort_values(
-                    "entry_score", ascending=False
-                )
-            elif quick_sort == "Low Entry Score" and "entry_score" in show_cols:
-                display_df = display_source[show_cols].sort_values(
-                    "entry_score", ascending=True
-                )
+            if grouped_trades.empty:
+                st.info("No hay trades agrupados. Corré un backtest primero.")
+                display_df = pd.DataFrame()
             else:
-                display_df = display_source[show_cols].sort_values(
-                    "final_exit_date", ascending=False
-                )
+                display_source = grouped_trades.copy()
+                display_source = display_source.rename(columns={"ticker": "symbol"})
+
+                # Apply ML scoring if model available
+                if _ML_MODEL is not None:
+                    display_source = score_trades_ml(display_source, _ML_MODEL)
+
+                # Select most useful columns
+                show_cols = [
+                    "symbol",
+                    "entry_date",
+                    "final_exit_date",
+                    "entry_price",
+                    "total_pnl",
+                    "total_shares",
+                    "exit_phases",
+                    "hold_days",
+                    "entry_score",
+                    "pattern_type",
+                    "rs_percentile",
+                ]
+                if has_r:
+                    show_cols.append("r_multiple")
+                if _ML_MODEL is not None and "ml_score" in display_source.columns:
+                    show_cols.append("ml_score")
+
+                # Ensure RS percentile exists, fallback to 0 if missing
+                if "rs_percentile" not in display_source.columns:
+                    display_source["rs_percentile"] = 0
+
+                # Filtrar solo columnas que existen
+                show_cols = [c for c in show_cols if c in display_source.columns]
+
+                # Sortear sobre display_source completo antes de filtrar cols
+                _has_exit_date = "final_exit_date" in display_source.columns
+                _has_pnl = "total_pnl" in display_source.columns
+                _sort_col_date = "final_exit_date" if _has_exit_date else None
+
+                if quick_sort == "Latest First" and _sort_col_date:
+                    display_df = display_source.sort_values(
+                        _sort_col_date, ascending=False
+                    )[show_cols]
+                elif quick_sort == "Oldest First" and _sort_col_date:
+                    display_df = display_source.sort_values(
+                        _sort_col_date, ascending=True
+                    )[show_cols]
+                elif quick_sort == "Top Winners ($)" and _has_pnl:
+                    display_df = display_source.sort_values(
+                        "total_pnl", ascending=False
+                    )[show_cols]
+                elif quick_sort == "Top Losers ($)" and _has_pnl:
+                    display_df = display_source.sort_values(
+                        "total_pnl", ascending=True
+                    )[show_cols]
+                elif (
+                    quick_sort == "High R-Multiple"
+                    and "r_multiple" in display_source.columns
+                ):
+                    display_df = display_source.sort_values(
+                        "r_multiple", ascending=False
+                    )[show_cols]
+                elif (
+                    quick_sort == "High Entry Score"
+                    and "entry_score" in display_source.columns
+                ):
+                    display_df = display_source.sort_values(
+                        "entry_score", ascending=False
+                    )[show_cols]
+                elif (
+                    quick_sort == "Low Entry Score"
+                    and "entry_score" in display_source.columns
+                ):
+                    display_df = display_source.sort_values(
+                        "entry_score", ascending=True
+                    )[show_cols]
+                elif (
+                    quick_sort == "High ML Score"
+                    and "ml_score" in display_source.columns
+                ):
+                    display_df = display_source.sort_values(
+                        "ml_score", ascending=False
+                    )[show_cols]
+                else:
+                    if _sort_col_date:
+                        display_df = display_source.sort_values(
+                            _sort_col_date, ascending=False
+                        )[show_cols]
+                    else:
+                        display_df = display_source[show_cols]
         else:
             # Partial exits view - ensure entry_score column is visible
             partial_cols = [
@@ -1844,15 +2794,31 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
             else:
                 display_df = df[partial_cols].sort_values("exit_date", ascending=False)
 
-        selected_symbol = st.selectbox(
-            "Filter Symbol", ["All"] + sorted(df["symbol"].unique().tolist())
+        _sym_col_name = (
+            "symbol"
+            if "symbol" in df.columns
+            else ("ticker" if "ticker" in df.columns else None)
         )
-        if selected_symbol != "All":
-            sym_col = "symbol" if "symbol" in display_df.columns else "ticker"
-            display_df = display_df[display_df[sym_col] == selected_symbol]
+        _symbol_list = (
+            sorted(df[_sym_col_name].dropna().unique().tolist())
+            if _sym_col_name
+            else []
+        )
+        selected_symbol = st.selectbox("Filter Symbol", ["All"] + _symbol_list)
+        if selected_symbol != "All" and _sym_col_name:
+            display_df = display_df[display_df[_sym_col_name] == selected_symbol]
 
-        # Filter by date range (start_date / end_date from backtest config)
-        if start_date and end_date:
+        # Debug badge: show row count before date filter
+        _pre_filter_count = len(display_df)
+
+        # Optional date range filter - disabled by default to avoid silently hiding trades
+        apply_date_filter = st.checkbox(
+            "Apply Date Range Filter",
+            value=False,
+            help="Filter trades by the Start/End dates from sidebar. "
+            "When disabled, shows all available trades.",
+        )
+        if apply_date_filter and start_date and end_date:
             filter_start = pd.to_datetime(start_date)
             filter_end = pd.to_datetime(end_date)
             date_col = (
@@ -1864,6 +2830,30 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                 (display_df[date_col] >= filter_start)
                 & (display_df[date_col] <= filter_end)
             ]
+
+        # Show debug badge if filtering changed row count
+        _post_filter_count = len(display_df)
+        if _pre_filter_count > 0:
+            if _post_filter_count == 0:
+                st.warning(
+                    f"⚠️ **0 trades after filtering** ({_pre_filter_count} available). "
+                    f"Enable 'Apply Date Range Filter' to see all trades, or adjust the sidebar dates."
+                )
+                # Show available date range for diagnosis
+                _avail_dates = []
+                for _dc in ["entry_date", "exit_date", "final_exit_date"]:
+                    if _dc in df.columns:
+                        _avail_dates.append(_dc)
+                if _avail_dates:
+                    _dcol = _avail_dates[0]
+                    _dmin = pd.to_datetime(df[_dcol]).min().strftime("%Y-%m-%d")
+                    _dmax = pd.to_datetime(df[_dcol]).max().strftime("%Y-%m-%d")
+                    st.caption(f"Available trade dates: {_dmin} to {_dmax}")
+            elif _post_filter_count < _pre_filter_count:
+                st.caption(
+                    f"Showing {_post_filter_count}/{_pre_filter_count} trades "
+                    f"(date filter applied)"
+                )
 
         if not display_df.empty:
             display_df_display = display_df.copy()
@@ -1899,6 +2889,16 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                 "Pattern", help="Detected Chart Pattern"
             ),
         }
+        # Add ML score column config if present
+        if "ml_score" in display_df_display.columns:
+            _ml_oof_auc = _ML_MODEL.get("oof_auc", 0) if _ML_MODEL is not None else 0
+            log_column_config["ml_score"] = st.column_config.ProgressColumn(
+                "ML Score",
+                help=f"P(winner) segun LightGBM - OOF AUC: {_ml_oof_auc:.3f}",
+                format=".0%",
+                min_value=0.0,
+                max_value=1.0,
+            )
 
         if show_all:
             st.dataframe(
@@ -1924,14 +2924,25 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
 
                 def format_fn(i):
                     row = display_source.loc[i]
-                    return f"{row['symbol']} - {row['entry_date'].date()} (${row['total_pnl']:,.2f})"
+                    sym = row.get("symbol", row.get("ticker", "Unknown"))
+                    entry_dt = row.get("entry_date", row.get("final_exit_date", ""))
+                    if hasattr(entry_dt, "date"):
+                        entry_dt = entry_dt.date()
+                    pnl = row.get("total_pnl", 0)
+                    return f"{sym} - {entry_dt} (${pnl:,.2f})"
 
                 source_df = display_source
             else:
 
                 def format_fn(i):
                     row = df.loc[i]
-                    return f"{row['symbol']} - {row['entry_date'].date()} ({row['exit_phase']} - ${row['pnl']:,.2f})"
+                    sym = row.get("symbol", row.get("ticker", "Unknown"))
+                    entry_dt = row.get("entry_date", "")
+                    if hasattr(entry_dt, "date"):
+                        entry_dt = entry_dt.date()
+                    phase = row.get("exit_phase", "")
+                    pnl = row.get("pnl", 0)
+                    return f"{sym} - {entry_dt} ({phase} - ${pnl:,.2f})"
 
                 source_df = df
 
@@ -1942,7 +2953,9 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
             )
 
             if st.button("Show Detailed Chart"):
-                dash = InteractiveDashboard("outputs/backtests/backtest_results.csv")
+                dash = InteractiveDashboard(
+                    df=df
+                )  # PERF Item 6: evita re-leer CSV desde disco
 
                 # If it's a grouped trade, we need all partials
                 if view_mode == "Complete Trades":
@@ -2035,6 +3048,7 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
             st.markdown("### Strategy Metrics (no benchmark)")
             try:
                 from src.analytics.quantstats_analyzer import QuantStatsAnalyzer
+
                 _analyzer_solo = QuantStatsAnalyzer(
                     trade_log=trade_df_for_grouper,
                     initial_capital=equity,
@@ -2044,8 +3058,8 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                 if _qs_m:
                     _c1, _c2, _c3 = st.columns(3)
                     _c1.metric("Sharpe", f"{_qs_m.get('sharpe', 0):.2f}")
-                    _c2.metric("Max DD", f"{_qs_m.get('max_drawdown', 0)*100:.2f}%")
-                    _c3.metric("CAGR", f"{_qs_m.get('cagr', 0)*100:.2f}%")
+                    _c2.metric("Max DD", f"{_qs_m.get('max_drawdown', 0) * 100:.2f}%")
+                    _c3.metric("CAGR", f"{_qs_m.get('cagr', 0) * 100:.2f}%")
             except Exception as _qe:
                 st.info(f"Metrics unavailable: {_qe}")
         else:
@@ -2169,13 +3183,16 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
             # --- Monthly Returns ---
             st.markdown("### Monthly Returns (%)")
             import pandas as pd
-            if len(strat_returns) > 0 and isinstance(strat_returns.index, pd.DatetimeIndex):
+
+            if len(strat_returns) > 0 and isinstance(
+                strat_returns.index, pd.DatetimeIndex
+            ):
                 monthly_ret = qs.stats.monthly_returns(strat_returns) * 100
                 # Format for display
                 st.dataframe(
-                    monthly_ret.style.background_gradient(cmap="RdYlGn", axis=None).format(
-                        "{:.2f}%"
-                    ),
+                    monthly_ret.style.background_gradient(
+                        cmap="RdYlGn", axis=None
+                    ).format("{:.2f}%"),
                     use_container_width=True,
                 )
             else:
@@ -2321,7 +3338,10 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                 # Load SPY data for the backtest period
                 # First try offline for speed, then online if missing
                 spy_data, vix_data = load_spy_vix_data(
-                    str(start_date), str(end_date), cache=get_ticker_cache(), offline=True
+                    str(start_date),
+                    str(end_date),
+                    cache=get_ticker_cache(),
+                    offline=True,
                 )
 
                 if spy_data is None or spy_data.empty:
@@ -2438,14 +3458,20 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
             # Get actual values from metrics
             exposure = qs_metrics.get("exposure_time_pct", 0) if qs_metrics else 0
             beta_val = qs_metrics.get("beta", 0) if qs_metrics else 0
-            
+
             with exp_col1:
                 # Dynamic interpretation based on actual exposure
                 if exposure > 0:
-                    exposure_quality = "excelente" if exposure < 15 else "moderado" if exposure < 30 else "alto"
+                    exposure_quality = (
+                        "excelente"
+                        if exposure < 15
+                        else "moderado"
+                        if exposure < 30
+                        else "alto"
+                    )
                     in_market_pct = exposure
                     in_cash_pct = 100 - exposure
-                    
+
                     st.info(f"**Exposure Time ({exposure:.1f}%)**")
                     st.write(f"""
                     Este valor es **{exposure_quality}** para una estrategia de momentum quirúrgica:
@@ -2475,17 +3501,19 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                     else:
                         beta_desc = "**alta correlación con el mercado**"
                         benefit = "Sigue de cerca los movimientos del SPY"
-                    
+
                     st.info(f"**Beta ({beta_val:+.2f})**")
                     st.write(f"""
                     Tu estrategia está {beta_desc} del SPY:
                     * **Carácter:** {benefit}.
                     * **Alpha Puro:** Retornos generados por selección de activos, no por el mercado.
-                    * **Valor Institucional:** {'Alta resiliencia buscada por fondos' if beta_val < 0 else 'Diversificación moderada'}.
+                    * **Valor Institucional:** {"Alta resiliencia buscada por fondos" if beta_val < 0 else "Diversificación moderada"}.
                     """)
                 else:
                     st.info("**Beta**")
-                    st.write("Métrica no disponible o beta cercano a cero (estrategia neutral).")
+                    st.write(
+                        "Métrica no disponible o beta cercano a cero (estrategia neutral)."
+                    )
             # --- END EXPERT ANALYSIS ---
 
             st.markdown("---")
@@ -2602,70 +3630,82 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
     # =========================================================================
     with t5:
         st.header("⚙️ Configuración del Sistema")
-        st.caption(f"Parámetros activos cargados desde: `config/production_config.json`")
+        st.caption(
+            f"Parámetros activos cargados desde: `config/production_config.json`"
+        )
 
         col_i1, col_i2 = st.columns(2)
 
         with col_i1:
             st.markdown("### 🎯 Tier 1: Estrategia Core")
             st.markdown(f"**Take Profit Multi-Fase:**")
-            
-            tp1_pct = _t1.get('tp1_pct', 0) * 100
-            tp2_pct = _t1.get('tp2_pct', 0) * 100
-            runner_pct = _t1.get('runner_pct', 0) * 100
-            tp1_r = _t1.get('tp1_r', 0)
-            tp2_r = _t1.get('tp2_r', 0)
-            
+
+            tp1_pct = _t1.get("tp1_pct", 0) * 100
+            tp2_pct = _t1.get("tp2_pct", 0) * 100
+            runner_pct = _t1.get("runner_pct", 0) * 100
+            tp1_r = _t1.get("tp1_r", 0)
+            tp2_r = _t1.get("tp2_r", 0)
+
             st.info(f"**TP1:** {tp1_pct:.0f}% de posición @ {tp1_r:.1f}R")
             st.info(f"**TP2:** {tp2_pct:.0f}% de posición @ {tp2_r:.1f}R")
-            st.info(f"**Runner:** {runner_pct:.0f}% con EMA8/EMA21 crossover + ATR trailing")
-            
+            st.info(
+                f"**Runner:** {runner_pct:.0f}% con EMA8/EMA21 crossover + ATR trailing"
+            )
+
             st.markdown("**Gestión de Riesgo:**")
-            max_stop = _t1.get('max_stop_pct', 0) * 100
-            risk_dollars = _t1.get('risk_dollars', 0)
+            max_stop = _t1.get("max_stop_pct", 0) * 100
+            risk_dollars = _t1.get("risk_dollars", 0)
             st.info(f"Stop Loss Máximo: {max_stop:.1f}%")
             st.info(f"Riesgo por Trade: ${risk_dollars:.0f}")
 
             st.markdown("---")
             st.markdown("### 🔬 Tier 2: Filtros de Calidad")
-            
-            min_rvol = _t2.get('min_rvol', 0)
-            max_dist_sma20 = _t2.get('max_dist_sma20', 0)
-            min_adr = _t2.get('min_adr', 0)
-            min_dollar_vol = _t2.get('min_dollar_volume', 0)
-            
+
+            min_rvol = _t2.get("min_rvol", 0)
+            max_dist_sma20 = _t2.get("max_dist_sma20", 0)
+            min_adr = _t2.get("min_adr", 0)
+            min_dollar_vol = _t2.get("min_dollar_volume", 0)
+
             st.info(f"**RVOL Mínimo:** {min_rvol:.1f}x (volumen relativo)")
-            st.info(f"**Distancia Max SMA20:** {max_dist_sma20:.1f}% (evita sobreextensión)")
+            st.info(
+                f"**Distancia Max SMA20:** {max_dist_sma20:.1f}% (evita sobreextensión)"
+            )
             st.info(f"**ADR Mínimo:** {min_adr:.2f}% (rango promedio diario)")
             st.info(f"**Volumen Mínimo:** ${min_dollar_vol:,.0f} (liquidez)")
 
         with col_i2:
             st.markdown("### 🛡️ Tier 3: Gestión de Riesgo")
-            
-            rvol_danger = _t3.get('rvol_danger', 0)
-            rvol_danger_size = _t3.get('rvol_danger_size', 0) * 100
-            rvol_warning = _t3.get('rvol_warning', 0)
-            rvol_warning_size = _t3.get('rvol_warning_size', 0) * 100
-            max_exposure = _t3.get('max_exposure_pct', 0) * 100
-            max_position = _t3.get('max_position_pct', 0) * 100
-            
+
+            rvol_danger = _t3.get("rvol_danger", 0)
+            rvol_danger_size = _t3.get("rvol_danger_size", 0) * 100
+            rvol_warning = _t3.get("rvol_warning", 0)
+            rvol_warning_size = _t3.get("rvol_warning_size", 0) * 100
+            max_exposure = _t3.get("max_exposure_pct", 0) * 100
+            max_position = _t3.get("max_position_pct", 0) * 100
+
             st.markdown("**Ajustes por Volatilidad:**")
-            st.warning(f"**RVOL Peligro (≥{rvol_danger:.1f}x):** Reduce size a {rvol_danger_size:.0f}%")
-            st.warning(f"**RVOL Alerta (≥{rvol_warning:.1f}x):** Reduce size a {rvol_warning_size:.0f}%")
-            
+            st.warning(
+                f"**RVOL Peligro (≥{rvol_danger:.1f}x):** Reduce size a {rvol_danger_size:.0f}%"
+            )
+            st.warning(
+                f"**RVOL Alerta (≥{rvol_warning:.1f}x):** Reduce size a {rvol_warning_size:.0f}%"
+            )
+
             st.markdown("**Límites de Cartera:**")
             st.info(f"**Max Exposure Total:** {max_exposure:.0f}% del capital")
             st.info(f"**Max Posición Individual:** {max_position:.0f}% del capital")
 
             st.markdown("---")
             st.markdown("### 🌊 Market Regime Filter")
-            
-            require_spy_sma50 = _mr.get('require_spy_above_sma50', False)
-            max_vix = _mr.get('max_vix', 40)
-            
-            st.info(f"**SPY > SMA50:** {'✅ Requerido' if require_spy_sma50 else '❌ No requerido'}")
+
+            require_spy_sma50 = _mr.get("require_spy_above_sma50", False)
+            max_vix = _mr.get("max_vix", 40)
+
+            st.info(
+                f"**SPY > SMA50:** {'✅ Requerido' if require_spy_sma50 else '❌ No requerido'}"
+            )
             st.info(f"**VIX Máximo:** {max_vix:.0f} (por encima = BLOCKED)")
-            
+
             st.markdown("**Reglas de Stage:**")
             st.success("Stage 1 (Bull): 100% size")
             st.warning("Stage 2 (Consolidation): 75% size")
@@ -2675,12 +3715,12 @@ if os.path.exists("outputs/backtests/backtest_results.csv"):
                 st.markdown("---")
                 st.markdown("### 📈 Performance de Validación")
                 st.caption("Resultados del último proceso de optimización")
-                
-                val_sharpe = _perf.get('sharpe_ratio', 0)
-                val_wr = _perf.get('win_rate_pct', 0)
-                val_trades = _perf.get('total_trades', 0)
-                val_return = _perf.get('total_return_pct', 0)
-                
+
+                val_sharpe = _perf.get("sharpe_ratio", 0)
+                val_wr = _perf.get("win_rate_pct", 0)
+                val_trades = _perf.get("total_trades", 0)
+                val_return = _perf.get("total_return_pct", 0)
+
                 perf_col1, perf_col2 = st.columns(2)
                 with perf_col1:
                     st.metric("Sharpe Ratio", f"{val_sharpe:.2f}")
@@ -2805,7 +3845,7 @@ el pánico institucional está confirmado — la señal de peligro más fuerte a
                     int(tradeable_pct),
                     text=f"Días operables: {tradeable_pct:.0f}%  ({tradeable} abiertos / {blocked} bloqueados)",
                 )
-                
+
                 # Dynamic interpretation
                 st.markdown("#### 📊 Interpretación del Período")
                 if tradeable_pct >= 70:
@@ -3003,13 +4043,20 @@ el pánico institucional está confirmado — la señal de peligro más fuerte a
                 if transitions:
                     trans_df = pd.DataFrame(transitions)
                     st.dataframe(trans_df, use_container_width=True)
-                    
+
                     # Add educational context based on actual transitions
                     st.markdown("#### 💡 Análisis de Transiciones")
-                    
+
                     num_transitions = len(transitions)
-                    blocked_transitions = len([t for t in transitions if "STAGE_3" in t["Nuevo Stage"] or "STAGE_4" in t["Nuevo Stage"]])
-                    
+                    blocked_transitions = len(
+                        [
+                            t
+                            for t in transitions
+                            if "STAGE_3" in t["Nuevo Stage"]
+                            or "STAGE_4" in t["Nuevo Stage"]
+                        ]
+                    )
+
                     if num_transitions <= 5:
                         st.success(f"""
                         ✅ **Mercado estable** ({num_transitions} cambios de regime)
@@ -3031,7 +4078,7 @@ el pánico institucional está confirmado — la señal de peligro más fuerte a
                         Muchas transiciones indican inestabilidad y cambios bruscos.
                         El filtro de regime es crítico en estos períodos.
                         """)
-                    
+
                     if blocked_transitions > 0:
                         st.error(f"""
                         🛡️ **Protección activa:** {blocked_transitions} transiciones a Stage 3/4 bloqueadas
@@ -3054,68 +4101,80 @@ el pánico institucional está confirmado — la señal de peligro más fuerte a
     # =========================================================================
     with t7:
         st.markdown("## 🎓 Anatomía del Trade - Modo Educativo")
-        st.caption("Aprende cómo funciona el sistema analizando trades reales paso a paso")
-        
+        st.caption(
+            "Aprende cómo funciona el sistema analizando trades reales paso a paso"
+        )
+
         if not grouped_trades.empty:
             # Trade selector
             st.markdown("### 📍 Selecciona un Trade para Analizar")
-            
+
             # Create dropdown with most interesting trades
             interesting_trades = grouped_trades.copy()
-            interesting_trades['description'] = (
-                interesting_trades['ticker'] + " | " +
-                interesting_trades['entry_date'].astype(str) + " → " +
-                interesting_trades['final_exit_date'].astype(str) + " | PnL: $" +
-                interesting_trades['total_pnl'].round(2).astype(str)
+            interesting_trades["description"] = (
+                interesting_trades["ticker"].astype(str)
+                + " | "
+                + interesting_trades["entry_date"].astype(str)
+                + " → "
+                + interesting_trades["final_exit_date"].astype(str)
+                + " | PnL: $"
+                + interesting_trades["total_pnl"].round(2).astype(str)
             )
-            
+
             # Sort by absolute PnL to show most impactful trades
-            interesting_trades['abs_pnl'] = interesting_trades['total_pnl'].abs()
-            interesting_trades = interesting_trades.sort_values('abs_pnl', ascending=False)
-            
+            interesting_trades["abs_pnl"] = interesting_trades["total_pnl"].abs()
+            interesting_trades = interesting_trades.sort_values(
+                "abs_pnl", ascending=False
+            )
+
             selected_trade_desc = st.selectbox(
                 "Trade:",
-                interesting_trades['description'].tolist(),
-                help="Ordenados por impacto (PnL absoluto)"
+                interesting_trades["description"].tolist(),
+                help="Ordenados por impacto (PnL absoluto)",
             )
-            
+
             # Get the selected trade
             selected_idx = interesting_trades[
-                interesting_trades['description'] == selected_trade_desc
+                interesting_trades["description"] == selected_trade_desc
             ].index[0]
             trade = interesting_trades.loc[selected_idx]
-            
+
             # Display trade overview
             st.markdown("---")
-            outcome_emoji = "✅" if trade['total_pnl'] > 0 else "❌"
+            outcome_emoji = "✅" if trade["total_pnl"] > 0 else "❌"
             st.markdown(f"## {outcome_emoji} {trade['ticker']} - Análisis Completo")
-            
+
             # Key metrics in columns
             m1, m2, m3, m4, m5 = st.columns(5)
             m1.metric("Entrada", f"${trade['entry_price']:.2f}")
             m2.metric("PnL Total", f"${trade['total_pnl']:.2f}")
             m3.metric("Días en Trade", f"{int(trade['hold_days'])}")
             m4.metric("Entry Score", f"{trade.get('entry_score', 0):.2f}")
-            m5.metric("R-Multiple", f"{trade.get('r_multiple', 0):+.2f}R" if 'r_multiple' in trade else "N/A")
-            
+            m5.metric(
+                "R-Multiple",
+                f"{trade.get('r_multiple', 0):+.2f}R"
+                if "r_multiple" in trade
+                else "N/A",
+            )
+
             # PHASE 1: PRE-ENTRADA
             st.markdown("---")
             st.markdown("### 🔍 FASE 1: Pre-Entrada (Screening)")
-            
+
             col_pre1, col_pre2 = st.columns(2)
-            
+
             with col_pre1:
                 st.markdown("#### ¿Qué buscaba el sistema?")
                 st.info(f"""
-                **Patrón:** {trade.get('pattern_type', 'N/A')}
+                **Patrón:** {trade.get("pattern_type", "N/A")}
                 
                 **Criterios de selección:**
                 1. **Base consolidada** - Precio entre soporte y resistencia
                 2. **AVWAP por debajo** - Precio no sobreextendido
                 3. **Volumen institucional** - Detecta acumulación
-                4. **Momentum relativo** - RS Percentile: {trade.get('rs_percentile', 0):.0f}
+                4. **Momentum relativo** - RS Percentile: {trade.get("rs_percentile", 0):.0f}
                 """)
-                
+
             with col_pre2:
                 st.markdown("#### Filtros que Pasó")
                 # Show that this trade passed all filters
@@ -3124,42 +4183,46 @@ el pánico institucional está confirmado — la señal de peligro más fuerte a
                 ✅ **Tier 2 (Quality)** - Calidad técnica suficiente
                 ✅ **Tier 3 (Risk)** - Risk/Reward aceptable
                 
-                **Entry Score:** {trade.get('entry_score', 0):.2f}/1.0
+                **Entry Score:** {trade.get("entry_score", 0):.2f}/1.0
                 """)
-                
-                if trade.get('entry_score', 0) >= 0.7:
+
+                if trade.get("entry_score", 0) >= 0.7:
                     st.write("🔥 **Score alto** - Setup de muy alta calidad")
-                elif trade.get('entry_score', 0) >= 0.4:
+                elif trade.get("entry_score", 0) >= 0.4:
                     st.write("⚠️ **Score medio** - Setup aceptable pero no ideal")
                 else:
                     st.write("⚡ **Score bajo** - Setup marginal, riesgo elevado")
-            
+
             # PHASE 2: ENTRADA
             st.markdown("---")
             st.markdown("### 🚀 FASE 2: Entrada (Trigger)")
-            
+
             col_ent1, col_ent2 = st.columns(2)
-            
+
             with col_ent1:
                 st.markdown("#### El Momento de Entrada")
-                entry_date_str = trade['entry_date'].strftime('%Y-%m-%d') if hasattr(trade['entry_date'], 'strftime') else str(trade['entry_date'])
+                entry_date_str = (
+                    trade["entry_date"].strftime("%Y-%m-%d")
+                    if hasattr(trade["entry_date"], "strftime")
+                    else str(trade["entry_date"])
+                )
                 st.write(f"""
                 **Fecha:** {entry_date_str}
-                **Precio:** ${trade['entry_price']:.2f}
-                **Shares:** {int(trade.get('total_shares', 0))}
-                **Capital Arriesgado:** ${int(trade.get('total_shares', 0) * trade['entry_price']):.0f}
+                **Precio:** ${trade["entry_price"]:.2f}
+                **Shares:** {int(trade.get("total_shares", 0))}
+                **Capital Arriesgado:** ${int(trade.get("total_shares", 0) * trade["entry_price"]):.0f}
                 
                 **Trigger:**
                 El precio rompió por encima del nivel de resistencia de la base consolidada,
                 confirmando que hay compradores institucionales entrando.
                 """)
-                
+
             with col_ent2:
                 st.markdown("#### Position Sizing Dinámico")
-                shares = int(trade.get('total_shares', 0))
-                entry_price = trade['entry_price']
+                shares = int(trade.get("total_shares", 0))
+                entry_price = trade["entry_price"]
                 position_value = shares * entry_price
-                
+
                 st.write(f"""
                 **Cálculo de posición:**
                 * Shares: {shares}
@@ -3171,18 +4234,18 @@ el pánico institucional está confirmado — la señal de peligro más fuerte a
                 2. **Distancia al stop** - Más lejos = menos shares
                 3. **Régimen de mercado** - Stage 2 = 75% size
                 """)
-            
+
             # PHASE 3: GESTIÓN
             st.markdown("---")
             st.markdown("### 📊 FASE 3: Gestión del Trade")
-            
+
             col_gest1, col_gest2 = st.columns(2)
-            
+
             with col_gest1:
                 st.markdown("#### Sistema de Salidas Escalonadas")
-                
+
                 # Parse exit phases if available
-                exit_info = trade.get('exit_phases', 'N/A')
+                exit_info = trade.get("exit_phases", "N/A")
                 st.write(f"""
                 **Fases de salida:** {exit_info}
                 
@@ -3193,13 +4256,13 @@ el pánico institucional está confirmado — la señal de peligro más fuerte a
                 
                 Cada fase tiene su propio trailing stop para proteger ganancias.
                 """)
-                
+
             with col_gest2:
                 st.markdown("#### ¿Qué Pasó en Este Trade?")
-                
-                if trade['total_pnl'] > 0:
+
+                if trade["total_pnl"] > 0:
                     st.success(f"""
-                    ✅ **Trade Ganador** (+${trade['total_pnl']:.2f})
+                    ✅ **Trade Ganador** (+${trade["total_pnl"]:.2f})
                     
                     El precio continuó en la dirección esperada y el sistema
                     ejecutó las salidas según el plan. Las múltiples fases
@@ -3207,26 +4270,36 @@ el pánico institucional está confirmado — la señal de peligro más fuerte a
                     """)
                 else:
                     st.error(f"""
-                    ❌ **Trade Perdedor** (${trade['total_pnl']:.2f})
+                    ❌ **Trade Perdedor** (${trade["total_pnl"]:.2f})
                     
                     El precio no se movió como se esperaba. El stop loss
                     protegió el capital al limitar la pérdida a un nivel
                     predefinido. Es parte normal del trading.
                     """)
-            
+
             # PHASE 4: POST-MORTEM
             st.markdown("---")
             st.markdown("### 🔬 FASE 4: Post-Mortem (Aprendizaje)")
-            
+
             col_pm1, col_pm2 = st.columns(2)
-            
+
             with col_pm1:
                 st.markdown("#### Métricas de Performance")
-                
-                win_rate_pct = (grouped_trades['total_pnl'] > 0).sum() / len(grouped_trades) * 100
-                avg_win = grouped_trades[grouped_trades['total_pnl'] > 0]['total_pnl'].mean() if (grouped_trades['total_pnl'] > 0).any() else 0
-                avg_loss = grouped_trades[grouped_trades['total_pnl'] < 0]['total_pnl'].mean() if (grouped_trades['total_pnl'] < 0).any() else 0
-                
+
+                win_rate_pct = (
+                    (grouped_trades["total_pnl"] > 0).sum() / len(grouped_trades) * 100
+                )
+                avg_win = (
+                    grouped_trades[grouped_trades["total_pnl"] > 0]["total_pnl"].mean()
+                    if (grouped_trades["total_pnl"] > 0).any()
+                    else 0
+                )
+                avg_loss = (
+                    grouped_trades[grouped_trades["total_pnl"] < 0]["total_pnl"].mean()
+                    if (grouped_trades["total_pnl"] < 0).any()
+                    else 0
+                )
+
                 st.info(f"""
                 **Contexto del sistema completo:**
                 * Win Rate: {win_rate_pct:.1f}%
@@ -3234,50 +4307,66 @@ el pánico institucional está confirmado — la señal de peligro más fuerte a
                 * Avg Loss: ${avg_loss:.2f}
                 * Total Trades: {len(grouped_trades)}
                 
-                Este trade {'contribuyó positivamente' if trade['total_pnl'] > 0 else 'fue parte del costo de hacer negocios'}.
+                Este trade {"contribuyó positivamente" if trade["total_pnl"] > 0 else "fue parte del costo de hacer negocios"}.
                 """)
-                
+
             with col_pm2:
                 st.markdown("#### Lecciones Clave")
-                
+
                 # Dynamic lessons based on trade characteristics
                 lessons = []
-                
-                if trade.get('entry_score', 0) >= 0.7 and trade['total_pnl'] > 0:
-                    lessons.append("✅ **Score alto + ganador** - Sistema funcionó como esperado")
-                elif trade.get('entry_score', 0) < 0.4 and trade['total_pnl'] < 0:
-                    lessons.append("⚠️ **Score bajo + perdedor** - Confirmación de que scores bajos son más riesgosos")
-                elif trade.get('entry_score', 0) >= 0.7 and trade['total_pnl'] < 0:
-                    lessons.append("📚 **Score alto pero perdió** - Incluso buenos setups fallan (probabilidades)")
-                elif trade.get('entry_score', 0) < 0.4 and trade['total_pnl'] > 0:
-                    lessons.append("🎲 **Score bajo pero ganó** - Caso fortuito, no replicable")
-                
-                if trade['hold_days'] < 3:
-                    lessons.append("⚡ **Trade corto** - Sistema detectó debilidad y cortó rápido")
-                elif trade['hold_days'] > 10:
-                    lessons.append("🏃 **Trade extendido** - El momentum se mantuvo varios días")
-                
-                if trade.get('rs_percentile', 0) >= 80:
-                    lessons.append("🚀 **RS alto** - Líder relativo del mercado (IBD style)")
-                
+
+                if trade.get("entry_score", 0) >= 0.7 and trade["total_pnl"] > 0:
+                    lessons.append(
+                        "✅ **Score alto + ganador** - Sistema funcionó como esperado"
+                    )
+                elif trade.get("entry_score", 0) < 0.4 and trade["total_pnl"] < 0:
+                    lessons.append(
+                        "⚠️ **Score bajo + perdedor** - Confirmación de que scores bajos son más riesgosos"
+                    )
+                elif trade.get("entry_score", 0) >= 0.7 and trade["total_pnl"] < 0:
+                    lessons.append(
+                        "📚 **Score alto pero perdió** - Incluso buenos setups fallan (probabilidades)"
+                    )
+                elif trade.get("entry_score", 0) < 0.4 and trade["total_pnl"] > 0:
+                    lessons.append(
+                        "🎲 **Score bajo pero ganó** - Caso fortuito, no replicable"
+                    )
+
+                if trade["hold_days"] < 3:
+                    lessons.append(
+                        "⚡ **Trade corto** - Sistema detectó debilidad y cortó rápido"
+                    )
+                elif trade["hold_days"] > 10:
+                    lessons.append(
+                        "🏃 **Trade extendido** - El momentum se mantuvo varios días"
+                    )
+
+                if trade.get("rs_percentile", 0) >= 80:
+                    lessons.append(
+                        "🚀 **RS alto** - Líder relativo del mercado (IBD style)"
+                    )
+
                 for lesson in lessons:
                     st.write(lesson)
-                
+
                 if not lessons:
                     st.write("📊 Trade con características estándar del sistema")
-            
+
             # EDUCATIONAL CONCEPTS
             st.markdown("---")
             st.markdown("### 📚 Conceptos Clave del Sistema")
-            
-            edu_tabs = st.tabs([
-                "Triad Protocol",
-                "Entry Score",
-                "R-Multiple",
-                "Market Regime",
-                "Position Sizing"
-            ])
-            
+
+            edu_tabs = st.tabs(
+                [
+                    "Triad Protocol",
+                    "Entry Score",
+                    "R-Multiple",
+                    "Market Regime",
+                    "Position Sizing",
+                ]
+            )
+
             with edu_tabs[0]:
                 st.markdown("""
                 #### 🔱 Triad Protocol
@@ -3302,7 +4391,7 @@ el pánico institucional está confirmado — la señal de peligro más fuerte a
                 Cuando precio rompe la base Y está cerca de AVWAP Y supera VWAP,
                 es señal de que institucionales están comprando activamente.
                 """)
-                
+
             with edu_tabs[1]:
                 st.markdown("""
                 #### 🎯 Entry Score v2
@@ -3323,7 +4412,7 @@ el pánico institucional está confirmado — la señal de peligro más fuerte a
                 **Uso en producción:**
                 Puedes filtrar trades por score mínimo para mejorar consistencia.
                 """)
-                
+
             with edu_tabs[2]:
                 st.markdown("""
                 #### 📏 R-Multiple (Risk Units)
@@ -3344,7 +4433,7 @@ el pánico institucional está confirmado — la señal de peligro más fuerte a
                 * Corta perdedores rápido (-1R)
                 * Deja correr ganadores (+2R, +3R, +5R)
                 """)
-                
+
             with edu_tabs[3]:
                 st.markdown("""
                 #### 🌊 Market Regime Filter
@@ -3373,7 +4462,7 @@ el pánico institucional está confirmado — la señal de peligro más fuerte a
                 **Filosofía:**
                 No luches contra la marea. El mejor trade es el que no haces en mal ambiente.
                 """)
-                
+
             with edu_tabs[4]:
                 st.markdown("""
                 #### 💰 Position Sizing Dinámico
@@ -3401,137 +4490,257 @@ el pánico institucional está confirmado — la señal de peligro más fuerte a
                 * Stage 2 (Consolidation): 75% del tamaño
                 * Stage 3/4: No entries
                 """)
-            
+
             # LIVE EXECUTION TIMELINE
             st.markdown("---")
             st.markdown("### 📅 Timeline de Ejecución")
-            
+
             # Get individual exits from original trade_df if available
-            if 'trade_df_for_grouper' in dir() and not trade_df_for_grouper.empty:
+            if "trade_df_for_grouper" in dir() and not trade_df_for_grouper.empty:
                 # Find all partial exits for this trade
                 partial_exits = trade_df_for_grouper[
-                    (trade_df_for_grouper['ticker'] == trade['ticker']) &
-                    (trade_df_for_grouper['entry_date'] == trade['entry_date'])
+                    (trade_df_for_grouper["ticker"] == trade["ticker"])
+                    & (trade_df_for_grouper["entry_date"] == trade["entry_date"])
                 ].copy()
-                
+
                 if not partial_exits.empty:
-                    partial_exits = partial_exits.sort_values('exit_date')
-                    
+                    partial_exits = partial_exits.sort_values("exit_date")
+
                     timeline_data = []
-                    timeline_data.append({
-                        "Evento": "🟢 ENTRADA",
-                        "Fecha": entry_date_str,
-                        "Precio": f"${trade['entry_price']:.2f}",
-                        "Shares": f"{int(trade['total_shares'])}",
-                        "PnL": "-",
-                        "Notas": "Apertura de posición completa"
-                    })
-                    
+                    timeline_data.append(
+                        {
+                            "Evento": "🟢 ENTRADA",
+                            "Fecha": entry_date_str,
+                            "Precio": f"${trade['entry_price']:.2f}",
+                            "Shares": f"{int(trade['total_shares'])}",
+                            "PnL": "-",
+                            "Notas": "Apertura de posición completa",
+                        }
+                    )
+
                     for idx, exit_row in partial_exits.iterrows():
-                        exit_date_str = exit_row['exit_date'].strftime('%Y-%m-%d') if hasattr(exit_row['exit_date'], 'strftime') else str(exit_row['exit_date'])
-                        exit_price = exit_row.get('exit_price', 0)
-                        pnl = exit_row.get('pnl', 0)
-                        shares_exited = exit_row.get('shares', 0)
-                        exit_reason = exit_row.get('exit_reason', 'N/A')
-                        
-                        emoji = "🎯" if "TP" in str(exit_reason) else "🛑" if pnl < 0 else "📤"
-                        
-                        timeline_data.append({
-                            "Evento": f"{emoji} SALIDA",
-                            "Fecha": exit_date_str,
-                            "Precio": f"${exit_price:.2f}",
-                            "Shares": f"{int(shares_exited)}",
-                            "PnL": f"${pnl:.2f}",
-                            "Notas": str(exit_reason)
-                        })
-                    
+                        exit_date_str = (
+                            exit_row["exit_date"].strftime("%Y-%m-%d")
+                            if hasattr(exit_row["exit_date"], "strftime")
+                            else str(exit_row["exit_date"])
+                        )
+                        exit_price = exit_row.get("exit_price", 0)
+                        pnl = exit_row.get("pnl", 0)
+                        shares_exited = exit_row.get("shares", 0)
+                        exit_reason = exit_row.get("exit_reason", "N/A")
+
+                        emoji = (
+                            "🎯"
+                            if "TP" in str(exit_reason)
+                            else "🛑"
+                            if pnl < 0
+                            else "📤"
+                        )
+
+                        timeline_data.append(
+                            {
+                                "Evento": f"{emoji} SALIDA",
+                                "Fecha": exit_date_str,
+                                "Precio": f"${exit_price:.2f}",
+                                "Shares": f"{int(shares_exited)}",
+                                "PnL": f"${pnl:.2f}",
+                                "Notas": str(exit_reason),
+                            }
+                        )
+
                     timeline_df = pd.DataFrame(timeline_data)
                     st.dataframe(timeline_df, use_container_width=True, hide_index=True)
                 else:
                     st.info("Timeline detallado no disponible para este trade")
-            
+
             # KEY TAKEAWAYS
             st.markdown("---")
             st.markdown("### 💡 Conclusiones & Takeaways")
-            
+
             final_col1, final_col2 = st.columns(2)
-            
+
             with final_col1:
                 st.markdown("#### ¿Qué hizo bien el sistema?")
                 positives = []
-                
-                if trade.get('entry_score', 0) >= 0.6:
+
+                if trade.get("entry_score", 0) >= 0.6:
                     positives.append("✅ Identificó setup de calidad")
-                if trade.get('rs_percentile', 0) >= 70:
+                if trade.get("rs_percentile", 0) >= 70:
                     positives.append("✅ Seleccionó líder relativo fuerte")
-                if trade['hold_days'] >= 2:
+                if trade["hold_days"] >= 2:
                     positives.append("✅ Dio espacio al trade para desarrollarse")
-                if trade['total_pnl'] > 0:
+                if trade["total_pnl"] > 0:
                     positives.append("✅ Ejecutó plan de salida correctamente")
                 else:
                     positives.append("✅ Cortó pérdida según plan (gestión de riesgo)")
-                
+
                 for p in positives:
                     st.write(p)
-            
+
             with final_col2:
                 st.markdown("#### Puntos de Mejora")
                 improvements = []
-                
-                if trade.get('entry_score', 0) < 0.4:
-                    improvements.append("⚠️ Entry score bajo - considerar umbral más alto")
-                if trade.get('rs_percentile', 0) < 50:
+
+                if trade.get("entry_score", 0) < 0.4:
+                    improvements.append(
+                        "⚠️ Entry score bajo - considerar umbral más alto"
+                    )
+                if trade.get("rs_percentile", 0) < 50:
                     improvements.append("⚠️ RS bajo - no era líder de mercado")
-                if trade['total_pnl'] < 0 and trade['hold_days'] < 2:
+                if trade["total_pnl"] < 0 and trade["hold_days"] < 2:
                     improvements.append("⚠️ Stop muy ajustado o entrada prematura")
-                if abs(trade['total_pnl']) < 50:
-                    improvements.append("⚠️ PnL pequeño - ajustar risk/size o skip setups débiles")
-                
+                if abs(trade["total_pnl"]) < 50:
+                    improvements.append(
+                        "⚠️ PnL pequeño - ajustar risk/size o skip setups débiles"
+                    )
+
                 if improvements:
                     for imp in improvements:
                         st.write(imp)
                 else:
                     st.success("✨ Ejecución sólida sin puntos críticos de mejora")
-            
+
             # COMPARISON WITH PEERS
             st.markdown("---")
             st.markdown("### 📊 Comparación con Otros Trades")
-            
+
             comp_col1, comp_col2, comp_col3 = st.columns(3)
-            
+
             with comp_col1:
                 st.markdown("#### Por PnL")
-                rank_pnl = (grouped_trades['total_pnl'] >= trade['total_pnl']).sum()
+                rank_pnl = (grouped_trades["total_pnl"] >= trade["total_pnl"]).sum()
                 st.metric(
                     "Ranking",
                     f"{rank_pnl} / {len(grouped_trades)}",
-                    f"Top {rank_pnl/len(grouped_trades)*100:.0f}%"
+                    f"Top {rank_pnl / len(grouped_trades) * 100:.0f}%",
                 )
-                
+
             with comp_col2:
                 st.markdown("#### Por Entry Score")
-                if 'entry_score' in grouped_trades.columns:
-                    rank_score = (grouped_trades['entry_score'] >= trade.get('entry_score', 0)).sum()
+                if "entry_score" in grouped_trades.columns:
+                    rank_score = (
+                        grouped_trades["entry_score"] >= trade.get("entry_score", 0)
+                    ).sum()
                     st.metric(
                         "Ranking",
                         f"{rank_score} / {len(grouped_trades)}",
-                        f"Top {rank_score/len(grouped_trades)*100:.0f}%"
+                        f"Top {rank_score / len(grouped_trades) * 100:.0f}%",
                     )
                 else:
                     st.write("N/A")
-                    
+
             with comp_col3:
                 st.markdown("#### Por Días en Hold")
-                rank_hold = (grouped_trades['hold_days'] >= trade['hold_days']).sum()
+                rank_hold = (grouped_trades["hold_days"] >= trade["hold_days"]).sum()
                 st.metric(
                     "Ranking",
                     f"{rank_hold} / {len(grouped_trades)}",
-                    f"Top {rank_hold/len(grouped_trades)*100:.0f}%"
+                    f"Top {rank_hold / len(grouped_trades) * 100:.0f}%",
                 )
-            
+
         else:
             st.info("No hay trades disponibles. Ejecuta un backtest primero.")
 
+    with t8:
+        st.markdown("### Estrategias disponibles")
+        st.caption(
+            "Comparativa de configs optimizadas. Los parámetros son los golden config actuales."
+        )
+
+        import json as _json_t8
+        import pandas as _pd_t8
+
+        def _load_cfg(path, signal):
+            try:
+                c = _json_t8.load(open(path))
+                t1_ = c.get("tier1_strategy", {})
+                t2_ = c.get("tier2_filters", {})
+                oos = c.get("_oos_validation", {})
+                ve = c.get("vcp_entry", c.get("extra_params", {}))
+                return {
+                    "Signal": signal,
+                    "TP1 (R)": t1_.get("tp1_r", "-"),
+                    "TP2 (R)": t1_.get("tp2_r", "-"),
+                    "TP1 %": f"{t1_.get('tp1_pct', 0) * 100:.0f}%",
+                    "Runner %": f"{t1_.get('runner_pct', 0) * 100:.0f}%",
+                    "Max Stop": f"{t1_.get('max_stop_pct', 0) * 100:.1f}%",
+                    "Min RVOL": t2_.get("min_rvol", "-"),
+                    "Max Dist SMA20": f"{t2_.get('max_dist_sma20', '-')}%",
+                    "RS Filter": "ON" if t2_.get("use_rs_percentile") else "OFF",
+                    "OOS Sharpe": oos.get("oos_sharpe", "sin validar"),
+                    "OOS WR": f"{oos.get('oos_win_rate', 0):.0f}%"
+                    if oos.get("oos_win_rate")
+                    else "-",
+                    "OOS DD": f"{oos.get('oos_max_dd', 0):.1f}%"
+                    if oos.get("oos_max_dd")
+                    else "-",
+                    "OOS Period": oos.get("period", "-"),
+                    "Passed": "✅"
+                    if str(oos.get("passed", "False")) == "True"
+                    else "⚠",
+                }
+            except Exception as _e:
+                return {"Signal": signal, "Error": str(_e)}
+
+        configs_to_show = [
+            ("config/production_config.json", "Any / Breakout"),
+        ]
+        if _vcp_available:
+            configs_to_show.append(("config/vcp_config.json", "VCP"))
+        if _pp_available:
+            configs_to_show.append(("config/pocket_pivot_config.json", "Pocket Pivot"))
+        if _fb_available:
+            configs_to_show.append(("config/flat_base_config.json", "Flat Base"))
+
+        rows = [_load_cfg(p, s) for p, s in configs_to_show]
+        df_strats = _pd_t8.DataFrame(rows)
+
+        # Cast all columns to str to avoid PyArrow type errors
+        # (mixed float/str columns like OOS Sharpe break Arrow serialization)
+        df_display = df_strats.set_index("Signal").astype(str)
+        st.dataframe(
+            df_display,
+            use_container_width=True,
+            height=200,
+        )
+
+        st.markdown("---")
+        st.markdown("#### Cómo optimizar un patrón nuevo")
+        st.code(
+            "# Cualquier patrón registrado en pattern_configs.py:\n"
+            "python3 optimize_3tier.py --signal-type vcp --trials 200 --tickers 80\n"
+            "python3 optimize_3tier.py --signal-type pocket_pivot --trials 200 --tickers 80\n"
+            "python3 optimize_3tier.py --signal-type flat_base --trials 200 --tickers 80\n"
+            "\n"
+            "# Validar VCP OOS:\n"
+            "python3 validate_vcp_oos.py --start 2023-01-01 --end 2024-12-31 --tickers 120\n"
+            "\n"
+            "# Forzar export si el golden guard bloquea (e.g. tras fix de bug):\n"
+            "python3 optimize_3tier.py --signal-type breakout --trials 300 --force-export",
+            language="bash",
+        )
+
+        st.markdown("---")
+        st.markdown("#### Señal activa en este backtest")
+        _sig_info = {
+            "any": "close > SMA20 (sin filtro adicional). Tier2 calibrado para este universo.",
+            "breakout": "close > rolling 20d high. Breakout clásico de pivote.",
+            "vcp": "5 condiciones: atr_contracting + pivot_break + vol_dry + near_pivot + tight_base.",
+            "pocket_pivot": "Día verde + volumen > max(vol down-days últimos N bars). Entrada dentro de la base.",
+            "flat_base": "Base tight (<fb_max_range%) + plana (no cup) + breakout del borde superior.",
+        }
+        _cur_sig = (
+            "vcp"
+            if _use_vcp
+            else "pocket_pivot"
+            if _use_pp
+            else "flat_base"
+            if _use_fb
+            else "breakout"
+            if _use_breakout
+            else "any"
+        )
+        st.info(f"**{_cur_sig.upper()}** — {_sig_info.get(_cur_sig, '')}")
 
 else:
     st.info("No backtest results found. Run a backtest to see analytics.")

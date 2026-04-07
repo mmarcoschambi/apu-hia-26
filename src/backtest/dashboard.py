@@ -23,8 +23,14 @@ from src.indicators.triad import TriadIndicators
 
 
 class InteractiveDashboard:
-    def __init__(self, results_csv: str):
-        self.results_df = pd.read_csv(results_csv)
+    def __init__(self, results_csv: str = None, df=None):
+        # PERF Item 6: aceptar DataFrame en memoria para evitar round-trip CSV
+        if df is not None:
+            self.results_df = df.copy()
+        elif results_csv:
+            self.results_df = pd.read_csv(results_csv)
+        else:
+            raise ValueError("InteractiveDashboard: provide either results_csv or df")
         # Fix column name mismatch: Dashboard expects 'date', CSV has 'entry_date'
         if (
             "date" not in self.results_df.columns

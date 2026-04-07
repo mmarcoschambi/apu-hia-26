@@ -74,8 +74,10 @@ class ValidationThresholds:
     max_drawdown_duration_days: int = 400  # Max 400 active trading days. 2021-2025 includes 2022 bear market where VIX25 blocks entries for months; recovery in 2023 can generate 350-400 active dd days even in healthy systems.
 
     # Performance stability (relaxed for shorter OOS windows)
-    min_sharpe_ratio: float = 0.35 # Relaxed: PBO 17.8% justifies lower Sharpe threshold. Systems with near-zero overfitting can have lower OOS Sharpe due to 2022 bear market blocking trades (VIX cap 25), not due to system failure.
-    min_profit_factor: float = 1.1  # Reducido de 1.2 — sistema baja frecuencia con alta asimetria
+    min_sharpe_ratio: float = 0.35  # Relaxed: PBO 17.8% justifies lower Sharpe threshold. Systems with near-zero overfitting can have lower OOS Sharpe due to 2022 bear market blocking trades (VIX cap 25), not due to system failure.
+    min_profit_factor: float = (
+        1.1  # Reducido de 1.2 — sistema baja frecuencia con alta asimetria
+    )
     min_win_rate: float = 45.0  # 45%
 
     # Statistical significance
@@ -123,6 +125,9 @@ class ValidationResult:
 
     # Performance metrics
     sharpe_ratio: float = 0.0
+    profit_factor: float = 0.0
+    total_trades: int = 0
+    win_rate_pct: float = 0.0
 
     # Drawdown analysis
     max_drawdown_pct: float = 100.0
@@ -166,6 +171,17 @@ class CSCVAnalyzer:
             objective_fn = self._default_objective
 
         n_trials, n_periods = returns_matrix.shape
+
+        # Adaptive n_splits: with few param variations (e.g. 20), 16 splits
+        # produces a noisy PBO artefact (C(16,8)=12870 combos on 20 curves).
+        # Cap to largest even number <= n_trials for valid CSCV.
+        _max_splits = max(2, (n_trials // 2) * 2)
+        if _max_splits < self.n_splits:
+            logger.info(
+                f"CSCV adaptive: n_trials={n_trials} -> "
+                f"n_splits {self.n_splits}->{_max_splits} (PBO artefact fix)"
+            )
+            self.n_splits = _max_splits
 
         if n_periods < self.n_splits:
             logger.warning(
@@ -355,6 +371,50 @@ class ResearchGate:
         # short-term autocorrelation structure.
         self.bootstrap_block_size = 5
 
+    # ── PERF helper ────────────────────────────────────────────────────────
+    @staticmethod
+    def _inject_template_data(engine, template_engine) -> None:
+        """Copia DataFrames pre-cargados del template al engine destino.
+        Idéntico al patrón de objective() en optimize_3tier.py.
+        Evita load_data() completo cuando los datos son los mismos."""
+        _ATTRS = [
+            "close",
+            "high",
+            "low",
+            "open",
+            "volume",
+            "sma_20",
+            "sma_50",
+            "adr_pct",
+            "avg_volume_20",
+            "dollar_volume",
+            "rvol",
+            "ema_8",
+            "ema_10",
+            "ema_21",
+            "atr_14",
+            "dist_sma20_pct",
+            "consolidation_range",
+            "consolidation_days",
+            "trend_aligned",
+            "high_20",
+            "low_20",
+            "universe",
+            "tradeable_mask",
+            "market_regime_classifier",
+            "market_is_bullish",
+            "market_is_safe",
+            "vix_close",
+            "spy_close",
+            "spy_sma50",
+            "spy_sma200",
+            "spy_ema20",
+            "data",
+        ]
+        for attr in _ATTRS:
+            if hasattr(template_engine, attr):
+                setattr(engine, attr, getattr(template_engine, attr))
+
     def validate_strategy(
         self,
         engine_class: Type,
@@ -364,6 +424,7 @@ class ResearchGate:
         test_dates: Tuple[str, str],
         n_cscv_trials: int = 100,
         verbose: bool = True,
+        template_engine=None,
     ) -> ValidationResult:
         """
         Run full validation pipeline on a strategy using AdvancedVectorBTEngine.
@@ -420,7 +481,14 @@ class ResearchGate:
                 end_date=train_dates[1],
                 **params,
             )
-            train_engine.load_data()
+            if template_engine is not None:
+                # PERF: reusar datos del template (evita load_data() completo)
+                ResearchGate._inject_template_data(train_engine, template_engine)
+                logger.debug(
+                    "   train_engine: data injected from template (no load_data)"
+                )
+            else:
+                train_engine.load_data()
             train_results = train_engine.run_backtest()
         except Exception as e:
             logger.error(f"Training backtest failed: {e}")
@@ -438,7 +506,13 @@ class ResearchGate:
                 end_date=test_dates[1],
                 **params,
             )
-            test_engine.load_data()
+            if template_engine is not None:
+                ResearchGate._inject_template_data(test_engine, template_engine)
+                logger.debug(
+                    "   test_engine: data injected from template (no load_data)"
+                )
+            else:
+                test_engine.load_data()
             test_results = test_engine.run_backtest()
         except Exception as e:
             logger.error(f"Test backtest failed: {e}")
@@ -451,6 +525,9 @@ class ResearchGate:
 
         # Store test metrics in result
         result.sharpe_ratio = test_metrics.get("sharpe_ratio", 0.0)
+        result.profit_factor = float(test_metrics.get("profit_factor", 0.0))
+        result.total_trades = int(test_metrics.get("total_trades", 0))
+        result.win_rate_pct = float(test_metrics.get("win_rate_pct", 0.0))
 
         if verbose:
             logger.info(f"   Training Sharpe: {train_metrics['sharpe_ratio']:.2f}")
@@ -482,7 +559,11 @@ class ResearchGate:
                         end_date=train_dates[1],
                         **var_params,
                     )
-                    var_engine.load_data()
+                    if template_engine is not None:
+                        # PERF: datos identicos — solo cambian tp1_r/tp2_r/min_rvol
+                        ResearchGate._inject_template_data(var_engine, template_engine)
+                    else:
+                        var_engine.load_data()
                     var_results = var_engine.run_backtest()
                     var_equity = var_results.get("equity_curve", pd.Series())
                     if len(var_equity) > 10:
@@ -601,6 +682,7 @@ class ResearchGate:
             universe=universe,
             test_dates=test_dates,
             baseline_results=test_metrics,
+            template_engine=template_engine,
         )
 
         if verbose:
@@ -784,6 +866,7 @@ class ResearchGate:
         universe: List[str],
         test_dates: Tuple[str, str],
         baseline_results: Dict[str, float],
+        template_engine=None,
     ) -> Tuple[bool, Dict[str, float]]:
         """Run stress tests on costs, spreads, and gaps.
 
@@ -806,7 +889,10 @@ class ResearchGate:
                 end_date=test_dates[1],
                 **params_high_cost,
             )
-            engine_high_cost.load_data()
+            if template_engine is not None:
+                ResearchGate._inject_template_data(engine_high_cost, template_engine)
+            else:
+                engine_high_cost.load_data()
             results_high_cost = engine_high_cost.run_backtest()
             metrics_high_cost = self._extract_metrics(results_high_cost)
             scenarios["2x_costs"] = (
@@ -829,7 +915,10 @@ class ResearchGate:
                 end_date=test_dates[1],
                 **params_extreme_cost,
             )
-            engine_extreme_cost.load_data()
+            if template_engine is not None:
+                ResearchGate._inject_template_data(engine_extreme_cost, template_engine)
+            else:
+                engine_extreme_cost.load_data()
             results_extreme_cost = engine_extreme_cost.run_backtest()
             metrics_extreme_cost = self._extract_metrics(results_extreme_cost)
             scenarios["3x_costs"] = (
@@ -851,7 +940,10 @@ class ResearchGate:
                 end_date=test_dates[1],
                 **params_wider_spread,
             )
-            engine_wider_spread.load_data()
+            if template_engine is not None:
+                ResearchGate._inject_template_data(engine_wider_spread, template_engine)
+            else:
+                engine_wider_spread.load_data()
             results_wider_spread = engine_wider_spread.run_backtest()
             metrics_wider_spread = self._extract_metrics(results_wider_spread)
             scenarios["wider_spreads"] = (

@@ -43,7 +43,7 @@ def fix_memory_leak():
     print(f"\n🔧 2. RECREANDO CACHE (5 últimos años)")
     print(f"   • Desde: 2021-01-01")
     print(f"   • Hasta: 2026-01-01")
-    print(f"   • Estimado: 1500+ tickers")
+    print(f"   • Estimado: 3000+ tickers")
 
     # Llamar a quick_populate_cache.py con flags para limitar rango
     print(f"\n🔧 3. DESCARGANDO DATOS (rango limitado)")

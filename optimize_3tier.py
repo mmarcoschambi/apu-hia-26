@@ -80,10 +80,66 @@ try:
     from src.data.cache_manager import CacheManager
     from config.tier3_risk_management import get_tier3_config, validate_tier3_params
     from config.defaults import get_tier2_defaults, reload_config
+    from src.config.pattern_configs import get_pattern_config, list_patterns
+    from src.screeners import ScreenerRegistry
+    from src.data.market_data import MarketDataProvider
 except ImportError as e:
     logger.error(f"Missing module: {e}")
     logger.error("Run from project root: cd momentum-v2 && python optimize_3tier.py")
     sys.exit(1)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Numba Warmup — pre-compila simulate_fast_core antes del primer trial
+# Sin esto el primer trial tarda 15-60s extra en compilar JIT
+# ──────────────────────────────────────────────────────────────────────────────
+def _warmup_numba() -> None:
+    """Pre-compile Numba JIT function with minimal dummy arrays."""
+    try:
+        n, m = 12, 2  # 12 dias, 2 tickers — minimo para que no falle el rolling(14)
+        dummy2d = np.zeros((n, m), dtype=np.float32)
+        entries = np.zeros((n, m), dtype=np.bool_)
+        dummy1d = np.zeros(n, dtype=np.float32)
+        simulate_fast_core(
+            dummy2d,
+            dummy2d,
+            dummy2d,
+            dummy2d,
+            dummy2d,  # close/high/low/open/volume
+            entries,  # entries
+            dummy2d,
+            dummy2d,
+            dummy2d,
+            dummy2d,
+            dummy2d,  # atr/sma20/ema10/ema8/ema21
+            dummy2d,
+            dummy2d,
+            dummy2d,  # adr/rvol/entry_score
+            dummy1d,
+            dummy1d,  # spy_close/spy_sma50
+            100_000.0,  # initial_capital
+            1.5,
+            3.0,  # tp1_r, tp2_r
+            0.5,
+            0.3,
+            0.2,  # tp1_pct, tp2_pct, runner_pct
+            0.01,
+            0.5,  # risk_pct_per_trade, be_threshold_r
+            0.5,  # max_exposure_pct  (NEW param order)
+            True,  # use_trailing_stop
+            0.08,  # max_stop_pct
+            500.0,  # risk_dollars
+            True,  # use_fixed_dollar_risk
+            True,  # use_atr_stop
+            1.5,  # atr_stop_multiplier
+            1.0,  # atr_trailing_multiplier
+        )
+        logger.info("Numba warmup complete (JIT compiled)")
+    except Exception as e:
+        logger.debug(f"Numba warmup skipped: {e}")  # silently continue
+
+
+_warmup_numba()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -103,23 +159,50 @@ def get_universe_from_db(
         logger.warning(f"Database {db_path} not found. Using fallbacks.")
         return _get_fallback_universe(limit)
 
+    # Intentar DuckDB primero (20x mas rapido para queries analiticos sobre SQLite)
+    try:
+        import duckdb
+
+        conn = duckdb.connect()
+        conn.execute(f"ATTACH '{db_path}' AS src (TYPE SQLITE, READ_ONLY TRUE)")
+        query = """
+            SELECT ticker, COUNT(*) as cnt
+            FROM src.ohlcv_cache
+            WHERE date >= ? AND date <= ?
+            GROUP BY ticker
+            ORDER BY cnt DESC
+            LIMIT ?
+        """
+        df = conn.execute(query, [start_date, end_date, limit]).fetchdf()
+        conn.close()
+        if not df.empty:
+            tickers = df["ticker"].tolist()
+            if len(tickers) < 10:
+                logger.warning(
+                    f"Only {len(tickers)} tickers found for period {start_date} to {end_date}"
+                )
+            logger.debug(f"Universe loaded via DuckDB: {len(tickers)} tickers")
+            return tickers
+    except ImportError:
+        logger.debug("DuckDB not installed, falling back to SQLite")
+    except Exception as e:
+        logger.debug(f"DuckDB query failed ({e}), falling back to SQLite")
+
+    # Fallback: SQLite estandar
     try:
         conn = sqlite3.connect(str(db_path))
-        # Query specifically for tickers that have data in the requested range
         query = """
-            SELECT ticker, COUNT(*) as cnt 
-            FROM ohlcv_cache 
+            SELECT ticker, COUNT(*) as cnt
+            FROM ohlcv_cache
             WHERE date >= ? AND date <= ?
-            GROUP BY ticker 
-            ORDER BY cnt DESC 
+            GROUP BY ticker
+            ORDER BY cnt DESC
             LIMIT ?
         """
         df = pd.read_sql_query(query, conn, params=(start_date, end_date, limit))
         conn.close()
-
         if not df.empty:
             tickers = df["ticker"].tolist()
-            # If we have very few tickers with full data, warn the user
             if len(tickers) < 10:
                 logger.warning(
                     f"Only {len(tickers)} tickers found for period {start_date} to {end_date}"
@@ -129,6 +212,74 @@ def get_universe_from_db(
         logger.error(f"Error querying ticker_cache.db: {e}")
 
     return _get_fallback_universe(limit)
+
+
+def apply_screener_to_universe(
+    universe: List[str],
+    screener_name: str,
+    start_date: str,
+    end_date: str,
+) -> List[str]:
+    """Filter universe using an explicit screener before optimization.
+
+    FASE 1 FIX: Explicit asset state management per ticker iteration.
+    Each ticker gets its own isolated state dict that is destroyed at the
+    end of the iteration. Screener instances are already stateless (new
+    instance per ScreenerRegistry.get() call), but this adds defensive
+    isolation for any future screener that might hold state.
+    """
+    from dataclasses import dataclass, field
+
+    @dataclass
+    class AssetState:
+        """Transient state for a single ticker during screening."""
+
+        ticker: str
+        df: Optional[pd.DataFrame] = None
+        result: Optional[Any] = None
+        error: Optional[str] = None
+        passed: bool = False
+
+    logger.info(
+        f"  Applying screener '{screener_name}' to universe of {len(universe)} tickers..."
+    )
+
+    try:
+        screener = ScreenerRegistry.get(screener_name)
+    except Exception as e:
+        logger.warning(f"  Screener not available: {e}. Using raw universe.")
+        return universe
+
+    market_data = MarketDataProvider()
+    screened: List[str] = []
+    estado_activos: Dict[str, AssetState] = {}
+
+    for ticker in universe:
+        state = AssetState(ticker=ticker)
+        try:
+            state.df = market_data.get_daily_data(
+                ticker,
+                start=(pd.Timestamp(start_date) - pd.Timedelta(days=300)).strftime(
+                    "%Y-%m-%d"
+                ),
+                end=end_date,
+            )
+            if state.df is None or state.df.empty or len(state.df) < 100:
+                continue
+
+            state.result = screener.scan(ticker, state.df)
+            state.passed = state.result.passed
+            if state.passed:
+                screened.append(ticker)
+        except Exception as e:
+            state.error = str(e)
+            continue
+        finally:
+            estado_activos[ticker] = state
+            del state
+
+    logger.info(f"  Screener results: {len(screened)}/{len(universe)} passed")
+    return screened or universe
 
 
 def _get_fallback_universe(limit: int) -> List[str]:
@@ -264,6 +415,77 @@ def build_tier3_engine_params(tier3_raw: Dict[str, Any]) -> Dict[str, Any]:
 # ══════════════════════════════════════════════════════════════════════════════
 
 
+def _compute_universe_volume_thresholds(
+    universe: List[str],
+    start_date: str,
+    end_date: str,
+    volume_percentile: float = 5.0,
+    dollar_volume_percentile: float = 5.0,
+) -> Tuple[int, float]:
+    """
+    FASE 2: Compute universe-aware volume thresholds from actual data.
+
+    Instead of hardcoded absolutes (min_volume=100k, min_dollar_volume=1M),
+    calculate percentiles from the universe's median daily volume distribution.
+    This scales thresholds to the actual liquidity profile:
+      - Large-cap universe → higher thresholds (natural)
+      - Small-cap universe → lower thresholds (avoids rejecting everything)
+
+    Args:
+        universe: List of tickers
+        start_date: Backtest start
+        end_date: Backtest end
+        volume_percentile: Percentile cutoff for min_volume (default p5)
+        dollar_volume_percentile: Percentile cutoff for min_dollar_volume (default p5)
+
+    Returns:
+        (min_volume, min_dollar_volume) — sane defaults if data unavailable
+    """
+    FLOOR_VOLUME = 50_000
+    FLOOR_DOLLAR_VOLUME = 500_000
+    CEILING_VOLUME = 5_000_000
+    CEILING_DOLLAR_VOLUME = 50_000_000
+
+    try:
+        market_data = MarketDataProvider()
+        volumes = []
+        dollar_volumes = []
+
+        for ticker in universe[:30]:  # Sample first 30 for efficiency
+            try:
+                df = market_data.get_daily_data(ticker, start=start_date, end=end_date)
+                if df is None or df.empty or len(df) < 30:
+                    continue
+                median_vol = float(df["Volume"].median())
+                median_price = float(df["Close"].median())
+                median_dv = median_vol * median_price
+                volumes.append(median_vol)
+                dollar_volumes.append(median_dv)
+            except Exception:
+                continue
+
+        if len(volumes) >= 5:
+            min_vol = int(np.percentile(volumes, volume_percentile))
+            min_dv = float(np.percentile(dollar_volumes, dollar_volume_percentile))
+            min_vol = max(FLOOR_VOLUME, min(CEILING_VOLUME, min_vol))
+            min_dv = max(FLOOR_DOLLAR_VOLUME, min(CEILING_DOLLAR_VOLUME, min_dv))
+            logger.info(
+                f"  Universe volume thresholds (p{volume_percentile:.0f}): "
+                f"min_volume={min_vol:,.0f}, min_dollar_volume=${min_dv:,.0f}"
+            )
+            return min_vol, min_dv
+    except Exception as e:
+        logger.warning(
+            f"  Could not compute universe volume thresholds ({e}), using defaults"
+        )
+
+    logger.info(
+        f"  Using default volume thresholds: "
+        f"min_volume={FLOOR_VOLUME:,.0f}, min_dollar_volume=${FLOOR_DOLLAR_VOLUME:,.0f}"
+    )
+    return FLOOR_VOLUME, FLOOR_DOLLAR_VOLUME
+
+
 def run_baseline(
     universe: List[str],
     start_date: str,
@@ -271,6 +493,8 @@ def run_baseline(
     tier3_engine_params: Dict[str, Any],
     initial_capital: float = 100_000,
     use_pit_universe: bool = False,
+    signal_type: str = "breakout",  # tipo de patron para etiquetado correcto en trades
+    screener_name: Optional[str] = None,
 ) -> Tuple[Dict[str, Any], pd.DataFrame]:
     """
     Phase 1: Run backtest with LOOSE filters to capture the full trade universe.
@@ -293,14 +517,23 @@ def run_baseline(
     logger.info(f"  Risk Fraction (Tier 3): {risk_fraction * 100:.2f}%")
     logger.info(f"  Risk per Trade: ${risk_dollars:,.0f}")
 
+    # FASE 2 FIX: Compute universe-aware volume thresholds instead of
+    # hardcoded absolutes. min_volume and min_dollar_volume scale with
+    # the actual liquidity distribution of the universe.
+    # Large-cap universes naturally have higher dollar volume; small-cap
+    # universes need lower thresholds to avoid rejecting everything.
+    min_volume, min_dollar_volume = _compute_universe_volume_thresholds(
+        universe, start_date, end_date
+    )
+
     # Loose Tier 2: Let almost everything through
     loose_params = {
         "min_rvol": 0.5,  # Very low - see everything
         "min_adr": 1.0,  # Very low
         "max_dist_sma20": 20.0,  # Very wide
         "min_consolidation_days": 3,  # Very short
-        "min_volume": 100_000,
-        "min_dollar_volume": 1_000_000,
+        "min_volume": min_volume,
+        "min_dollar_volume": min_dollar_volume,
         # Strategy defaults (not critical, just need trades)
         "tp1_r": 1.25,
         "tp2_r": 3.0,
@@ -313,7 +546,7 @@ def run_baseline(
         "slippage": 0.001,
         "risk_dollars": risk_dollars,  # Fixed dollar risk (matches production, NO compounding)
         # Market filters (keep basic ones on for realistic signals)
-        "signal_type": "any",  # Match production config (was "breakout" - caused signal mismatch)
+        "signal_type": signal_type,  # Usar el patron real para etiquetado correcto de trades
         "require_spy_above_sma50": True,
         "max_vix_threshold": 28.0,  # Slightly wider than production
         "use_market_regime_filter": False,  # OFF for baseline
@@ -683,6 +916,15 @@ def optimize_tier1(
     use_pit_universe: bool = False,
     optim_seed: Optional[int] = None,
     warmstart_params: Optional[Dict[str, Any]] = None,
+    pattern_config: Optional[Dict[str, Any]] = None,
+    # PERF Item 3: paralelizacion Optuna con n_jobs workers.
+    # Thread-safety confirmada: cada trial usa clone_with_params (instancia propia).
+    # DataFrames del template son read-only; _ml_pool_buffer tiene lock.
+    # n_jobs=1 -> secuencial (default conservador, identico comportamiento anterior)
+    # n_jobs=2 -> recomendado en produccion (12 CPUs disponibles, deja margen)
+    # n_jobs=4 -> agresivo, OK si RAM lo permite (cada clone ~igual mem que template)
+    # NOTA: show_progress_bar se desactiva con n_jobs>1 (tqdm no es thread-safe)
+    n_jobs: int = 1,
 ) -> Tuple[Dict[str, Any], float, optuna.Study]:
     """
     Phase 3: Optimize ONLY Tier 1 strategy parameters via Optuna.
@@ -739,122 +981,181 @@ def optimize_tier1(
         "mode": "production",
         "fees": 0.001,
         "slippage": 0.001,
-        "risk_dollars": risk_dollars,  # Fixed dollar risk (matches production, NO compounding)
-        "signal_type": "any",  # Match production config (was "breakout" - caused signal mismatch)
-        "require_spy_above_sma50": True,
-        "max_vix_threshold": 25.0,
-        # --- ALIGN WITH UI MARKET REGIME RULES ---
-        "use_market_regime_filter": True,  # Activa el filtro
-        "block_trades_in_stage3": True,  # Bloquea mercados de distribución
-        "block_trades_in_stage4": True,  # Bloquea mercados bajistas (Bear)
-        # ---------------------------------------
+        "risk_dollars": risk_dollars,
         "use_earnings_calendar": False,
         "use_trailing_stop": False,
         "use_composite_sector_scoring": False,
-        # RS Percentile settings come from tier2_derived (Tier 2)
-        "use_adaptive_filtering": True,  # Activa filtros TIER 1-2-3 con rechazos detallados
         "use_pit_universe": use_pit_universe,
+        "log_rejections": False,  # PERF: skip CSV writes durante optimizacion
+        # Extra params del patron (signal_type, regime flags, adaptive filtering)
+        # El plugin define estos segun el comportamiento optimo de cada patron.
+        # Para breakout (default): adaptive=True, regime=True
+        # Para VCP/PP/FB: adaptive=False, regime=False (optimizacion in-sample sin bloqueos)
+        **(
+            pattern_config["extra_fixed_params"]
+            if pattern_config
+            else {
+                "signal_type": "any",
+                "require_spy_above_sma50": True,
+                "max_vix_threshold": 25.0,
+                "use_market_regime_filter": True,
+                "block_trades_in_stage3": True,
+                "block_trades_in_stage4": True,
+                "use_adaptive_filtering": True,
+            }
+        ),
     }
 
     # =========================================================
     # PRE-LOAD ENGINE TEMPLATE (data shared across all trials)
     # Saves ~1.5s per trial (no SQLite re-reads, no indicator recalc)
     # =========================================================
-    logger.info("  Pre-loading engine template (data + indicators, shared across trials)...")
+    logger.info(
+        "  Pre-loading engine template (data + indicators, shared across trials)..."
+    )
     import time as _time
+
     _t0 = _time.time()
-    _template_params = {**fixed_params,
-        "tp1_r": 1.75, "tp2_r": 3.0, "tp1_pct": 0.5, "tp2_pct": 0.3,
-        "runner_pct": 0.2, "score_rs_weight": 0.7, "score_proximity_weight": 0.3,
-        "pattern_bonus_high": 0.0, "pattern_bonus_med": 0.0, "pattern_bonus_low": 0.0,
+    _template_params = {
+        **fixed_params,
+        "tp1_r": 1.75,
+        "tp2_r": 3.0,
+        "tp1_pct": 0.5,
+        "tp2_pct": 0.3,
+        "runner_pct": 0.2,
+        "score_rs_weight": 0.7,
+        "score_proximity_weight": 0.3,
+        "pattern_bonus_high": 0.0,
+        "pattern_bonus_med": 0.0,
+        "pattern_bonus_low": 0.0,
     }
     _template_engine = AdvancedVectorBTEngine(
-        universe=universe, start_date=start_date, end_date=end_date,
-        initial_capital=initial_capital, **_template_params,
+        universe=universe,
+        start_date=start_date,
+        end_date=end_date,
+        initial_capital=initial_capital,
+        **_template_params,
     )
     _template_engine.load_data()
-    logger.info(f"  Engine template loaded in {_time.time()-_t0:.2f}s — data will be reused each trial")
+    logger.info(
+        f"  Engine template loaded in {_time.time() - _t0:.2f}s — data will be reused each trial"
+    )
+
+    # PERF Item 2: Pre-calcular componentes crudos de entry_score (una sola vez)
+    # score_rs_weight / score_proximity_weight varian por trial, pero los
+    # componentes normalizados (RS multi-TF y proximidad 52wk) son constantes.
+    try:
+        _rs_component = _template_engine._compute_rs_scores()
+        _prox_component = _template_engine._compute_proximity_scores()
+        # Cachear en template para inspeccion posterior si se necesita
+        _template_engine._rs_score_component = _rs_component
+        _template_engine._proximity_score_component = _prox_component
+        _precompute_score = True
+        logger.info(
+            "  Entry score components pre-computed (RS + proximity) — skipped per-trial"
+        )
+    except Exception as _e_pre:
+        _precompute_score = False
+        logger.warning(f"  Could not pre-compute entry score components: {_e_pre}")
 
     # ML TRAINING POOL: accumulate trades from promising trials
-    _ML_POOL_PATH = __import__("pathlib").Path("outputs/3tier_optimization/ml_training_pool.csv")
-    _ML_POOL_MIN_SHARPE = 0.50   # only save trades from trials with Sharpe > this
-    _ML_POOL_MIN_TRADES = 30     # and at least this many trades
+    _ML_POOL_PATH = __import__("pathlib").Path(
+        "outputs/3tier_optimization/ml_training_pool.csv"
+    )
+    _ML_POOL_MIN_SHARPE = 0.50  # only save trades from trials with Sharpe > this
+    _ML_POOL_MIN_TRADES = 30  # and at least this many trades
     _ml_pool_lock = __import__("threading").Lock()
+    _ml_pool_buffer = []  # PERF: acumular en memoria, escribir 1 vez al final
 
     def objective(trial: optuna.Trial) -> float:
-        # ── Tier 1: ONLY these are optimized ──────────────────────────
-        # Aligned with Streamlit proven parameters (1.5R / 3.5R)
-        tier1_params = {
-            "tp1_r": trial.suggest_float("tp1_r", 1.25, 2.25, step=0.25),
-            "tp2_r": trial.suggest_float("tp2_r", 2.0, 4.5, step=0.25),
-        }
+        # PATTERN PLUGIN DISPATCH
+        # Si se paso un pattern_config, usar su espacio Optuna.
+        # Esto permite que cada patron defina sus propios params
+        # sin modificar este script base.
+        if pattern_config and "optuna_space" in pattern_config:
+            _trial_params = pattern_config["optuna_space"](trial, fixed_params)
+            if _trial_params is None:
+                return -999.0
+            tier1_params = _trial_params
+            full_params = {**fixed_params, **tier1_params}
+        else:
+            # BREAKOUT DEFAULT SPACE (cuando no hay plugin)
+            tier1_params = {
+                "tp1_r": trial.suggest_float("tp1_r", 1.25, 2.5, step=0.25),
+                "tp2_r": trial.suggest_float("tp2_r", 2.0, 4.5, step=0.25),
+            }
 
-        # Position distribution (must sum to ~1.0)
-        # Aligned with Streamlit: 50% at TP1, 40% at TP2, 10% runner
-        tp1_pct = trial.suggest_float("tp1_pct", 0.35000000000000003, 0.60, step=0.05)
-        tp2_pct = trial.suggest_float("tp2_pct", 0.2, 0.5, step=0.05)
-        runner_pct = round(1.0 - tp1_pct - tp2_pct, 2)
+            # Position distribution (must sum to ~1.0)
+            # Aligned with Streamlit: 50% at TP1, 40% at TP2, 10% runner
+            tp1_pct = trial.suggest_float(
+                "tp1_pct", 0.35000000000000003, 0.60, step=0.05
+            )
+            tp2_pct = trial.suggest_float("tp2_pct", 0.2, 0.55, step=0.05)
+            runner_pct = round(1.0 - tp1_pct - tp2_pct, 2)
 
-        # Constraint: runner must have at least 5% and max 25%
-        if runner_pct < 0.05 or runner_pct > 0.25:
-            return -999.0
+            # Constraint: runner must have at least 5% and max 25%
+            if runner_pct < 0.05 or runner_pct > 0.25:
+                return -999.0
 
-        # Constraint: tp2 must be meaningfully higher than tp1 (min 0.5R separation)
-        # Prevents degenerate solutions where tp1=tp2
-        if tier1_params["tp2_r"] - tier1_params["tp1_r"] < 0.5:
-            return -999.0
+            # Constraint: tp2 must be meaningfully higher than tp1 (min 0.5R separation)
+            # Prevents degenerate solutions where tp1=tp2
+            if tier1_params["tp2_r"] - tier1_params["tp1_r"] < 0.5:
+                return -999.0
 
-        tier1_params["tp1_pct"] = tp1_pct
-        tier1_params["tp2_pct"] = tp2_pct
-        tier1_params["runner_pct"] = runner_pct
+            tier1_params["tp1_pct"] = tp1_pct
+            tier1_params["tp2_pct"] = tp2_pct
+            tier1_params["runner_pct"] = runner_pct
 
-        # Entry Quality Score v2: RS rank + 52wk proximity
-        # Optuna decide la proporcion optima entre las dos señales
-        score_rs_weight = trial.suggest_float("score_rs_weight", 0.30000000000000004, 1.0, step=0.1)
-        score_proximity_weight = round(1.0 - score_rs_weight, 2)
-        tier1_params["score_rs_weight"] = score_rs_weight
-        tier1_params["score_proximity_weight"] = score_proximity_weight
+            # Entry Quality Score v2: RS rank + 52wk proximity
+            # Optuna decide la proporcion optima entre las dos señales
+            score_rs_weight = trial.suggest_float(
+                "score_rs_weight", 0.30000000000000004, 1.0, step=0.1
+            )
+            score_proximity_weight = round(1.0 - score_rs_weight, 2)
+            tier1_params["score_rs_weight"] = score_rs_weight
+            tier1_params["score_proximity_weight"] = score_proximity_weight
 
-        # PATTERN BONUS: fijado en 0.0 para diagnostico
-        # El bonus distorsiona el entry score (High score WR < Med score WR)
-        # Una vez confirmado si aporta valor se re-activa
-        tier1_params["pattern_bonus_high"] = 0.0
-        tier1_params["pattern_bonus_med"] = 0.0
-        tier1_params["pattern_bonus_low"] = 0.0
+            # PATTERN BONUS: fijado en 0.0 para diagnostico
+            # El bonus distorsiona el entry score (High score WR < Med score WR)
+            # Una vez confirmado si aporta valor se re-activa
+            tier1_params["pattern_bonus_high"] = 0.0
+            tier1_params["pattern_bonus_med"] = 0.0
+            tier1_params["pattern_bonus_low"] = 0.0
 
-        # Combine everything
-        full_params = {**fixed_params, **tier1_params}
+            # Combine everything
+            full_params = {**fixed_params, **tier1_params}
 
         try:
-            # PERF: pass pre-loaded classifier to skip SPY/VIX SQLite reload per trial
-            _regime_clf = _template_engine.market_regime_classifier if hasattr(_template_engine, "market_regime_classifier") else None
-            engine = AdvancedVectorBTEngine(
-                universe=universe,
-                start_date=start_date,
-                end_date=end_date,
-                initial_capital=initial_capital,
-                _preloaded_regime_classifier=_regime_clf,
-                **full_params,
-            )
-            # Inject pre-loaded data from template engine (avoids SQLite re-read)
-            # Only TP params and score_rs_weight vary per trial -- data is identical
-            if "_template_engine" in dir() or "_template_engine" in locals() or "_template_engine" in globals():
-                pass  # handled below
+            # PERF Item 1: clone_with_params evita re-instanciar el engine y
+            # re-inyectar ~30 attrs por trial. DataFrames se comparten por ref.
             try:
-                _INJECT_ATTRS = [
-                    "close","high","low","open","volume",
-                    "sma_20","sma_50","adr_pct","avg_volume_20","dollar_volume",
-                    "rvol","ema_8","ema_10","ema_21","atr_14",
-                    "universe","tradeable_mask",
-                    "market_regime_classifier","market_is_bullish",
-                    "vix_close","spy_close","spy_sma50","spy_sma200",
-                    "data",  # raw OHLCV dict per ticker
-                ]
-                for _attr in _INJECT_ATTRS:
-                    if hasattr(_template_engine, _attr):
-                        setattr(engine, _attr, getattr(_template_engine, _attr))
+                engine = _template_engine.clone_with_params(**full_params)
             except NameError:
-                engine.load_data()  # fallback if template not available
+                # Fallback si no hay template (no deberia ocurrir en flujo normal)
+                engine = AdvancedVectorBTEngine(
+                    universe=universe,
+                    start_date=start_date,
+                    end_date=end_date,
+                    initial_capital=initial_capital,
+                    **full_params,
+                )
+                engine.load_data()
+
+            # PERF Item 2: inyectar entry_score pre-computado para este trial
+            # (score_rs_weight + score_proximity_weight varian, componentes no)
+            if _precompute_score:
+                _rs_w = full_params.get("score_rs_weight", 0.70)
+                _prox_w = full_params.get("score_proximity_weight", 0.30)
+                _total_w = _rs_w + _prox_w
+                if _total_w > 0:
+                    _rs_w /= _total_w
+                    _prox_w /= _total_w
+                import numpy as _np_obj
+
+                engine._entry_score_precomputed = (
+                    _rs_w * _rs_component + _prox_w * _prox_component
+                ).astype(_np_obj.float32)
+
             results = engine.run_backtest()
 
             # Minimum trade threshold for statistical reliability
@@ -876,10 +1177,9 @@ def optimize_tier1(
                     _trial_trades_df["_trial"] = trial.number
                     _trial_trades_df["_trial_sharpe"] = round(_trial_sharpe, 3)
                     with _ml_pool_lock:
-                        _write_header = not _ML_POOL_PATH.exists()
-                        _trial_trades_df.to_csv(
-                            _ML_POOL_PATH, mode="a", header=_write_header, index=False
-                        )
+                        _ml_pool_buffer.append(
+                            _trial_trades_df
+                        )  # PERF: solo append, sin I/O
                 except Exception as _pe:
                     pass  # non-critical
 
@@ -905,22 +1205,114 @@ def optimize_tier1(
         study_name=f"3tier_{datetime.now().strftime('%Y%m%d_%H%M')}",
         sampler=optuna.samplers.TPESampler(
             seed=optim_seed,
-            n_startup_trials=50,
-            n_ei_candidates=48,
+            n_startup_trials=15,  # PERF: 50->15 (espacio ~6 dims, no necesita mas)
+            n_ei_candidates=24,  # PERF: 48->24 (suficiente para 6 dims)
+            multivariate=True,  # PERF: captura correlaciones entre params (tp1_r<->tp1_pct)
+            consider_endpoints=True,  # Samplea valores extremos del rango
         ),
     )
 
     # Warmstart: enqueue known-good params as first trial
     # Esto le da a Optuna un punto de partida fuerte en lugar de empezar ciego
     if warmstart_params is not None:
-        ws = {k: v for k, v in warmstart_params.items()
-              if k in ["tp1_r", "tp2_r", "tp1_pct", "tp2_pct", "score_rs_weight"]}
+        ws = {
+            k: v
+            for k, v in warmstart_params.items()
+            if k in ["tp1_r", "tp2_r", "tp1_pct", "tp2_pct", "score_rs_weight"]
+        }
         if ws:
             study.enqueue_trial(ws)
             logger.info(f"  Warmstart enqueued: {ws}")
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
-    study.optimize(objective, n_trials=n_trials, show_progress_bar=True)
+
+    # Columnas estándar para el ML pool (todas las corridas deben tener estas)
+    _STANDARD_COLS = [
+        "day_idx",
+        "col_idx",
+        "exit_type_code",
+        "exit_price",
+        "shares",
+        "pnl",
+        "entry_day_idx",
+        "initial_risk",
+        "context_rvol",
+        "context_adr",
+        "context_volume",
+        "entry_score",
+        "stop_loss",
+        "tp1_target",
+        "tp2_target",
+        "exit_date",
+        "entry_date",
+        "symbol",
+        "exit_phase",
+        "monetary_risk",
+        "adjusted_risk_dollars",
+        "base_risk_dollars",
+        "context_vol",
+        "return_pct",
+        "entry_price",
+        "context_dollar_vol",
+        "signal_type",
+        "dist_sma20_pct",
+        "rs_percentile",
+        "stop_distance",
+        "stop_distance_pct",
+        "risk_per_share",
+        "r_multiple",
+        "outcome",
+        "is_big_win",
+        "is_big_loss",
+        "_trial",
+        "_trial_sharpe",
+    ]
+
+    # PERF: flush ML pool buffer al salir (atexit como safety net si se interrumpe)
+    _ml_pool_flushed = False
+
+    def _flush_ml_pool() -> None:
+        """Persist ML training pool once; idempotent (safe for atexit + explicit flush)."""
+        nonlocal _ml_pool_flushed
+        if _ml_pool_flushed:
+            return
+
+        with _ml_pool_lock:
+            if not _ml_pool_buffer:
+                _ml_pool_flushed = True
+                return
+            _buffer = list(_ml_pool_buffer)
+            _ml_pool_buffer.clear()
+            _ml_pool_flushed = True
+
+        try:
+            combined = pd.concat(_buffer, ignore_index=True)
+            # Normalizar: solo mantener columnas estándar, ignorar extras
+            existing_cols = [c for c in _STANDARD_COLS if c in combined.columns]
+            combined = combined[existing_cols]
+            _write_header = not _ML_POOL_PATH.exists()
+            combined.to_csv(_ML_POOL_PATH, mode="a", header=_write_header, index=False)
+            logger.info(
+                f"  ML pool: saved {len(combined)} rows ({len(existing_cols)} cols) from {len(_buffer)} trials -> {_ML_POOL_PATH}"
+            )
+        except Exception as _pe:
+            logger.debug(f"ML pool flush failed (non-critical): {_pe}")
+
+    import atexit as _atexit
+
+    _atexit.register(_flush_ml_pool)
+
+    # PERF Item 3: n_jobs controla workers paralelos de Optuna.
+    # Con n_jobs>1 se desactiva show_progress_bar (tqdm no es thread-safe).
+    study.optimize(
+        objective,
+        n_trials=n_trials,
+        n_jobs=n_jobs,
+        show_progress_bar=(n_jobs == 1),
+    )
+
+    # Flush inmediato tras optimize (el atexit es solo backup si se interrumpe)
+    _flush_ml_pool()
 
     best = study.best_params
     # Add derived runner_pct
@@ -942,7 +1334,7 @@ def optimize_tier1(
     logger.info(f"    Trades: {bt.user_attrs.get('trades', 0)}")
     logger.info(f"    PF: {bt.user_attrs.get('profit_factor', 0):.2f}")
 
-    return best, study.best_value, study
+    return best, study.best_value, study, _template_engine
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -955,23 +1347,23 @@ def validate_with_research_gate(
     full_params: Dict[str, Any],
     train_dates: Tuple[str, str],
     test_dates: Tuple[str, str],
+    template_engine=None,
 ) -> Any:
     """
     Phase 4: Run the 3-phase ResearchGate validation with MULTI-WINDOW Walk Forward.
 
-    Instead of a single train/test split, we use rolling windows to ensure
-    robustness across different market regimes.
-
-    Returns:
-        ValidationResult (with .promotion_approved bool)
+    template_engine: si se pasa, todos los engines internos (train, test, CSCV x20,
+    stress x3) heredan sus DataFrames sin llamar load_data(). Elimina 24 de 25
+    load_data() en Phase 4.
     """
     logger.info("=" * 70)
     logger.info("PHASE 4: RESEARCH GATE VALIDATION (Multi-Window Walk Forward)")
+    if template_engine is not None:
+        logger.info("  PERF: template_engine provided - skipping 24 load_data() calls")
     logger.info("=" * 70)
 
     gate = ResearchGate()
 
-    # Use single window for now - ResearchGate handles the validation internally
     result = gate.validate_strategy(
         engine_class=AdvancedVectorBTEngine,
         params=full_params,
@@ -979,6 +1371,7 @@ def validate_with_research_gate(
         train_dates=train_dates,
         test_dates=test_dates,
         verbose=True,
+        template_engine=template_engine,
     )
 
     return result
@@ -1182,19 +1575,35 @@ def run_pipeline(args) -> Dict[str, Any]:
     _HOLDOUT_START = "2025-07-01"
     if str(args.end) > _HOLDOUT_START:
         logger.warning("=" * 70)
-        logger.warning("  DATA SNOOPING GUARD: end_date %s exceeds holdout boundary", args.end)
-        logger.warning("  2025-H2 reserved as sacred OOS holdout. Capping to %s", _HOLDOUT_START)
+        logger.warning(
+            "  DATA SNOOPING GUARD: end_date %s exceeds holdout boundary", args.end
+        )
+        logger.warning(
+            "  2025-H2 reserved as sacred OOS holdout. Capping to %s", _HOLDOUT_START
+        )
         logger.warning("=" * 70)
         args.end = _HOLDOUT_START
+
+    # Cargar config del patron a optimizar
+    signal_type = getattr(args, "signal_type", "breakout")
+    pcfg = get_pattern_config(signal_type)
+    config_output = getattr(args, "output", pcfg["config_output"])
+    # Si el output no fue sobreescrito por el usuario, usar el del plugin
+    if config_output == "config/production_config.json" and signal_type != "breakout":
+        config_output = pcfg["config_output"]
 
     logger.info("=" * 70)
     logger.info("3-TIER OPTIMIZATION PIPELINE")
     logger.info("=" * 70)
     logger.info(f"  Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    logger.info(f"  Signal type: {signal_type} -- {pcfg['description']}")
+    logger.info(f"  Config output: {config_output}")
     logger.info(f"  Period: {args.start} to {args.end}")
     logger.info(f"  Tickers: {args.tickers}")
     logger.info(f"  Trials: {args.trials}")
     logger.info(f"  Capital: ${args.capital:,.0f}")
+
+    screener_name = getattr(args, "screener", None)
 
     # ── Load Tier 3 (Institutional Risk) ──────────────────────────────────
     validate_tier3_params()
@@ -1222,15 +1631,28 @@ def run_pipeline(args) -> Dict[str, Any]:
     elif getattr(args, "ticker_file", None):
         # Load curated universe from file
         from pathlib import Path as _Path
+
         _tf = _Path(args.ticker_file)
         if not _tf.exists():
             raise FileNotFoundError(f"ticker-file not found: {args.ticker_file}")
         with open(_tf) as _f:
-            universe = [t.strip() for t in _f.readlines() if t.strip() and not t.startswith("#")]
-        logger.info(f"\n  Universe (curated file): {len(universe)} tickers from {args.ticker_file}")
+            universe = [
+                t.strip() for t in _f.readlines() if t.strip() and not t.startswith("#")
+            ]
+        logger.info(
+            f"\n  Universe (curated file): {len(universe)} tickers from {args.ticker_file}"
+        )
     else:
         universe = get_universe_from_db(
             limit=args.tickers, start_date=args.start, end_date=args.end
+        )
+
+    if screener_name:
+        universe = apply_screener_to_universe(
+            universe=universe,
+            screener_name=screener_name,
+            start_date=args.start,
+            end_date=args.end,
         )
     logger.info(f"\n  Universe: {len(universe)} tickers ({', '.join(universe[:5])}...)")
 
@@ -1244,6 +1666,8 @@ def run_pipeline(args) -> Dict[str, Any]:
         tier3_engine_params=tier3_engine,
         initial_capital=args.capital,
         use_pit_universe=use_pit,
+        signal_type=signal_type,  # propagar --signal-type al engine para etiquetado
+        screener_name=screener_name,
     )
 
     # Save baseline trades for analysis
@@ -1251,6 +1675,10 @@ def run_pipeline(args) -> Dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     baseline_trades.to_csv(output_dir / "baseline_trades.csv", index=False)
     logger.info(f"  Baseline trades saved: {output_dir / 'baseline_trades.csv'}")
+    # Guardar tambien con nombre por patron para ML multi-patron
+    pattern_trades_path = output_dir / f"baseline_trades_{signal_type}.csv"
+    baseline_trades.to_csv(pattern_trades_path, index=False)
+    logger.info(f"  Pattern baseline saved: {pattern_trades_path}")
 
     # ══════════════════════════════════════════════════════════════════════
     # PHASE 2: Derive Tier 2
@@ -1270,10 +1698,16 @@ def run_pipeline(args) -> Dict[str, Any]:
     # ══════════════════════════════════════════════════════════════════════
     # PHASE 3: Optimize Tier 1
     # ══════════════════════════════════════════════════════════════════════
-    # Load production config as warmstart if available
+    # Load warmstart: para breakout usa production_config.json,
+    # para otros patrones intenta cargar su propio config primero.
     warmstart = None
-    prod_config_path = Path("config/production_config.json")
-    if prod_config_path.exists():
+    _ws_path = Path(pcfg["config_output"])
+    if not _ws_path.exists() and signal_type != "breakout":
+        _ws_path = None  # no warmstart si el config del patron no existe aun
+    elif signal_type == "breakout":
+        _ws_path = Path("config/production_config.json")
+    prod_config_path = _ws_path
+    if prod_config_path and prod_config_path.exists():
         try:
             with open(prod_config_path) as f:
                 prod = json.load(f)
@@ -1287,11 +1721,13 @@ def run_pipeline(args) -> Dict[str, Any]:
                     "tp2_pct": t1.get("tp2_pct", 0.35),
                     "score_rs_weight": t1.get("score_rs_weight", 0.7),
                 }
-                logger.info(f"  Warmstart loaded from production_config.json: {warmstart}")
+                logger.info(
+                    f"  Warmstart loaded from production_config.json: {warmstart}"
+                )
         except Exception as e:
             logger.warning(f"  Could not load warmstart from production config: {e}")
 
-    best_tier1, best_score, study = optimize_tier1(
+    best_tier1, best_score, study, _template_engine = optimize_tier1(
         universe=universe,
         start_date=args.start,
         end_date=args.end,
@@ -1301,7 +1737,9 @@ def run_pipeline(args) -> Dict[str, Any]:
         initial_capital=args.capital,
         use_pit_universe=use_pit,
         optim_seed=getattr(args, "seed", None),
+        pattern_config=pcfg,
         warmstart_params=warmstart,
+        n_jobs=getattr(args, "jobs", 1),  # PERF Item 3
     )
 
     # Save trial history
@@ -1325,7 +1763,7 @@ def run_pipeline(args) -> Dict[str, Any]:
             "fees": 0.001,
             "slippage": 0.001,
             "risk_dollars": int(args.capital * tier3_raw.get("risk_fraction", 0.005)),
-            "signal_type": "any",  # Match production config
+            "signal_type": signal_type,
             "require_spy_above_sma50": True,
             "max_vix_threshold": 25.0,
             "use_market_regime_filter": True,
@@ -1371,9 +1809,9 @@ def run_pipeline(args) -> Dict[str, Any]:
         # Window 2: train 2019-2022 (full), test 2023     (post-bear recovery)
         # Window 3: train 2019-2023 (full), test 2024-25  (bull reciente)
         absolute_windows = [
-            ('2019-01-01', '2021-06-01', '2021-06-01', '2022-06-01'),
-            ('2019-01-01', '2023-01-01', '2023-01-01', '2024-01-01'),
-            ('2019-01-01', '2023-07-01', '2023-07-01', '2025-12-31'),
+            ("2019-01-01", "2021-06-01", "2021-06-01", "2022-06-01"),
+            ("2019-01-01", "2023-01-01", "2023-01-01", "2024-01-01"),
+            ("2019-01-01", "2023-07-01", "2023-07-01", "2025-12-31"),
         ]
         all_results = []
         best_result = None
@@ -1382,13 +1820,11 @@ def run_pipeline(args) -> Dict[str, Any]:
 
         for i, (train_s, train_e, test_s, test_e) in enumerate(absolute_windows, 1):
             train_dates = (train_s, train_e)
-            test_dates  = (test_s, test_e)
+            test_dates = (test_s, test_e)
 
-            logger.info(
-                f'\n  Walk-Forward Window {i}/{len(absolute_windows)}'
-            )
-            logger.info(f'    Train: {train_dates[0]} to {train_dates[1]}')
-            logger.info(f'    Test:  {test_dates[0]} to {test_dates[1]}')
+            logger.info(f"\n  Walk-Forward Window {i}/{len(absolute_windows)}")
+            logger.info(f"    Train: {train_dates[0]} to {train_dates[1]}")
+            logger.info(f"    Test:  {test_dates[0]} to {test_dates[1]}")
 
             # ── Re-derive Tier 2 from TRAIN data only (no OOS contamination) ──
             logger.info(f"    Re-deriving Tier 2 from train period only...")
@@ -1399,6 +1835,7 @@ def run_pipeline(args) -> Dict[str, Any]:
                 tier3_engine_params=tier3_engine,
                 initial_capital=args.capital,
                 use_pit_universe=use_pit,
+                signal_type=signal_type,  # propagar para etiquetado consistente en folds
             )
             fold_tier2 = derive_tier2_filters(
                 trades_df=fold_trades,
@@ -1415,6 +1852,7 @@ def run_pipeline(args) -> Dict[str, Any]:
                 full_params=full_params,
                 train_dates=train_dates,
                 test_dates=test_dates,
+                template_engine=_template_engine,  # PERF: evita 24 load_data() en Phase 4
             )
 
             all_results.append(result)
@@ -1426,21 +1864,29 @@ def run_pipeline(args) -> Dict[str, Any]:
                 if score > wf_best_score:
                     wf_best_score = score
                     best_result = result
-                logger.info(f'    ✅ Ventana {i} APROBADA (total: {windows_passed}/{i})')
+                logger.info(
+                    f"    ✅ Ventana {i} APROBADA (total: {windows_passed}/{i})"
+                )
             else:
-                logger.info(f'    ❌ Ventana {i} rechazada')
+                logger.info(f"    ❌ Ventana {i} rechazada")
 
         # CRITERIO: aprobar si AL MENOS 1 de 3 ventanas pasa
         # SPY>SMA50 hace que ventanas con test en 2022 fallen por diseño
         min_windows_required = 1
-        logger.info(f'\n  Walk-Forward: {windows_passed}/{len(absolute_windows)} ventanas aprobadas')
+        logger.info(
+            f"\n  Walk-Forward: {windows_passed}/{len(absolute_windows)} ventanas aprobadas"
+        )
 
         if best_result and windows_passed >= min_windows_required:
             validation_result = best_result
-            logger.info(f'  ✅ APROBADO — mejor ventana Sharpe: {best_result.sharpe_ratio:.2f} | MaxDD: {best_result.max_drawdown_pct:.2f}%')
+            logger.info(
+                f"  ✅ APROBADO — mejor ventana Sharpe: {best_result.sharpe_ratio:.2f} | MaxDD: {best_result.max_drawdown_pct:.2f}%"
+            )
         else:
             validation_result = all_results[-1] if all_results else None
-            logger.warning('  ❌ Walk-Forward rechazado: ninguna ventana paso todos los criterios')
+            logger.warning(
+                "  ❌ Walk-Forward rechazado: ninguna ventana paso todos los criterios"
+            )
     else:
         logger.info("\n  SKIPPING ResearchGate validation (--skip-validation)")
 
@@ -1491,6 +1937,17 @@ def run_pipeline(args) -> Dict[str, Any]:
     with open(final_path, "w") as f:
         json.dump(final_config, f, indent=2, default=str)
 
+    # For non-production patterns (vcp, pocket_pivot, flat_base),
+    # also copy directly to their config_output path.
+    # This keeps config/ in sync after every run.
+    _cfg_out = Path(config_output)
+    if _cfg_out != Path("config/production_config.json"):
+        _cfg_out.parent.mkdir(parents=True, exist_ok=True)
+        import shutil as _shutil
+
+        _shutil.copy2(final_path, _cfg_out)
+        logger.info(f"  Pattern config saved to: {_cfg_out}")
+
     # Print summary
     logger.info(f"\n  TIER 3 (Risk - Fixed):")
     logger.info(f"    rvol_danger: {tier3_raw['rvol_danger']}x")
@@ -1510,7 +1967,23 @@ def run_pipeline(args) -> Dict[str, Any]:
     # ═══════════════════════════════════════════════════════════════════════
     # Re-run best params to get rejection stats
     try:
-        full_best_params = {**fixed_params, **best_tier1}
+        # fixed_params lives inside optimize_tier1() -- reconstruct minimal version here
+        _rj_base = {
+            **tier3_engine,
+            **tier2_derived,
+            "signal_type": signal_type,
+            "mode": "production",
+            "fees": 0.001,
+            "slippage": 0.001,
+            "risk_dollars": int(args.capital * tier3_raw.get("risk_fraction", 0.005)),
+            "use_market_regime_filter": True,
+            "require_spy_above_sma50": True,
+            "max_vix_threshold": 25.0,
+            "use_adaptive_filtering": True,
+            "use_earnings_calendar": False,
+            "use_trailing_stop": False,
+        }
+        full_best_params = {**_rj_base, **best_tier1}
         rejection_engine = AdvancedVectorBTEngine(
             universe=universe,
             start_date=args.start,
@@ -1523,9 +1996,9 @@ def run_pipeline(args) -> Dict[str, Any]:
 
         rejection_stats = getattr(rejection_engine, "rejection_stats_tier", {})
         if rejection_stats:
-            tier1_rejections = rejection_stats.get("TIER 1 (Market Safety)", 0)
-            tier2_rejections = rejection_stats.get("TIER 2 (Dynamic Quality)", 0)
-            tier3_rejections = rejection_stats.get("TIER 3 (Optional)", 0)
+            tier1_rejections = rejection_stats.get("TIER1", 0)
+            tier2_rejections = rejection_stats.get("TIER2", 0)
+            tier3_rejections = rejection_stats.get("TIER3", 0)
             total_rejections = tier1_rejections + tier2_rejections + tier3_rejections
 
             logger.info(f"\n  REJECTIONS BY TIER (Best Trial):")
@@ -1541,60 +2014,137 @@ def run_pipeline(args) -> Dict[str, Any]:
             logger.info(f"\n  VALIDATION: APPROVED FOR PRODUCTION")
 
             # ══════════════════════════════════════════════════════════════════
-            # PHASE 5: Auto-Export to Streamlit (if approved)
-            # ══════════════════════════════════════════════════════════════════
-            if not args.skip_streamlit_export:
+            # ================================================================
+            # PHASE 5: GOLDEN CONFIG GUARD + AUTO-EXPORT
+            # ================================================================
+            # _new_sharpe  = walk-forward Sharpe from ResearchGate validation
+            # _golden_sharpe = WF Sharpe stamped by the PREVIOUS approved pipeline run
+            #   (stored as _oos_sharpe in production_config.json)
+            # Rule: new run must beat golden by >=5% to overwrite.
+            # Use --force-export to bypass (e.g. after fixing a code bug).
+            # ================================================================
+            import json as _json
+
+            # Golden path: usar el config del signal_type activo (benchmark por estrategia)
+            # Cada estrategia compite contra su propio golden, no contra un global.
+            _signal_golden_path = Path(
+                pcfg.get("config_output", "config/production_config.json")
+            )
+            _golden_path = (
+                _signal_golden_path
+                if _signal_golden_path.exists()
+                else Path("config/production_config.json")
+            )
+            _new_sharpe = getattr(validation_result, "sharpe_ratio", 0.0)
+            _new_dd = getattr(validation_result, "max_drawdown_pct", 999.0)
+            _golden_sharpe = 0.0
+            _golden_date = "none"
+            _should_export = True
+            _reason = "no golden config found"
+            _margin = 0.05  # must improve by >=5%
+
+            if _golden_path.exists():
                 try:
-                    # ============================================================
-                    # GOLDEN CONFIG GUARD: only overwrite if new run beats current
-                    # ============================================================
-                    _golden_path = Path("config/production_config.json")
-                    _new_sharpe  = validation_result.metrics.get("sharpe_ratio", 0) if hasattr(validation_result, "metrics") else best_score
-                    _new_sharpe  = optimization.get("best_trial_metrics", {}).get("sharpe", _new_sharpe)
-                    _golden_sharpe = 0.0
-                    _golden_tp2    = 0.0
-                    _should_export = True
-                    _reason        = "no golden config found"
+                    _golden = _json.load(open(_golden_path))
+                    # _oos_sharpe: stamped by this pipeline on the previous approved run
+                    # Fallback: _sharpe_validation (legacy field from pattern configs)
+                    # Fallback: performance.sharpe_ratio (legacy field)
+                    _golden_sharpe = _golden.get(
+                        "_oos_sharpe",
+                        _golden.get(
+                            "_sharpe_validation",
+                            _golden.get("performance", {}).get("sharpe_ratio", 0.0),
+                        ),
+                    )
+                    _golden_date = _golden.get(
+                        "_oos_stamped",
+                        _golden.get(
+                            "_last_updated", _golden.get("timestamp", "unknown")
+                        ),
+                    )
+                except Exception as _ge:
+                    logger.warning(f"  Could not read golden config: {_ge}")
+            logger.info(
+                f"  Golden file    : {_golden_path.name}  (signal: {signal_type})"
+            )
 
-                    if _golden_path.exists():
-                        try:
-                            import json as _json
-                            _golden = _json.load(open(_golden_path))
-                            _golden_sharpe = _golden.get("performance", {}).get("sharpe_ratio", 0)
-                            _golden_tp2    = _golden.get("tier1_strategy", {}).get("tp2_r", 0)
-                            _margin        = 0.05  # new run must beat golden by at least 5%
-                            if _new_sharpe < _golden_sharpe * (1 + _margin):
-                                _should_export = False
-                                _reason = (
-                                    f"new Sharpe {_new_sharpe:.3f} does not beat "
-                                    f"golden Sharpe {_golden_sharpe:.3f} "
-                                    f"(requires +{_margin*100:.0f}% improvement = {_golden_sharpe*(1+_margin):.3f})"
-                                )
-                            else:
-                                _reason = f"new Sharpe {_new_sharpe:.3f} beats golden {_golden_sharpe:.3f}"
-                        except Exception as _ge:
-                            logger.warning(f"  Could not read golden config for comparison: {_ge}")
+            # --force-export bypasses the guard
+            if getattr(args, "force_export", False):
+                _should_export = True
+                _reason = f"--force-export flag set by user (golden={_golden_sharpe:.3f} bypassed)"
+            elif _golden_sharpe > 0 and _new_sharpe < _golden_sharpe * (1 + _margin):
+                _should_export = False
+                _gdate = (
+                    _golden_date[:10]
+                    if len(str(_golden_date)) >= 10
+                    else str(_golden_date)
+                )
+                _reason = (
+                    f"WF Sharpe {_new_sharpe:.3f} does not improve golden "
+                    f"{_golden_sharpe:.3f} by >{_margin * 100:.0f}% "
+                    f"(need >= {_golden_sharpe * (1 + _margin):.3f}, golden from {_gdate})"
+                )
+            else:
+                _gdate = (
+                    _golden_date[:10]
+                    if len(str(_golden_date)) >= 10
+                    else str(_golden_date)
+                )
+                _reason = (
+                    f"WF Sharpe {_new_sharpe:.3f} beats golden "
+                    f"{_golden_sharpe:.3f} (golden from {_gdate})"
+                )
 
-                    if _should_export:
-                        logger.info(f"  🟢 GOLDEN GUARD: exporting -- {_reason}")
+            logger.info("=" * 60)
+            logger.info("  GOLDEN CONFIG GUARD")
+            logger.info("=" * 60)
+            logger.info(
+                f"  New  WF Sharpe : {_new_sharpe:.4f}  (MaxDD: {_new_dd:.1f}%)"
+            )
+            logger.info(f"  Golden file    : {_golden_path.name}")
+            logger.info(f"  Golden Sharpe  : {_golden_sharpe:.4f}")
+            logger.info(f"  Required margin: +{_margin * 100:.0f}%")
+            logger.info(
+                f"  Decision       : {'EXPORT' if _should_export else 'PRESERVE GOLDEN'}"
+            )
+            logger.info(f"  Reason         : {_reason}")
+            logger.info("=" * 60)
+
+            if not args.skip_streamlit_export:
+                if _should_export:
+                    try:
                         export_to_streamlit_config(
                             final_config=final_config,
                             output_path=args.output,
                             backup=True,
                         )
-                        logger.info(f"\n  🚀 Strategy exported to Streamlit app!")
-                        logger.info(f"     Run: streamlit run app.py")
-                    else:
-                        logger.warning(f"  🛑 GOLDEN GUARD: NOT exporting -- {_reason}")
-                        logger.warning(f"     Golden config preserved (tp2_r={_golden_tp2})")
-                        logger.warning(f"     Trades saved to ml_training_pool.csv for ML enrichment")
-                except Exception as e:
-                    logger.error(f"\n  ❌ Failed to export to Streamlit: {e}")
+                        # Stamp the WF Sharpe into production_config for next run comparison
+                        try:
+                            _pc = _json.load(open(args.output))
+                            _pc["_oos_sharpe"] = round(_new_sharpe, 4)
+                            _pc["_oos_max_dd"] = round(_new_dd, 2)
+                            _pc["_oos_stamped"] = datetime.now().isoformat()
+                            with open(args.output, "w") as _pf:
+                                _json.dump(_pc, _pf, indent=2, default=str)
+                            logger.info(
+                                f"  _oos_sharpe={_new_sharpe:.4f} stamped in {args.output}"
+                            )
+                        except Exception as _se:
+                            logger.warning(f"  Could not stamp _oos_sharpe: {_se}")
+                        logger.info(f"  Exported to: {args.output}")
+                        logger.info(f"  Run: streamlit run app.py")
+                    except Exception as e:
+                        logger.error(f"  Export failed: {e}")
+                else:
+                    logger.warning(f"  production_config.json NOT overwritten.")
+                    logger.info(
+                        f"  New config: outputs/3tier_optimization/FINAL_CONFIG.json"
+                    )
+                    logger.info(
+                        f"  To force-export: python optimize_3tier.py --force-export"
+                    )
             else:
-                logger.info(
-                    f"\n  ⏭️  Skipped Streamlit export (--skip-streamlit-export)"
-                )
-        else:
+                logger.info(f"  Skipped export (--skip-streamlit-export)")
             logger.info(f"\n  VALIDATION: REJECTED")
             for reason in validation_result.rejection_reasons:
                 logger.info(f"    - {reason}")
@@ -1608,9 +2158,12 @@ def run_pipeline(args) -> Dict[str, Any]:
     # ============================================================
     try:
         import subprocess, sys
+
         expand_result = subprocess.run(
             [sys.executable, "auto_expand_ranges.py"],
-            capture_output=True, text=True, cwd="."
+            capture_output=True,
+            text=True,
+            cwd=".",
         )
         if expand_result.stdout:
             for line in expand_result.stdout.strip().split("\n"):
@@ -1658,7 +2211,13 @@ Examples:
         type=str,
         default=None,
         help="Path to file with one ticker per line (e.g. config/universe_sp500_curated.txt). "
-             "Overrides --tickers. Use for curated live-trading universe.",
+        "Overrides --tickers. Use for curated live-trading universe.",
+    )
+    parser.add_argument(
+        "--screener",
+        type=str,
+        default=None,
+        help="Optional screener name to filter the universe before optimization.",
     )
     parser.add_argument(
         "--start",
@@ -1690,6 +2249,12 @@ Examples:
         help="Skip ResearchGate validation (for quick dev runs)",
     )
     parser.add_argument(
+        "--force-export",
+        action="store_true",
+        default=False,
+        help="Bypass golden guard and force-export. Use after fixing a bug that depressed performance.",
+    )
+    parser.add_argument(
         "--skip-streamlit-export",
         action="store_true",
         help="Skip auto-export to Streamlit config (for testing)",
@@ -1706,11 +2271,32 @@ Examples:
         help="Output path for Streamlit config (default: config/production_config.json)",
     )
     parser.add_argument(
+        "--signal-type",
+        type=str,
+        default="breakout",
+        help="Pattern to optimize: breakout | vcp | pocket_pivot | flat_base. "
+        "Each has its own config output and Optuna search space. "
+        "Run with --list-patterns to see all available options.",
+    )
+    parser.add_argument(
+        "--list-patterns",
+        action="store_true",
+        help="List all available signal types and exit.",
+    )
+    parser.add_argument(
         "--seed",
         type=int,
         default=None,
         help="Random seed for Optuna (default: None = non-deterministic exploration). "
-             "Set e.g. --seed 42 to reproduce a specific run exactly.",
+        "Set e.g. --seed 42 to reproduce a specific run exactly.",
+    )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=1,
+        help="Numero de workers paralelos para Optuna (default: 1 = secuencial). "
+        "Recomendado: --jobs 2. Con n>1 se desactiva la barra de progreso. "
+        "Thread-safety garantizada via clone_with_params (Item 1).",
     )
     parser.add_argument(
         "--no-warmstart",
@@ -1719,6 +2305,11 @@ Examples:
     )
 
     args = parser.parse_args()
+    if getattr(args, "list_patterns", False):
+        print(list_patterns())
+        return
+    # Normalizar signal_type (guion a guion bajo)
+    args.signal_type = getattr(args, "signal_type", "breakout").replace("-", "_")
     run_pipeline(args)
 
 
