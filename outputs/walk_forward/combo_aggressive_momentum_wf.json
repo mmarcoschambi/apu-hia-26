@@ -1,0 +1,54 @@
+{
+  "combo": "combo_aggressive_momentum",
+  "run_at": "2026-04-09T00:59:46.474449",
+  "folds": [
+    {
+      "fold": 1,
+      "oos_start": "2022-01-01",
+      "oos_end": "2022-12-31",
+      "trades": 15,
+      "sharpe": -1.465,
+      "pf": 0.111,
+      "win_rate": 10.0,
+      "max_dd": 7.84,
+      "total_return": -6.85,
+      "status": "ok"
+    },
+    {
+      "fold": 2,
+      "oos_start": "2023-01-01",
+      "oos_end": "2023-12-31",
+      "trades": 136,
+      "sharpe": 1.707,
+      "pf": 2.066,
+      "win_rate": 65.5,
+      "max_dd": 7.31,
+      "total_return": 23.35,
+      "status": "ok"
+    },
+    {
+      "fold": 3,
+      "oos_start": "2024-01-01",
+      "oos_end": "2024-12-31",
+      "trades": 120,
+      "sharpe": 0.097,
+      "pf": 0.894,
+      "win_rate": 35.7,
+      "max_dd": 12.62,
+      "total_return": 0.45,
+      "status": "ok"
+    }
+  ],
+  "aggregate": {
+    "sharpe_mean": 0.902,
+    "sharpe_min": 0.097,
+    "sharpe_positive_folds": 2,
+    "pf_mean": 1.48,
+    "pf_consistent": false,
+    "trades_total": 256,
+    "trades_per_fold": 128.0,
+    "folds_valid": 2,
+    "folds_ignored_low_sample": 1,
+    "verdict": "GO"
+  }
+}

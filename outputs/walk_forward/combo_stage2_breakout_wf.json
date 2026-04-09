@@ -1,0 +1,54 @@
+{
+  "combo": "combo_stage2_breakout",
+  "run_at": "2026-04-09T01:05:54.034872",
+  "folds": [
+    {
+      "fold": 1,
+      "oos_start": "2022-01-01",
+      "oos_end": "2022-12-31",
+      "trades": 99,
+      "sharpe": -0.93,
+      "pf": 0.455,
+      "win_rate": 38.5,
+      "max_dd": 9.58,
+      "total_return": -6.83,
+      "status": "ok"
+    },
+    {
+      "fold": 2,
+      "oos_start": "2023-01-01",
+      "oos_end": "2023-12-31",
+      "trades": 558,
+      "sharpe": 0.741,
+      "pf": 1.158,
+      "win_rate": 57.7,
+      "max_dd": 11.31,
+      "total_return": 9.78,
+      "status": "ok"
+    },
+    {
+      "fold": 3,
+      "oos_start": "2024-01-01",
+      "oos_end": "2024-12-31",
+      "trades": 507,
+      "sharpe": 0.583,
+      "pf": 1.279,
+      "win_rate": 54.0,
+      "max_dd": 7.93,
+      "total_return": 5.85,
+      "status": "ok"
+    }
+  ],
+  "aggregate": {
+    "sharpe_mean": 0.131,
+    "sharpe_min": -0.93,
+    "sharpe_positive_folds": 2,
+    "pf_mean": 0.964,
+    "pf_consistent": false,
+    "trades_total": 1164,
+    "trades_per_fold": 388.0,
+    "folds_valid": 3,
+    "folds_ignored_low_sample": 0,
+    "verdict": "NO-GO"
+  }
+}

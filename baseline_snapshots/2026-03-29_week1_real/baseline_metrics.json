@@ -1,0 +1,89 @@
+{
+  "note": "Baseline CANONICO (2019-2024, 100 trials) \u2014 referencia activa para regression checks",
+  "created_at": "2026-04-08 23:37",
+  "run_config": {
+    "start": "2019-01-01",
+    "end": "2024-12-31",
+    "trials": 100,
+    "tickers": 200
+  },
+  "combos": [
+    {
+      "name": "combo_aggressive_momentum",
+      "sharpe": 0.92,
+      "pbo": 0.6225,
+      "pf": 1.45,
+      "trades": 95,
+      "dd": 3.6,
+      "wr": 44.2,
+      "passed": true,
+      "wf_sharpe_mean": 0.113,
+      "wf_pf_mean": 1.024,
+      "wf_verdict": "NO-GO"
+    },
+    {
+      "name": "combo_ideal_setup",
+      "sharpe": 0.94,
+      "pbo": 0.7876,
+      "pf": 1.8,
+      "trades": 18,
+      "dd": 1.5,
+      "wr": 61.9,
+      "passed": true
+    },
+    {
+      "name": "combo_pullback_entry",
+      "sharpe": 1.09,
+      "pbo": 0.8228,
+      "pf": 1.62,
+      "trades": 108,
+      "dd": 4.2,
+      "wr": 50.0,
+      "passed": true,
+      "wf_sharpe_mean": 0.498,
+      "wf_pf_mean": 1.577,
+      "wf_verdict": "GO"
+    },
+    {
+      "name": "combo_pure_momentum",
+      "sharpe": 0.62,
+      "pbo": 0.2054,
+      "pf": 1.45,
+      "trades": 371,
+      "dd": 4.7,
+      "wr": 38.3,
+      "passed": true,
+      "wf_sharpe_mean": 0.205,
+      "wf_pf_mean": 0.969,
+      "wf_verdict": "NO-GO"
+    },
+    {
+      "name": "combo_stage2_breakout",
+      "sharpe": 0.86,
+      "pbo": 0.5169,
+      "pf": 1.48,
+      "trades": 740,
+      "dd": 5.7,
+      "wr": 55.1,
+      "passed": true,
+      "wf_sharpe_mean": 0.131,
+      "wf_pf_mean": 0.964,
+      "wf_verdict": "NO-GO"
+    },
+    {
+      "name": "combo_universal_any",
+      "sharpe": 1.64,
+      "pbo": 0.6009,
+      "pf": 2.12,
+      "trades": 2625,
+      "dd": 4.5,
+      "wr": 63.2,
+      "passed": true,
+      "wf_sharpe_mean": 0.254,
+      "wf_pf_mean": 0.717,
+      "wf_verdict": "NO-GO"
+    }
+  ],
+  "strict_passed": 6,
+  "total": 6
+}
