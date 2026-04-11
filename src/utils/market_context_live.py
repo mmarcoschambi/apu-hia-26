@@ -1,0 +1,248 @@
+"""
+src/utils/market_context_live.py
+================================
+Helper para obtener contexto de mercado (SPY/VIX) de forma robusta.
+Útil para runbook de paper trading y scanners en tiempo real.
+
+Funcionalidades:
+- Limpieza robusta de MultiIndex de yfinance
+- Cadena de fallback para VIX: ^VIX → VIXY → cache → PASS_WARNING
+- Diagnóstico de calidad del dato (OK | LOW)
+- Recomendaciones para decisiones de gate
+"""
+
+from __future__ import annotations
+
+import sqlite3
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict, Optional, Tuple
+
+import pandas as pd
+import yfinance as yf
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+DB_PATH = PROJECT_ROOT / "data" / "ticker_cache.db"
+
+
+def _extract_close_series(df: pd.DataFrame) -> pd.Series:
+    """Extrae serie de Close de DataFrame de yfinance, maneja MultiIndex."""
+    if df is None or df.empty:
+        return pd.Series(dtype=float)
+
+    if isinstance(df.columns, pd.MultiIndex):
+        if "Close" in df.columns.get_level_values(0):
+            close_df = df.xs("Close", axis=1, level=0, drop_level=False)
+            s = close_df.iloc[:, 0]
+        else:
+            return pd.Series(dtype=float)
+    else:
+        if "Close" in df.columns:
+            s = df["Close"]
+        elif "close" in df.columns:
+            s = df["close"]
+        else:
+            return pd.Series(dtype=float)
+
+    return pd.to_numeric(s, errors="coerce").dropna()
+
+
+def _fetch_last_close_yf(
+    ticker: str, period: str, timeout: int = 10
+) -> Tuple[Optional[float], Optional[str]]:
+    """Descarga último close desde Yahoo Finance."""
+    try:
+        df = yf.download(
+            ticker, period=period, auto_adjust=True, progress=False, timeout=timeout
+        )
+        s = _extract_close_series(df)
+        if s.empty:
+            return None, f"{ticker}: close series empty"
+        return float(s.iloc[-1]), None
+    except Exception as e:
+        return None, f"{ticker}: {e}"
+
+
+def _fetch_last_close_cache(
+    db_path: Path, ticker: str, days: int = 10
+) -> Tuple[Optional[float], Optional[str]]:
+    """Descarga último close desde cache local (ticker_cache.db)."""
+    try:
+        conn = sqlite3.connect(str(db_path))
+        cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+        row = conn.execute(
+            "SELECT close FROM ohlcv_cache WHERE ticker=? AND date>=? ORDER BY date DESC LIMIT 1",
+            (ticker, cutoff),
+        ).fetchone()
+        conn.close()
+        if not row:
+            return None, f"{ticker}: no cache row"
+        return float(row[0]), None
+    except Exception as e:
+        return None, f"{ticker}: cache error {e}"
+
+
+def get_market_context_live(
+    require_spy_above_sma50: bool = True,
+    max_vix: float = 35.0,
+    db_path: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """
+    Obtiene contexto de mercado de forma robusta con fallback chain.
+
+    Args:
+        require_spy_above_sma50: Si True, SPY debe estar sobre SMA50 para aprobar.
+        max_vix: Umbral máximo de VIX para aprobar.
+        db_path: Path al DB de cache (default: PROJECT_ROOT/data/ticker_cache.db)
+
+    Returns:
+        Dict con estructura:
+        {
+            "spy_price": float,
+            "spy_sma50": float,
+            "spy_ok": bool,
+            "vix": float,
+            "vix_ok": bool,
+            "vix_source": str,  # "^VIX", "VIXY_PROXY", "CACHE:^VIX", "PASS_WARNING"
+            "regime_quality": "OK" | "LOW",
+            "warnings": [str],
+        }
+    """
+    if db_path is None:
+        db_path = DB_PATH
+
+    ctx: Dict[str, Any] = {
+        "spy_price": None,
+        "spy_sma50": None,
+        "spy_ok": True,
+        "vix": None,
+        "vix_ok": True,
+        "vix_source": None,
+        "regime_quality": "OK",
+        "warnings": [],
+    }
+
+    # === SPY robusto ===
+    try:
+        spy_df = yf.download(
+            "SPY", period="90d", auto_adjust=True, progress=False, timeout=10
+        )
+        spy_s = _extract_close_series(spy_df)
+
+        if len(spy_s) >= 50:
+            spy_price = float(spy_s.iloc[-1])
+            spy_sma50_val = float(spy_s.rolling(50).mean().dropna().iloc[-1])
+            ctx["spy_price"] = spy_price
+            ctx["spy_sma50"] = spy_sma50_val
+            if require_spy_above_sma50:
+                ctx["spy_ok"] = spy_price >= spy_sma50_val
+            else:
+                ctx["spy_ok"] = True
+        else:
+            ctx["spy_ok"] = True
+            ctx["regime_quality"] = "LOW"
+            ctx["warnings"].append("SPY insufficient data; gate degraded")
+    except Exception as e:
+        ctx["spy_ok"] = True
+        ctx["regime_quality"] = "LOW"
+        ctx["warnings"].append(f"SPY fetch failed: {e}; gate degraded")
+
+    # === VIX chain: ^VIX -> VIXY -> cache ^VIX -> cache VIXY -> PASS_WARNING ===
+    vix_val, err = _fetch_last_close_yf("^VIX", "10d")
+    if vix_val is not None:
+        ctx["vix"] = vix_val
+        ctx["vix_ok"] = vix_val < max_vix
+        ctx["vix_source"] = "^VIX"
+        return ctx
+
+    if err:
+        ctx["warnings"].append(err)
+
+    proxy_val, err = _fetch_last_close_yf("VIXY", "10d")
+    if proxy_val is not None:
+        ctx["vix"] = proxy_val
+        ctx["vix_ok"] = True
+        ctx["vix_source"] = "VIXY_PROXY"
+        ctx["regime_quality"] = "LOW"
+        ctx["warnings"].append("Using VIXY proxy; VIX gate set to warning mode")
+        return ctx
+
+    if err:
+        ctx["warnings"].append(err)
+
+    for ticker in ("^VIX", "VIXY"):
+        cached, err = _fetch_last_close_cache(db_path, ticker, days=14)
+        if cached is not None:
+            ctx["vix"] = cached
+            ctx["vix_ok"] = True
+            ctx["vix_source"] = f"CACHE:{ticker}"
+            ctx["regime_quality"] = "LOW"
+            ctx["warnings"].append(
+                f"Using cached {ticker}; VIX gate set to warning mode"
+            )
+            return ctx
+        if err:
+            ctx["warnings"].append(err)
+
+    # Fallback final: VIX no disponible
+    ctx["vix_ok"] = True
+    ctx["vix_source"] = "PASS_WARNING"
+    ctx["regime_quality"] = "LOW"
+    ctx["warnings"].append("VIX unavailable from all sources; PASS_WARNING applied")
+
+    return ctx
+
+
+def apply_regime_override(
+    ctx: Dict[str, Any],
+    mode: str,
+) -> Dict[str, Any]:
+    """
+    Aplica override al régimen calculado.
+
+    Args:
+        ctx: Output de get_market_context_live()
+        mode: "none" | "spy" | "vix" | "all"
+
+    Returns:
+        Dict con raw vs effective y metadata del override
+    """
+    raw_spy_ok = bool(ctx.get("spy_ok", True))
+    raw_vix_ok = bool(ctx.get("vix_ok", True))
+
+    eff_spy_ok = raw_spy_ok
+    eff_vix_ok = raw_vix_ok
+    applied = False
+
+    if mode == "spy":
+        eff_spy_ok = True
+        applied = not raw_spy_ok
+    elif mode == "vix":
+        eff_vix_ok = True
+        applied = not raw_vix_ok
+    elif mode == "all":
+        eff_spy_ok = True
+        eff_vix_ok = True
+        applied = not (raw_spy_ok and raw_vix_ok)
+    # mode == "none": no change
+
+    return {
+        "raw_spy_ok": raw_spy_ok,
+        "raw_vix_ok": raw_vix_ok,
+        "effective_spy_ok": eff_spy_ok,
+        "effective_vix_ok": eff_vix_ok,
+        "raw_regime_ok": raw_spy_ok and raw_vix_ok,
+        "effective_regime_ok": eff_spy_ok and eff_vix_ok,
+        "override_mode": mode,
+        "override_applied": applied,
+    }
+
+
+def _to_bool(v: Any) -> bool:
+    """Convierte valor a booleano (maneja strings 'True'/'False')."""
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, str):
+        return v.strip().lower() in {"true", "1", "yes", "y"}
+    return False

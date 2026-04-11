@@ -1,0 +1,116 @@
+{
+  "generated_at": "2026-04-10T23:26:57.122482",
+  "study_name": "s4_main_v2",
+  "promoted_candidate": {
+    "selected_trial_id": "431",
+    "score_composed": 1.5022,
+    "params": {
+      "min_rs_percentile": 57.37778765137335,
+      "max_dist_sma20": 6.6495247781116635,
+      "min_rvol": 1.1149016493825001,
+      "min_adr": 1.613213313949042,
+      "risk_per_trade_pct": 0.026805900676805605,
+      "max_exposure_pct": 0.22123548791645659,
+      "use_composite_sector_scoring": false,
+      "sector_top_percentile": 0.29672532058516715,
+      "use_atr_stop": false,
+      "atr_stop_multiplier": 1.4940389842218635,
+      "atr_trailing_multiplier": 2.9820380088803273
+    },
+    "metrics": {},
+    "gate_results": {
+      "passed": true,
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0,
+      "gate_details": {
+        "pf_gate": {
+          "threshold": 1.3,
+          "passed": true,
+          "value": 3.580573311889042
+        },
+        "calmar_gate": {
+          "threshold": 1.0,
+          "passed": true,
+          "value": 1.3331444880179213
+        },
+        "mdd_duration_gate": {
+          "threshold": 126,
+          "passed": true,
+          "value": 63
+        },
+        "hard_ruin_gate": {
+          "threshold": 0.05,
+          "passed": true,
+          "value": 0.0
+        },
+        "degradation_gate": {
+          "threshold": 0.2,
+          "passed": true,
+          "value": null
+        },
+        "cost_robustness_gate": {
+          "passed": true,
+          "value": "ROBUSTO"
+        }
+      }
+    }
+  },
+  "trazability": {
+    "optuna_db": "/home/marcos/trade/momentum-v2/outputs/optuna_s4/s4_main_v2.db",
+    "gate_results": {
+      "passed": true,
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0,
+      "gate_details": {
+        "pf_gate": {
+          "threshold": 1.3,
+          "passed": true,
+          "value": 3.580573311889042
+        },
+        "calmar_gate": {
+          "threshold": 1.0,
+          "passed": true,
+          "value": 1.3331444880179213
+        },
+        "mdd_duration_gate": {
+          "threshold": 126,
+          "passed": true,
+          "value": 63
+        },
+        "hard_ruin_gate": {
+          "threshold": 0.05,
+          "passed": true,
+          "value": 0.0
+        },
+        "degradation_gate": {
+          "threshold": 0.2,
+          "passed": true,
+          "value": null
+        },
+        "cost_robustness_gate": {
+          "passed": true,
+          "value": "ROBUSTO"
+        }
+      }
+    },
+    "params_used": {
+      "min_rs_percentile": 57.37778765137335,
+      "max_dist_sma20": 6.6495247781116635,
+      "min_rvol": 1.1149016493825001,
+      "min_adr": 1.613213313949042,
+      "risk_per_trade_pct": 0.026805900676805605,
+      "max_exposure_pct": 0.22123548791645659,
+      "use_composite_sector_scoring": false,
+      "sector_top_percentile": 0.29672532058516715,
+      "use_atr_stop": false,
+      "atr_stop_multiplier": 1.4940389842218635,
+      "atr_trailing_multiplier": 2.9820380088803273
+    }
+  },
+  "next_steps": [
+    "1. Generate canonical analytics with backtest_analytics_bridge",
+    "2. Update production_config.json with promoted params",
+    "3. Enable paper trading with new config",
+    "4. Monitor paper performance for 30 days"
+  ]
+}

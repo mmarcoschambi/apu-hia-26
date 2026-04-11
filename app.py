@@ -2322,6 +2322,410 @@ if not _trades_df.empty:
             st.warning(f"QuantStats metrics unavailable: {e}")
 
         # ═══════════════════════════════════════════════════════════════════════
+        # MONTE CARLO SIMULATION (Random Draw)
+        # ═══════════════════════════════════════════════════════════════════════
+        st.markdown("---")
+        st.markdown("### 🎲 Monte Carlo Simulation")
+
+        try:
+            # Build daily returns series from grouped trades
+            if not grouped_trades.empty and "final_exit_date" in grouped_trades.columns:
+                # Create daily equity curve from trades
+                mc_df = grouped_trades[["final_exit_date", "total_pnl"]].copy()
+                mc_df = mc_df.sort_values("final_exit_date")
+                mc_df["cumulative_pnl"] = mc_df["total_pnl"].cumsum()
+
+                # Get daily returns (simplified: use trade returns as daily returns)
+                # For more accuracy, we'd map to calendar days
+                trade_returns = (
+                    mc_df["total_pnl"].values / equity
+                    if equity > 0
+                    else np.zeros(len(mc_df))
+                )
+
+                def run_monte_carlo(
+                    returns: np.ndarray, n_simulations: int = 1000, n_trades: int = None
+                ) -> dict:
+                    """Run Monte Carlo simulation using bootstrap resampling."""
+                    if len(returns) == 0:
+                        return {}
+
+                    n_trades = n_trades or len(returns)
+
+                    # Initialize results arrays
+                    final_capitals = np.zeros(n_simulations)
+                    total_returns = np.zeros(n_simulations)
+                    max_drawdowns = np.zeros(n_simulations)
+                    sharpe_ratios = np.zeros(n_simulations)
+                    win_rates = np.zeros(n_simulations)
+
+                    np.random.seed(42)  # For reproducibility
+
+                    for i in range(n_simulations):
+                        # Random draw with replacement (bootstrap)
+                        sampled_indices = np.random.choice(
+                            len(returns), size=n_trades, replace=True
+                        )
+                        sampled_returns = returns[sampled_indices]
+
+                        # Calculate cumulative equity
+                        equity_curve = np.cumsum(sampled_returns) + 1.0
+                        final_capitals[i] = equity_curve[-1] * equity
+                        total_returns[i] = (equity_curve[-1] - 1.0) * 100
+
+                        # Calculate max drawdown
+                        peak = np.maximum.accumulate(equity_curve)
+                        drawdown = (equity_curve - peak) / peak
+                        max_drawdowns[i] = drawdown.min() * 100
+
+                        # Calculate Sharpe ratio (annualized)
+                        if sampled_returns.std() > 0:
+                            sharpe_ratios[i] = (
+                                sampled_returns.mean() / sampled_returns.std()
+                            ) * np.sqrt(252)
+                        else:
+                            sharpe_ratios[i] = 0
+
+                        # Calculate win rate
+                        win_rates[i] = (
+                            (sampled_returns > 0).sum() / len(sampled_returns) * 100
+                        )
+
+                    return {
+                        "final_capital": final_capitals,
+                        "total_return": total_returns,
+                        "max_drawdown": max_drawdowns,
+                        "sharpe_ratio": sharpe_ratios,
+                        "win_rate": win_rates,
+                    }
+
+                # UI for Monte Carlo parameters
+                mc_col1, mc_col2, mc_col3 = st.columns(3)
+
+                with mc_col1:
+                    mc_simulations = st.slider(
+                        "Simulations",
+                        min_value=100,
+                        max_value=5000,
+                        value=1000,
+                        step=100,
+                        help="Number of Monte Carlo iterations",
+                    )
+
+                with mc_col2:
+                    mc_resample = st.checkbox(
+                        "Resample N trades",
+                        value=False,
+                        help="If enabled, resample same number of trades as original",
+                    )
+
+                with mc_col3:
+                    if st.button("Run Monte Carlo", type="primary"):
+                        mc_key = f"mc_results_{mc_simulations}_{mc_resample}"
+                        if mc_key not in st.session_state:
+                            with st.spinner("Running Monte Carlo simulations..."):
+                                n_trades_val = (
+                                    len(trade_returns) if mc_resample else None
+                                )
+                                mc_results = run_monte_carlo(
+                                    trade_returns,
+                                    n_simulations=mc_simulations,
+                                    n_trades=n_trades_val,
+                                )
+                                st.session_state[mc_key] = mc_results
+
+                # Display results if available
+                mc_results = st.session_state.get(
+                    f"mc_results_{mc_simulations}_{mc_resample}"
+                )
+
+                if mc_results and len(mc_results.get("final_capital", [])) > 0:
+                    st.success(f"Completed {mc_simulations:,} simulations")
+
+                    # Calculate percentiles
+                    p10 = np.percentile(mc_results["total_return"], 10)
+                    p50 = np.percentile(mc_results["total_return"], 50)
+                    p90 = np.percentile(mc_results["total_return"], 90)
+
+                    dd_p10 = np.percentile(mc_results["max_drawdown"], 10)
+                    dd_p50 = np.percentile(mc_results["max_drawdown"], 50)
+                    dd_p90 = np.percentile(mc_results["max_drawdown"], 90)
+
+                    sharpe_p10 = np.percentile(mc_results["sharpe_ratio"], 10)
+                    sharpe_p50 = np.percentile(mc_results["sharpe_ratio"], 50)
+                    sharpe_p90 = np.percentile(mc_results["sharpe_ratio"], 90)
+
+                    wr_p10 = np.percentile(mc_results["win_rate"], 10)
+                    wr_p50 = np.percentile(mc_results["win_rate"], 50)
+                    wr_p90 = np.percentile(mc_results["win_rate"], 90)
+
+                    # Display summary metrics with color rules
+                    st.markdown("#### Monte Carlo Results Summary")
+
+                    mc_summary_cols = st.columns(4)
+
+                    with mc_summary_cols[0]:
+                        st.markdown("**Return Distribution (%)**")
+                        # Color based on P10/P90
+                        p10_color = "green" if p10 > 0 else "red"
+                        p90_color = "green" if p90 > 0 else "red"
+                        st.markdown(
+                            f"<span style='color:#ff6b6b'>P10: {p10:+.1f}%</span> | "
+                            f"P50: <span style='color:#00ffa3'>{p50:+.1f}%</span> | "
+                            f"<span style='color:{p90_color}'>P90: {p90:+.1f}%</span>",
+                            unsafe_allow_html=True,
+                        )
+
+                    with mc_summary_cols[1]:
+                        st.markdown("**Max Drawdown Distribution (%)**")
+                        dd_color_p10 = (
+                            "green"
+                            if abs(dd_p10) < 20
+                            else ("orange" if abs(dd_p10) < 30 else "red")
+                        )
+                        dd_color_p90 = (
+                            "green"
+                            if abs(dd_p90) < 20
+                            else ("orange" if abs(dd_p90) < 30 else "red")
+                        )
+                        st.markdown(
+                            f"P10: <span style='color:{dd_color_p10}'>{dd_p10:.1f}%</span> | "
+                            f"P50: <span style='color:#00ffa3'>{dd_p50:.1f}%</span> | "
+                            f"P90: <span style='color:{dd_color_p90}'>{dd_p90:.1f}%</span>",
+                            unsafe_allow_html=True,
+                        )
+
+                    with mc_summary_cols[2]:
+                        st.markdown("**Sharpe Ratio Distribution**")
+                        sharpe_color_p10 = (
+                            "green"
+                            if sharpe_p10 > 1.0
+                            else ("orange" if sharpe_p10 > 0.5 else "red")
+                        )
+                        sharpe_color_p90 = (
+                            "green"
+                            if sharpe_p90 > 1.0
+                            else ("orange" if sharpe_p90 > 0.5 else "red")
+                        )
+                        st.markdown(
+                            f"P10: <span style='color:{sharpe_color_p10}'>{sharpe_p10:.2f}</span> | "
+                            f"P50: <span style='color:#00ffa3'>{sharpe_p50:.2f}</span> | "
+                            f"P90: <span style='color:{sharpe_color_p90}'>{sharpe_p90:.2f}</span>",
+                            unsafe_allow_html=True,
+                        )
+
+                    with mc_summary_cols[3]:
+                        st.markdown("**Win Rate Distribution (%)**")
+                        wr_color_p10 = (
+                            "green"
+                            if wr_p10 > 50
+                            else ("orange" if wr_p10 > 40 else "red")
+                        )
+                        wr_color_p90 = (
+                            "green"
+                            if wr_p90 > 50
+                            else ("orange" if wr_p90 > 40 else "red")
+                        )
+                        st.markdown(
+                            f"P10: <span style='color:{wr_color_p10}'>{wr_p10:.1f}%</span> | "
+                            f"P50: <span style='color:#00ffa3'>{wr_p50:.1f}%</span> | "
+                            f"P90: <span style='color:{wr_color_p90}'>{wr_p90:.1f}%</span>",
+                            unsafe_allow_html=True,
+                        )
+
+                    # Histograms
+                    st.markdown("#### Distribution Histograms")
+
+                    hist_col1, hist_col2 = st.columns(2)
+
+                    with hist_col1:
+                        fig_ret = go.Figure()
+                        fig_ret.add_trace(
+                            go.Histogram(
+                                x=mc_results["total_return"],
+                                nbinsx=30,
+                                marker_color="#00ffa3",
+                                name="Return %",
+                            )
+                        )
+                        # Add vertical lines for percentiles
+                        fig_ret.add_vline(
+                            x=p10,
+                            line_dash="dash",
+                            line_color="#ff6b6b",
+                            annotation_text="P10",
+                        )
+                        fig_ret.add_vline(
+                            x=p50,
+                            line_dash="solid",
+                            line_color="#00ffa3",
+                            annotation_text="P50",
+                        )
+                        fig_ret.add_vline(
+                            x=p90,
+                            line_dash="dash",
+                            line_color="#ff6b6b",
+                            annotation_text="P90",
+                        )
+                        fig_ret.update_layout(
+                            title="Return Distribution (%)",
+                            template="plotly_dark",
+                            height=300,
+                            xaxis_title="Return (%)",
+                            yaxis_title="Frequency",
+                        )
+                        st.plotly_chart(fig_ret, use_container_width=True)
+
+                    with hist_col2:
+                        fig_dd = go.Figure()
+                        fig_dd.add_trace(
+                            go.Histogram(
+                                x=mc_results["max_drawdown"],
+                                nbinsx=30,
+                                marker_color="#ff6b6b",
+                                name="Max DD %",
+                            )
+                        )
+                        fig_dd.add_vline(
+                            x=dd_p10,
+                            line_dash="dash",
+                            line_color="#ffa500",
+                            annotation_text="P10",
+                        )
+                        fig_dd.add_vline(
+                            x=dd_p50,
+                            line_dash="solid",
+                            line_color="#00ffa3",
+                            annotation_text="P50",
+                        )
+                        fig_dd.add_vline(
+                            x=dd_p90,
+                            line_dash="dash",
+                            line_color="#d50000",
+                            annotation_text="P90",
+                        )
+                        fig_dd.update_layout(
+                            title="Max Drawdown Distribution (%)",
+                            template="plotly_dark",
+                            height=300,
+                            xaxis_title="Max Drawdown (%)",
+                            yaxis_title="Frequency",
+                        )
+                        st.plotly_chart(fig_dd, use_container_width=True)
+
+                    hist_col3, hist_col4 = st.columns(2)
+
+                    with hist_col3:
+                        fig_sharpe = go.Figure()
+                        fig_sharpe.add_trace(
+                            go.Histogram(
+                                x=mc_results["sharpe_ratio"],
+                                nbinsx=30,
+                                marker_color="#00d1ff",
+                                name="Sharpe",
+                            )
+                        )
+                        fig_sharpe.add_vline(
+                            x=sharpe_p10,
+                            line_dash="dash",
+                            line_color="#ffa500",
+                            annotation_text="P10",
+                        )
+                        fig_sharpe.add_vline(
+                            x=sharpe_p50,
+                            line_dash="solid",
+                            line_color="#00ffa3",
+                            annotation_text="P50",
+                        )
+                        fig_sharpe.add_vline(
+                            x=sharpe_p90,
+                            line_dash="dash",
+                            line_color="#00ffa3",
+                            annotation_text="P90",
+                        )
+                        fig_sharpe.update_layout(
+                            title="Sharpe Ratio Distribution",
+                            template="plotly_dark",
+                            height=300,
+                            xaxis_title="Sharpe Ratio",
+                            yaxis_title="Frequency",
+                        )
+                        st.plotly_chart(fig_sharpe, use_container_width=True)
+
+                    with hist_col4:
+                        fig_wr = go.Figure()
+                        fig_wr.add_trace(
+                            go.Histogram(
+                                x=mc_results["win_rate"],
+                                nbinsx=30,
+                                marker_color="#ffa500",
+                                name="Win Rate %",
+                            )
+                        )
+                        fig_wr.add_vline(
+                            x=wr_p10,
+                            line_dash="dash",
+                            line_color="#ff6b6b",
+                            annotation_text="P10",
+                        )
+                        fig_wr.add_vline(
+                            x=wr_p50,
+                            line_dash="solid",
+                            line_color="#00ffa3",
+                            annotation_text="P50",
+                        )
+                        fig_wr.add_vline(
+                            x=wr_p90,
+                            line_dash="dash",
+                            line_color="#00ffa3",
+                            annotation_text="P90",
+                        )
+                        fig_wr.update_layout(
+                            title="Win Rate Distribution (%)",
+                            template="plotly_dark",
+                            height=300,
+                            xaxis_title="Win Rate (%)",
+                            yaxis_title="Frequency",
+                        )
+                        st.plotly_chart(fig_wr, use_container_width=True)
+
+                    # Interpretation
+                    st.markdown("#### Monte Carlo Interpretation")
+                    if p10 > 0 and p90 > 0:
+                        st.success(
+                            f"✅ **Resultado robusto:** El P10 ({p10:+.1f}%) es positivo, "
+                            f"indicando que incluso en el escenario pesimista la estrategia genera retornos."
+                        )
+                    elif p90 < 0:
+                        st.error(
+                            f"⚠️ **Resultado frágil:** El P90 ({p90:+.1f}%) es negativo, "
+                            f"la estrategia puede perder en cualquier escenario."
+                        )
+                    else:
+                        st.warning(
+                            f"⚠️ **Resultado mixto:** P10 ({p10:+.1f}%) negativo, P90 ({p90:+.1f}%) positivo. "
+                            f"La estrategia tiene variabilidad significativa."
+                        )
+
+                    if abs(dd_p90) > 30:
+                        st.warning(
+                            f"⚠️ **Drawdown riesgo:** El P90 del drawdown es {dd_p90:.1f}%, "
+                            f"indicando potencial de pérdidas significativas en escenarios adversos."
+                        )
+                    else:
+                        st.success(
+                            f"✅ **Control de riesgo:** El P90 del drawdown ({dd_p90:.1f}%) está controlado."
+                        )
+                else:
+                    st.info("Click 'Run Monte Carlo' to execute simulations")
+
+            else:
+                st.info("No grouped trades available for Monte Carlo simulation")
+
+        except Exception as e:
+            st.warning(f"Monte Carlo simulation unavailable: {e}")
+
+        # ═══════════════════════════════════════════════════════════════════════
         # ANÁLISIS DE ENTRY SCORE, RS Y POSITION SIZING
         # ═══════════════════════════════════════════════════════════════════════
         try:
