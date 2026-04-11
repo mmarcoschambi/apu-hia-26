@@ -1750,145 +1750,142 @@ def run_pipeline(args) -> Dict[str, Any]:
     # PHASE 4: ResearchGate Validation
     # ══════════════════════════════════════════════════════════════════════
     validation_result = None
+    promoted_tier1 = None
+    best_is_score = best_score
 
     if not args.skip_validation:
-        # Base params (Tier 3 + Tier 1 + infrastructure) — Tier 2 re-derived per fold
-        base_params = {
-            # Tier 3 (institutional)
-            **tier3_engine,
-            # Tier 1 (optimized)
-            **best_tier1,
-            # Infrastructure
-            "mode": "production",
-            "fees": 0.001,
-            "slippage": 0.001,
-            "risk_dollars": int(args.capital * tier3_raw.get("risk_fraction", 0.005)),
-            "signal_type": signal_type,
-            "require_spy_above_sma50": True,
-            "max_vix_threshold": 25.0,
-            "use_market_regime_filter": True,
-            "block_trades_in_stage3": True,
-            "block_trades_in_stage4": True,
-            "use_earnings_calendar": False,
-            "use_trailing_stop": False,
-            "use_composite_sector_scoring": False,
-            # RS — viene de tier2_derived (Phase 2), no de final_config
-            "require_positive_rs": tier2_derived.get("require_positive_rs", True),
-            "use_rs_percentile": tier2_derived.get("use_rs_percentile", True),
-            "min_rs_percentile": tier2_derived.get("min_rs_percentile", 70.0),
-            "rs_lookback_days": tier2_derived.get("rs_lookback_days", 60),
-            # Pattern bonus — viene de best_tier1 (Optuna)
-            "pattern_bonus_high": best_tier1.get("pattern_bonus_high", 0.0),
-            "pattern_bonus_med": best_tier1.get("pattern_bonus_med", 0.0),
-            "pattern_bonus_low": best_tier1.get("pattern_bonus_low", 0.0),
-            "use_pattern_filter": tier2_derived.get("use_pattern_filter", False),
-            "min_pattern_confidence": tier2_derived.get("min_pattern_confidence", 0.5),
-            "pattern_cache_path": tier2_derived.get(
-                "pattern_cache_path", "data/pattern_matrix.pkl"
-            ),
-            "use_adaptive_filtering": True,
-            "use_pit_universe": use_pit,
-        }
+        # Get top 10 trials to find the most robust one (OOS-first selection)
+        trials_df = study.trials_dataframe()
+        top_trials = (
+            trials_df[trials_df["state"] == "COMPLETE"]
+            .sort_values("value", ascending=False)
+            .head(10)
+        )
 
-        # Multi-Window Walk Forward Validation
-        # Creates multiple train/test splits for robust validation
-        # IMPORTANT: Tier 2 is RE-DERIVED per fold using only train data
-        # to prevent IS/OOS contamination (Tier 2 never sees test data).
-        from datetime import datetime as dt
-
-        start_dt = dt.strptime(args.start, "%Y-%m-%d")
-        end_dt = dt.strptime(args.end, "%Y-%m-%d")
-        total_days = (end_dt - start_dt).days
+        logger.info(f"  Validating top {len(top_trials)} trials to find robust candidate...")
 
         # Walk-forward windows: fechas ABSOLUTAS para evitar validar en 2022
-        # 2022 es mercado bajista — SPY<SMA50 desactiva el sistema por diseño.
-        # Validar ahi castiga una feature. Usamos fechas que garantizan actividad.
-        # Criterio: aprobar si AL MENOS 1 de 3 ventanas pasa.
-        #
-        # Window 1: train 2019-2021 (bull), test 2021     (activo)
-        # Window 2: train 2019-2022 (full), test 2023     (post-bear recovery)
-        # Window 3: train 2019-2023 (full), test 2024-25  (bull reciente)
         absolute_windows = [
             ("2019-01-01", "2021-06-01", "2021-06-01", "2022-06-01"),
             ("2019-01-01", "2023-01-01", "2023-01-01", "2024-01-01"),
             ("2019-01-01", "2023-07-01", "2023-07-01", "2025-12-31"),
         ]
-        all_results = []
-        best_result = None
-        wf_best_score = -999.0
-        windows_passed = 0
-
-        for i, (train_s, train_e, test_s, test_e) in enumerate(absolute_windows, 1):
-            train_dates = (train_s, train_e)
-            test_dates = (test_s, test_e)
-
-            logger.info(f"\n  Walk-Forward Window {i}/{len(absolute_windows)}")
-            logger.info(f"    Train: {train_dates[0]} to {train_dates[1]}")
-            logger.info(f"    Test:  {test_dates[0]} to {test_dates[1]}")
-
-            # ── Re-derive Tier 2 from TRAIN data only (no OOS contamination) ──
-            logger.info(f"    Re-deriving Tier 2 from train period only...")
-            _, fold_trades = run_baseline(
-                universe=universe,
-                start_date=train_dates[0],
-                end_date=train_dates[1],
-                tier3_engine_params=tier3_engine,
-                initial_capital=args.capital,
-                use_pit_universe=use_pit,
-                signal_type=signal_type,  # propagar para etiquetado consistente en folds
-            )
-            fold_tier2 = derive_tier2_filters(
-                trades_df=fold_trades,
-                winner_threshold_r=0.0,
-                keep_pct=args.keep_pct,
-            )
-            logger.info(f"    Fold Tier 2: {fold_tier2}")
-
-            # Build full_params with fold-specific Tier 2
-            full_params = {**fold_tier2, **base_params}
-
-            result = validate_with_research_gate(
-                universe=universe,
-                full_params=full_params,
-                train_dates=train_dates,
-                test_dates=test_dates,
-                template_engine=_template_engine,  # PERF: evita 24 load_data() en Phase 4
-            )
-
-            all_results.append(result)
-
-            # Track best result y contar ventanas que pasan
-            if result.promotion_approved:
-                windows_passed += 1
-                score = result.sharpe_ratio - (result.max_drawdown_pct / 100)
-                if score > wf_best_score:
-                    wf_best_score = score
-                    best_result = result
-                logger.info(
-                    f"    ✅ Ventana {i} APROBADA (total: {windows_passed}/{i})"
-                )
-            else:
-                logger.info(f"    ❌ Ventana {i} rechazada")
-
-        # CRITERIO: aprobar si AL MENOS 1 de 3 ventanas pasa
-        # SPY>SMA50 hace que ventanas con test en 2022 fallen por diseño
         min_windows_required = 1
-        logger.info(
-            f"\n  Walk-Forward: {windows_passed}/{len(absolute_windows)} ventanas aprobadas"
-        )
 
-        if best_result and windows_passed >= min_windows_required:
-            validation_result = best_result
-            logger.info(
-                f"  ✅ APROBADO — mejor ventana Sharpe: {best_result.sharpe_ratio:.2f} | MaxDD: {best_result.max_drawdown_pct:.2f}%"
+        for idx, (_, row) in enumerate(top_trials.iterrows()):
+            # Reconstruct trial params
+            trial_params = {
+                k.replace("params_", ""): v
+                for k, v in row.items()
+                if k.startswith("params_")
+            }
+            # Add derived runner_pct
+            trial_params["runner_pct"] = round(
+                1.0 - trial_params.get("tp1_pct", 0.33) - trial_params.get("tp2_pct", 0.33), 2
             )
+            
+            trial_num = row.get("number", "N/A")
+            trial_value = row.get("value", 0)
+            
+            logger.info(f"\n  [Trial {trial_num}] Testing candidate {idx+1}/{len(top_trials)} (IS Score: {trial_value:.2f})")
+
+            # Base params (Tier 3 + Trial Tier 1 + infrastructure)
+            base_params = {
+                **tier3_engine,
+                **trial_params,
+                "mode": "production",
+                "fees": 0.001,
+                "slippage": 0.001,
+                "risk_dollars": int(args.capital * tier3_raw.get("risk_fraction", 0.005)),
+                "signal_type": signal_type,
+                "require_spy_above_sma50": True,
+                "max_vix_threshold": 25.0,
+                "use_market_regime_filter": True,
+                "block_trades_in_stage3": True,
+                "block_trades_in_stage4": True,
+                "use_earnings_calendar": False,
+                "use_trailing_stop": False,
+                "use_composite_sector_scoring": False,
+                "require_positive_rs": tier2_derived.get("require_positive_rs", True),
+                "use_rs_percentile": tier2_derived.get("use_rs_percentile", True),
+                "min_rs_percentile": tier2_derived.get("min_rs_percentile", 70.0),
+                "rs_lookback_days": tier2_derived.get("rs_lookback_days", 60),
+                "pattern_bonus_high": trial_params.get("pattern_bonus_high", 0.0),
+                "pattern_bonus_med": trial_params.get("pattern_bonus_med", 0.0),
+                "pattern_bonus_low": trial_params.get("pattern_bonus_low", 0.0),
+                "use_pattern_filter": tier2_derived.get("use_pattern_filter", False),
+                "min_pattern_confidence": tier2_derived.get("min_pattern_confidence", 0.5),
+                "pattern_cache_path": tier2_derived.get("pattern_cache_path", "data/pattern_matrix.pkl"),
+                "use_adaptive_filtering": True,
+                "use_pit_universe": use_pit,
+            }
+
+            all_results = []
+            best_fold_result = None
+            wf_best_score = -999.0
+            windows_passed = 0
+
+            for i, (train_s, train_e, test_s, test_e) in enumerate(absolute_windows, 1):
+                train_dates = (train_s, train_e)
+                test_dates = (test_s, test_e)
+
+                logger.info(f"    Fold {i}/{len(absolute_windows)}: Train {train_s} / Test {test_s}")
+
+                # Re-derive Tier 2 from TRAIN data only
+                _, fold_trades = run_baseline(
+                    universe=universe,
+                    start_date=train_dates[0],
+                    end_date=train_dates[1],
+                    tier3_engine_params=tier3_engine,
+                    initial_capital=args.capital,
+                    use_pit_universe=use_pit,
+                    signal_type=signal_type,
+                )
+                fold_tier2 = derive_tier2_filters(
+                    trades_df=fold_trades,
+                    winner_threshold_r=0.0,
+                    keep_pct=args.keep_pct,
+                )
+
+                full_params = {**fold_tier2, **base_params}
+
+                result = validate_with_research_gate(
+                    universe=universe,
+                    full_params=full_params,
+                    train_dates=train_dates,
+                    test_dates=test_dates,
+                    template_engine=_template_engine,
+                )
+                all_results.append(result)
+
+                if result.promotion_approved:
+                    windows_passed += 1
+                    score = result.sharpe_ratio - (result.max_drawdown_pct / 100)
+                    if score > wf_best_score:
+                        wf_best_score = score
+                        best_fold_result = result
+                    logger.info(f"      ✅ Fold {i} PASS")
+                else:
+                    logger.info(f"      ❌ Fold {i} FAIL ({', '.join(result.rejection_reasons[:2])})")
+
+            if windows_passed >= min_windows_required:
+                validation_result = best_fold_result
+                promoted_tier1 = trial_params
+                best_is_score = trial_value
+                logger.info(f"  🏆 [Trial {trial_num}] PROMOTED: Passed {windows_passed} windows.")
+                break
+            else:
+                logger.warning(f"  ⚠️  [Trial {trial_num}] REJECTED: Only {windows_passed} windows passed.")
+
+        if promoted_tier1:
+            best_tier1 = promoted_tier1
+            best_score = best_is_score
         else:
             validation_result = all_results[-1] if all_results else None
-            logger.warning(
-                "  ❌ Walk-Forward rechazado: ninguna ventana paso todos los criterios"
-            )
+            logger.error("  ❌ PIPELINE FAILED: None of the top 10 trials passed Walk-Forward validation.")
     else:
         logger.info("\n  SKIPPING ResearchGate validation (--skip-validation)")
+
 
     # ══════════════════════════════════════════════════════════════════════
     # FINAL OUTPUT
