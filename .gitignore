@@ -1,32 +1,54 @@
+# Backups y temporales
+*.bak
+*.bak_
+*.bak_*
+*.bak_fase*
+*.bak_week*
+*.bak_vcp*
+*.bak_pre*
+*.bak_prefixes
+*.bak_patterns*
+
+# Herramientas externas
+.qwen/
+
+# Patches temporales
+_patch_*.txt
+
+# Python cache
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-venv/
-env/
-ENV/
-.venv
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Data (generado, no code)
+data/ticker_cache.db
+data/cache/
+data/screener_cache/
+
+# Outputs generados (no fuente)
+outputs/backtests/backtest_results.csv
+outputs/backtests/backtest_metrics.json
+outputs/backtests/rejection_stats.json
+outputs/paper_trading/capital.json
+outputs/paper_trading/positions.json
+outputs/paper_trading/analytics_*.json
+outputs/paper_trading/daily_pnl_*.json
+outputs/paper_trading/pre_report_*.json
+outputs/paper_trading/simulation_report_*.json
+outputs/paper_trading/weekly_report_*.json
+
+# Configs generados por optimizacion (se regeneran)
+config/breakout_config.json
+config/flat_base_config.json
+config/vcp_config.json
+config/pocket_pivot_config.json
+config/leaders_config.json
+config/paper_portfolio_config.json
+
+# Logs
 *.log
 logs/
-data/cache/
-*.pkl
-.env
-.DS_Store
-*.swp
-*.swo
-.idea/
-.vscode/
-data/ticker_cache.db
-data/ticker_cache.db.backup
 
-# Large data files
-*.db
-*.sqlite
-*.csv
-!outputs/backtests/backtest_results.csv
-cvs/
-sp500/
-outputs/bolide_optimization/
-outputs/bolide_walkforward/
-outputs/bugatti_evo/
+# Jupyter
+.ipynb_checkpoints/

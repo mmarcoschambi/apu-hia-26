@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parent.parent
 RESULTS_DIR   = ROOT / "config" / "combo_results"
 # Baseline canonico de la semana: 2019-2024, 100 trials
 # Cuando pullback_entry corra y produzca resultados, actualizar este archivo
-SNAPSHOT_DIR  = ROOT / "baseline_snapshots" / "2026-03-29_week1_real"
+SNAPSHOT_DIR  = ROOT / "baseline_snapshots" / "2026-04-13_updated"  # activado 2026-04-13: baseline 2019-2024 canonico
 BASELINE_METRICS = SNAPSHOT_DIR / "baseline_metrics.json"
 # Fallback al snapshot historico si el nuevo no tiene datos aun
 _FALLBACK_METRICS = ROOT / "baseline_snapshots" / "2026-03-28_pre-week1" / "baseline_metrics.json"
