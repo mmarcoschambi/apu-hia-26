@@ -16,6 +16,7 @@ Exit codes: 0=PASSED  1=FAILED  2=ERROR
 """
 
 import argparse
+from datetime import date
 import json
 import sys
 from pathlib import Path
@@ -192,12 +193,57 @@ def run_check(combo_name: str, max_sharpe_drop: float, max_pbo: float) -> bool:
     return passed
 
 
+
+
+def _do_update_baseline(combos: list) -> None:
+    """Actualiza baseline_metrics.json con los resultados actuales de combo_results/."""
+    snapshot_dir = ROOT / "baseline_snapshots" / f"{date.today()}_updated"
+    snapshot_dir.mkdir(parents=True, exist_ok=True)
+    out_path = snapshot_dir / "baseline_metrics.json"
+
+    # Cargar baseline existente para preservar metadata
+    existing = {}
+    if BASELINE_METRICS.exists():
+        with open(BASELINE_METRICS) as f:
+            existing = json.load(f)
+
+    updated_combos = []
+    for combo_name in combos:
+        curr = load_current_metrics(combo_name)
+        if not curr:
+            print(f"  ⚠️  Sin datos actuales para {combo_name} - no se actualiza")
+            continue
+        entry = {
+            "name": combo_name,
+            "sharpe": curr.get("sharpe", 0.0),
+            "pbo":    curr.get("pbo", 1.0),
+            "pf":     curr.get("pf", 0.0),
+            "trades": curr.get("trades", 0),
+            "dd":     curr.get("dd", 100.0),
+            "wr":     curr.get("wr", 0.0),
+            "passed": curr.get("passed", False),
+        }
+        updated_combos.append(entry)
+        print(f"  ✅ Baseline actualizado: {combo_name} | sharpe={entry['sharpe']:.2f} pbo={entry['pbo']:.2%}")
+
+    meta = existing.get("meta", {})
+    meta["updated_at"] = str(date.today())
+    meta["note"] = f"Baseline actualizado {date.today()} via --update-baseline"
+
+    payload = {"meta": meta, "combos": updated_combos}
+    with open(out_path, "w") as f:
+        json.dump(payload, f, indent=2)
+
+    print(f"\n  💾 Baseline guardado en: {out_path}")
+    print(f"  ⚠️  Para activarlo como canonico, actualiza SNAPSHOT_DIR en validate_combo_regression.py")
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--combo", type=str)
     parser.add_argument("--all", action="store_true")
     parser.add_argument("--max-sharpe-drop", type=float, default=15.0)
     parser.add_argument("--max-pbo", type=float, default=0.50)
+    parser.add_argument("--update-baseline", action="store_true", help="Actualiza baseline_metrics.json con los resultados actuales")
     args = parser.parse_args()
 
     if not args.combo and not args.all:
@@ -222,6 +268,9 @@ def main():
     else:
         print("  ❌ HAY REGRESIONES — revisar combos fallidos arriba")
     print(f"{'='*62}\n")
+
+    if args.update_baseline:
+        _do_update_baseline(combos)
 
     sys.exit(0 if all_passed else 1)
 
