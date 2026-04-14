@@ -22,6 +22,7 @@ from src.core.triad_openbb import TriadOpenBB
 from src.core.screener import InstitutionalScreener
 from src.data.market_data import MarketDataProvider
 from src.strategies.triad_protocol import TriadStrategy, Camino
+from src.utils.market_regime import MarketRegimeClassifier, load_spy_vix_data
 
 logger = logging.getLogger(__name__)
 
@@ -306,6 +307,22 @@ class DailyBacktestEngine:
         print("🚀 Starting Daily Simulation...")
         date_range = pd.date_range(start=self.start_date, end=self.end_date, freq='B')
         total_days = len(date_range)
+
+        # Instanciar MarketRegimeClassifier para sizing dinamico por regimen
+        # Usa SPY + VIX para determinar Stage 1/2/3/4 y ajustar risk_factor
+        _regime_classifier = None
+        try:
+            _spy, _vix = load_spy_vix_data(
+                str(self.start_date)[:10], str(self.end_date)[:10],
+                cache=self.data_provider.cache if hasattr(self.data_provider, "cache") else None
+            )
+            if _spy is not None and not _spy.empty:
+                _regime_classifier = MarketRegimeClassifier(_spy, _vix)
+                print("MarketRegimeClassifier cargado para daily_engine")
+            else:
+                print("WARN: SPY no disponible, market_regime_factor=1.0 (fallback)")
+        except Exception as _e:
+            print(f"WARN: No se pudo instanciar MarketRegimeClassifier: {_e}. Usando factor=1.0")
         
         for i, today in enumerate(date_range):
             # Emit progress for UI
@@ -326,7 +343,15 @@ class DailyBacktestEngine:
             candidates = self._run_daily_screener(today)
             
             # 4. Prepare Orders for Tomorrow
-            self._prepare_orders(today, candidates, self.portfolio.equity)
+            # Calcular market_regime_factor del dia actual
+            _regime_factor = 1.0
+            if _regime_classifier is not None:
+                try:
+                    _ctx = _regime_classifier.get_market_context(today)
+                    _regime_factor = float(_ctx.get("risk_multiplier", 1.0))
+                except Exception:
+                    _regime_factor = 1.0
+            self._prepare_orders(today, candidates, self.portfolio.equity, regime_factor=_regime_factor)
         
         # CRITICAL: Close all remaining open positions at end of backtest period
         final_date = date_range[-1]
@@ -838,7 +863,7 @@ class DailyBacktestEngine:
                  
         return refined_candidates
 
-    def _prepare_orders(self, today, candidates, equity):
+    def _prepare_orders(self, today, candidates, equity, regime_factor: float = 1.0):
         for cand in candidates:
             if cand['symbol'] in self.portfolio.positions: continue
             
@@ -910,7 +935,7 @@ class DailyBacktestEngine:
                 stop_price=stop_price,
                 adr_percent=adr_pct,
                 avg_daily_volume=avg_volume,
-                market_regime_factor=1.0
+                market_regime_factor=regime_factor  # dinamico por Stage 1/2/3/4
             )
             
             # ═══════════════════════════════════════════════════════════════
