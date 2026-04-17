@@ -36,6 +36,8 @@ def simulate_fast_core(
     use_atr_stop,
     atr_stop_multiplier,
     atr_trailing_multiplier,
+    fee_rate,
+    slippage_rate,
 ):
     """
     Núcleo de simulación de alta velocidad compilado con Numba.
@@ -262,8 +264,13 @@ def simulate_fast_core(
                 # Asegurar que no vendamos más de lo que tenemos
                 exit_shares = min(exit_shares, pos_shares[i])
 
-                pnl = (exit_price - pos_entry_price[i]) * exit_shares
-                cash += exit_price * exit_shares
+                exit_value = exit_price * exit_shares
+                exit_price_net = exit_price * (1 - slippage_rate)
+                exit_fee = exit_value * fee_rate
+                net_proceeds = (exit_price_net * exit_shares) - exit_fee
+
+                pnl = (exit_price_net - pos_entry_price[i]) * exit_shares - exit_fee
+                cash += net_proceeds
                 pos_shares[i] -= exit_shares
 
                 # Registrar Trade - DYNAMIC RESIZING to save memory
@@ -411,12 +418,14 @@ def simulate_fast_core(
                     else:
                         next_open = curr_close  # last day fallback
 
-                    cost = shares * next_open
+                    entry_price_with_slippage = next_open * (1 + slippage_rate)
+                    entry_cost = shares * entry_price_with_slippage
+                    entry_fee = entry_cost * fee_rate
 
                     # Verificar cash disponible
-                    if cash >= cost:
+                    if cash >= (entry_cost + entry_fee):
                         # Ejecutar Entrada al open del dia siguiente
-                        cash -= cost
+                        cash -= entry_cost + entry_fee
                         pos_active[i] = True
                         pos_shares[i] = shares
                         pos_original_shares[i] = shares

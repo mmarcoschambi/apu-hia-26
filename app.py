@@ -76,6 +76,22 @@ from src.ui.dashboard_cache import (
     cached_build_index,
 )
 
+# --- YAML COMBO CONFIG LOADER (Fase 2: Centralized config) ---
+try:
+    from config.combo_loader import (
+        load_combo_configs,
+        get_combo_by_name,
+        get_go_combos,
+        ComboConfig,
+    )
+    _yaml_combos = load_combo_configs()
+    _yaml_go_combos = get_go_combos(_yaml_combos)
+    _yaml_combos_available = True
+except Exception as _yce:
+    _yaml_combos = []
+    _yaml_go_combos = []
+    _yaml_combos_available = False
+
 # --- LOAD COMBO RANKING (optional production selector) ---
 _combo_top5_path = Path("config/combos/top5.json")
 try:
@@ -99,8 +115,66 @@ def _normalize_combo_config(raw: dict) -> dict:
     return cfg
 
 
+def _convert_yaml_to_production_dict(combo: ComboConfig) -> dict:
+    """Convert ComboConfig (YAML) to nested dict structure expected by app.py."""
+    # Start with production defaults as baseline
+    try:
+        base = load_production_config()
+    except Exception:
+        # Fallback to empty if file missing
+        base = {}
+    
+    # Map flat YAML fields to nested JSON structure
+    return {
+        "combo_name": combo.name,
+        "status": combo.status,
+        "pbo": combo.pbo,
+        "wf_sharpe_mean": combo.wf_sharpe_mean,
+        "tier1_strategy": {
+            **base.get("tier1_strategy", {}),
+            "fee_rate": combo.fee_rate,
+            "slippage_rate": combo.slippage_rate,
+        },
+        "tier2_filters": {
+            **base.get("tier2_filters", {}),
+            "min_rvol": combo.min_rvol,
+            "min_adr": combo.min_adr,
+            "min_consolidation_days": combo.min_consolidation_days,
+            "flat_base_range_pct": combo.flat_base_range_pct,
+            "vcp_contraction_threshold": combo.vcp_contraction_threshold,
+        },
+        "tier3_risk": {
+            **base.get("tier3_risk", {}),
+            "max_positions": combo.max_positions,
+            "max_position_pct": combo.max_position_pct,
+            "max_exposure_pct": combo.max_exposure_pct,
+        },
+        "market_regime": {
+            **base.get("market_regime", {}),
+            "require_spy_above_sma50": combo.spx_sma_period > 0,
+            "max_vix": combo.vix_max,
+            "regime_blocked": combo.regime_blocked,
+        },
+        "scanner": {
+            "name": combo.scanner_filter,
+            "mode": "all"
+        },
+        "pattern": {
+            "signal_type": combo.pattern_filter
+        }
+    }
+
+
 def _load_selected_strategy_config() -> dict:
     """Load active strategy config from the selected combo or production fallback."""
+    # 1. PRIORITY: YAML validated combos (Fase 2 system)
+    selected_yaml = st.session_state.get("active_yaml_combo")
+    if _yaml_combos_available and selected_yaml:
+        combo = get_combo_by_name(_yaml_combos, selected_yaml, require_go=False)
+        if combo:
+            return _convert_yaml_to_production_dict(combo)
+
+    # 2. SECONDARY: top5.json (old system)
     selected_label = st.session_state.get("active_combo_label")
     if _combo_top5 and selected_label:
         for combo in _combo_top5:
@@ -117,6 +191,8 @@ def _load_selected_strategy_config() -> dict:
                         return _normalize_combo_config(raw)
                     except Exception:
                         break
+    
+    # 3. FALLBACK: production_config.json
     return load_production_config()
 
 
@@ -142,6 +218,54 @@ _mr = {
     **_raw_config.get("market_regime", {}),
 }
 _perf = _raw_config.get("performance", {})
+
+# ── YAML COMBO PARAMETER INJECTION (Fase 3: Override with active YAML combo) ──
+# When a YAML combo is active, its parameters override the defaults/production config
+# This ensures the scanner live uses the exact params from the selected combo
+# NOTE: _active_yaml_combo is set in sidebar below, use session_state for access here
+_active_yaml_combo = None
+if _yaml_combos_available and _yaml_go_combos:
+    _prev_combo_name = st.session_state.get("active_yaml_combo")
+    if _prev_combo_name:
+        _active_yaml_combo = get_combo_by_name(_yaml_combos, _prev_combo_name)
+        if _active_yaml_combo:
+            _yc = _active_yaml_combo  # type: ComboConfig
+            
+            # Override tier2 (filters/quality)
+            _t2.update({
+                'min_rvol': _yc.min_rvol,
+                'min_adr': _yc.min_adr,
+                'min_consolidation_days': _yc.min_consolidation_days,
+            })
+            
+            # Override tier3 (risk)
+            _t3.update({
+                'max_position_pct': _yc.max_position_pct,
+                'max_exposure_pct': _yc.max_exposure_pct,
+            })
+            
+            # Override market regime
+            _mr.update({
+                'max_vix': _yc.vix_max,
+            })
+            
+            # Store for scanner integration
+            _yaml_combo_params = {
+                'fee_rate': _yc.fee_rate,
+                'slippage_rate': _yc.slippage_rate,
+                'regime_blocked': _yc.regime_blocked,
+                'scanner_filter': _yc.scanner_filter,
+                'pattern_filter': _yc.pattern_filter,
+                'lookback_days': _yc.lookback_days,
+                'max_setups': _yc.max_setups,
+                'active_combo_name': _yc.name,
+            }
+        else:
+            _yaml_combo_params = {}
+    else:
+        _yaml_combo_params = {}
+else:
+    _yaml_combo_params = {}
 
 # --- LOAD VCP CONFIG (separate golden config for VCP pattern) ---
 _vcp_config_path = "config/vcp_config.json"
@@ -1265,6 +1389,61 @@ with st.sidebar:
     st.title("Momentum V2")
     st.caption("Institutional Trading Engine")
 
+    # ── YAML COMBO SELECTOR (Fase 3: Centralized config UI) ──────────
+    if _yaml_combos_available and _yaml_go_combos:
+        st.divider()
+        st.subheader("🎯 Combo Activo (YAML)")
+        
+        _yaml_combo_names = [c.name for c in _yaml_go_combos]
+        _yaml_labels = [
+            f"{c.name} (Sharpe WF: {c.wf_sharpe_mean:.2f})" 
+            for c in _yaml_go_combos
+        ]
+        
+        # Restore previous selection or default to first
+        _prev_yaml_combo = st.session_state.get("active_yaml_combo")
+        _default_idx = 0
+        if _prev_yaml_combo and _prev_yaml_combo in _yaml_combo_names:
+            _default_idx = _yaml_combo_names.index(_prev_yaml_combo)
+        
+        _yaml_selected_label = st.selectbox(
+            "Combo activo",
+            options=_yaml_labels,
+            index=_default_idx,
+            help="Selecciona un combo GO validado por walk-forward",
+        )
+        
+        # Update session state and global reference
+        _selected_combo_name = _yaml_combo_names[_yaml_labels.index(_yaml_selected_label)]
+        st.session_state["active_yaml_combo"] = _selected_combo_name
+        _active_yaml_combo = get_combo_by_name(_yaml_combos, _selected_combo_name)
+        
+        # Panel de estado del combo seleccionado
+        with st.expander("📊 Estado del Combo", expanded=True):
+            st.metric("Status", _active_yaml_combo.status)
+            st.metric("Sharpe WF Mean", f"{_active_yaml_combo.wf_sharpe_mean:.2f}")
+            st.caption(f"Min: {_active_yaml_combo.wf_sharpe_min:.2f}")
+            st.metric("PBO", f"{_active_yaml_combo.pbo:.0%}")
+            st.caption(f"Costos: {_active_yaml_combo.cost_robustness}")
+            
+            # Alerts
+            if _active_yaml_combo.alerts:
+                for alert in _active_yaml_combo.alerts:
+                    if "⚠" in alert:
+                        st.warning(alert)
+                    else:
+                        st.info(alert)
+        
+        # Scanner parameters preview
+        with st.expander("⚙️ Parámetros del Scanner", expanded=False):
+            st.caption(f"Filter: {_active_yaml_combo.scanner_filter}")
+            st.caption(f"Patterns: {_active_yaml_combo.pattern_filter}")
+            st.caption(f"Fee: {_active_yaml_combo.fee_rate*10000:.0f}bps | Slippage: {_active_yaml_combo.slippage_rate*10000:.0f}bps")
+            st.caption(f"Max positions: {_active_yaml_combo.max_positions}")
+            st.caption(f"Regime blocked: {_active_yaml_combo.regime_blocked}")
+    else:
+        _active_yaml_combo = None
+
     # ── EXECUTION MODE ───────────────────────────────────────────────
     _exec_mode = st.radio(
         "Execution Mode",
@@ -1526,7 +1705,7 @@ with st.sidebar:
                 "Risk per Trade ($)",
                 value=int(_t1.get("risk_dollars", 1000)),
                 min_value=50,
-                max_value=2000,
+                max_value=10000,
                 step=50,
                 help="Fixed dollar risk per trade (no compounding)",
             )

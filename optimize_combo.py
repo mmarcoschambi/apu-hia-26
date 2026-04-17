@@ -30,7 +30,7 @@ import sqlite3
 import warnings
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any, Tuple, List
+from typing import Dict, Any, Tuple, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -58,8 +58,6 @@ try:
         RobustObjectiveConfig,
     )
     from config.defaults import get_tier2_defaults
-    from src.screeners import ScreenerRegistry
-    from src.data.market_data import MarketDataProvider
     from src.data.screener_cache import ScreenerCacheManager
 except ImportError as e:
     logger.error(f"Missing module: {e}")
@@ -108,31 +106,99 @@ def list_available_combos() -> List[str]:
 
 
 def get_universe_from_db(
-    limit: int = 50, start_date: str = "2021-01-01", end_date: str = "2025-12-31"
+    limit: int = 50,
+    start_date: str = "2021-01-01",
+    end_date: str = "2025-12-31",
+    seed: Optional[int] = None,
+    liquidity_stratified: bool = True,
 ) -> List[str]:
-    """Get top tickers by data availability from cache DB."""
+    """
+    Get tickers from cache DB with STRATIFIED sampling.
+    Uses same implementation as optimize_3tier.py for consistency.
+    """
     db_path = Path("data/ticker_cache.db")
     if not db_path.exists():
         return get_fallback_universe(limit)
 
+    # Get full universe with metrics
     try:
-        conn = sqlite3.connect(str(db_path))
+        import duckdb
+
+        conn = duckdb.connect()
+        conn.execute(f"ATTACH '{db_path}' AS src (TYPE SQLITE, READ_ONLY TRUE)")
         query = """
-            SELECT ticker, COUNT(*) as cnt
-            FROM ohlcv_cache
+            SELECT 
+                ticker, 
+                COUNT(*) as cnt,
+                AVG(close * volume) as avg_dollar_vol,
+                AVG(volume) as avg_volume,
+                AVG(close) as avg_price
+            FROM src.ohlcv_cache
             WHERE date >= ? AND date <= ?
             GROUP BY ticker
-            ORDER BY cnt DESC
-            LIMIT ?
+            HAVING cnt >= 100
         """
-        df = pd.read_sql_query(query, conn, params=(start_date, end_date, limit))
+        df = conn.execute(query, [start_date, end_date]).fetchdf()
         conn.close()
-        if not df.empty:
-            return df["ticker"].tolist()
+    except ImportError:
+        try:
+            conn = sqlite3.connect(str(db_path))
+            query = """
+                SELECT 
+                    ticker, 
+                    COUNT(*) as cnt,
+                    AVG(close * volume) as avg_dollar_vol,
+                    AVG(volume) as avg_volume,
+                    AVG(close) as avg_price
+                FROM ohlcv_cache
+                WHERE date >= ? AND date <= ?
+                GROUP BY ticker
+                HAVING COUNT(*) >= 100
+            """
+            df = pd.read_sql_query(query, conn, params=(start_date, end_date))
+            conn.close()
+        except Exception as e:
+            logger.error(f"Error querying ticker_cache.db: {e}")
+            return get_fallback_universe(limit)
     except Exception as e:
-        logger.error(f"Error querying DB: {e}")
+        logger.error(f"DuckDB query failed ({e}), falling back")
+        return get_fallback_universe(limit)
 
-    return get_fallback_universe(limit)
+    if df.empty or len(df) < 10:
+        return get_fallback_universe(limit)
+
+    rng = np.random.default_rng(seed) if seed is not None else np.random
+
+    if liquidity_stratified and len(df) >= 30:
+        try:
+            df["liq_bin"] = pd.qcut(
+                df["avg_dollar_vol"].clip(lower=1e6),
+                q=min(5, len(df) // 10),
+                labels=False,
+                duplicates="drop",
+            )
+            n_bins = df["liq_bin"].nunique()
+            per_bin = max(1, limit // n_bins)
+
+            sampled = []
+            for bin_id in sorted(df["liq_bin"].unique()):
+                bin_df = df[df["liq_bin"] == bin_id]
+                take = min(len(bin_df), per_bin + rng.integers(0, 3))
+                sampled.append(bin_df.sample(min(take, len(bin_df)), random_state=seed))
+
+            result = pd.concat(sampled, ignore_index=True)
+            result = result.sample(frac=1, random_state=seed).reset_index(drop=True)
+            tickers = result["ticker"].tolist()[:limit]
+            method = "stratified"
+        except Exception:
+            tickers = df.nlargest(limit, "cnt")["ticker"].tolist()
+            method = "top-cnt (stratified failed)"
+    else:
+        tickers = df.nlargest(limit, "cnt")["ticker"].tolist()
+        method = "top-cnt"
+
+    logger.debug(f"Universe ({method}, seed={seed}): {len(tickers)} tickers")
+    return tickers
 
 
 def apply_screener_to_universe(
@@ -326,7 +392,9 @@ def phase2_derive_tier2(
 
     # Si hay muy pocos trades, los percentiles son ruidosos -> 0-trade collapse en OOS
     if len(baseline_trades) < 20:
-        logger.warning(f"Baseline tiene solo {len(baseline_trades)} trades - insuficiente para derivar filtros. Usando defaults del combo JSON.")
+        logger.warning(
+            f"Baseline tiene solo {len(baseline_trades)} trades - insuficiente para derivar filtros. Usando defaults del combo JSON."
+        )
         base_defaults = get_tier2_defaults()
         return {
             **base_defaults,
@@ -336,7 +404,6 @@ def phase2_derive_tier2(
         }
 
     winners = baseline_trades[baseline_trades["pnl"] > 0]
-    losers = baseline_trades[baseline_trades["pnl"] <= 0]
 
     derived = {}
     cut_percentile = 100 - keep_pct
@@ -475,13 +542,16 @@ def phase3_optimize_tier1(
     _use_rich_space = False
     try:
         from src.config.pattern_configs import get_pattern_config
+
         _pattern_config = get_pattern_config(pattern_type)
         _use_rich_space = True
         logger.info(f"  Usando optuna_space rico de pattern_configs ({pattern_type})")
     except Exception as _e:
         logger.info(f"  Usando optuna_space del JSON del combo: {_e}")
 
-    _extra_fixed = _pattern_config.get("extra_fixed_params", {}) if _pattern_config else {}
+    _extra_fixed = (
+        _pattern_config.get("extra_fixed_params", {}) if _pattern_config else {}
+    )
     optuna_space = combo["tier1_optuna_space"]
 
     # =========================================================
@@ -500,13 +570,13 @@ def phase3_optimize_tier1(
         "screener_name": combo["screener"]["name"],
         "screener_cache_path": str(SCREENER_CACHE.cache_dir),
     }
-    
+
     _template_engine = AdvancedVectorBTEngine(
         universe=universe,
         start_date=start_date,
         end_date=end_date,
         initial_capital=100_000,
-        **_base_params
+        **_base_params,
     )
     _template_engine.load_data()
 
@@ -523,27 +593,39 @@ def phase3_optimize_tier1(
     def objective(trial: optuna.Trial) -> float:
         if _use_rich_space and _pattern_config:
             params = _pattern_config["optuna_space"](trial, _extra_fixed)
-            if params is None: return -999.0
+            if params is None:
+                return -999.0
         else:
             params = {}
             for key, cfg in optuna_space.items():
                 if isinstance(cfg.get("min"), int):
-                    params[key] = trial.suggest_int(key, cfg["min"], cfg["max"], step=cfg.get("step", 1))
+                    params[key] = trial.suggest_int(
+                        key, cfg["min"], cfg["max"], step=cfg.get("step", 1)
+                    )
                 else:
-                    params[key] = trial.suggest_float(key, cfg["min"], cfg["max"], step=cfg.get("step", 0.25))
+                    params[key] = trial.suggest_float(
+                        key, cfg["min"], cfg["max"], step=cfg.get("step", 0.25)
+                    )
 
         tp1_pct = params.get("tp1_pct", 0.35)
         tp2_pct = params.get("tp2_pct", 0.25)
         runner_pct = round(1.0 - tp1_pct - tp2_pct, 2)
-        if runner_pct < 0.10 or runner_pct > 0.35: return -999.0
-        if params.get("tp2_r", 3.0) - params.get("tp1_r", 1.5) < 0.5: return -999.0
+        if runner_pct < 0.10 or runner_pct > 0.35:
+            return -999.0
+        if params.get("tp2_r", 3.0) - params.get("tp1_r", 1.5) < 0.5:
+            return -999.0
 
-        full_params = {**params, "tp1_pct": tp1_pct, "tp2_pct": tp2_pct, "runner_pct": runner_pct}
-        
+        full_params = {
+            **params,
+            "tp1_pct": tp1_pct,
+            "tp2_pct": tp2_pct,
+            "runner_pct": runner_pct,
+        }
+
         try:
             # Clone from template (PERF)
             engine = _template_engine.clone_with_params(**full_params)
-            
+
             if _precompute_score:
                 _rs_w = full_params.get("score_rs_weight", 0.70)
                 _prox_w = full_params.get("score_proximity_weight", 0.30)
@@ -551,23 +633,34 @@ def phase3_optimize_tier1(
                 if _total_w > 0:
                     _rs_w /= _total_w
                     _prox_w /= _total_w
-                engine._entry_score_precomputed = (_rs_w * _rs_component + _prox_w * _prox_component).astype(np.float32)
+                engine._entry_score_precomputed = (
+                    _rs_w * _rs_component + _prox_w * _prox_component
+                ).astype(np.float32)
 
             results = engine.run_backtest()
             n_trades = results.get("total_trades", 0)
-            if n_trades < 15: return -999.0
+            if n_trades < 15:
+                return -999.0
 
             robust_config = RobustObjectiveConfig(
-                p5_weight=1.0, p10_weight=0.5, p50_weight=0.2,
-                sharpe_weight=0.30, sortino_weight=0.30, calmar_weight=0.20,
-                max_dd_penalty=2.0, dd_duration_penalty=1.0, loss_prob_penalty=1.5
+                p5_weight=1.0,
+                p10_weight=0.5,
+                p50_weight=0.2,
+                sharpe_weight=0.30,
+                sortino_weight=0.30,
+                calmar_weight=0.20,
+                max_dd_penalty=2.0,
+                dd_duration_penalty=1.0,
+                loss_prob_penalty=1.5,
             )
             score = robust_objective_function(results, robust_config)
 
             # Penalizacion por activity
             _MIN_TRADES_FOLD_TOTAL = 40
             if n_trades < _MIN_TRADES_FOLD_TOTAL:
-                _activity_penalty = 0.40 * (1.0 - (n_trades - 15) / (_MIN_TRADES_FOLD_TOTAL - 15))
+                _activity_penalty = 0.40 * (
+                    1.0 - (n_trades - 15) / (_MIN_TRADES_FOLD_TOTAL - 15)
+                )
                 score = score - _activity_penalty
 
             trial.set_user_attr("total_return", results.get("total_return", 0) * 100)
@@ -578,16 +671,20 @@ def phase3_optimize_tier1(
             trial.set_user_attr("profit_factor", results.get("profit_factor", 0))
 
             return score
-        except Exception as e:
+        except Exception:
             return -999.0
 
     study = optuna.create_study(
         direction="maximize",
-        sampler=optuna.samplers.TPESampler(seed=seed, n_startup_trials=20, n_ei_candidates=24, multivariate=False)
+        sampler=optuna.samplers.TPESampler(
+            seed=seed, n_startup_trials=20, n_ei_candidates=24, multivariate=False
+        ),
     )
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
-    study.optimize(objective, n_trials=n_trials, n_jobs=n_jobs, show_progress_bar=(n_jobs == 1))
+    study.optimize(
+        objective, n_trials=n_trials, n_jobs=n_jobs, show_progress_bar=(n_jobs == 1)
+    )
 
     best = study.best_params.copy()
     tp1_pct = best.get("tp1_pct", 0.35)
@@ -601,7 +698,8 @@ def phase3_optimize_tier1(
 
     best_score = study.best_value
     logger.info(f"\n  BEST TIER 1 (Score: {best_score:.2f}):")
-    for k, v in best.items(): logger.info(f"    {k}: {v}")
+    for k, v in best.items():
+        logger.info(f"    {k}: {v}")
 
     return best, best_score, study, _template_engine
 
@@ -781,6 +879,7 @@ def run_combo_optimization(
     skip_validation: bool = False,
     skip_optimization: bool = False,
     seed: int = 42,
+    liquidity_stratified: bool = True,
 ) -> Dict[str, Any]:
     """Run full 3-tier optimization for a single combo."""
     logger.info(f"\n{'#' * 70}")
@@ -792,7 +891,11 @@ def run_combo_optimization(
 
     combo = load_combo_config(combo_name)
     universe = get_universe_from_db(
-        limit=tickers_limit, start_date=start_date, end_date=end_date
+        limit=tickers_limit,
+        start_date=start_date,
+        end_date=end_date,
+        seed=seed,
+        liquidity_stratified=liquidity_stratified,
     )
 
     screener_name = combo["screener"]["name"]
@@ -835,60 +938,113 @@ def run_combo_optimization(
             seed=seed,
         )
 
-    # OOS: ultimo 20% del periodo como hold-out interno (walk-forward split).
-    from datetime import timedelta as _timedelta
-
-    _start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-    _end_dt = datetime.strptime(end_date, "%Y-%m-%d")
-    _total_days = (_end_dt - _start_dt).days
-    _oos_days = int(_total_days * 0.20)
-    _oos_start = _end_dt - _timedelta(days=_oos_days)
-    train_dates = (start_date, _oos_start.strftime("%Y-%m-%d"))
-    test_dates = (_oos_start.strftime("%Y-%m-%d"), end_date)
+    # Multi-window walk-forward validation (same as optimize_3tier.py)
+    # 3 absolute windows for robustness verification
+    absolute_windows = [
+        ("2019-01-01", "2021-06-01", "2021-06-01", "2022-06-01"),
+        ("2019-01-01", "2023-01-01", "2023-01-01", "2024-01-01"),
+        ("2019-01-01", "2023-07-01", "2023-07-01", "2025-12-31"),
+    ]
+    min_windows_required = 2  # research (2/3); production strict use 3
 
     validation_passed = True
     validation_result = None
     oos_score = score
-    
+
     if not skip_validation and not skip_optimization:
-        # Implement Top-10 OOS Loop (Steve Jacobs Robustness Fix)
         trials_df = study.trials_dataframe()
-        top_trials = trials_df[trials_df["state"] == "COMPLETE"].sort_values("value", ascending=False).head(10)
-        
-        logger.info(f"  Validating top {len(top_trials)} trials to find robust candidate...")
-        
+        top_trials = (
+            trials_df[trials_df["state"] == "COMPLETE"]
+            .sort_values("value", ascending=False)
+            .head(10)
+        )
+
+        logger.info(
+            f"  Validating top {len(top_trials)} trials across {len(absolute_windows)} windows..."
+        )
+
         found_robust = False
+        best_oos_score = -999
+
         for idx, (_, row) in enumerate(top_trials.iterrows()):
-            trial_params = {k.replace("params_", ""): v for k, v in row.items() if k.startswith("params_")}
+            trial_params = {
+                k.replace("params_", ""): v
+                for k, v in row.items()
+                if k.startswith("params_")
+            }
             tp1_pct = trial_params.get("tp1_pct", 0.35)
             tp2_pct = trial_params.get("tp2_pct", 0.25)
             trial_params["runner_pct"] = round(1.0 - tp1_pct - tp2_pct, 2)
-            
-            logger.info(f"  [Candidate {idx+1}/10] Trial {row['number']} (IS Score: {row['value']:.2f})")
-            
-            v_res = validate_combo_result(
-                combo, trial_params, tier2_filters, train_dates, test_dates, screened_universe, 100_000,
-                template_engine=template_engine
+
+            logger.info(
+                f"\n  [Candidate {idx + 1}/10] Trial {row['number']} (IS Score: {row['value']:.2f})"
             )
-            
-            if v_res.promotion_approved:
-                logger.info(f"  🏆 Candidate {idx+1} PASSED Walk-Forward validation!")
+
+            windows_passed = 0
+            all_results = []
+
+            for w_idx, (train_s, train_e, test_s, test_e) in enumerate(
+                absolute_windows, 1
+            ):
+                train_dates = (train_s, train_e)
+                test_dates = (test_s, test_e)
+
+                logger.info(
+                    f"    Fold {w_idx}/{len(absolute_windows)}: Train {train_s} / Test {test_s}"
+                )
+
+                # Re-derive Tier 2 from train data only (avoid look-ahead)
+                fold_baseline_trades = phase1_baseline_run(
+                    combo, screened_universe, train_s, train_e
+                )
+                fold_tier2 = phase2_derive_tier2(fold_baseline_trades, combo)
+
+                v_res = validate_combo_result(
+                    combo,
+                    trial_params,
+                    fold_tier2,
+                    train_dates,
+                    test_dates,
+                    screened_universe,
+                    100_000,
+                    template_engine=template_engine,
+                )
+                all_results.append(v_res)
+
+                if v_res.promotion_approved:
+                    windows_passed += 1
+                    _s = v_res.sharpe_ratio - (v_res.max_drawdown_pct / 100)
+                    if _s > best_oos_score:
+                        best_oos_score = _s
+                        validation_result = v_res
+                    logger.info(f"      Fold {w_idx} PASS")
+                else:
+                    logger.info(
+                        f"      Fold {w_idx} FAIL ({v_res.rejection_reasons[:1]})"
+                    )
+
+            if windows_passed >= min_windows_required:
+                logger.info(
+                    f"  🏆 Candidate {idx + 1} PASSED {windows_passed}/{len(absolute_windows)} windows!"
+                )
                 tier1_params = trial_params
                 score = row["value"]
-                # oos_score: Sharpe OOS real (value Optuna puede ser negativo por penalizaciones DD)
-                oos_score = getattr(v_res, "sharpe_ratio", score)
-                validation_result = v_res
+                oos_score = getattr(validation_result, "sharpe_ratio", score)
                 validation_passed = True
                 found_robust = True
                 break
             else:
-                logger.info(f"  ❌ Candidate {idx+1} FAILED OOS check.")
-        
+                logger.info(
+                    f"  ❌ Candidate {idx + 1} FAILED: only {windows_passed}/{len(absolute_windows)} windows."
+                )
+
         if not found_robust:
-            logger.error("  ❌ PIPELINE FAILED: None of the top 10 trials passed OOS validation.")
+            logger.error(
+                "  ❌ PIPELINE FAILED: None of top 10 trials passed multi-window validation."
+            )
             validation_passed = False
-            validation_result = v_res # Fallback to last validation for metrics
-            
+            validation_result = all_results[-1] if all_results else None
+
     elif not skip_validation and skip_optimization:
         validation_result = validate_combo_result(
             combo,
@@ -971,6 +1127,19 @@ def main():
         action="store_true",
         help="Build historical screener cache and exit",
     )
+    parser.add_argument(
+        "--stratified-universe",
+        action="store_true",
+        dest="stratified_universe",
+        default=True,
+        help="Use stratified sampling by liquidity (default: True)",
+    )
+    parser.add_argument(
+        "--no-stratified-universe",
+        action="store_false",
+        dest="stratified_universe",
+        help="Use legacy top-by-count universe (disable stratification)",
+    )
     args = parser.parse_args()
 
     if args.list_combos:
@@ -994,9 +1163,13 @@ def main():
 
     if args.build_screener_cache:
         for combo_name in combos:
-            combo = load_combo_config(combo_name)
+            _ = load_combo_config(combo_name)
             universe = get_universe_from_db(
-                limit=args.tickers, start_date=args.start, end_date=args.end
+                limit=args.tickers,
+                start_date=args.start,
+                end_date=args.end,
+                seed=args.seed,
+                liquidity_stratified=args.stratified_universe,
             )
             build_screener_cache_for_combo(combo_name, args.start, args.end, universe)
         return
@@ -1014,6 +1187,7 @@ def main():
                 skip_validation=args.skip_validation,
                 skip_optimization=args.skip_optimization,
                 seed=args.seed,
+                liquidity_stratified=args.stratified_universe,
             )
             results.append(result)
         except Exception as e:

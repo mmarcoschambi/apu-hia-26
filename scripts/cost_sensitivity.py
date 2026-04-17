@@ -15,6 +15,7 @@ Uso:
 import argparse, json, sys, logging, warnings, sqlite3
 from pathlib import Path
 from datetime import datetime
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -63,6 +64,59 @@ COST_GRID = [
 ]
 
 
+def _extract_total_return_pct(
+    result: dict[str, Any], initial_capital: float = 100_000
+) -> float:
+    """Extract total return in percent across mixed engine key conventions."""
+    total_return_pct = result.get("total_return_pct")
+    if total_return_pct is not None:
+        return float(total_return_pct)
+
+    total_return = result.get("total_return")
+    if total_return is not None:
+        total_return = float(total_return)
+        # Decimal convention (0.22 == 22%) vs percent convention (22.0 == 22%).
+        return total_return * 100 if abs(total_return) <= 2 else total_return
+
+    final_equity = result.get("final_equity")
+    if final_equity is not None and initial_capital > 0:
+        return ((float(final_equity) / initial_capital) - 1.0) * 100.0
+
+    return 0.0
+
+
+def _check_cost_sanity(scenarios: list[dict[str, Any]]) -> list[str]:
+    """Return warnings when cost sensitivity outputs look inconsistent."""
+    issues = []
+    if not scenarios:
+        return ["No hay escenarios para validar."]
+
+    ordered = sorted(scenarios, key=lambda x: x["roundtrip_bps"])
+    sharpe_vals = [s["sharpe"] for s in ordered]
+    pf_vals = [s["pf"] for s in ordered]
+    return_vals = [s["total_return"] for s in ordered]
+
+    if len(set(sharpe_vals)) == 1 and len(set(pf_vals)) == 1:
+        issues.append(
+            "Sharpe/PF constantes en todos los costos (posible bug o salida stale)."
+        )
+    if len(set(return_vals)) == 1:
+        issues.append(
+            "Total return constante en todos los costos (revisar mapping total_return_pct/total_return)."
+        )
+
+    # Monotonicidad laxa: mas costos no deberian mejorar mucho la metrica.
+    # Permitimos pequenos rebotes por ruido de fill/priority.
+    for i in range(1, len(ordered)):
+        if ordered[i]["sharpe"] > ordered[i - 1]["sharpe"] + 0.20:
+            issues.append(
+                "Sharpe mejora >0.20 al subir costos entre escenarios contiguos (revisar aplicacion de fees)."
+            )
+            break
+
+    return issues
+
+
 def run_with_costs(combo_name: str, params: dict, cost: dict) -> dict:
     universe = get_universe_from_db(PERIOD_START, PERIOD_END)
     kwargs = build_engine_kwargs(combo_name, params)
@@ -80,8 +134,8 @@ def run_with_costs(combo_name: str, params: dict, cost: dict) -> dict:
     )
     try:
         result = engine.run_backtest()
-        trades_df = result.get("trades_df", pd.DataFrame())
         rt_bps = int((cost["fees"] + cost["slippage"]) * 2 * 10_000)
+        total_return_pct = _extract_total_return_pct(result, initial_capital=100_000)
         return {
             "label": cost["label"],
             "fees_bps": int(cost["fees"] * 10_000),
@@ -97,7 +151,7 @@ def run_with_costs(combo_name: str, params: dict, cost: dict) -> dict:
                 else abs(float(result.get("max_drawdown", 0))) * 100,
                 2,
             ),
-            "total_return": round(float(result.get("total_return_pct", 0)), 2),
+            "total_return": round(total_return_pct, 2),
             "viable": result.get("sharpe_ratio", 0) > 0
             and result.get("profit_factor", 0) > 1.0,
             "status": "ok",
@@ -106,9 +160,9 @@ def run_with_costs(combo_name: str, params: dict, cost: dict) -> dict:
         logger.error(f"    ERROR en {cost['label']}: {e}")
         return {
             "label": cost["label"],
-            "fees_bps": 0,
-            "slippage_bps": 0,
-            "roundtrip_bps": 0,
+            "fees_bps": int(cost["fees"] * 10_000),
+            "slippage_bps": int(cost["slippage"] * 10_000),
+            "roundtrip_bps": int((cost["fees"] + cost["slippage"]) * 2 * 10_000),
             "trades": 0,
             "sharpe": 0,
             "pf": 0,
@@ -182,6 +236,10 @@ def analyze_combo_costs(combo_name: str) -> dict:
             f"  Optimizer usó 20bps RT — sharpe en ese escenario: {base['sharpe']:.3f}"
         )
 
+    sanity_issues = _check_cost_sanity(scenarios)
+    for issue in sanity_issues:
+        logger.warning(f"  [SANITY] {issue}")
+
     result = {
         "combo": combo_name,
         "run_at": datetime.now().isoformat(),
@@ -190,15 +248,20 @@ def analyze_combo_costs(combo_name: str) -> dict:
         "breakeven_bps": breakeven_bps,
         "assessment": assessment,
         "optimizer_baseline_bps": 20,
+        "sanity_issues": sanity_issues,
     }
     out_f = COST_OUT / f"{combo_name}_costs.json"
     import numpy as np
 
     def _to_native(obj):
-        if isinstance(obj, dict): return {k: _to_native(v) for k, v in obj.items()}
-        if isinstance(obj, list): return [_to_native(v) for v in obj]
-        if isinstance(obj, (bool,)): return bool(obj)
-        if hasattr(obj, "item"): return obj.item()  # numpy scalar
+        if isinstance(obj, dict):
+            return {k: _to_native(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [_to_native(v) for v in obj]
+        if isinstance(obj, (bool,)):
+            return bool(obj)
+        if hasattr(obj, "item"):
+            return obj.item()  # numpy scalar
         return obj
 
     json.dump(_to_native(result), open(out_f, "w"), indent=2)

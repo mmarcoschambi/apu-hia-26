@@ -39,6 +39,11 @@ from src.data.market_data import MarketDataProvider
 from src.core.market_context import MarketContext
 from src.core.pattern_screener import PatternScreener
 from src.utils.risk_manager import RiskManager
+from config.scanner_combo_adapter import (
+    calculate_effective_entry_price,
+    calculate_adjusted_pnl,
+    is_regime_blocked,
+)
 
 # ── Multi-Screener System ──────────────────────────────────────────────────
 try:
@@ -191,15 +196,23 @@ class MarketHealthMonitor:
         spx_data = yf.download('^GSPC', period='3mo', progress=False)
         qqq_data = yf.download('QQQ', period='3mo', progress=False)
         vix_data = yf.download('^VIX', period='1mo', progress=False)
-        
+
+        # Handle yfinance MultiIndex column format (newer versions)
+        if isinstance(spx_data.columns, pd.MultiIndex):
+            spx_data.columns = spx_data.columns.droplevel(1)
+        if isinstance(qqq_data.columns, pd.MultiIndex):
+            qqq_data.columns = qqq_data.columns.droplevel(1)
+        if isinstance(vix_data.columns, pd.MultiIndex):
+            vix_data.columns = vix_data.columns.droplevel(1)
+
         # 1. Tendencia SPX
         spx_data['SMA5'] = spx_data['Close'].rolling(5).mean()
         spx_data['SMA20'] = spx_data['Close'].rolling(20).mean()
         spx_bullish = spx_data['SMA5'].iloc[-1] > spx_data['SMA20'].iloc[-1]
-        
+
         # 2. VIX
-        vix_current = vix_data['Close'].iloc[-1]
-        vix_5d_ago = vix_data['Close'].iloc[-5] if len(vix_data) >= 5 else vix_current
+        vix_current = float(vix_data['Close'].iloc[-1])
+        vix_5d_ago = float(vix_data['Close'].iloc[-5]) if len(vix_data) >= 5 else vix_current
         vix_stable = vix_current <= vix_5d_ago
         vix_low = vix_current < 20
         
@@ -210,13 +223,13 @@ class MarketHealthMonitor:
         # Scoring
         points = 0
         reasons = []
-        
+
         if spx_bullish:
             points += 2
             reasons.append("✅ SPX en tendencia ALCISTA")
         else:
             reasons.append("❌ SPX en tendencia BAJISTA")
-        
+
         if vix_low:
             points += 2
             reasons.append(f"✅ VIX BAJO ({vix_current:.1f})")
@@ -225,13 +238,13 @@ class MarketHealthMonitor:
             reasons.append(f"⚠️ VIX MODERADO ({vix_current:.1f})")
         else:
             reasons.append(f"❌ VIX ALTO ({vix_current:.1f})")
-        
+
         if vix_stable:
             points += 1
             reasons.append("✅ VIX ESTABLE/BAJANDO")
         else:
             reasons.append("❌ VIX SUBIENDO")
-        
+
         if spx_vol < 15:
             points += 2
             reasons.append(f"✅ Volatilidad BAJA ({spx_vol:.1f}%)")
@@ -240,20 +253,24 @@ class MarketHealthMonitor:
             reasons.append(f"⚠️ Volatilidad MODERADA ({spx_vol:.1f}%)")
         else:
             reasons.append(f"❌ Volatilidad ALTA ({spx_vol:.1f}%)")
-        
-        # Decision
+
+        # Decision (con régimen numérico para blocked_mask)
+        # Régimen: 1=bull, 2=neutral, 3=bear, 4=crash
         if points >= 5:
             status = "🟢 GREEN LIGHT"
             can_trade = True
             max_positions = 4
+            regime_status = 1  # bull
         elif points >= 3:
             status = "🟡 YELLOW LIGHT"
             can_trade = True
             max_positions = 2
+            regime_status = 2  # neutral
         else:
             status = "🔴 RED LIGHT"
             can_trade = False
             max_positions = 0
+            regime_status = 3  # bear
         
         return {
             'status': status,
@@ -265,7 +282,8 @@ class MarketHealthMonitor:
             'spx_bullish': spx_bullish,
             'vix_current': vix_current,
             'vix_stable': vix_stable,
-            'spx_volatility': spx_vol
+            'spx_volatility': spx_vol,
+            'regime_status': regime_status,  # NEW: 1=bull, 2=neutral, 3=bear, 4=crash
         }
 
 
@@ -300,14 +318,18 @@ class SectorRotationAnalyzer:
         for etf, name in SECTOR_ETFS.items():
             try:
                 data = yf.download(etf, period='3mo', progress=False)
-                
+
+                # Handle yfinance MultiIndex column format
+                if isinstance(data.columns, pd.MultiIndex):
+                    data.columns = data.columns.droplevel(1)
+
                 if len(data) < 60:
                     continue
-                
+
                 # Rendimientos en diferentes timeframes
-                rend_5d = ((data['Close'].iloc[-1] / data['Close'].iloc[-5]) - 1) * 100
-                rend_20d = ((data['Close'].iloc[-1] / data['Close'].iloc[-20]) - 1) * 100
-                rend_60d = ((data['Close'].iloc[-1] / data['Close'].iloc[-60]) - 1) * 100
+                rend_5d = ((float(data['Close'].iloc[-1]) / float(data['Close'].iloc[-5])) - 1) * 100
+                rend_20d = ((float(data['Close'].iloc[-1]) / float(data['Close'].iloc[-20])) - 1) * 100
+                rend_60d = ((float(data['Close'].iloc[-1]) / float(data['Close'].iloc[-60])) - 1) * 100
                 
                 # Score ponderado
                 score = 0
@@ -347,18 +369,22 @@ def scan_ticker_for_patterns(args):
     Esta función se ejecuta en paralelo
     """
     ticker, start_date, end_date = args
-    
+
     try:
         # Descargar datos
         data = yf.download(ticker, start=start_date, end=end_date, progress=False)
-        
+
+        # Handle yfinance MultiIndex column format
+        if isinstance(data.columns, pd.MultiIndex):
+            data.columns = data.columns.droplevel(1)
+
         if len(data) < 40:
             return None
-        
+
         # Precio y volumen actuales
-        current_price = data['Close'].iloc[-1]
-        avg_volume = data['Volume'].tail(20).mean()
-        
+        current_price = float(data['Close'].iloc[-1])
+        avg_volume = float(data['Volume'].tail(20).mean())
+
         # Filtros básicos
         if current_price < 10 or current_price > 500:
             return None
@@ -453,22 +479,55 @@ def detect_vcp(data):
 
 class PatternScanner:
     """Escanea el universo en paralelo buscando patrones"""
-    
-    def __init__(self, n_processes=None):
+
+    def __init__(
+        self, 
+        n_processes=None,
+        fee_rate=0.001,
+        slippage_rate=0.001,
+        regime_blocked=None,
+        scanner_filter="default",
+        pattern_filter="",
+        lookback_days=180,
+        max_setups=5,
+    ):
         self.n_processes = n_processes or max(1, cpu_count() - 1)
-    
-    def scan_universe(self, tickers, lookback_days=180):
+        self.fee_rate = fee_rate
+        self.slippage_rate = slippage_rate
+        self.regime_blocked = regime_blocked or [3, 4]
+        self.scanner_filter = scanner_filter
+        self.pattern_filter = pattern_filter
+        self.lookback_days = lookback_days
+        self.max_setups = max_setups
+
+    def scan_universe(self, tickers, lookback_days=None, market_regime_status=None):
         """
         Escanea el universo completo usando multiprocessing
+        
+        Args:
+            tickers: List of ticker symbols to scan
+            lookback_days: Override for lookback period
+            market_regime_status: Current market regime status (1-4)
         """
+        # Check regime filter (Fase 1: Kill-switch)
+        if market_regime_status is not None:
+            is_blocked = is_regime_blocked(market_regime_status, self.regime_blocked)
+            if is_blocked:
+                logger.warning(
+                    f"🔴 TRADING BLOCKED - Regime {market_regime_status} in blocked list {self.regime_blocked}"
+                )
+                return pd.DataFrame()
+        
+        effective_lookback = lookback_days or self.lookback_days
+        
         logger.info(f"Scanning {len(tickers)} tickers using {self.n_processes} processes...")
-        
+
         end_date = datetime.now()
-        start_date = end_date - timedelta(days=lookback_days)
-        
+        start_date = end_date - timedelta(days=effective_lookback)
+
         # Preparar argumentos para workers
         args = [(ticker, start_date, end_date) for ticker in tickers]
-        
+
         # Escanear en paralelo con barra de progreso
         results = []
         with Pool(processes=self.n_processes) as pool:
@@ -477,14 +536,33 @@ class PatternScanner:
                     if result:
                         results.append(result)
                     pbar.update()
-        
+
         df = pd.DataFrame(results)
-        
+
         if len(df) > 0:
             df = df.sort_values('distance_to_pivot')
-        
+            
+            # Apply fees and slippage adjustment to entry prices
+            df['entry_price_effective'] = df['pivot'].apply(
+                lambda p: calculate_effective_entry_price(
+                    p, self.fee_rate, self.slippage_rate
+                )
+            )
+            
+            # Filter out setups where edge < costs
+            df['distance_to_pivot_effective'] = (
+                (df['entry_price_effective'] - df['current_price']) / df['current_price'] * 100
+            )
+            
+            # Log cost analysis
+            total_cost_bps = (self.fee_rate + self.slippage_rate) * 10000 * 2
+            logger.info(
+                f"Transaction costs: {total_cost_bps:.0f}bps "
+                f"(fee={self.fee_rate*10000:.0f}bps + slippage={self.slippage_rate*10000:.0f}bps)"
+            )
+
         logger.info(f"✅ Found {len(df)} setups with patterns")
-        
+
         return df
 
 
@@ -520,13 +598,17 @@ class FocusListGenerator:
                 
                 # Descargar datos recientes
                 data = yf.download(ticker, period='1mo', progress=False)
-                
+
+                # Handle yfinance MultiIndex column format
+                if isinstance(data.columns, pd.MultiIndex):
+                    data.columns = data.columns.droplevel(1)
+
                 if len(data) < 10:
                     continue
-                
+
                 # Volumen bajo
-                vol_recent = data['Volume'].tail(3).mean()
-                vol_avg = data['Volume'].tail(20).mean()
+                vol_recent = float(data['Volume'].tail(3).mean())
+                vol_avg = float(data['Volume'].tail(20).mean())
                 
                 if vol_recent > vol_avg * 0.8:
                     continue
@@ -577,6 +659,8 @@ def main():
     parser.add_argument('--static', action='store_true', help='Use static universe file (no download)')
     parser.add_argument('--processes', type=int, default=None, help='Number of parallel processes')
     parser.add_argument('--max-setups', type=int, default=5, help='Max setups in focus list')
+    parser.add_argument('--combo', type=str, default=None, 
+                        help='Combo YAML config name (e.g., combo_pullback_entry)')
     parser.add_argument('--screener', type=str, default=None,
                         help='Screener post-pattern. Opciones: minervini_trend, ema21_pullback, '
                              'qullamaggie_momentum, vcp_enhanced. Combinar con + '
@@ -586,23 +670,37 @@ def main():
     parser.add_argument('--screener-mode', type=str, default='all',
                         choices=['all', 'any', 'sequential'],
                         help='Modo de combinacion cuando se usan multiples screeners (default: all)')
-    parser.add_argument('--screener', type=str, default=None,
-                        help='Screener a aplicar post-pattern. Opciones: minervini_trend, '
-                             'ema21_pullback, qullamaggie_momentum, vcp_enhanced, o combinaciones '
-                             'separadas por + (ej. minervini_trend+vcp_enhanced)')
-    parser.add_argument('--screener-config', type=str, default=None,
-                        help='Path a JSON de configuración del screener')
-    parser.add_argument('--screener-mode', type=str, default='all',
-                        choices=['all', 'any', 'sequential'],
-                        help='Modo de combinación cuando se usan múltiples screeners (default: all)')
-    
+
     args = parser.parse_args()
-    
+
     print("\n" + "="*80)
     print("🚀 LIVE TRADING SCANNER")
     print("="*80)
     print(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*80)
+
+    # Load YAML combo config if specified
+    combo_params = {}
+    if args.combo:
+        try:
+            from config.combo_loader import get_combo_by_name, load_combo_configs
+            combos = load_combo_configs()
+            combo = get_combo_by_name(combos, args.combo)
+            if combo:
+                combo_params = {
+                    'fee_rate': combo.fee_rate,
+                    'slippage_rate': combo.slippage_rate,
+                    'regime_blocked': combo.regime_blocked,
+                    'scanner_filter': combo.scanner_filter,
+                    'pattern_filter': combo.pattern_filter,
+                    'lookback_days': combo.lookback_days,
+                    'max_setups': combo.max_setups,
+                }
+                print(f"✅ Loaded combo: {combo.name} (Sharpe={combo.wf_sharpe_mean:.2f})")
+            else:
+                print(f"⚠️  Combo '{args.combo}' not found, using defaults")
+        except Exception as e:
+            print(f"⚠️  Failed to load combo: {e}, using defaults")
     
     # PASO 0: Inicializar cache
     cache = CacheManager()
@@ -617,6 +715,7 @@ def main():
     
     print(f"\nStatus: {health['status']}")
     print(f"Score: {health['points']}/{health['total_points']}")
+    print(f"Regime: {health['regime_status']} (1=bull, 2=neutral, 3=bear, 4=crash)")
     print("\nAnalysis:")
     for reason in health['reasons']:
         print(f"  {reason}")
@@ -661,21 +760,43 @@ def main():
     print("\n" + "="*80)
     print("🔍 STEP 4: PATTERN SCANNING")
     print("="*80)
+
+    # Create scanner with combo params (Fase 2: Centralized config)
+    scanner = PatternScanner(
+        n_processes=args.processes,
+        fee_rate=combo_params.get('fee_rate', 0.001),
+        slippage_rate=combo_params.get('slippage_rate', 0.001),
+        regime_blocked=combo_params.get('regime_blocked', [3, 4]),
+        scanner_filter=combo_params.get('scanner_filter', 'default'),
+        pattern_filter=combo_params.get('pattern_filter', ''),
+        lookback_days=combo_params.get('lookback_days', 180),
+        max_setups=combo_params.get('max_setups', 5),
+    )
     
-    scanner = PatternScanner(n_processes=args.processes)
-    watchlist = scanner.scan_universe(universe)
+    # Pass market regime status for kill-switch (Fase 1: Kill-switch)
+    watchlist = scanner.scan_universe(
+        universe, 
+        market_regime_status=health['regime_status']
+    )
     
     if len(watchlist) > 0:
         print(f"\n✅ Found {len(watchlist)} candidates")
-        print(f"\n{'Ticker':<8} {'Pattern':<15} {'Current':<10} {'Pivot':<10} {'Dist %':<10}")
+        print(f"\n{'Ticker':<8} {'Pattern':<15} {'Current':<10} {'Pivot':<10} {'Eff. Entry':<12} {'Dist %':<10}")
         print("-"*80)
-        
+
         for _, row in watchlist.head(20).iterrows():
+            eff_entry = row.get('entry_price_effective', row['pivot'])
+            dist_eff = row.get('distance_to_pivot_effective', row['distance_to_pivot'])
             print(f"{row['ticker']:<8} {row['pattern']:<15} ${row['current_price']:<9.2f} "
-                  f"${row['pivot']:<9.2f} {row['distance_to_pivot']:<9.2f}%")
-        
+                  f"${row['pivot']:<9.2f} ${eff_entry:<11.2f} {dist_eff:<9.2f}%")
+
         if len(watchlist) > 20:
             print(f"\n... and {len(watchlist) - 20} more candidates")
+        
+        # Print cost summary
+        total_cost_bps = (scanner.fee_rate + scanner.slippage_rate) * 10000 * 2
+        print(f"\n💰 Transaction Costs: {total_cost_bps:.0f}bps "
+              f"(fee={scanner.fee_rate*10000:.0f}bps + slippage={scanner.slippage_rate*10000:.0f}bps)")
     else:
         print("\n❌ No patterns found")
         return

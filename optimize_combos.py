@@ -14,7 +14,6 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List
 
-import re as _re
 from optimize_combo import list_available_combos, run_combo_optimization
 
 logger = logging.getLogger(__name__)
@@ -38,28 +37,31 @@ def _combo_score(item: Dict[str, Any]) -> float:
     v = item.get("validation", {})
     sharpe = float(v.get("sharpe_ratio", 0.0))
     trades = max(int(v.get("total_trades", 0)), 0)
-    pbo    = float(v.get("pbo_score", 1.0))
-    dd     = float(v.get("max_drawdown_pct", 100.0))
-    pf     = float(v.get("profit_factor", 0.0))
-    wr     = float(v.get("win_rate_pct", 0.0)) / 100.0  # normalizar a 0..1
+    pbo = float(v.get("pbo_score", 1.0))
+    dd = float(v.get("max_drawdown_pct", 100.0))
+    pf = float(v.get("profit_factor", 0.0))
+    wr = float(v.get("win_rate_pct", 0.0)) / 100.0  # normalizar a 0..1
 
     # Factores multiplicativos (todos en 0..1)
-    trade_factor = min(1.0, (trades / 100.0) ** 0.5)   # satura en 100 trades
-    pbo_factor   = max(0.0, 1.0 - pbo)                  # 0% PBO = factor 1.0
-    dd_factor    = max(0.0, 1.0 - min(dd, 100.0) / 100.0)
+    trade_factor = min(1.0, (trades / 100.0) ** 0.5)  # satura en 100 trades
+    pbo_factor = max(0.0, 1.0 - pbo)  # 0% PBO = factor 1.0
+    dd_factor = max(0.0, 1.0 - min(dd, 100.0) / 100.0)
 
     # Score base: Sharpe ajustado por robustez
     base = sharpe * trade_factor * (0.5 + 0.5 * pbo_factor) * (0.5 + 0.5 * dd_factor)
 
     # Bonos aditivos: recompensan calidad independientemente del Sharpe
     pf_bonus = max(0.0, min(0.3, (pf - 1.0) * 0.15))  # pf=3.0 -> +0.30
-    wr_bonus = max(0.0, min(0.2, (wr - 0.40) * 1.0))   # wr=60% -> +0.20
+    wr_bonus = max(0.0, min(0.2, (wr - 0.40) * 1.0))  # wr=60% -> +0.20
 
     return base + pf_bonus + wr_bonus
 
 
 def _passes_gates(
-    item: Dict[str, Any], min_trades: int, max_dd: float, max_pbo: float,
+    item: Dict[str, Any],
+    min_trades: int,
+    max_dd: float,
+    max_pbo: float,
     strict: bool = True,
 ) -> bool:
     """Gate de calidad para el ranking.
@@ -86,9 +88,9 @@ def _passes_gates(
         )
     # Modo relajado: solo descarta combinaciones claramente malas
     return (
-        sharpe > -1.0          # no catastroficos
+        sharpe > -1.0  # no catastroficos
         and trades >= max(10, min_trades // 3)  # algo de actividad
-        and dd <= max_dd * 2   # drawdown no extremo
+        and dd <= max_dd * 2  # drawdown no extremo
     )
 
 
@@ -140,6 +142,8 @@ def run_tournament(args) -> List[Dict[str, Any]]:
             tickers_limit=args.tickers,
             skip_validation=args.skip_validation,
             skip_optimization=args.skip_optimization,
+            seed=args.seed,
+            liquidity_stratified=not args.no_stratified,
         )
         results.append(result)
     return results
@@ -171,18 +175,22 @@ def export_topk(results: List[Dict[str, Any]], top_k: int = 5) -> List[Dict[str,
 
     # --- Nivel 1: gate estricto (ResearchGate aprobado) ---
     strict_pass = [
-        r for r in results
+        r
+        for r in results
         if _passes_gates(r, min_trades=30, max_dd=25.0, max_pbo=0.50, strict=True)
     ]
 
     if strict_pass:
-        logger.info("Gate estricto: %d/%d combos aprobados", len(strict_pass), len(results))
+        logger.info(
+            "Gate estricto: %d/%d combos aprobados", len(strict_pass), len(results)
+        )
         pool = strict_pass
         gate_label = "strict"
     else:
         # --- Nivel 2: fallback relajado ---
         relaxed_pass = [
-            r for r in results
+            r
+            for r in results
             if _passes_gates(r, min_trades=30, max_dd=25.0, max_pbo=0.50, strict=False)
         ]
         if relaxed_pass:
@@ -194,7 +202,9 @@ def export_topk(results: List[Dict[str, Any]], top_k: int = 5) -> List[Dict[str,
             pool = relaxed_pass
             gate_label = "relaxed"
         else:
-            logger.error("TODOS los combos fallaron incluso el gate relajado. top5.json vacio.")
+            logger.error(
+                "TODOS los combos fallaron incluso el gate relajado. top5.json vacio."
+            )
             TOP5_PATH.parent.mkdir(parents=True, exist_ok=True)
             with open(TOP5_PATH, "w", encoding="utf-8") as f:
                 json.dump([], f, indent=2)
@@ -212,7 +222,9 @@ def export_topk(results: List[Dict[str, Any]], top_k: int = 5) -> List[Dict[str,
     with open(TOP5_PATH, "w", encoding="utf-8") as f:
         json.dump(top, f, indent=2, default=str)
 
-    logger.info("Exported top %d combos (%s gate) to %s", len(top), gate_label, TOP5_PATH)
+    logger.info(
+        "Exported top %d combos (%s gate) to %s", len(top), gate_label, TOP5_PATH
+    )
     return top
 
 
@@ -227,6 +239,15 @@ def main() -> None:
     parser.add_argument("--skip-validation", action="store_true")
     parser.add_argument("--skip-optimization", action="store_true")
     parser.add_argument("--list-combos", action="store_true")
+    parser.add_argument(
+        "--seed", type=int, default=42, help="Random seed for universe sampling"
+    )
+    parser.add_argument(
+        "--no-stratified",
+        action="store_true",
+        default=False,
+        help="Use legacy top-by-count universe (default: stratified)",
+    )
     args = parser.parse_args()
 
     if args.list_combos:

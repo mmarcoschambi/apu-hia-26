@@ -72,6 +72,7 @@ logger = logging.getLogger(__name__)
 
 try:
     from src.backtest.vectorbt_engine_advanced import AdvancedVectorBTEngine
+    from src.backtest.numba_core import simulate_fast_core
     from src.validation.research_gate import ResearchGate, ValidationThresholds
     from src.validation.robustness_metrics import (
         robust_objective_function,
@@ -123,9 +124,9 @@ def _warmup_numba() -> None:
             0.5,
             0.3,
             0.2,  # tp1_pct, tp2_pct, runner_pct
-            0.01,
-            0.5,  # risk_pct_per_trade, be_threshold_r
-            0.5,  # max_exposure_pct  (NEW param order)
+            0.01,  # risk_pct_per_trade
+            0.5,  # max_exposure_pct
+            0.5,  # be_threshold_r
             True,  # use_trailing_stop
             0.08,  # max_stop_pct
             500.0,  # risk_dollars
@@ -133,6 +134,8 @@ def _warmup_numba() -> None:
             True,  # use_atr_stop
             1.5,  # atr_stop_multiplier
             1.0,  # atr_trailing_multiplier
+            0.001,  # fee_rate
+            0.001,  # slippage_rate
         )
         logger.info("Numba warmup complete (JIT compiled)")
     except Exception as e:
@@ -148,70 +151,129 @@ _warmup_numba()
 
 
 def get_universe_from_db(
-    limit: int = 50, start_date: str = "2021-01-01", end_date: str = "2025-12-31"
+    limit: int = 50,
+    start_date: str = "2021-01-01",
+    end_date: str = "2025-12-31",
+    seed: Optional[int] = None,
+    liquidity_stratified: bool = True,
 ) -> List[str]:
     """
-    Get top tickers by data availability from cache DB for a SPECIFIC period.
-    Corrected to use ticker_cache.db (ohlcv_cache table).
+    Get tickers from cache DB for a SPECIFIC period with STRATIFIED sampling.
+
+    Two modes:
+      - liquidity_stratified=True: sample from liquidity bins (reduces selection bias)
+      - liquidity_stratified=False: original top-by-count (legacy behavior)
+
+    For Optuna tournaments, prefer stratified to avoid overfitting to top-liquid subset.
+    For production validation, consider running multiple seeds and selecting by median OOS.
+
+    Args:
+        limit: max tickers to return
+        start_date: start of period
+        end_date: end of period
+        seed: random seed for reproducibility (None = random each run)
+        liquidity_stratified: if True, sample from liquidity bins; else top-by-count
+
+    Returns:
+        List of ticker symbols
     """
     db_path = Path("data/ticker_cache.db")
     if not db_path.exists():
         logger.warning(f"Database {db_path} not found. Using fallbacks.")
         return _get_fallback_universe(limit)
 
-    # Intentar DuckDB primero (20x mas rapido para queries analiticos sobre SQLite)
+    # Get full universe DataFrame with metrics for stratification
     try:
         import duckdb
 
         conn = duckdb.connect()
         conn.execute(f"ATTACH '{db_path}' AS src (TYPE SQLITE, READ_ONLY TRUE)")
         query = """
-            SELECT ticker, COUNT(*) as cnt
+            SELECT
+                ticker,
+                COUNT(*) as cnt,
+                AVG(close * volume) as avg_dollar_vol,
+                AVG(volume) as avg_volume,
+                AVG(close) as avg_price
             FROM src.ohlcv_cache
             WHERE date >= ? AND date <= ?
             GROUP BY ticker
-            ORDER BY cnt DESC
-            LIMIT ?
+            HAVING cnt >= 100
         """
-        df = conn.execute(query, [start_date, end_date, limit]).fetchdf()
+        df = conn.execute(query, [start_date, end_date]).fetchdf()
         conn.close()
-        if not df.empty:
-            tickers = df["ticker"].tolist()
-            if len(tickers) < 10:
-                logger.warning(
-                    f"Only {len(tickers)} tickers found for period {start_date} to {end_date}"
-                )
-            logger.debug(f"Universe loaded via DuckDB: {len(tickers)} tickers")
-            return tickers
     except ImportError:
-        logger.debug("DuckDB not installed, falling back to SQLite")
+        try:
+            conn = sqlite3.connect(str(db_path))
+            query = """
+                SELECT
+                    ticker,
+                    COUNT(*) as cnt,
+                    AVG(close * volume) as avg_dollar_vol,
+                    AVG(volume) as avg_volume,
+                    AVG(close) as avg_price
+                FROM ohlcv_cache
+                WHERE date >= ? AND date <= ?
+                GROUP BY ticker
+                HAVING COUNT(*) >= 100
+            """
+            df = pd.read_sql_query(query, conn, params=(start_date, end_date))
+            conn.close()
+        except Exception as e:
+            logger.error(f"Error querying ticker_cache.db: {e}")
+            return _get_fallback_universe(limit)
     except Exception as e:
-        logger.debug(f"DuckDB query failed ({e}), falling back to SQLite")
+        logger.error(f"DuckDB query failed ({e}), falling back to SQLite")
+        return _get_fallback_universe(limit)
 
-    # Fallback: SQLite estandar
-    try:
-        conn = sqlite3.connect(str(db_path))
-        query = """
-            SELECT ticker, COUNT(*) as cnt
-            FROM ohlcv_cache
-            WHERE date >= ? AND date <= ?
-            GROUP BY ticker
-            ORDER BY cnt DESC
-            LIMIT ?
-        """
-        df = pd.read_sql_query(query, conn, params=(start_date, end_date, limit))
-        conn.close()
-        if not df.empty:
-            tickers = df["ticker"].tolist()
-            if len(tickers) < 10:
-                logger.warning(
-                    f"Only {len(tickers)} tickers found for period {start_date} to {end_date}"
-                )
-            return tickers
-    except Exception as e:
-        logger.error(f"Error querying ticker_cache.db: {e}")
+    if df.empty or len(df) < 10:
+        logger.warning(f"Only {len(df)} tickers found, using fallback")
+        return _get_fallback_universe(limit)
 
-    return _get_fallback_universe(limit)
+    # Determine sampling method
+    rng = np.random.default_rng(seed) if seed is not None else np.random
+
+    if liquidity_stratified and len(df) >= 30:
+        # Stratified sampling: bin by dollar volume, sample proportionally
+        try:
+            # Create liquidity bins (5 quantiles)
+            df["liq_bin"] = pd.qcut(
+                df["avg_dollar_vol"].clip(lower=1e6),  # avoid inf
+                q=min(5, len(df) // 10),
+                labels=False,
+                duplicates="drop",
+            )
+            # Calculate target per bin
+            n_bins = df["liq_bin"].nunique()
+            per_bin = max(1, limit // n_bins)
+
+            # Sample from each bin
+            sampled = []
+            for bin_id in sorted(df["liq_bin"].unique()):
+                bin_df = df[df["liq_bin"] == bin_id]
+                take = min(len(bin_df), per_bin + rng.integers(0, 3))  # slight noise
+                sampled.append(bin_df.sample(min(take, len(bin_df)), random_state=seed)
+
+            result = pd.concat(sampled, ignore_index=True)
+            # Shuffle to avoid ordering bias from bin groups
+            result = result.sample(frac=1, random_state=seed).reset_index(drop=True)
+            tickers = result["ticker"].tolist()[:limit]
+            method = "stratified"
+        except Exception as e:
+            # Fallback to top-by-count on any stratification error
+            tickers = df.nlargest(limit, "cnt")["ticker"].tolist()
+            method = "top-cnt (stratified failed)"
+    else:
+        # Legacy: top by count
+        tickers = df.nlargest(limit, "cnt")["ticker"].tolist()
+        method = "top-cnt"
+
+    if len(tickers) < 10:
+        logger.warning(
+            f"Only {len(tickers)} tickers for period {start_date} to {end_date}"
+        )
+    logger.debug(f"Universe ({method}, seed={seed}): {len(tickers)} tickers")
+    return tickers
 
 
 def apply_screener_to_universe(
@@ -1644,7 +1706,11 @@ def run_pipeline(args) -> Dict[str, Any]:
         )
     else:
         universe = get_universe_from_db(
-            limit=args.tickers, start_date=args.start, end_date=args.end
+            limit=args.tickers,
+            start_date=args.start,
+            end_date=args.end,
+            seed=getattr(args, "seed", None),
+            liquidity_stratified=getattr(args, "stratified_universe", True),
         )
 
     if screener_name:
@@ -1762,7 +1828,9 @@ def run_pipeline(args) -> Dict[str, Any]:
             .head(10)
         )
 
-        logger.info(f"  Validating top {len(top_trials)} trials to find robust candidate...")
+        logger.info(
+            f"  Validating top {len(top_trials)} trials to find robust candidate..."
+        )
 
         # Walk-forward windows: fechas ABSOLUTAS para evitar validar en 2022
         absolute_windows = [
@@ -1770,7 +1838,7 @@ def run_pipeline(args) -> Dict[str, Any]:
             ("2019-01-01", "2023-01-01", "2023-01-01", "2024-01-01"),
             ("2019-01-01", "2023-07-01", "2023-07-01", "2025-12-31"),
         ]
-        min_windows_required = 1
+        min_windows_required = 2 if not getattr(args, "validation_strict", False) else 3
 
         for idx, (_, row) in enumerate(top_trials.iterrows()):
             # Reconstruct trial params
@@ -1781,13 +1849,18 @@ def run_pipeline(args) -> Dict[str, Any]:
             }
             # Add derived runner_pct
             trial_params["runner_pct"] = round(
-                1.0 - trial_params.get("tp1_pct", 0.33) - trial_params.get("tp2_pct", 0.33), 2
+                1.0
+                - trial_params.get("tp1_pct", 0.33)
+                - trial_params.get("tp2_pct", 0.33),
+                2,
             )
-            
+
             trial_num = row.get("number", "N/A")
             trial_value = row.get("value", 0)
-            
-            logger.info(f"\n  [Trial {trial_num}] Testing candidate {idx+1}/{len(top_trials)} (IS Score: {trial_value:.2f})")
+
+            logger.info(
+                f"\n  [Trial {trial_num}] Testing candidate {idx + 1}/{len(top_trials)} (IS Score: {trial_value:.2f})"
+            )
 
             # Base params (Tier 3 + Trial Tier 1 + infrastructure)
             base_params = {
@@ -1796,7 +1869,9 @@ def run_pipeline(args) -> Dict[str, Any]:
                 "mode": "production",
                 "fees": 0.001,
                 "slippage": 0.001,
-                "risk_dollars": int(args.capital * tier3_raw.get("risk_fraction", 0.005)),
+                "risk_dollars": int(
+                    args.capital * tier3_raw.get("risk_fraction", 0.005)
+                ),
                 "signal_type": signal_type,
                 "require_spy_above_sma50": True,
                 "max_vix_threshold": 25.0,
@@ -1814,8 +1889,12 @@ def run_pipeline(args) -> Dict[str, Any]:
                 "pattern_bonus_med": trial_params.get("pattern_bonus_med", 0.0),
                 "pattern_bonus_low": trial_params.get("pattern_bonus_low", 0.0),
                 "use_pattern_filter": tier2_derived.get("use_pattern_filter", False),
-                "min_pattern_confidence": tier2_derived.get("min_pattern_confidence", 0.5),
-                "pattern_cache_path": tier2_derived.get("pattern_cache_path", "data/pattern_matrix.pkl"),
+                "min_pattern_confidence": tier2_derived.get(
+                    "min_pattern_confidence", 0.5
+                ),
+                "pattern_cache_path": tier2_derived.get(
+                    "pattern_cache_path", "data/pattern_matrix.pkl"
+                ),
                 "use_adaptive_filtering": True,
                 "use_pit_universe": use_pit,
             }
@@ -1829,7 +1908,9 @@ def run_pipeline(args) -> Dict[str, Any]:
                 train_dates = (train_s, train_e)
                 test_dates = (test_s, test_e)
 
-                logger.info(f"    Fold {i}/{len(absolute_windows)}: Train {train_s} / Test {test_s}")
+                logger.info(
+                    f"    Fold {i}/{len(absolute_windows)}: Train {train_s} / Test {test_s}"
+                )
 
                 # Re-derive Tier 2 from TRAIN data only
                 _, fold_trades = run_baseline(
@@ -1866,26 +1947,33 @@ def run_pipeline(args) -> Dict[str, Any]:
                         best_fold_result = result
                     logger.info(f"      ✅ Fold {i} PASS")
                 else:
-                    logger.info(f"      ❌ Fold {i} FAIL ({', '.join(result.rejection_reasons[:2])})")
+                    logger.info(
+                        f"      ❌ Fold {i} FAIL ({', '.join(result.rejection_reasons[:2])})"
+                    )
 
             if windows_passed >= min_windows_required:
                 validation_result = best_fold_result
                 promoted_tier1 = trial_params
                 best_is_score = trial_value
-                logger.info(f"  🏆 [Trial {trial_num}] PROMOTED: Passed {windows_passed} windows.")
+                logger.info(
+                    f"  🏆 [Trial {trial_num}] PROMOTED: Passed {windows_passed} windows."
+                )
                 break
             else:
-                logger.warning(f"  ⚠️  [Trial {trial_num}] REJECTED: Only {windows_passed} windows passed.")
+                logger.warning(
+                    f"  ⚠️  [Trial {trial_num}] REJECTED: Only {windows_passed} windows passed."
+                )
 
         if promoted_tier1:
             best_tier1 = promoted_tier1
             best_score = best_is_score
         else:
             validation_result = all_results[-1] if all_results else None
-            logger.error("  ❌ PIPELINE FAILED: None of the top 10 trials passed Walk-Forward validation.")
+            logger.error(
+                "  ❌ PIPELINE FAILED: None of the top 10 trials passed Walk-Forward validation."
+            )
     else:
         logger.info("\n  SKIPPING ResearchGate validation (--skip-validation)")
-
 
     # ══════════════════════════════════════════════════════════════════════
     # FINAL OUTPUT
@@ -2204,6 +2292,19 @@ Examples:
         help="Number of tickers in universe (default: 50). Ignored if --ticker-file is set.",
     )
     parser.add_argument(
+        "--stratified-universe",
+        action="store_true",
+        dest="stratified_universe",
+        default=True,
+        help="Use stratified sampling by liquidity (default: True).",
+    )
+    parser.add_argument(
+        "--no-stratified-universe",
+        action="store_false",
+        dest="stratified_universe",
+        help="Use legacy top-by-count universe (disable stratification).",
+    )
+    parser.add_argument(
         "--ticker-file",
         type=str,
         default=None,
@@ -2244,6 +2345,12 @@ Examples:
         "--skip-validation",
         action="store_true",
         help="Skip ResearchGate validation (for quick dev runs)",
+    )
+    parser.add_argument(
+        "--validation-strict",
+        action="store_true",
+        default=False,
+        help="Require 3/3 windows for promotion (default: 2/3). Use for production.",
     )
     parser.add_argument(
         "--force-export",
@@ -2305,8 +2412,9 @@ Examples:
     if getattr(args, "list_patterns", False):
         print(list_patterns())
         return
-    # Normalizar signal_type (guion a guion bajo)
     args.signal_type = getattr(args, "signal_type", "breakout").replace("-", "_")
+    if getattr(args, "validation_strict", False):
+        logger.info("STRICT MODE: requiring 3/3 windows for promotion")
     run_pipeline(args)
 
 

@@ -269,23 +269,50 @@ Gates: PASS (PF 3.58, Calmar 1.33)
 
 ---
 
-## ✅ Version Summary (v2.2.0)
+## Version 2.3.0 - 2026-04-17
 
-**Version:** 2.2.0  
-**Release Date:** 2026-04-10  
-**Status:** Production Ready (Paper Trading)  
-**Compatibility:** Requires re-optimization for live deployment
+### 🛡️ Pipeline Robustness & Stratification
 
-**Major Changes:**
-- S4 optimization pipeline (600 trials)
-- Acceptance gates with cost sensitivity
-- Statistical validation framework
+#### 🎯 Walk-Forward (WF) Hardening
+- **Stricter Promotion Gates**: `min_windows_required` set to 2/3 by default, with an optional **3/3 strict mode** for production-grade validation.
+- **New Flag**: `--validation-strict` in `optimize_3tier.py` to enforce perfect 3/3 WF window passing.
+- **Methodological Alignment**: Combo validation now follows the same multi-window WF scheme as 3-tier optimization for consistency.
 
-**Next Version Preview (v2.3.0):**
-- Live trading integration
-- Drift detection
-- Production monitoring
+#### 🌌 Stratified Universe Selection
+- **Liquidity Stratification**: New sampling method that bins tickers by dollar volume, reducing selection bias towards only the most liquid names.
+- **Default Active**: Enabled by default in `optimize_3tier.py` and combo workflows.
+- **Legacy Support**: Added `--no-stratified-universe` (or `--no-stratified`) flags to maintain compatibility with the legacy top-by-count selection.
+
+#### 🔧 Consistency & Reproducibility
+- **Seeded Runs**: Added `--seed` support across `optimize_combos.py` and `run_best_combos.py` for reproducible tournament runs.
+- **Interface Alignment**: Standardized flags across all optimization tools (`--seed`, `--no-stratified`).
+- **Bug Fix**: Fixed "unwired" flags in tournament tools that were declared but not propagated to internal calls.
+
+#### 📁 Modified Files
+- `optimize_3tier.py`: Hardened WF gates and stratified universe sampling.
+- `optimize_combo.py`: Added stratification support and parameter propagation.
+- `optimize_combos.py`: Linked tournament flags to optimization engine.
+- `run_best_combos.py`: Propagated stratification settings to the 3-tier subprocess.
 
 ---
 
-**Ready to use in Paper Trading** 🚀
+## ✅ Version Summary (v2.3.0)
+
+**Version:** 2.3.0  
+**Release Date:** 2026-04-17  
+**Status:** Production Ready  
+**Compatibility:** Backward compatible via legacy flags.
+
+**Major Changes:**
+- Hardened WF promotion (2/3 or 3/3 windows).
+- Stratified universe sampling by liquidity.
+- Full flag consistency and reproducibility across the pipeline.
+
+**Next Steps:**
+- Monitor OOS performance of stratified vs legacy universes.
+- Fine-tune Tier 2 filters with hardened validation.
+
+---
+
+**Ready for Institutional-Grade Validation** 🛡️
+

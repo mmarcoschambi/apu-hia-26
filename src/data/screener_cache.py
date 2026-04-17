@@ -82,7 +82,15 @@ class ScreenerCacheManager:
         )
 
         records: List[Dict[str, Any]] = []
-        for ticker in tickers:
+        
+        try:
+            from tqdm import tqdm
+            ticker_iter = tqdm(tickers, desc=f"Building {screener_name} cache", unit="ticker")
+        except ImportError:
+            logger.info("tqdm not found, progress bar disabled")
+            ticker_iter = tickers
+
+        for ticker in ticker_iter:
             df = self._load_symbol_data(
                 ticker,
                 start_date,

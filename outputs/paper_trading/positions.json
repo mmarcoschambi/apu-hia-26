@@ -5,7 +5,7 @@
     "entry_price": 127.0,
     "shares": 99,
     "shares_orig": 99,
-    "stop_price": 116.84,
+    "stop_price": 121.92,
     "tp1_price": 144.78,
     "tp2_price": 165.1,
     "entry_score": 0.0,
@@ -13,6 +13,8 @@
     "tp2_done": false,
     "be_done": false,
     "status": "OPEN",
-    "pnl": 0.0
+    "pnl": 0.0,
+    "stop_original": 116.84,
+    "signal_type": "BREAKOUT"
   }
 }

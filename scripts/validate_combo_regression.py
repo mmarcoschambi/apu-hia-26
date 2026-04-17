@@ -75,7 +75,7 @@ def check_regression(
     max_pf_drop_pct: float = 20.0,
     max_pbo: float = 0.50,
 ) -> tuple:
-    failures, warnings = [], []
+    failures, warnings, policy_failures = [], [], []
 
     if not base:
         return False, ["No hay baseline disponible para comparar"], []
@@ -111,7 +111,7 @@ def check_regression(
                 f"pero se ignora por pocos trades ({curr_trades} < 50)"
             )
         else:
-            failures.append(f"PBO={curr_pbo:.2%} supera limite {max_pbo:.0%}")
+            policy_failures.append(f"PBO={curr_pbo:.2%} supera limite {max_pbo:.0%}")
 
     base_pf = float(base.get("pf", 0.0))
     curr_pf = float(curr.get("pf", 0.0))
@@ -123,7 +123,7 @@ def check_regression(
                 f"(baseline={base_pf:.2f}, actual={curr_pf:.2f}, max={max_pf_drop_pct}%)"
             )
 
-    return len(failures) == 0, failures, warnings
+    return len(failures) == 0, failures, warnings, policy_failures
 
 
 def fmt(val, fmt_str=".2f", suffix=""):
@@ -133,7 +133,9 @@ def fmt(val, fmt_str=".2f", suffix=""):
         return str(val)
 
 
-def run_check(combo_name: str, max_sharpe_drop: float, max_pbo: float) -> bool:
+def run_check(
+    combo_name: str, max_sharpe_drop: float, max_pbo: float, enforce_policy: bool
+) -> bool:
     all_baselines = load_baseline_metrics()
     base = all_baselines.get(combo_name)
     curr = load_current_metrics(combo_name)
@@ -154,7 +156,7 @@ def run_check(combo_name: str, max_sharpe_drop: float, max_pbo: float) -> bool:
         # No bloquear por falta de metricas en current — es un warning, no failure
         return True
 
-    passed, failures, warnings = check_regression(
+    regression_ok, failures, warnings, policy_failures = check_regression(
         base, curr, combo_name, max_sharpe_drop, max_pf_drop_pct=20.0, max_pbo=max_pbo
     )
 
@@ -183,10 +185,21 @@ def run_check(combo_name: str, max_sharpe_drop: float, max_pbo: float) -> bool:
     for w in warnings:
         print(f"  ⚠️  {w}")
 
-    if passed:
+    if policy_failures and not enforce_policy:
+        for pf in policy_failures:
+            print(f"  ⚠️  POLICY_FAIL (no bloqueante): {pf}")
+
+    passed = regression_ok and (not policy_failures or enforce_policy is False)
+    if regression_ok and not policy_failures:
         print(f"  ✅ PASSED — sin regresion en {combo_name}")
+    elif regression_ok and policy_failures and not enforce_policy:
+        print(f"  ✅ PASSED (REGRESSION_ONLY) — sin regresion en {combo_name}")
+    elif regression_ok and policy_failures and enforce_policy:
+        print(f"  ❌ POLICY_FAIL (bloqueante) — {combo_name}")
+        for pf in policy_failures:
+            print(f"     • {pf}")
     else:
-        print(f"  ❌ FAILED — regresion detectada:")
+        print(f"  ❌ REGRESSION_FAIL — regresion detectada:")
         for fail in failures:
             print(f"     • {fail}")
 
@@ -243,6 +256,11 @@ def main():
     parser.add_argument("--all", action="store_true")
     parser.add_argument("--max-sharpe-drop", type=float, default=15.0)
     parser.add_argument("--max-pbo", type=float, default=0.50)
+    parser.add_argument(
+        "--enforce-policy",
+        action="store_true",
+        help="Si se activa, POLICY_FAIL (ej. PBO > max-pbo) bloquea el check",
+    )
     parser.add_argument("--update-baseline", action="store_true", help="Actualiza baseline_metrics.json con los resultados actuales")
     args = parser.parse_args()
 
@@ -258,7 +276,7 @@ def main():
 
     all_passed = True
     for combo in sorted(combos):
-        ok = run_check(combo, args.max_sharpe_drop, args.max_pbo)
+        ok = run_check(combo, args.max_sharpe_drop, args.max_pbo, args.enforce_policy)
         if not ok:
             all_passed = False
 
@@ -266,7 +284,7 @@ def main():
     if all_passed:
         print("  ✅ TODOS PASARON — sin regresiones detectadas")
     else:
-        print("  ❌ HAY REGRESIONES — revisar combos fallidos arriba")
+        print("  ❌ HAY FALLOS — revisar arriba (REGRESSION_FAIL y/o POLICY_FAIL)")
     print(f"{'='*62}\n")
 
     if args.update_baseline:

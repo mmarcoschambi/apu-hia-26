@@ -575,6 +575,9 @@ class AdvancedVectorBTEngine:
         pattern_cache_path: str = "data/pattern_matrix.pkl",  # Path to precomputed patterns
         screener_cache_path: Optional[str] = None,
         screener_name: Optional[str] = None,
+        # NEW: Fee and Slippage settings
+        fee_rate: float = 0.001,
+        slippage_rate: float = 0.001,
         **kwargs,
     ):
         self.universe = universe
@@ -697,6 +700,17 @@ class AdvancedVectorBTEngine:
         self.screener_name = screener_name
         self.pattern_confidence_matrix: Optional[pd.DataFrame] = None
         self.pattern_type_matrix: Optional[pd.DataFrame] = None
+
+        # Fee and Slippage settings (backward compatible with legacy keys)
+        legacy_fee_rate = kwargs.pop("fees", None)
+        legacy_slippage_rate = kwargs.pop("slippage", None)
+        if legacy_fee_rate is not None:
+            fee_rate = legacy_fee_rate
+        if legacy_slippage_rate is not None:
+            slippage_rate = legacy_slippage_rate
+
+        self.fee_rate = fee_rate
+        self.slippage_rate = slippage_rate
         self.screener_cache_manager = None
 
         # Filter thresholds
@@ -1981,6 +1995,8 @@ class AdvancedVectorBTEngine:
             use_atr_stop=self.use_atr_stop,
             atr_stop_multiplier=self.atr_stop_multiplier,
             atr_trailing_multiplier=self.atr_trailing_multiplier,
+            fee_rate=self.fee_rate,
+            slippage_rate=self.slippage_rate,
         )
 
         duration = (datetime.now() - start_time).total_seconds()
@@ -2905,6 +2921,12 @@ class AdvancedVectorBTEngine:
             )
             signal_types[~entries] = None
 
+        # Ensure pattern cache is available before applying pattern filter.
+        # Previously this cache was loaded later inside chunk simulation,
+        # so the filter branch never executed even when use_pattern_filter=True.
+        if self.use_pattern_filter and self.pattern_confidence_matrix is None:
+            self._load_pattern_cache()
+
         # =====================================================================
         # PATTERN FILTER (optional - filter entries without pattern)
         # =====================================================================
@@ -3630,6 +3652,9 @@ class AdvancedVectorBTEngine:
                             self.regime_risk_multipliers = {}
                         self.regime_risk_multipliers[date] = risk_mult
 
+                # Apply blocked mask to entries - THE CRITICAL FIX
+                entries = entries & ~blocked_mask
+
                 total_entries_post_regime = entries.sum().sum()
 
                 logger.info(
@@ -4080,7 +4105,7 @@ class AdvancedVectorBTEngine:
         if (
             getattr(self, "use_pattern_filter", False)
             or getattr(self, "pattern_bonus_high", 0) > 0
-        ):
+        ) and self.pattern_confidence_matrix is None:
             self._load_pattern_cache()
 
         # Save index/columns BEFORE release_dataframes destroys self.close

@@ -55,12 +55,12 @@ class TriadRTSScreener(BaseScreener):
                 "sma200_uptrend_days": 22,
                 "min_rs_percentile": 70.0,  # RS > 70
                 # Fase 4: RTS gate
-                "min_rts_pct": 90.0,
+                "min_rts_pct": 70.0,
                 # Fase 5: Dark green cells
                 "require_atr_above_universe": True,
                 "max_sma50_atr_extension": 5.0,  # Max 5x ATR desde SMA50
                 "pivot_tolerance_pct": 2.0,  # +-2% de máximo 20 días
-                "require_green_candle": True,
+                "require_green_candle": False,
             },
         )
 

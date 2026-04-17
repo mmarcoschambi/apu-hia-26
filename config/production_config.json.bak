@@ -1,7 +1,7 @@
 {
   "_schema_version": "2.0",
   "_description": "Auto-exported from 3-Tier Optimization Pipeline",
-  "_last_updated": "2026-03-12T21:50:34.504699",
+  "_last_updated": "2026-03-20T07:39:35.962360",
   "_optimization_method": "3Tier_AdvancedVectorBT",
   "system": {
     "name": "Bugatti Trading System",
@@ -11,28 +11,28 @@
   },
   "=== TIER 1: STRATEGY (Optimized via Optuna) ===": {},
   "tier1_strategy": {
-    "tp1_r": 1.75,
-    "tp2_r": 3.75,
-    "tp1_pct": 0.55,
-    "tp2_pct": 0.2,
-    "runner_pct": 0.25,
+    "tp1_r": 2.0,
+    "tp2_r": 3.5,
+    "tp1_pct": 0.39999999999999997,
+    "tp2_pct": 0.5,
+    "runner_pct": 0.1,
     "max_stop_pct": 0.08,
     "risk_dollars": 1000,
     "use_phases": true,
     "signal_type": "any",
-    "_optimized_with": "3-Tier Pipeline (AdvancedVectorBT, 50 tickers)",
-    "_trials": 300,
-    "_robust_score": -28.56221535632509,
-    "_sharpe_validation": 1.0659245548533953
+    "_optimized_with": "3-Tier Pipeline (AdvancedVectorBT, 80 tickers)",
+    "_trials": 200,
+    "_robust_score": -1.7583748124041145,
+    "_sharpe_validation": 1.5645715687700144
   },
   "=== TIER 2: FILTERS (Statistically Derived) ===": {},
   "tier2_filters": {
-    "min_rvol": 0.58,
-    "min_adr": 1.49,
-    "max_dist_sma20": 12.84,
+    "min_rvol": 0.6,
+    "min_adr": 1.39,
+    "max_dist_sma20": 7.0,
     "min_consolidation_days": 5,
     "min_volume": 100000,
-    "min_dollar_volume": 5941884.092140198,
+    "min_dollar_volume": 4903368.932914734,
     "max_consolidation_range": 15.0,
     "require_sector_strength": false,
     "sector_top_percentile": 0.4,
@@ -77,14 +77,14 @@
     "target_win_rate": 45.0,
     "max_acceptable_drawdown": 25.0,
     "validation_max_degradation_pct": 20.0,
-    "sharpe_ratio": 1.0659245548533953,
-    "total_trades": 8396,
-    "win_rate_pct": 61.5625,
-    "total_return_pct": 78.45680767074226,
-    "max_drawdown_pct": 12.567943250955398,
-    "pbo_score": 0.41414141414141414,
-    "bootstrap_p5": -8.279651084138735,
-    "bootstrap_p10": -3.0938407381245985
+    "sharpe_ratio": 1.5645715687700144,
+    "total_trades": 775,
+    "win_rate_pct": 56.17977528089888,
+    "total_return_pct": 29.335888422966004,
+    "max_drawdown_pct": 13.486088739596862,
+    "pbo_score": 0.15757575757575756,
+    "bootstrap_p5": -0.8541625343717959,
+    "bootstrap_p10": 5.692281444143033
   },
   "=== UI DEFAULTS (Override these for Streamlit) ===": {},
   "ui_defaults": {
@@ -471,6 +471,31 @@
       "pbo_score": 0.41414141414141414,
       "approved": "True",
       "notes": "50 tickers, 2021-01-01 to 2025-12-31"
+    },
+    {
+      "date": "2026-03-20",
+      "method": "3Tier_AdvancedVectorBT",
+      "trials": 200,
+      "sharpe": 1.237864222123807,
+      "win_rate": 62.0,
+      "trades": 59,
+      "pbo_score": 0.08927738927738928,
+      "approved": "True",
+      "notes": "80 tickers, 2021-01-01 to 2025-06-30"
+    },
+    {
+      "date": "2026-03-20",
+      "method": "3Tier_AdvancedVectorBT",
+      "trials": 200,
+      "sharpe": 0.9608886525594168,
+      "win_rate": 56.17977528089888,
+      "trades": 775,
+      "pbo_score": 0.15757575757575756,
+      "approved": "True",
+      "notes": "80 tickers, 2021-01-01 to 2025-06-30"
     }
-  ]
+  ],
+  "_oos_sharpe": 1.5646,
+  "_oos_max_dd": 13.49,
+  "_oos_stamped": "2026-03-20T07:39:53.540446"
 }

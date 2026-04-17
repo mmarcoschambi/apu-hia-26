@@ -35,7 +35,19 @@ WF_FOLDS = [
     {"fold": 1, "oos_start": "2022-01-01", "oos_end": "2022-12-31"},
     {"fold": 2, "oos_start": "2023-01-01", "oos_end": "2023-12-31"},
     {"fold": 3, "oos_start": "2024-01-01", "oos_end": "2024-12-31"},
+    {"fold": 4, "oos_start": "2025-01-01", "oos_end": "2025-12-31"},
 ]
+
+# Gate mas estricto para evitar falsos GO por 1 anio excepcional.
+GATE_RULES = {
+    "min_valid_folds": 2,
+    "min_positive_folds": 2,
+    "min_sharpe_mean": 0.75,
+    "min_sharpe_min": 0.25,
+    "min_pf_mean": 1.20,
+    "min_pf_min": 1.00,
+    "min_trades_per_fold": 50,
+}
 
 COMBOS_DIR = ROOT / "config" / "combos"
 RESULTS_DIR = ROOT / "outputs" / "best_combos_run"
@@ -181,7 +193,18 @@ def run_oos_fold(combo_name: str, params: dict, fold: dict) -> dict:
                 else abs(float(result.get("max_drawdown", 0))) * 100,
                 2,
             ),
-            "total_return": round(float(result.get("total_return_pct", result.get("total_return", 0))) * (100 if abs(result.get("total_return_pct", result.get("total_return", 1))) < 2 else 1), 2),
+            "total_return": round(
+                float(result.get("total_return_pct", result.get("total_return", 0)))
+                * (
+                    100
+                    if abs(
+                        result.get("total_return_pct", result.get("total_return", 1))
+                    )
+                    < 2
+                    else 1
+                ),
+                2,
+            ),
             "status": "ok",
         }
     except Exception as e:
@@ -222,9 +245,15 @@ def evaluate_combo_wf(combo_name: str) -> dict:
 
     # Folds con <30 trades: estadisticamente invalidos
     # (bear market + SPY<SMA50 filter -> pocos trades por diseno, no falla del sistema)
-    MIN_FOLD_TRADES = 30
-    valid       = [f for f in fold_results if f["status"] == "ok" and f["trades"] >= MIN_FOLD_TRADES]
-    low_sample  = [f for f in fold_results if f["status"] == "ok" and f["trades"] <  MIN_FOLD_TRADES]
+    MIN_FOLD_TRADES = GATE_RULES["min_trades_per_fold"]
+    valid = [
+        f
+        for f in fold_results
+        if f["status"] == "ok" and f["trades"] >= MIN_FOLD_TRADES
+    ]
+    low_sample = [
+        f for f in fold_results if f["status"] == "ok" and f["trades"] < MIN_FOLD_TRADES
+    ]
     if not valid:
         agg = {
             "sharpe_mean": 0,
@@ -244,49 +273,42 @@ def evaluate_combo_wf(combo_name: str) -> dict:
             "sharpe_positive_folds": int(sum(s > 0 for s in sharpes)),
             "pf_mean": round(float(np.mean(pfs)), 3),
             "pf_consistent": bool(all(p > 1.0 for p in pfs)),
-            "trades_total":              int(sum(f["trades"] for f in valid)),
-            "trades_per_fold":           round(float(np.mean([f["trades"] for f in valid])), 1),
-            "folds_valid":               len(valid),
-            "folds_ignored_low_sample":  len(low_sample),
+            "trades_total": int(sum(f["trades"] for f in valid)),
+            "trades_per_fold": round(float(np.mean([f["trades"] for f in valid])), 1),
+            "folds_valid": len(valid),
+            "folds_ignored_low_sample": len(low_sample),
         }
-        # Criterio regimen-robusto:
-        # 2022 fue bear+fed hiking extremo — no descartamos por 1 fold negativo.
-        # Gate: >= 2/3 folds positivos, PF medio > 1.0, trades suficientes, sharpe medio > 0.25
         positive_folds = agg["sharpe_positive_folds"]
-        n_valid        = len(valid)
-        # Criterio adaptado al numero de folds con muestra valida:
-        #   - 3 folds validos: necesita >=2 positivos
-        #   - 2 folds validos: necesita >=2 positivos (ambos)
-        #   - 1 fold valido:   necesita sharpe > 0.4 y PF > 1.2 (barra mas alta)
-        if n_valid >= 2:
+        n_valid = len(valid)
+        if n_valid >= GATE_RULES["min_valid_folds"]:
             go = (
-                positive_folds         >= 2    and
-                agg["pf_mean"]         >  1.0  and
-                agg["trades_per_fold"] >= 30   and
-                agg["sharpe_mean"]     >  0.25
-            )
-        elif n_valid == 1:
-            go = (
-                positive_folds         >= 1    and
-                agg["pf_mean"]         >  1.2  and
-                agg["trades_per_fold"] >= 30   and
-                agg["sharpe_mean"]     >  0.4
+                positive_folds >= GATE_RULES["min_positive_folds"]
+                and agg["sharpe_mean"] >= GATE_RULES["min_sharpe_mean"]
+                and agg["sharpe_min"] >= GATE_RULES["min_sharpe_min"]
+                and agg["pf_mean"] >= GATE_RULES["min_pf_mean"]
+                and min(pfs) >= GATE_RULES["min_pf_min"]
+                and agg["trades_per_fold"] >= GATE_RULES["min_trades_per_fold"]
             )
         else:
             go = False
         agg["verdict"] = "GO" if go else "NO-GO"
+        agg["gate_rules"] = GATE_RULES
 
     if low_sample:
         for ls in low_sample:
-            logger.info(f"    Fold {ls['fold']} IGNORADO: {ls['trades']} trades "
-                        f"(bear/regime filter activo, muestra insuficiente)")
+            logger.info(
+                f"    Fold {ls['fold']} IGNORADO: {ls['trades']} trades "
+                f"(bear/regime filter activo, muestra insuficiente)"
+            )
     logger.info(f"\n  AGREGADO:")
     logger.info(f"    Sharpe medio:    {agg.get('sharpe_mean', 0):.3f}")
     logger.info(f"    Sharpe minimo:   {agg.get('sharpe_min', 0):.3f}")
     logger.info(f"    PF consistente:  {agg.get('pf_consistent', False)}")
     logger.info(f"    Trades por fold: {agg.get('trades_per_fold', 0):.1f}")
-    logger.info(f"    Folds validos:   {agg.get('folds_valid', 0)}/3  "
-                f"(ignorados por muestra baja: {agg.get('folds_ignored_low_sample', 0)})")
+    logger.info(
+        f"    Folds validos:   {agg.get('folds_valid', 0)}/{len(WF_FOLDS)}  "
+        f"(ignorados por muestra baja: {agg.get('folds_ignored_low_sample', 0)})"
+    )
     verdict = agg.get("verdict", "?")
     logger.info(f"    {'[GO]' if verdict == 'GO' else '[NO-GO]'} VEREDICTO: {verdict}")
 
