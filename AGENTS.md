@@ -115,7 +115,17 @@ Emoji prefixes common: `"✅ APPROVED..."`, `"🚫 REJECTED..."`, `"Loading..."`
 - Use `pathlib.Path` everywhere, never `os.path`
 - Project root: `BASE_DIR = Path(__file__).resolve().parent.parent`
 
-### Configuration Architecture
+## Active Agents Status (April 2026)
+
+| Agent Name | Strategy | Status | Notes |
+|------------|----------|--------|-------|
+| `combo_pure_momentum` | Momentum | **ACTIVE** | Core high-frequency agent. |
+| `combo_stage2_breakout` | Breakout | **ACTIVE** | Classic Stage 2 confirmation. |
+| `combo_pullback_entry` | Pullback | **ACTIVE** | Mean reversion in uptrend. |
+| `combo_ideal_setup` | Multi-Factor | **ACTIVE** | High precision, medium volume. |
+| `triad_rts` | Institutional | **RANKING ONLY** | Discarded as execution trigger due to extreme selectivity (<50 trades/yr). Use only for quality filtering. |
+
+## Configuration Architecture
 - **Single source of truth**: `config/production_config.json`
 - **Python fallback defaults**: `config/defaults.py`
 - **Feature flags**: `config/feature_flags.py`

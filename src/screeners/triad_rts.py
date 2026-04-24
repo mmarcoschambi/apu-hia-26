@@ -13,8 +13,10 @@ Backtest-only: Usa daily_triad_rankings para métricas PIT.
 """
 
 import pandas as pd
-import numpy as np
 from typing import Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 from .base import BaseScreener, ScreenerConfig, ScreenerResult
 from .registry import ScreenerRegistry
@@ -70,7 +72,8 @@ class TriadRTSScreener(BaseScreener):
             from src.data.triad_rankings import get_triad_metrics
 
             return get_triad_metrics(ticker, date=date)
-        except Exception:
+        except Exception as e:
+            logger.error(f"{ticker}: _load_triad_metrics({date}) exception: {e}")
             return None
 
     def _load_rs_percentile(self, ticker: str, date: str) -> float:
@@ -148,6 +151,14 @@ class TriadRTSScreener(BaseScreener):
             if triad_metrics:
                 as_5d_pct = triad_metrics.get("as_5d_pct", 50.0)
                 as_21d_pct = triad_metrics.get("as_21d_pct", 50.0)
+            else:
+                logger.warning(
+                    f"{ticker}: scan_date={scan_date} pero no hay triad_metrics - usando fallback 50.0"
+                )
+        else:
+            logger.warning(
+                f"{ticker}: scan_date=None - usando fallback 50.0 para AS/RTS (esto diluye el gate!)"
+            )
 
         as_filters = {
             "as_5d_ok": as_5d_pct >= p.get("min_as_5d_pct", 50.0),
@@ -240,7 +251,7 @@ class TriadRTSScreener(BaseScreener):
 
         atr_filter = True
         if p.get("require_atr_above_universe", True):
-            atr_filter = atr14 > atr_universe_mean * 0.8  # Al menos 80% del promedio
+            atr_filter = atr14 > atr_universe_mean  # Debe ser >= promedio del universo
 
         # Extensión SMA50
         dist_sma50_pct = ((price - s50) / s50 * 100) if s50 > 0 else 999.0

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
@@ -22,6 +23,27 @@ logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DEFAULT_CACHE_DIR = PROJECT_ROOT / "data" / "screener_cache"
+
+
+def get_valid_scan_dates_for_triad(
+    tickers: List[str], start_date: str, end_date: str
+) -> List[str]:
+    """Retorna fechas donde EXISTEN triad_metrics para al menos un ticker."""
+    db_path = PROJECT_ROOT / "data" / "ticker_cache.db"
+    conn = sqlite3.connect(db_path)
+    try:
+        placeholders = ",".join(["?"] * len(tickers))
+        query = f"""
+            SELECT DISTINCT date 
+            FROM daily_triad_rankings 
+            WHERE ticker IN ({placeholders})
+              AND date BETWEEN ? AND ?
+            ORDER BY date
+        """
+        rows = conn.execute(query, tickers + [start_date, end_date]).fetchall()
+        return [r[0] for r in rows]
+    finally:
+        conn.close()
 
 
 @dataclass
@@ -82,10 +104,13 @@ class ScreenerCacheManager:
         )
 
         records: List[Dict[str, Any]] = []
-        
+
         try:
             from tqdm import tqdm
-            ticker_iter = tqdm(tickers, desc=f"Building {screener_name} cache", unit="ticker")
+
+            ticker_iter = tqdm(
+                tickers, desc=f"Building {screener_name} cache", unit="ticker"
+            )
         except ImportError:
             logger.info("tqdm not found, progress bar disabled")
             ticker_iter = tickers
@@ -100,7 +125,15 @@ class ScreenerCacheManager:
             if df.empty:
                 continue
 
-            for date in df.index[df.index >= pd.to_datetime(start_date)]:
+            scan_dates = df.index[df.index >= pd.to_datetime(start_date)]
+            if screener_name == "triad_rts":
+                valid_dates = get_valid_scan_dates_for_triad(
+                    [ticker], start_date, end_date
+                )
+                valid_dt = set(pd.to_datetime(valid_dates))
+                scan_dates = [d for d in scan_dates if d in valid_dt]
+
+            for date in scan_dates:
                 hist = df.loc[:date]
                 if len(hist) < 50:
                     continue

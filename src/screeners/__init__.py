@@ -14,6 +14,7 @@ from . import qullamaggie_momentum  # noqa: F401
 from . import vcp_enhanced  # noqa: F401
 from . import universal_any  # noqa: F401
 from . import triad_rts  # noqa: F401
+from . import structure_pivot  # noqa: F401
 
 __all__ = [
     "BaseScreener",
