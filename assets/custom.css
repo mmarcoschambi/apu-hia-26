@@ -1,0 +1,42 @@
+.stApp { background-color: var(--background-color); color: var(--text-color); }
+.metric-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.metric-card { 
+    background-color: var(--secondary-background-color); 
+    padding: 20px 16px; 
+    border-radius: 12px; 
+    border: 1px solid rgba(255,255,255,0.1); 
+    border-left: 4px solid var(--primary-color); 
+    transition: 0.3s; 
+}
+.metric-card:hover { transform: translateY(-4px); border-color: var(--primary-color); box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+.metric-label { color: #8899a6; font-size: 0.75rem; text-transform: uppercase; font-weight: 600; margin-bottom: 6px; }
+.metric-value { color: var(--text-color); font-size: 1.5rem; font-weight: 700; }
+.metric-value.positive { color: #00ffa3; }
+.metric-value.negative { color: #ff4b4b; }
+[data-testid="stSidebar"] { background-color: var(--secondary-background-color); border-right: 1px solid rgba(255,255,255,0.1); }
+
+/* Better Scrollbars */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: rgba(0,0,0,0); }
+::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #484f58; }
+
+/* Scorecard / Semáforo Styles */
+.scorecard-container { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+.scorecard-item { 
+    padding: 12px 16px; 
+    border-radius: 8px; 
+    flex: 1; 
+    min-width: 140px; 
+    text-align: center;
+    border: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    transition: 0.3s;
+}
+.score-green { background-color: rgba(0, 255, 163, 0.1); border-color: #00ffa3; color: #00ffa3; box-shadow: 0 0 10px rgba(0, 255, 163, 0.1); }
+.score-yellow { background-color: rgba(255, 165, 0, 0.1); border-color: #ffa500; color: #ffa500; box-shadow: 0 0 10px rgba(255, 165, 0, 0.1); }
+.score-red { background-color: rgba(255, 75, 75, 0.1); border-color: #ff4b4b; color: #ff4b4b; box-shadow: 0 0 10px rgba(255, 75, 75, 0.1); }
+.score-label { font-size: 0.7rem; text-transform: uppercase; font-weight: 700; opacity: 0.9; margin-bottom: 4px; }
+.score-value { font-size: 1.2rem; font-weight: 800; }

@@ -1,0 +1,78 @@
+{
+  "meta": {
+    "updated_at": "2026-04-13",
+    "note": "Baseline actualizado 2026-04-13 via --update-baseline"
+  },
+  "combos": [
+    {
+      "name": "combo_universal_any",
+      "sharpe": 0.7783,
+      "pbo": 0.6201,
+      "pf": 1.2797,
+      "trades": 11785,
+      "dd": 15.23,
+      "wr": 46.25,
+      "passed": false
+    },
+    {
+      "name": "combo_pure_momentum",
+      "sharpe": 0.7537,
+      "pbo": 0.5137,
+      "pf": 1.3204,
+      "trades": 1671,
+      "dd": 7.26,
+      "wr": 53.49,
+      "passed": true
+    },
+    {
+      "name": "combo_aggressive_momentum",
+      "sharpe": 0.0,
+      "pbo": 1.0,
+      "pf": 0.0,
+      "trades": 0,
+      "dd": 100.0,
+      "wr": 0.0,
+      "passed": false
+    },
+    {
+      "name": "combo_pullback_entry",
+      "sharpe": 0.21,
+      "pbo": 0.5931,
+      "pf": 0.8952,
+      "trades": 394,
+      "dd": 12.4,
+      "wr": 41.48,
+      "passed": false
+    },
+    {
+      "name": "combo_stage2_breakout",
+      "sharpe": 0.9642,
+      "pbo": 0.5633,
+      "pf": 1.5135,
+      "trades": 4209,
+      "dd": 9.61,
+      "wr": 55.98,
+      "passed": true
+    },
+    {
+      "name": "combo_triad_rts_breakout",
+      "sharpe": 0.0,
+      "pbo": 0.0,
+      "pf": 0.0,
+      "trades": 0,
+      "dd": 0.0,
+      "wr": 0.0,
+      "passed": false
+    },
+    {
+      "name": "combo_ideal_setup",
+      "sharpe": 0.0,
+      "pbo": 1.0,
+      "pf": 0.0,
+      "trades": 0,
+      "dd": 100.0,
+      "wr": 0.0,
+      "passed": false
+    }
+  ]
+}

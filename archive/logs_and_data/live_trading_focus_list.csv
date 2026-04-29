@@ -1,0 +1,2 @@
+ticker,pattern,current_price,pivot,trigger_price,stop_loss,distance_%
+JPM,Flat Base,311.1199951171875,314.32000732421875,314.52000732421874,289.35840673828125,1.028545981374782

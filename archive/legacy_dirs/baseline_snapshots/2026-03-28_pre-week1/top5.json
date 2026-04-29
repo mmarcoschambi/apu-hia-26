@@ -1,0 +1,38 @@
+[
+  {
+    "combo": "combo_pullback_entry",
+    "score": -99.0,
+    "oos_score": 2.3778529261036665,
+    "validation_passed": true,
+    "validation": {
+      "sharpe_ratio": 3.0198762360294022,
+      "max_drawdown_pct": 3.3271171363591887,
+      "total_trades": 62,
+      "win_rate_pct": 59.09090909090909,
+      "pbo_score": 0.3320901320901321,
+      "profit_factor": 3.3427856391220274
+    },
+    "tier1": {
+      "tp1_r": 1.75,
+      "tp2_r": 5.0,
+      "tp1_pct": 0.6,
+      "tp2_pct": 0.25,
+      "runner_pct": 0.15
+    },
+    "tier2": {
+      "min_screener_score": 0.9,
+      "max_r_from_ema21": 0.5,
+      "min_adr_pct": 3.9,
+      "pp_vol_lookback": 10,
+      "min_rvol": 1.09,
+      "min_adr": 3.71,
+      "max_dist_sma20": 7.09,
+      "min_dollar_volume": 22830841.568989754,
+      "min_consolidation_days": 5,
+      "min_volume": 100000
+    },
+    "export_path": "/home/marcos/trade/momentum-v2/config/combo_results/combo_pullback_entry_optimized.json",
+    "combo_score": 2.4409,
+    "_gate": "strict"
+  }
+]

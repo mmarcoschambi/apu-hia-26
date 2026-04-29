@@ -19,13 +19,16 @@ Logica identica al engine:
     Price:  NEXT BAR OPEN (sin look-ahead bias)
 """
 
-import sys, json, sqlite3, argparse, warnings
+import argparse
+import json
+import sqlite3
+import sys
+import warnings
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import yfinance as yf
 
 warnings.filterwarnings("ignore")
 
@@ -35,6 +38,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from src.utils.market_context_live import get_market_context_live
+from src.scanner.universe_loader import load_scan_universe
 
 CONFIG_PATH = PROJECT_ROOT / "config" / "production_config.json"
 DB_PATH = PROJECT_ROOT / "data" / "ticker_cache.db"
@@ -95,7 +99,7 @@ def load_ohlcv(ticker, days=LOOKBACK_DAYS):
     if not rows:
         return pd.DataFrame()
     df = pd.DataFrame(rows, columns=["date", "open", "high", "low", "close", "volume"])
-    df["date"] = pd.to_datetime(df["date"])
+    df["date"] = pd.to_datetime(df["date"], format="mixed")
     df = df.set_index("date").astype(float)
     return df
 
@@ -116,7 +120,24 @@ def get_market_context():
     return ctx
 
 
-def scan_ticker(ticker, df, rs_universe_df):
+def _compute_rs_pct(ticker: str, df: pd.DataFrame, all_closes: dict) -> float:
+    if len(df) < RS_LOOKBACK + 5:
+        return 50.0
+    ret = df["close"].pct_change(RS_LOOKBACK).dropna()
+    if ret.empty:
+        return 50.0
+    ticker_ret = float(ret.iloc[-1])
+    other_rets = [
+        float(all_closes[t].pct_change(RS_LOOKBACK).dropna().iloc[-1])
+        for t in all_closes
+        if t != ticker and len(all_closes[t]) >= RS_LOOKBACK + 5
+    ]
+    if not other_rets:
+        return 50.0
+    return float((sum(r < ticker_ret for r in other_rets) / len(other_rets)) * 100)
+
+
+def scan_ticker(ticker, df, all_closes):
     if len(df) < MIN_HISTORY:
         return None
 
@@ -168,12 +189,7 @@ def scan_ticker(ticker, df, rs_universe_df):
         return None
 
     # RS percentile (cross-sectional)
-    rs_pct = 50.0
-    if not rs_universe_df.empty and ticker in rs_universe_df.columns:
-        last_row = rs_universe_df.iloc[-1].dropna()
-        ticker_val = last_row.get(ticker, np.nan)
-        if not np.isnan(ticker_val):
-            rs_pct = float((last_row < ticker_val).mean() * 100)
+    rs_pct = _compute_rs_pct(ticker, df, all_closes)
 
     if rs_pct < MIN_RS_PCT:
         return None
@@ -217,6 +233,19 @@ def main():
     parser.add_argument("--top", type=int, default=0)
     parser.add_argument("--output", type=str, default="")
     parser.add_argument("--quiet", action="store_true")
+    parser.add_argument(
+        "--universe-source",
+        type=str,
+        choices=["db", "stable", "file"],
+        default="db",
+        help="Universe source: db (default), stable (stable_universe.csv), file (--universe-file)",
+    )
+    parser.add_argument(
+        "--universe-file",
+        type=str,
+        default="",
+        help="CSV path for --universe-source file",
+    )
     args = parser.parse_args()
 
     today = datetime.now().strftime("%Y-%m-%d")
@@ -251,20 +280,20 @@ def main():
     # Universe
     if args.tickers:
         universe = [t.upper() for t in args.tickers]
-    elif args.top > 0:
-        universe = load_tickers_from_db(top_n=args.top)
+    elif args.universe_file:
+        universe = load_scan_universe(source="file", path=Path(args.universe_file))
+    elif args.universe_source == "stable":
+        universe = load_scan_universe(source="stable")
     else:
-        universe = load_tickers_from_db(top_n=0)
+        universe = load_scan_universe(source="db", top_n=args.top)
     print(f"Scanning {len(universe)} tickers...")
 
     # Load RS universe
     all_closes = {}
     for t in universe:
         df = load_ohlcv(t)
-
         if len(df) >= MIN_HISTORY:
-            all_closes[t] = df["close"].pct_change(RS_LOOKBACK)
-    rs_universe_df = pd.DataFrame(all_closes)
+            all_closes[t] = df["close"]
 
     # Scan
     signals = []
@@ -272,7 +301,7 @@ def main():
         df = load_ohlcv(ticker)
         if df.empty or len(df) < MIN_HISTORY:
             continue
-        r = scan_ticker(ticker, df, rs_universe_df)
+        r = scan_ticker(ticker, df, all_closes)
         if r:
             signals.append(r)
         if not args.quiet and i % 500 == 0:
@@ -306,7 +335,7 @@ def main():
         pd.DataFrame(signals).to_csv(out, index=False)
         print(f"\n  Saved to: {out}")
 
-    print(f"\n  NOTE: Entry at NEXT DAY OPEN — do NOT enter at signal_price")
+    print("\n  NOTE: Entry at NEXT DAY OPEN — do NOT enter at signal_price")
     print(
         f"  Risk: ${T1['risk_dollars']} | Exits: TP1={T1['tp1_r']}R/{int(T1['tp1_pct'] * 100)}%  "
         f"TP2={T1['tp2_r']}R/{int(T1['tp2_pct'] * 100)}%  Runner={int(T1['runner_pct'] * 100)}%"

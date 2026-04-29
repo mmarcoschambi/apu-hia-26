@@ -1666,6 +1666,17 @@ class AdvancedVectorBTEngine:
         except Exception:
             pass
 
+        # ──────────────────────────────────────────────────────────────────────
+        # FASE 2: Inyección de señales pre-calculadas (A+B Parity)
+        # ──────────────────────────────────────────────────────────────────────
+        try:
+            from src.backtest.signal_engine import inject_precomputed_signals
+            inject_precomputed_signals(self)
+        except ImportError:
+            logger.warning("⚠️ signal_engine.py no encontrado. Saltando inyección de señales.")
+        except Exception as e:
+            logger.error(f"⚠️ Error durante la inyección de señales: {e}")
+
         return self.close
 
     def _build_trade_dict(

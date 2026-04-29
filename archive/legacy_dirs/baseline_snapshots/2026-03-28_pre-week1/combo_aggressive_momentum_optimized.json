@@ -1,0 +1,41 @@
+{
+  "combo_name": "combo_aggressive_momentum",
+  "description": "Aggressive Momentum: Minervini Stage 2 + Pocket Pivot. Focus on volume-driven entries in strong trends.",
+  "optimized_at": "2026-03-28T13:40:01.659630",
+  "validation_passed": false,
+  "optimization_score": -11.537,
+  "screener": "minervini_trend",
+  "pattern": "pocket_pivot",
+  "tier1_exits": {
+    "tp1_r": 1.75,
+    "tp2_r": 3.0,
+    "tp1_pct": 0.6,
+    "tp2_pct": 0.25,
+    "pp_vol_lookback": 8,
+    "pp_vol_mult": 2.0,
+    "runner_pct": 0.15
+  },
+  "tier2_filters": {
+    "min_screener_score": 1.0,
+    "pp_vol_lookback": 10,
+    "pp_vol_mult_min": 1.2,
+    "require_above_sma50": true,
+    "min_rvol": 0.98,
+    "min_adr": 2.01,
+    "max_dist_sma20": 7.65,
+    "min_dollar_volume": 28538558.080444336,
+    "min_consolidation_days": 5,
+    "min_volume": 100000
+  },
+  "tier3_fixed": {
+    "max_loss_pct": 2.5,
+    "max_positions": 4,
+    "position_size_method": "equal_weight",
+    "risk_fraction": 0.005
+  },
+  "validation": {
+    "min_win_rate": 0.38,
+    "min_profit_factor": 1.1,
+    "min_trades": 20
+  }
+}

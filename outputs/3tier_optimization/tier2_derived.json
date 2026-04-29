@@ -1,48 +1,50 @@
 {
-  "min_rvol": 0.58,
-  "min_adr": 1.26,
-  "max_dist_sma20": 13.69,
-  "min_dollar_volume": 12608525.60634613,
+  "min_rvol": 0.75,
+  "min_adr": 1.2,
+  "max_dist_sma20": 17.77,
+  "min_dollar_volume": 2167650.05987339,
   "min_consolidation_days": 5,
   "min_volume": 100000,
   "require_positive_rs": true,
   "use_rs_percentile": true,
-  "min_rs_percentile": 70.0,
+  "min_rs_percentile": 85.0,
+  "require_spy_above_sma200": true,
+  "require_spy_above_sma50": false,
   "rs_lookback_days": 60,
   "use_pattern_filter": false,
   "min_pattern_confidence": 0.5,
   "pattern_cache_path": "data/pattern_matrix.pkl",
   "_raw_derived": {
-    "rvol_raw": 0.58,
-    "adr_raw": 1.26,
-    "dist_sma20_raw": 13.69,
-    "dollar_volume_raw": 12608525.60634613
+    "rvol_raw": 0.75,
+    "adr_raw": 1.55,
+    "dist_sma20_raw": 17.77,
+    "dollar_volume_raw": 2167650.05987339
   },
   "_dollar_volume_stats": {
-    "p10": 41892255.81893923,
-    "p25": 79245813.98925781,
-    "median": 204016131.9369049,
-    "p75": 484788371.5209961,
-    "p90": 1688733840.184935,
-    "max": 20156288195.983887,
-    "derived_raw": 12608525.60634613
+    "p10": 6274339.748286438,
+    "p25": 25113870.214989282,
+    "median": 163203504.27631837,
+    "p75": 747321339.2132262,
+    "p90": 4958883462.3307495,
+    "max": 49467126952.128784,
+    "derived_raw": 2167650.05987339
   },
   "_rvol_stats": {
-    "p10": 0.64,
-    "median": 0.97,
-    "p90": 1.58,
-    "max": 3.79
+    "p10": 0.81,
+    "median": 1.22,
+    "p90": 2.2,
+    "max": 3.84
   },
   "_adr_stats": {
-    "p10": 1.67,
-    "median": 2.56,
-    "p90": 4.31,
-    "max": 9.42
+    "p10": 1.72,
+    "median": 2.87,
+    "p90": 6.12,
+    "max": 8.62
   },
   "_dist_sma20_stats": {
-    "p10": -0.4,
-    "median": 4.08,
-    "p90": 10.75,
-    "max": 16.19
+    "p10": 3.54,
+    "median": 7.98,
+    "p90": 16.74,
+    "max": 20.61
   }
 }

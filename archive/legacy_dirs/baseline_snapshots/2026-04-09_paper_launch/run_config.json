@@ -1,0 +1,15 @@
+{
+  "snapshot_date": "2026-03-29",
+  "commit_hash": "15f035e4412dd0d213e3ef900719b1bc8084d407",
+  "run_flags": {
+    "start": "2019-01-01",
+    "end": "2024-12-31",
+    "trials": 100,
+    "jobs": 1,
+    "tickers": 200,
+    "script": "python optimize_combos.py --start 2019-01-01 --end 2024-12-31 --trials 100 --tickers 200"
+  },
+  "optuna_seed": 42,
+  "status": "PENDIENTE — correr pullback_entry primero para establecer el baseline real",
+  "note": "Este es el baseline canonico de la semana. 2019-2024 con 100 trials. Mas robusto que el baseline original (2022-2024, 150 trials)."
+}

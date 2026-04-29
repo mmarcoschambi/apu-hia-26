@@ -21,22 +21,23 @@ __pycache__/
 *.pyo
 .pytest_cache/
 
-# Data (generado, no code)
-data/ticker_cache.db
-data/cache/
-data/screener_cache/
+# Sensitive data
+.env
+telemetry-id
 
-# Outputs generados (no fuente)
-outputs/backtests/backtest_results.csv
-outputs/backtests/backtest_metrics.json
-outputs/backtests/rejection_stats.json
-outputs/paper_trading/capital.json
-outputs/paper_trading/positions.json
-outputs/paper_trading/analytics_*.json
-outputs/paper_trading/daily_pnl_*.json
-outputs/paper_trading/pre_report_*.json
-outputs/paper_trading/simulation_report_*.json
-outputs/paper_trading/weekly_report_*.json
+# Data (Excluir todo por defecto, permitir solo estructura)
+data/*
+!data/README.md
+!data/.gitignore
+
+# Models (Excluir todo por defecto)
+models/*
+!models/README.md
+
+# Outputs generados (Excluir todo por defecto)
+outputs/*
+!outputs/**/README.md
+!outputs/**/IMPLEMENTATION_SUMMARY.md
 
 # Configs generados por optimizacion (se regeneran)
 config/breakout_config.json

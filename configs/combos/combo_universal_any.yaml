@@ -1,0 +1,36 @@
+name: combo_universal_any
+status: NO-GO
+pbo: 0.95
+wf_sharpe_mean: 0.15
+wf_sharpe_min: -0.8
+wf_sortino_mean: 0.2
+wf_max_drawdown: 0.55
+scanner_filter: default
+pattern_filter: any
+regime_blocked:
+- 3
+- 4
+fee_rate: 0.001
+slippage_rate: 0.001
+spx_sma_period: 50
+vix_max: 25.0
+spx_vol_max: 20.0
+green_light_points: 5
+lookback_days: 180
+max_setups: 5
+flat_base_range_pct: 0.15
+vcp_contraction_threshold: 0.7
+min_rvol: 1.0
+min_adr: 1.0
+min_consolidation_days: 5
+max_positions: 4
+max_position_pct: 0.25
+max_exposure_pct: 0.65
+alerts:
+- ❌ PBO=95% — Overfitting extremo (configuración capturó ruido)
+- ❌ Sharpe WF=0.15 — Sin edge estadístico fuera de muestra
+- ❌ Drawdown=55% — Riesgo de ruina detectado
+notes: 'Combo universal sin filtros específicos de patrón. Los resultados muestran
+  que no tiene ventaja competitiva y es altamente vulnerable al azar.
+  Mantenido para trazabilidad histórica.
+'

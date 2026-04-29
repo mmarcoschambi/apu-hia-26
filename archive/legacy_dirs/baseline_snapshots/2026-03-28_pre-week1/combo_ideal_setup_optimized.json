@@ -1,0 +1,48 @@
+{
+  "combo_name": "combo_ideal_setup",
+  "description": "The Ideal Setup: Minervini Stage 2 Trend + VCP. Maximum quality filter with structural consolidation pattern.",
+  "optimized_at": "2026-03-28T14:28:38.409964",
+  "validation_passed": false,
+  "optimization_score": -25.405,
+  "screener": "minervini_trend",
+  "pattern": "vcp",
+  "tier1_exits": {
+    "tp1_r": 1.25,
+    "tp2_r": 5.25,
+    "tp1_pct": 0.35,
+    "tp2_pct": 0.5,
+    "vcp_pivot_window": 24,
+    "vcp_atr_short": 12,
+    "vcp_atr_long": 33,
+    "vcp_atr_ratio": 0.9,
+    "vcp_volume_dry_periods": 4,
+    "vcp_depth_max_pct": 14.0,
+    "vcp_pivot_dist_max_pct": 11.0,
+    "vcp_require_vol_dry": true,
+    "runner_pct": 0.15
+  },
+  "tier2_filters": {
+    "min_screener_score": 1.0,
+    "min_vcs_score": 30.0,
+    "min_contractions": 1,
+    "require_higher_lows": false,
+    "max_distance_from_52wk_high_pct": 30.0,
+    "min_rvol": 0.98,
+    "min_adr": 2.01,
+    "max_dist_sma20": 5.5,
+    "min_dollar_volume": 21341770.597839355,
+    "min_consolidation_days": 5,
+    "min_volume": 100000
+  },
+  "tier3_fixed": {
+    "max_loss_pct": 2.0,
+    "max_positions": 5,
+    "position_size_method": "equal_weight",
+    "risk_fraction": 0.005
+  },
+  "validation": {
+    "min_win_rate": 0.3,
+    "min_profit_factor": 0.9,
+    "min_trades": 5
+  }
+}

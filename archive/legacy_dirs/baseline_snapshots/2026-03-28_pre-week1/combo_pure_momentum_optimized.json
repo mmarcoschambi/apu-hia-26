@@ -1,0 +1,39 @@
+{
+  "combo_name": "combo_pure_momentum",
+  "description": "Pure Momentum: Qullamaggie RS + Breakout. Top 3% relative strength with clean breakout.",
+  "optimized_at": "2026-03-28T14:46:22.687370",
+  "validation_passed": false,
+  "optimization_score": -99.0,
+  "screener": "qullamaggie_momentum",
+  "pattern": "breakout",
+  "tier1_exits": {
+    "tp1_r": 1.5,
+    "tp2_r": 5.5,
+    "tp1_pct": 0.6,
+    "tp2_pct": 0.25,
+    "runner_pct": 0.15
+  },
+  "tier2_filters": {
+    "min_screener_score": 0.9,
+    "min_rs_percentile": 93.0,
+    "min_trend_intensity": 105.0,
+    "require_ma_stack": false,
+    "min_rvol": 0.93,
+    "min_adr": 2.2,
+    "max_dist_sma20": 8.43,
+    "min_dollar_volume": 20629804.544448853,
+    "min_consolidation_days": 5,
+    "min_volume": 100000
+  },
+  "tier3_fixed": {
+    "max_loss_pct": 2.0,
+    "max_positions": 6,
+    "position_size_method": "rs_weighted",
+    "risk_fraction": 0.005
+  },
+  "validation": {
+    "min_win_rate": 0.38,
+    "min_profit_factor": 1.1,
+    "min_trades": 20
+  }
+}

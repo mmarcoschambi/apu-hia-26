@@ -1,0 +1,50 @@
+{
+  "combo_name": "combo_triad_rts_vcp",
+  "description": "Triad RTS VCP: Pipeline completo con patron VCP",
+  "optimized_at": "2026-04-23T19:26:20.276166",
+  "validation_passed": true,
+  "optimization_score": -25.739,
+  "screener": "triad_rts",
+  "pattern": "vcp",
+  "tier1_exits": {
+    "tp1_r": 1.5,
+    "tp2_r": 3.5,
+    "tp1_pct": 0.45,
+    "tp2_pct": 0.30000000000000004,
+    "vcp_pivot_window": 20,
+    "vcp_atr_short": 5,
+    "vcp_atr_long": 34,
+    "vcp_atr_ratio": 0.95,
+    "vcp_volume_dry_periods": 7,
+    "vcp_depth_max_pct": 20.0,
+    "vcp_pivot_dist_max_pct": 5.0,
+    "vcp_require_vol_dry": false,
+    "runner_pct": 0.25
+  },
+  "tier2_filters": {
+    "min_rvol": 0.93,
+    "min_adr": 2.15,
+    "max_dist_sma20": 8.41,
+    "min_dollar_volume": 20000000,
+    "min_consolidation_days": 5,
+    "min_volume": 100000,
+    "min_rs_percentile": 70.0,
+    "use_rs_percentile": true,
+    "rs_lookback_days": 60,
+    "require_spy_above_sma50": true,
+    "max_vix_threshold": 25.0,
+    "use_market_regime_filter": true
+  },
+  "tier3_fixed": {
+    "max_loss_pct": 1.5,
+    "max_positions": 3,
+    "position_size_method": "equal_weight",
+    "risk_fraction": 0.005
+  },
+  "validation_thresholds": {
+    "min_win_rate": 0.4,
+    "min_profit_factor": 1.2,
+    "min_trades": 20
+  },
+  "validation": {}
+}

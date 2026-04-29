@@ -1071,3 +1071,56 @@ class PatternDetectionEngine:
             return None
         
         return patterns[0]  # Ya están ordenados por confianza
+
+
+def detect_base_construction(df: pd.DataFrame, 
+                              min_base_days: int = 15,
+                              atr_period: int = 14) -> dict:
+    """
+    Detecta construcción de base antes de breakout. (Bloque 6 - PRO)
+    
+    Criterios:
+    - ATR decreciente: compresión de volatilidad.
+    - Tight range: el precio oscila en un rango estrecho (<12% total).
+    - Volume dry-up: el volumen cae indicando falta de presión vendedora.
+    """
+    if len(df) < min_base_days + atr_period:
+        return {"in_base": False, "reason": "insufficient_data"}
+    
+    # 1. ATR decreciente = compresión de volatilidad
+    # Calculamos ATR manualmente si no existe
+    high_low = df["high"] - df["low"]
+    high_close = (df["high"] - df["close"].shift()).abs()
+    low_close = (df["low"] - df["close"].shift()).abs()
+    tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    atr = tr.rolling(atr_period).mean()
+    
+    atr_recent = atr.iloc[-5:].mean()
+    atr_prior = atr.iloc[-20:-5].mean()
+    compressing = atr_recent < atr_prior * 0.90 # 10% de compresión mínima
+    
+    # 2. Rango de precios comprimido en últimos N días
+    recent = df.iloc[-min_base_days:]
+    price_range = (recent["high"].max() - recent["low"].min()) / recent["close"].mean()
+    tight_range = price_range < 0.12  # menos del 12% de rango
+    
+    # 3. Volume dry-up: volumen reciente < 75% del promedio
+    vol_avg20 = df["volume"].iloc[-20:].mean()
+    vol_avg5 = df["volume"].iloc[-5:].mean()
+    volume_dry = vol_avg5 < vol_avg20 * 0.75
+    
+    # Pivot = máximo de la base
+    pivot = recent["high"].max()
+    
+    in_base = compressing and tight_range
+    base_days = min_base_days if in_base else 0
+    
+    return {
+        "in_base": in_base,
+        "base_days": base_days,
+        "pivot": round(pivot, 2),
+        "volume_dry": volume_dry,
+        "near_breakout": in_base and (df["close"].iloc[-1] > pivot * 0.98),
+        "atr_compression": round(atr_recent / atr_prior, 2) if atr_prior > 0 else 1.0,
+        "price_range_pct": round(price_range * 100, 1),
+    }

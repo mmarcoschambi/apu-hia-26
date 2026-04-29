@@ -84,7 +84,9 @@ def _fetch_last_close_cache(
 
 
 def get_market_context_live(
-    require_spy_above_sma50: bool = True,
+    require_spy_above_sma50: bool = False,
+    require_spy_above_sma200: bool = False,
+    spy_lookback_days: int = 300,
     max_vix: float = 35.0,
     db_path: Optional[Path] = None,
 ) -> Dict[str, Any]:
@@ -93,6 +95,8 @@ def get_market_context_live(
 
     Args:
         require_spy_above_sma50: Si True, SPY debe estar sobre SMA50 para aprobar.
+        require_spy_above_sma200: Si True, SPY debe estar sobre SMA200 para aprobar.
+        spy_lookback_days: Días de historia a descargar para el SPY.
         max_vix: Umbral máximo de VIX para aprobar.
         db_path: Path al DB de cache (default: PROJECT_ROOT/data/ticker_cache.db)
 
@@ -101,6 +105,7 @@ def get_market_context_live(
         {
             "spy_price": float,
             "spy_sma50": float,
+            "spy_sma200": float,
             "spy_ok": bool,
             "vix": float,
             "vix_ok": bool,
@@ -115,6 +120,7 @@ def get_market_context_live(
     ctx: Dict[str, Any] = {
         "spy_price": None,
         "spy_sma50": None,
+        "spy_sma200": None,
         "spy_ok": True,
         "vix": None,
         "vix_ok": True,
@@ -126,25 +132,45 @@ def get_market_context_live(
     # === SPY robusto ===
     try:
         spy_df = yf.download(
-            "SPY", period="90d", auto_adjust=True, progress=False, timeout=10
+            "SPY", period=f"{spy_lookback_days}d", auto_adjust=True, progress=False, timeout=10
         )
         spy_s = _extract_close_series(spy_df)
 
-        if len(spy_s) >= 50:
+        if not spy_s.empty:
             spy_price = float(spy_s.iloc[-1])
-            spy_sma50_val = float(spy_s.rolling(50).mean().dropna().iloc[-1])
             ctx["spy_price"] = spy_price
-            ctx["spy_sma50"] = spy_sma50_val
-            if require_spy_above_sma50:
-                ctx["spy_ok"] = spy_price >= spy_sma50_val
-            else:
-                ctx["spy_ok"] = True
+            spy_ok = True
+
+            # SMA 50
+            if len(spy_s) >= 50:
+                spy_sma50_val = float(spy_s.rolling(50).mean().dropna().iloc[-1])
+                ctx["spy_sma50"] = spy_sma50_val
+                if require_spy_above_sma50:
+                    spy_ok = spy_ok and (spy_price >= spy_sma50_val)
+            elif require_spy_above_sma50:
+                spy_ok = False
+                ctx["regime_quality"] = "LOW"
+                ctx["warnings"].append("SPY insufficient data for SMA50")
+
+            # SMA 200
+            if len(spy_s) >= 200:
+                spy_sma200_val = float(spy_s.rolling(200).mean().dropna().iloc[-1])
+                ctx["spy_sma200"] = spy_sma200_val
+                if require_spy_above_sma200:
+                    spy_ok = spy_ok and (spy_price >= spy_sma200_val)
+            elif require_spy_above_sma200:
+                spy_ok = False
+                ctx["regime_quality"] = "LOW"
+                ctx["warnings"].append("SPY insufficient data for SMA200")
+
+            ctx["spy_ok"] = spy_ok
         else:
-            ctx["spy_ok"] = True
+            ctx["spy_ok"] = not (require_spy_above_sma50 or require_spy_above_sma200)
             ctx["regime_quality"] = "LOW"
-            ctx["warnings"].append("SPY insufficient data; gate degraded")
+            ctx["warnings"].append("SPY series empty; gate degraded")
+
     except Exception as e:
-        ctx["spy_ok"] = True
+        ctx["spy_ok"] = not (require_spy_above_sma50 or require_spy_above_sma200)
         ctx["regime_quality"] = "LOW"
         ctx["warnings"].append(f"SPY fetch failed: {e}; gate degraded")
 

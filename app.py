@@ -67,6 +67,7 @@ from config.defaults import (
 # vista filtrada y caché para multi-activo/multi-patrón
 # ──────────────────────────────────────────────────────────────────────
 from src.ui.dashboard_data_adapter import DashboardDataAdapter, get_adapter
+from src.ui.dashboard_v2_adapter import get_dashboard_v2_adapter
 from src.ui.session_state import DashboardState, ALL_LABEL
 from src.ui.filtered_view import get_filtered_trades, get_scope_label, get_scope_info
 from src.ui.dashboard_cache import (
@@ -84,6 +85,7 @@ try:
         get_go_combos,
         ComboConfig,
     )
+
     _yaml_combos = load_combo_configs()
     _yaml_go_combos = get_go_combos(_yaml_combos)
     _yaml_combos_available = True
@@ -123,7 +125,7 @@ def _convert_yaml_to_production_dict(combo: ComboConfig) -> dict:
     except Exception:
         # Fallback to empty if file missing
         base = {}
-    
+
     # Map flat YAML fields to nested JSON structure
     return {
         "combo_name": combo.name,
@@ -155,13 +157,8 @@ def _convert_yaml_to_production_dict(combo: ComboConfig) -> dict:
             "max_vix": combo.vix_max,
             "regime_blocked": combo.regime_blocked,
         },
-        "scanner": {
-            "name": combo.scanner_filter,
-            "mode": "all"
-        },
-        "pattern": {
-            "signal_type": combo.pattern_filter
-        }
+        "scanner": {"name": combo.scanner_filter, "mode": "all"},
+        "pattern": {"signal_type": combo.pattern_filter},
     }
 
 
@@ -191,7 +188,7 @@ def _load_selected_strategy_config() -> dict:
                         return _normalize_combo_config(raw)
                     except Exception:
                         break
-    
+
     # 3. FALLBACK: production_config.json
     return load_production_config()
 
@@ -230,35 +227,41 @@ if _yaml_combos_available and _yaml_go_combos:
         _active_yaml_combo = get_combo_by_name(_yaml_combos, _prev_combo_name)
         if _active_yaml_combo:
             _yc = _active_yaml_combo  # type: ComboConfig
-            
+
             # Override tier2 (filters/quality)
-            _t2.update({
-                'min_rvol': _yc.min_rvol,
-                'min_adr': _yc.min_adr,
-                'min_consolidation_days': _yc.min_consolidation_days,
-            })
-            
+            _t2.update(
+                {
+                    "min_rvol": _yc.min_rvol,
+                    "min_adr": _yc.min_adr,
+                    "min_consolidation_days": _yc.min_consolidation_days,
+                }
+            )
+
             # Override tier3 (risk)
-            _t3.update({
-                'max_position_pct': _yc.max_position_pct,
-                'max_exposure_pct': _yc.max_exposure_pct,
-            })
-            
+            _t3.update(
+                {
+                    "max_position_pct": _yc.max_position_pct,
+                    "max_exposure_pct": _yc.max_exposure_pct,
+                }
+            )
+
             # Override market regime
-            _mr.update({
-                'max_vix': _yc.vix_max,
-            })
-            
+            _mr.update(
+                {
+                    "max_vix": _yc.vix_max,
+                }
+            )
+
             # Store for scanner integration
             _yaml_combo_params = {
-                'fee_rate': _yc.fee_rate,
-                'slippage_rate': _yc.slippage_rate,
-                'regime_blocked': _yc.regime_blocked,
-                'scanner_filter': _yc.scanner_filter,
-                'pattern_filter': _yc.pattern_filter,
-                'lookback_days': _yc.lookback_days,
-                'max_setups': _yc.max_setups,
-                'active_combo_name': _yc.name,
+                "fee_rate": _yc.fee_rate,
+                "slippage_rate": _yc.slippage_rate,
+                "regime_blocked": _yc.regime_blocked,
+                "scanner_filter": _yc.scanner_filter,
+                "pattern_filter": _yc.pattern_filter,
+                "lookback_days": _yc.lookback_days,
+                "max_setups": _yc.max_setups,
+                "active_combo_name": _yc.name,
             }
         else:
             _yaml_combo_params = {}
@@ -600,6 +603,540 @@ has_r = (
 )
 
 _dash_cache = DashboardCache()
+_dashboard_v2_adapter = get_dashboard_v2_adapter()
+
+
+@st.cache_data(show_spinner=False)
+def _load_integration_run_v2(mode: str, date: str | None = None) -> dict:
+    return _dashboard_v2_adapter.load_integration_run(mode=mode, date=date)
+
+
+@st.cache_data(show_spinner=False)
+def _load_combo_run_v2(date: str | None = None) -> dict:
+    return _dashboard_v2_adapter.load_combo_scan_run(date=date)
+
+
+@st.cache_data(show_spinner=False)
+def _load_universe_snapshot_v2() -> dict:
+    return _dashboard_v2_adapter.load_universe_snapshot()
+
+
+def _filter_by_system(df: pd.DataFrame, system_view: str) -> pd.DataFrame:
+    if df.empty or system_view == "Combined" or "source_system" not in df.columns:
+        return df
+    target = "A" if system_view == "A only" else "B"
+    return df[df["source_system"] == target]
+
+
+def _filter_combo_df(df: pd.DataFrame, selected_agent: str) -> pd.DataFrame:
+    if df.empty or selected_agent == "All agents" or "agent_name" not in df.columns:
+        return df
+    return df[df["agent_name"] == selected_agent]
+
+
+def _render_kpi_row(items: list[tuple[str, str, str | None]]) -> None:
+    cols = st.columns(len(items))
+    for col, (label, value, delta) in zip(cols, items):
+        col.metric(label, value, delta=delta)
+
+
+def _render_phase_status(run: dict) -> None:
+    status = run.get("status", {})
+    labels = [("F1", "Unified"), ("F2", "Router"), ("F3", "Risk"), ("F4", "Edge")]
+    cols = st.columns(len(labels))
+    for col, (phase, subtitle) in zip(cols, labels):
+        ok = bool(status.get(phase.lower()))
+        col.markdown(
+            f"""
+            <div style="padding:14px 16px;border:1px solid {"#204b32" if ok else "#5b2f2f"};
+            border-radius:14px;background:{"#0f1e17" if ok else "#221516"};">
+              <div style="font-size:12px;color:#9eb1c9;text-transform:uppercase;letter-spacing:0.08em;">{phase}</div>
+              <div style="font-size:20px;font-weight:700;margin-top:4px;">{"OK" if ok else "Missing"}</div>
+              <div style="font-size:12px;color:#9eb1c9;margin-top:2px;">{subtitle}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+def _render_warnings(warnings: list[str], title: str = "Artifacts") -> None:
+    if warnings:
+        with st.expander(f"Warnings: {title}", expanded=False):
+            for warning in warnings:
+                st.warning(warning)
+
+
+def _render_pipeline_summary(run: dict, system_view: str) -> None:
+    unified_df = _filter_by_system(
+        run.get("unified_signals_df", pd.DataFrame()), system_view
+    )
+    routed_df = _filter_by_system(
+        run.get("routed_signals_df", pd.DataFrame()), system_view
+    )
+    execution_df = _filter_by_system(
+        run.get("execution_plan_df", pd.DataFrame()), system_view
+    )
+    phase3 = run.get("phase3_summary", {})
+    router = run.get("router_summary", {})
+    edge = run.get("edge_report", {})
+    preflight = edge.get("preflight", {})
+
+    exposure_value = (
+        phase3.get("exposure_total", 0.0)
+        if system_view == "Combined"
+        else phase3.get("exposure_A", 0.0)
+        if system_view == "A only"
+        else phase3.get("exposure_B", 0.0)
+    )
+    positions_value = (
+        phase3.get("positions_total", 0)
+        if system_view == "Combined"
+        else phase3.get("positions_A", 0)
+        if system_view == "A only"
+        else phase3.get("positions_B", 0)
+    )
+
+    _render_kpi_row(
+        [
+            ("Signals F1", f"{len(unified_df):,}", None),
+            ("Accepted F2", f"{len(routed_df):,}", None),
+            ("Planned F3", f"{len(execution_df):,}", None),
+            ("Exposure", f"${exposure_value:,.0f}", None),
+            ("Positions", f"{positions_value}", None),
+            ("Edge Status", edge.get("status", "N/A"), None),
+        ]
+    )
+
+    subcols = st.columns(3)
+    with subcols[0]:
+        st.caption("Router breakdown")
+        _render_kpi_row(
+            [
+                ("Accepted", str(router.get("accepted", "—")), None),
+                ("Dropped", str(router.get("dropped", "—")), None),
+                ("Blocked", str(router.get("blocked", "—")), None),
+            ]
+        )
+    with subcols[1]:
+        st.caption("Hydration rates")
+        rate_a = preflight.get("hydrated_rate_A")
+        rate_b = preflight.get("hydrated_rate_B")
+        _render_kpi_row(
+            [
+                ("Rate A", f"{rate_a:.0%}" if rate_a is not None else "—", None),
+                ("Rate B", f"{rate_b:.0%}" if rate_b is not None else "—", None),
+                ("Sessions", str(preflight.get("common_sessions", "—")), None),
+            ]
+        )
+    with subcols[2]:
+        st.caption("Edge preflight")
+        if preflight.get("passed"):
+            st.success("✓ Preflight passed")
+        else:
+            st.error("✗ Preflight blocked")
+            for error in preflight.get("errors") or []:
+                st.caption(f"⚠ {error}")
+
+
+def _render_execution_table(run: dict, system_view: str) -> None:
+    execution_df = _filter_by_system(
+        run.get("execution_plan_df", pd.DataFrame()), system_view
+    )
+    rejected_df = _filter_by_system(
+        run.get("risk_rejected_df", pd.DataFrame()), system_view
+    )
+    if execution_df.empty:
+        st.info("No execution plan rows found for this view.")
+    else:
+        columns = [
+            column
+            for column in [
+                "source_system",
+                "strategy_id",
+                "ticker",
+                "trade_date",
+                "entry_price_ref",
+                "hydrated_price_source",
+                "shares",
+                "notional_usd",
+                "router_reason",
+                "meta_historical_plan",
+                "meta_price_origin",
+                "meta_price_validation_mode",
+            ]
+            if column in execution_df.columns
+        ]
+        st.dataframe(
+            execution_df[columns].sort_values(
+                by=[
+                    c for c in ["trade_date", "source_system", "ticker"] if c in columns
+                ]
+            ),
+            use_container_width=True,
+            height=360,
+        )
+    if not rejected_df.empty:
+        with st.expander("Risk rejects", expanded=False):
+            st.dataframe(rejected_df.head(100), use_container_width=True, height=280)
+
+
+def _render_edge_panel(run: dict, system_view: str) -> None:
+    edge_report = run.get("edge_report", {})
+    preflight = edge_report.get("preflight", {})
+    metrics_df = _filter_by_system(
+        run.get("edge_metrics_df", pd.DataFrame()), system_view
+    )
+    promotions_df = _filter_by_system(
+        run.get("promotion_decisions_df", pd.DataFrame()), system_view
+    )
+
+    header_cols = st.columns(5)
+    header_cols[0].metric(
+        "Preflight", "PASS ✓" if preflight.get("passed") else "BLOCKED ✗"
+    )
+    header_cols[1].metric("Common Sessions", f"{preflight.get('common_sessions', 0):,}")
+    header_cols[2].metric("PROMOTE", f"{edge_report.get('promote_count', 0)}")
+    header_cols[3].metric("HOLD", f"{edge_report.get('hold_count', 0)}")
+    header_cols[4].metric("REJECT", f"{edge_report.get('reject_count', 0)}")
+
+    # Degradation warning
+    if edge_report.get("rolling_degradation_detected"):
+        pct = edge_report.get("rolling_degradation_pct", 0)
+        st.warning(
+            f"⚠ Rolling degradation detected: {pct:.0%} of rolling windows below threshold."
+        )
+
+    if preflight.get("errors"):
+        for error in preflight.get("errors") or []:
+            st.error(f"✗ {error}")
+    elif edge_report.get("message"):
+        st.info(edge_report["message"])
+
+    # Inline promotions from edge_report (historical mode has them embedded)
+    inline_promotions = edge_report.get("promotions", [])
+    if inline_promotions and promotions_df.empty:
+        promotions_df = pd.DataFrame(inline_promotions)
+
+    # Inline metrics from edge_report
+    inline_metrics = edge_report.get("edge_metrics", [])
+    if inline_metrics and metrics_df.empty:
+        metrics_df = pd.DataFrame(inline_metrics)
+
+    if not metrics_df.empty:
+        st.subheader("Edge Metrics by Strategy")
+        vis_cols = [
+            c
+            for c in [
+                "source_system",
+                "strategy_id",
+                "ticker",
+                "promote_decision",
+                "sharpe",
+                "win_rate",
+                "profit_factor",
+                "trade_count",
+                "edge_score",
+                "promote_reason",
+            ]
+            if c in metrics_df.columns
+        ]
+        st.dataframe(
+            metrics_df[vis_cols] if vis_cols else metrics_df,
+            use_container_width=True,
+            height=300,
+        )
+    if not promotions_df.empty:
+        st.subheader("Promotion Decisions")
+        vis_cols = [
+            c
+            for c in [
+                "strategy_id",
+                "ticker",
+                "source_system",
+                "decision",
+                "reason",
+                "edge_score",
+                "promote_count",
+            ]
+            if c in promotions_df.columns
+        ]
+        st.dataframe(
+            promotions_df[vis_cols] if vis_cols else promotions_df,
+            use_container_width=True,
+            height=240,
+        )
+
+
+def _render_universe_panel(universe_run: dict) -> None:
+    meta = universe_run.get("stable_universe_meta", {})
+    universe_df = universe_run.get("stable_universe_df", pd.DataFrame())
+    _render_kpi_row(
+        [
+            ("Provider", str(meta.get("provider", "N/A")), None),
+            ("Tickers", f"{meta.get('tickers_count', len(universe_df)):,}", None),
+            ("Scan Date", str(meta.get("scan_date", "N/A")), None),
+            ("Pages OK", str(meta.get("pages_ok", "N/A")), None),
+        ]
+    )
+    left, right = st.columns([1.4, 1])
+    with left:
+        st.subheader("Universe Metadata")
+        st.json(meta)
+    with right:
+        st.subheader("Stable Universe")
+        if universe_df.empty:
+            st.warning("stable_universe.csv is missing or empty.")
+        else:
+            st.dataframe(universe_df.head(250), use_container_width=True, height=360)
+    if universe_run.get("latest_snapshot_date"):
+        st.caption(f"Latest snapshot: {universe_run['latest_snapshot_date']}")
+
+
+def _render_combo_panel(combo_run: dict, selected_agent: str) -> None:
+    summary = combo_run.get("combo_scan_summary", {})
+    combo_df = _filter_combo_df(
+        combo_run.get("combo_signals_df", pd.DataFrame()), selected_agent
+    )
+    agent_tables = combo_run.get("agent_tables", {})
+    agents = summary.get("agents", {})
+
+    _render_kpi_row(
+        [
+            ("Combo Run", str(combo_run.get("run_date", "N/A")), None),
+            ("Universe Source", str(summary.get("universe_source", "N/A")), None),
+            ("Universe Count", f"{summary.get('universe_count', 0):,}", None),
+            ("Signals", f"{len(combo_df):,}", None),
+        ]
+    )
+
+    top_left, top_right = st.columns([1.1, 1.4])
+    with top_left:
+        st.subheader("Run Summary")
+        st.json(summary)
+    with top_right:
+        st.subheader("Combined Signals")
+        if combo_df.empty:
+            st.info("No combo signals found for the selected filter.")
+        else:
+            visible = [
+                column
+                for column in [
+                    "agent_name",
+                    "combo_name",
+                    "ticker",
+                    "signal_date",
+                    "entry_score",
+                    "screener_score",
+                    "screener_reason",
+                    "pattern_signal",
+                    "tier2_filter",
+                    "rvol",
+                    "adr_pct",
+                    "dist_sma20",
+                    "dollar_vol_M",
+                    "rs_percentile",
+                    "rs_ret",
+                ]
+                if column in combo_df.columns
+            ]
+            st.dataframe(
+                combo_df[visible].head(250), use_container_width=True, height=360
+            )
+
+    if agents:
+        with st.expander("Agent breakdown", expanded=False):
+            st.json(agents)
+    if selected_agent != "All agents" and selected_agent in agent_tables:
+        with st.expander(f"Raw file: {selected_agent}", expanded=False):
+            st.dataframe(
+                agent_tables[selected_agent].head(250),
+                use_container_width=True,
+                height=280,
+            )
+
+
+def _render_ab_comparison(live_run: dict, historical_run: dict) -> None:
+    """Render A vs B signal count and exposure comparison as bar charts."""
+    phase3_live = live_run.get("phase3_summary", {})
+    unified_live = live_run.get("unified_signals_df", pd.DataFrame())
+
+    f1_a_live = (
+        int((unified_live.get("source_system", pd.Series()) == "A").sum())
+        if not unified_live.empty
+        else 0
+    )
+    f1_b_live = (
+        int((unified_live.get("source_system", pd.Series()) == "B").sum())
+        if not unified_live.empty
+        else 0
+    )
+
+    st.markdown("#### A vs B Signal Breakdown")
+    chart_cols = st.columns(2)
+    with chart_cols[0]:
+        bar_data = pd.DataFrame(
+            {
+                "System": ["A", "B"],
+                "F1 Signals": [f1_a_live, f1_b_live],
+            }
+        )
+        if bar_data["F1 Signals"].sum() > 0:
+            fig = px.bar(
+                bar_data,
+                x="System",
+                y="F1 Signals",
+                color="System",
+                color_discrete_map={"A": "#3b82f6", "B": "#f59e0b"},
+                title="Live F1 Signals by System",
+                height=240,
+            )
+            fig.update_layout(showlegend=False, margin=dict(t=36, b=16, l=16, r=16))
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No F1 signal data for A/B breakdown.")
+    with chart_cols[1]:
+        exp_data = pd.DataFrame(
+            {
+                "System": ["A", "B"],
+                "Exposure USD": [
+                    float(phase3_live.get("exposure_A", 0) or 0),
+                    float(phase3_live.get("exposure_B", 0) or 0),
+                ],
+            }
+        )
+        if exp_data["Exposure USD"].sum() > 0:
+            fig2 = px.bar(
+                exp_data,
+                x="System",
+                y="Exposure USD",
+                color="System",
+                color_discrete_map={"A": "#3b82f6", "B": "#f59e0b"},
+                title="Live Planned Exposure by System",
+                height=240,
+            )
+            fig2.update_layout(showlegend=False, margin=dict(t=36, b=16, l=16, r=16))
+            st.plotly_chart(fig2, use_container_width=True)
+        else:
+            st.info("No exposure data for A/B breakdown.")
+
+
+def _render_dashboard_v2(
+    mode: str, system_view: str, selected_combo_run: str | None, selected_agent: str
+) -> None:
+    run = _load_integration_run_v2(mode)
+    historical_run = _load_integration_run_v2("historical")
+    combo_run = _load_combo_run_v2(selected_combo_run)
+    universe_run = _load_universe_snapshot_v2()
+
+    st.title("Momentum Control Tower 2.0")
+    st.caption(
+        f"Mode: {mode.title()}  |  System view: {system_view}  |  Integration run: {run.get('run_date') or 'latest'}"
+    )
+    _render_warnings(run.get("warnings", []), f"integration/{mode}")
+    _render_warnings(combo_run.get("warnings", []), "combo scanner")
+    _render_warnings(universe_run.get("warnings", []), "stable universe")
+
+    overview_tab, pipeline_tab, universe_tab, research_tab, legacy_tab = st.tabs(
+        [
+            "Overview",
+            "Live Pipeline",
+            "Universe + Combos",
+            "Research / Historical",
+            "Legacy",
+        ]
+    )
+
+    with overview_tab:
+        _render_phase_status(run)
+        st.markdown("")
+        _render_pipeline_summary(run, system_view)
+
+        # A vs B comparison chart
+        _render_ab_comparison(run, historical_run)
+
+        if mode == "live":
+            edge_report = run.get("edge_report", {})
+            preflight = edge_report.get("preflight", {})
+            if preflight.get("errors") and any(
+                "hydrated_rate_B" in err for err in (preflight.get("errors") or [])
+            ):
+                st.warning(
+                    "⚠ System B is currently blocked in live due to input pricing without historical authorization."
+                )
+
+    with pipeline_tab:
+        pipe_tab, exec_tab, edge_tab = st.tabs(["Pipeline", "Execution", "Edge"])
+        with pipe_tab:
+            st.subheader("Unified Signals (F1)")
+            f1 = _filter_by_system(
+                run.get("unified_signals_df", pd.DataFrame()), system_view
+            )
+            if f1.empty:
+                st.info("No F1 signals found.")
+            else:
+                cols = [
+                    c
+                    for c in [
+                        "source_system",
+                        "strategy_id",
+                        "ticker",
+                        "signal_time",
+                        "entry_price_ref",
+                        "meta_historical_plan",
+                        "meta_price_origin",
+                    ]
+                    if c in f1.columns
+                ]
+                st.dataframe(f1[cols].head(250), use_container_width=True, height=260)
+            st.subheader("Routed Signals (F2)")
+            f2 = _filter_by_system(
+                run.get("routed_signals_df", pd.DataFrame()), system_view
+            )
+            if not f2.empty:
+                cols = [
+                    c
+                    for c in [
+                        "source_system",
+                        "strategy_id",
+                        "ticker",
+                        "signal_time",
+                        "entry_price_ref",
+                        "router_reason",
+                        "meta_historical_plan",
+                    ]
+                    if c in f2.columns
+                ]
+                st.dataframe(f2[cols].head(250), use_container_width=True, height=260)
+        with exec_tab:
+            _render_execution_table(run, system_view)
+        with edge_tab:
+            _render_edge_panel(run, system_view)
+
+    with universe_tab:
+        top_tab, combo_tab = st.tabs(["Universe", "Combos"])
+        with top_tab:
+            _render_universe_panel(universe_run)
+        with combo_tab:
+            _render_combo_panel(combo_run, selected_agent)
+
+    with research_tab:
+        st.subheader("Historical Calibration")
+        _render_phase_status(historical_run)
+        _render_pipeline_summary(historical_run, system_view)
+        hist_edge_tab, hist_exec_tab = st.tabs(
+            ["Historical Edge", "Historical Execution"]
+        )
+        with hist_edge_tab:
+            _render_edge_panel(historical_run, system_view)
+        with hist_exec_tab:
+            _render_execution_table(historical_run, system_view)
+
+    with legacy_tab:
+        st.info(
+            "The legacy backtest dashboard is still available. Switch the sidebar selector to `Legacy` to open the full legacy workspace."
+        )
+        if not _trades_df.empty:
+            st.caption(f"Legacy trade log loaded: {len(_trades_df):,} rows")
 
 
 @st.cache_data(
@@ -1389,35 +1926,142 @@ with st.sidebar:
     st.title("Momentum V2")
     st.caption("Institutional Trading Engine")
 
+    st.subheader("Dashboard")
+    dashboard_view = st.radio(
+        "Workspace",
+        ["Integrated 2.0", "Legacy"],
+        index=0,
+        help="Integrated 2.0 reads live/historical pipeline artifacts. Legacy keeps the backtest-centric workspace.",
+    )
+    dashboard_mode = st.radio(
+        "Mode",
+        ["Live", "Historical"],
+        index=0,
+        horizontal=True,
+        help="Select which integration artifacts to inspect in Dashboard 2.0.",
+    )
+    system_view = st.selectbox(
+        "System View",
+        ["Combined", "A only", "B only"],
+        index=0,
+        help="Filter Dashboard 2.0 views by source system.",
+    )
+    _combo_run_options = _dashboard_v2_adapter.list_combo_scan_runs() or ["latest"]
+    selected_combo_run = st.selectbox(
+        "Combo Run Date",
+        _combo_run_options,
+        index=0,
+        help="Reads outputs/live_signals/<date>/ generated by the multi-combo scanner.",
+    )
+    _combo_run_data = _load_combo_run_v2(
+        None if selected_combo_run == "latest" else selected_combo_run
+    )
+    _agent_series = _combo_run_data.get("combo_signals_df", pd.DataFrame()).get(
+        "agent_name", pd.Series(dtype=str)
+    )
+    _agent_names = sorted({str(agent) for agent in _agent_series.dropna().tolist()})
+    selected_agent = st.selectbox(
+        "Combo / Agent",
+        ["All agents", *_agent_names],
+        index=0,
+        help="Filters Universe + Combos tables in Dashboard 2.0.",
+    )
+    if dashboard_view == "Integrated 2.0":
+        st.caption(
+            "Legacy controls remain available below but are ignored by Dashboard 2.0."
+        )
+    st.divider()
+
+    # ── RUN SCRIPTS (opt-in, Dashboard 2.0 only) ────────────────────
+    if dashboard_view == "Integrated 2.0":
+        with st.expander("⚡ Run Scripts (opt-in)", expanded=False):
+            st.caption(
+                "These trigger external scripts. Dashboard reads their outputs automatically."
+            )
+            _base = "/home/marcos/trade/momentum-v2"
+
+            def _run_script_streaming(label: str, cmd: list, cwd: str) -> None:
+                """Run a script showing live output line by line via Popen."""
+                import subprocess as _sp
+                import time as _time
+                log_placeholder = st.empty()
+                status_placeholder = st.empty()
+                log_lines: list = []
+                try:
+                    proc = _sp.Popen(
+                        cmd, stdout=_sp.PIPE, stderr=_sp.STDOUT,
+                        text=True, cwd=cwd, bufsize=1,
+                    )
+                    status_placeholder.info(f"⏳ Running {label}...")
+                    while True:
+                        line = proc.stdout.readline()
+                        if line == "" and proc.poll() is not None:
+                            break
+                        if line:
+                            log_lines.append(line.rstrip())
+                            # Show last 30 lines rolling
+                            log_placeholder.code(
+                                "\n".join(log_lines[-30:]), language=None
+                            )
+                    rc = proc.wait()
+                    if rc == 0:
+                        status_placeholder.success(f"✓ {label} completed successfully")
+                    else:
+                        status_placeholder.error(f"✗ {label} failed (rc={rc})")
+                except FileNotFoundError:
+                    status_placeholder.error(f"✗ Script not found: {cmd[1]}")
+                except Exception as _e:
+                    status_placeholder.error(f"✗ Unexpected error: {_e}")
+
+            if st.button("🔄 Sync Universe", use_container_width=True, key="btn_sync_universe"):
+                _run_script_streaming(
+                    "sync_universe.py",
+                    ["python3", f"{_base}/scripts/sync_universe.py"],
+                    _base,
+                )
+
+            if st.button("📡 Run Combo Scanner", use_container_width=True, key="btn_combo_scanner"):
+                st.caption("Reads ~400 tickers from DB — typically 1-3 min. Output streams below.")
+                _run_script_streaming(
+                    "run_combo_scanner.py",
+                    ["python3", f"{_base}/scripts/run_combo_scanner.py",
+                     "--universe-source", "stable"],
+                    _base,
+                )
+
+            st.caption("💡 For background runs: python3 scripts/run_combo_scanner.py")
+    st.divider()
+
     # ── YAML COMBO SELECTOR (Fase 3: Centralized config UI) ──────────
     if _yaml_combos_available and _yaml_go_combos:
         st.divider()
         st.subheader("🎯 Combo Activo (YAML)")
-        
+
         _yaml_combo_names = [c.name for c in _yaml_go_combos]
         _yaml_labels = [
-            f"{c.name} (Sharpe WF: {c.wf_sharpe_mean:.2f})" 
-            for c in _yaml_go_combos
+            f"{c.name} (Sharpe WF: {c.wf_sharpe_mean:.2f})" for c in _yaml_go_combos
         ]
-        
+
         # Restore previous selection or default to first
         _prev_yaml_combo = st.session_state.get("active_yaml_combo")
         _default_idx = 0
         if _prev_yaml_combo and _prev_yaml_combo in _yaml_combo_names:
             _default_idx = _yaml_combo_names.index(_prev_yaml_combo)
-        
+
         _yaml_selected_label = st.selectbox(
             "Combo activo",
             options=_yaml_labels,
             index=_default_idx,
             help="Selecciona un combo GO validado por walk-forward",
         )
-        
+
         # Update session state and global reference
-        _selected_combo_name = _yaml_combo_names[_yaml_labels.index(_yaml_selected_label)]
+        _selected_combo_name = _yaml_combo_names[
+            _yaml_labels.index(_yaml_selected_label)
+        ]
         st.session_state["active_yaml_combo"] = _selected_combo_name
         _active_yaml_combo = get_combo_by_name(_yaml_combos, _selected_combo_name)
-        
+
         # Panel de estado del combo seleccionado
         with st.expander("📊 Estado del Combo", expanded=True):
             st.metric("Status", _active_yaml_combo.status)
@@ -1425,7 +2069,7 @@ with st.sidebar:
             st.caption(f"Min: {_active_yaml_combo.wf_sharpe_min:.2f}")
             st.metric("PBO", f"{_active_yaml_combo.pbo:.0%}")
             st.caption(f"Costos: {_active_yaml_combo.cost_robustness}")
-            
+
             # Alerts
             if _active_yaml_combo.alerts:
                 for alert in _active_yaml_combo.alerts:
@@ -1433,12 +2077,14 @@ with st.sidebar:
                         st.warning(alert)
                     else:
                         st.info(alert)
-        
+
         # Scanner parameters preview
         with st.expander("⚙️ Parámetros del Scanner", expanded=False):
             st.caption(f"Filter: {_active_yaml_combo.scanner_filter}")
             st.caption(f"Patterns: {_active_yaml_combo.pattern_filter}")
-            st.caption(f"Fee: {_active_yaml_combo.fee_rate*10000:.0f}bps | Slippage: {_active_yaml_combo.slippage_rate*10000:.0f}bps")
+            st.caption(
+                f"Fee: {_active_yaml_combo.fee_rate * 10000:.0f}bps | Slippage: {_active_yaml_combo.slippage_rate * 10000:.0f}bps"
+            )
             st.caption(f"Max positions: {_active_yaml_combo.max_positions}")
             st.caption(f"Regime blocked: {_active_yaml_combo.regime_blocked}")
     else:
@@ -1922,7 +2568,17 @@ with st.sidebar:
     _dash_cache.render_timing_sidebar()
 
 # --- MAIN PAGE ---
-st.title("Institutional Dashboard")
+if dashboard_view == "Integrated 2.0":
+    _render_dashboard_v2(
+        mode=dashboard_mode.lower(),
+        system_view=system_view,
+        selected_combo_run=None
+        if selected_combo_run == "latest"
+        else selected_combo_run,
+        selected_agent=selected_agent,
+    )
+else:
+    st.title("Institutional Dashboard")
 
 # Calculate results summary if they exist for the top bar
 top_net_pnl = 0
@@ -1931,7 +2587,7 @@ _TRADE_EVENTS_PATH = (
     if os.path.exists("outputs/backtests/complete_trades_clean.csv")
     else "outputs/backtests/backtest_results.csv"
 )
-if not _trades_df.empty:
+if dashboard_view == "Legacy" and not _trades_df.empty:
     t1, t2, t3, t4, t5, t6, t7, t8 = st.tabs(
         [
             "Performance",

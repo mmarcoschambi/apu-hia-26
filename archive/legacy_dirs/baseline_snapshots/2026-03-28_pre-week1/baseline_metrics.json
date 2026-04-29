@@ -1,0 +1,19 @@
+{
+  "note": "Baseline ORIGINAL (2022-2024, 150 trials) — solo referencia historica, NO usar para comparar",
+  "original_run_config": {
+    "start": "2022-01-01",
+    "end": "2024-12-31",
+    "trials": 150,
+    "tickers": 200
+  },
+  "combos": [
+    {"name": "combo_pullback_entry",     "score": 2.4409,  "sharpe": 3.02,  "pf": 3.34, "pbo": 0.33, "dd": 3.3, "trades": 62,  "passed": true},
+    {"name": "combo_aggressive_momentum","score": 0.0052,  "sharpe": 0.01,  "pf": 0.69, "pbo": 0.94, "dd": 3.6, "trades": 44,  "passed": false},
+    {"name": "combo_universal_any",      "score": 0.0054,  "sharpe": 0.01,  "pf": 0.64, "pbo": 0.56, "dd": 7.8, "trades": 607, "passed": false},
+    {"name": "combo_ideal_setup",        "score": 0.0000,  "sharpe": 0.00,  "pf": 0.00, "pbo": 0.44, "dd": 0.0, "trades": 0,   "passed": false},
+    {"name": "combo_pure_momentum",      "score": -0.0008, "sharpe": -0.00, "pf": 0.33, "pbo": 0.51, "dd": 6.1, "trades": 61,  "passed": false},
+    {"name": "combo_stage2_breakout",    "score": -0.5893, "sharpe": -1.26, "pf": 0.19, "pbo": 0.84, "dd": 7.4, "trades": 70,  "passed": false}
+  ],
+  "strict_passed": 1,
+  "total": 6
+}

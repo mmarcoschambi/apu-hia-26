@@ -1,0 +1,36 @@
+name: combo_pure_momentum
+status: GO
+pbo: 0.09  # Probability of overfitting (bajo = bueno)
+wf_sharpe_mean: 1.72
+wf_sharpe_min: 1.55
+wf_sortino_mean: 2.31
+wf_max_drawdown: 0.18
+scanner_filter: momentum
+pattern_filter: breakout,ath
+regime_blocked:
+- 4
+fee_rate: 0.001
+slippage_rate: 0.0015
+spx_sma_period: 50
+vix_max: 30.0
+spx_vol_max: 25.0
+green_light_points: 4
+lookback_days: 120
+max_setups: 8
+flat_base_range_pct: 0.15
+vcp_contraction_threshold: 0.7
+min_rvol: 1.5
+min_adr: 1.2
+min_consolidation_days: 5
+max_positions: 6
+max_position_pct: 0.2
+max_exposure_pct: 0.75
+alerts:
+- PBO=9% — muy robusto
+- Mayor slippage (15bps) por velocidad de breakouts
+- Max positions=6 — mayor diversificación
+notes: 'Combo agresivo de momentum puro. Mayor tolerancia a VIX (30) y volatilidad
+  (25%). Requiere RVOL>1.5 para confirmar volumen institucional. Validado con 8 ventanas
+  walk-forward.
+
+  '

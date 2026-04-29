@@ -1,0 +1,36 @@
+name: combo_aggressive_momentum
+status: GO
+pbo: 0.24  # Probability of overfitting (bajo = bueno)
+wf_sharpe_mean: 1.52
+wf_sharpe_min: 1.25
+wf_sortino_mean: 2.05
+wf_max_drawdown: 0.22
+scanner_filter: aggressive
+pattern_filter: breakout,vcp,ath
+regime_blocked: []
+fee_rate: 0.001
+slippage_rate: 0.002
+spx_sma_period: 20
+vix_max: 35.0
+spx_vol_max: 30.0
+green_light_points: 3
+lookback_days: 90
+max_setups: 10
+flat_base_range_pct: 0.15
+vcp_contraction_threshold: 0.7
+min_rvol: 1.2
+min_adr: 1.0
+min_consolidation_days: 5
+max_positions: 8
+max_position_pct: 0.15
+max_exposure_pct: 0.85
+alerts:
+- ✅ PBO=24% — robusto
+- ⚠️ Max drawdown=22% — alto riesgo
+- ⚠️ Sin bloqueo de régimen — opera en cualquier condición
+- Slippage alto (20bps) por urgencia de entrada
+notes: 'Combo más agresivo. Opera incluso en regímenes dudosos. Solo recomendado cuando
+  hay convicción alta en el momentum. Validado pero con métricas inferiores a los
+  otros combos.
+
+  '

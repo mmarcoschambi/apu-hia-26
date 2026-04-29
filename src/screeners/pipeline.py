@@ -35,11 +35,12 @@ class ScreenerPipeline:
         ticker: str,
         df: pd.DataFrame,
         spy_df: Optional[pd.DataFrame] = None,
+        scan_date: Optional[str] = None,
     ) -> ScreenerResult:
         results: List[ScreenerResult] = []
 
         for screener in self.screeners:
-            result = screener.scan(ticker, df, spy_df)
+            result = screener.scan(ticker, df, spy_df, scan_date=scan_date)
             results.append(result)
 
             if self.mode == "sequential" and not result.passed:

@@ -1,0 +1,37 @@
+name: combo_ideal_setup
+status: GO
+pbo: 0.94
+wf_sharpe_mean: 2.05
+wf_sharpe_min: 1.8
+wf_sortino_mean: 2.75
+wf_max_drawdown: 0.08
+scanner_filter: ideal
+pattern_filter: vcp,cup_and_handle,flat_base
+regime_blocked:
+- 3
+- 4
+fee_rate: 0.001
+slippage_rate: 0.001
+spx_sma_period: 50
+vix_max: 20.0
+spx_vol_max: 15.0
+green_light_points: 6
+lookback_days: 200
+max_setups: 3
+flat_base_range_pct: 0.15
+vcp_contraction_threshold: 0.7
+min_rvol: 2.0
+min_adr: 1.5
+min_consolidation_days: 10
+max_positions: 3
+max_position_pct: 0.3
+max_exposure_pct: 0.6
+alerts:
+- ❌ PBO=94% — alto riesgo overfitting
+- Sharpe WF=2.05 — top decile
+- ⚠️ Solo 3 setups max — paciencia requerida
+- VIX max=20 — muy conservador
+notes: 'Combo ideal con todos los filtros activados. Solo entra en setups de alta
+  calidad. Puede pasar semanas sin señales. Validado con 10 ventanas walk-forward.
+
+  '

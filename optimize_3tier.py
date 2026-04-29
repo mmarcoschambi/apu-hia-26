@@ -252,7 +252,7 @@ def get_universe_from_db(
             for bin_id in sorted(df["liq_bin"].unique()):
                 bin_df = df[df["liq_bin"] == bin_id]
                 take = min(len(bin_df), per_bin + rng.integers(0, 3))  # slight noise
-                sampled.append(bin_df.sample(min(take, len(bin_df)), random_state=seed)
+                sampled.append(bin_df.sample(min(take, len(bin_df)), random_state=seed))
 
             result = pd.concat(sampled, ignore_index=True)
             # Shuffle to avoid ordering bias from bin groups
@@ -557,6 +557,7 @@ def run_baseline(
     use_pit_universe: bool = False,
     signal_type: str = "breakout",  # tipo de patron para etiquetado correcto en trades
     screener_name: Optional[str] = None,
+    system_mode: str = "default",
 ) -> Tuple[Dict[str, Any], pd.DataFrame]:
     """
     Phase 1: Run backtest with LOOSE filters to capture the full trade universe.
@@ -609,7 +610,8 @@ def run_baseline(
         "risk_dollars": risk_dollars,  # Fixed dollar risk (matches production, NO compounding)
         # Market filters (keep basic ones on for realistic signals)
         "signal_type": signal_type,  # Usar el patron real para etiquetado correcto de trades
-        "require_spy_above_sma50": True,
+        "require_spy_above_sma50": system_mode.lower() not in ["ablation", "fortress"],
+        "require_spy_above_sma200": system_mode.lower() in ["ablation", "fortress"],
         "max_vix_threshold": 28.0,  # Slightly wider than production
         "use_market_regime_filter": False,  # OFF for baseline
         "use_composite_sector_scoring": False,
@@ -667,6 +669,7 @@ def derive_tier2_filters(
     trades_df: pd.DataFrame,
     winner_threshold_r: float = 0.0,
     keep_pct: float = 95,  # Changed from 90 to 95 for looser filters (p5 of winners)
+    system_mode: str = "default",
 ) -> Dict[str, Any]:
     """
     Phase 2: Statistically derive Tier 2 quality filters from baseline trades.
@@ -903,7 +906,15 @@ def derive_tier2_filters(
     # ── RS Percentile (IBD-style) - Static values ──────────────────────
     derived["require_positive_rs"] = True  # Activate RS filter
     derived["use_rs_percentile"] = True  # Use IBD-style RS ranking
-    derived["min_rs_percentile"] = 70.0  # Top 30% of market
+    if system_mode.lower() in ["ablation", "fortress"]:
+        derived["min_rs_percentile"] = 85.0  # Fortress Mode: Top 15% of market
+        derived["min_adr"] = 1.2
+        derived["require_spy_above_sma200"] = True
+        derived["require_spy_above_sma50"] = False
+        logger.info("  🛡️ System Mode: Fortress/Ablation -> min_rs_percentile = 85.0, min_adr = 1.2, SMA200 Gate")
+    else:
+        derived["min_rs_percentile"] = 70.0  # Balanced/Default: Top 30% of market
+        logger.info("  ⚖️ System Mode: Default/Balanced -> min_rs_percentile = 70.0")
     derived["rs_lookback_days"] = 60  # 3 months lookback
 
     # ── Pattern Detection (NOT in tier2_derived - comes from engine defaults or Optuna tier1) ───────
@@ -987,6 +998,7 @@ def optimize_tier1(
     # n_jobs=4 -> agresivo, OK si RAM lo permite (cada clone ~igual mem que template)
     # NOTA: show_progress_bar se desactiva con n_jobs>1 (tqdm no es thread-safe)
     n_jobs: int = 1,
+    system_mode: str = "default",
 ) -> Tuple[Dict[str, Any], float, optuna.Study]:
     """
     Phase 3: Optimize ONLY Tier 1 strategy parameters via Optuna.
@@ -1058,7 +1070,8 @@ def optimize_tier1(
             if pattern_config
             else {
                 "signal_type": "any",
-                "require_spy_above_sma50": True,
+                "require_spy_above_sma50": system_mode.lower() not in ["ablation", "fortress"],
+                "require_spy_above_sma200": system_mode.lower() in ["ablation", "fortress"],
                 "max_vix_threshold": 25.0,
                 "use_market_regime_filter": True,
                 "block_trades_in_stage3": True,
@@ -1560,7 +1573,8 @@ def export_to_streamlit_config(
         },
         "=== MARKET REGIME ===": {},
         "market_regime": {
-            "require_spy_above_sma50": True,
+            "require_spy_above_sma50": final_config.get("system_mode", "default").lower() not in ["ablation", "fortress"],
+            "require_spy_above_sma200": final_config.get("system_mode", "default").lower() in ["ablation", "fortress"],
             "max_vix": 35.0,
             "use_market_regime_filter": True,
             "block_trades_in_stage3": True,
@@ -1749,10 +1763,12 @@ def run_pipeline(args) -> Dict[str, Any]:
     # ══════════════════════════════════════════════════════════════════════
     # PHASE 2: Derive Tier 2
     # ══════════════════════════════════════════════════════════════════════
+    system_mode = getattr(args, "system", "default")
     tier2_derived = derive_tier2_filters(
         trades_df=baseline_trades,
         winner_threshold_r=0.0,
         keep_pct=args.keep_pct,
+        system_mode=system_mode,
     )
 
     # Save derived Tier 2
@@ -1873,7 +1889,8 @@ def run_pipeline(args) -> Dict[str, Any]:
                     args.capital * tier3_raw.get("risk_fraction", 0.005)
                 ),
                 "signal_type": signal_type,
-                "require_spy_above_sma50": True,
+                "require_spy_above_sma50": system_mode.lower() not in ["ablation", "fortress"],
+                "require_spy_above_sma200": system_mode.lower() in ["ablation", "fortress"],
                 "max_vix_threshold": 25.0,
                 "use_market_regime_filter": True,
                 "block_trades_in_stage3": True,
@@ -1926,6 +1943,7 @@ def run_pipeline(args) -> Dict[str, Any]:
                     trades_df=fold_trades,
                     winner_threshold_r=0.0,
                     keep_pct=args.keep_pct,
+                    system_mode=system_mode,
                 )
 
                 full_params = {**fold_tier2, **base_params}
@@ -1985,6 +2003,7 @@ def run_pipeline(args) -> Dict[str, Any]:
     final_config = {
         "timestamp": datetime.now().isoformat(),
         "pipeline": "optimize_3tier",
+        "system_mode": system_mode,
         "period": {
             "start": args.start,
             "end": args.end,
@@ -2062,7 +2081,8 @@ def run_pipeline(args) -> Dict[str, Any]:
             "slippage": 0.001,
             "risk_dollars": int(args.capital * tier3_raw.get("risk_fraction", 0.005)),
             "use_market_regime_filter": True,
-            "require_spy_above_sma50": True,
+            "require_spy_above_sma50": system_mode.lower() not in ["ablation", "fortress"],
+            "require_spy_above_sma200": system_mode.lower() in ["ablation", "fortress"],
             "max_vix_threshold": 25.0,
             "use_adaptive_filtering": True,
             "use_earnings_calendar": False,
@@ -2386,6 +2406,13 @@ Examples:
         "--list-patterns",
         action="store_true",
         help="List all available signal types and exit.",
+    )
+    parser.add_argument(
+        "--system",
+        type=str,
+        default="default",
+        choices=["default", "ablation", "fortress"],
+        help="System mode for filtering: 'default' (RS 70) or 'ablation'/'fortress' (RS 85).",
     )
     parser.add_argument(
         "--seed",

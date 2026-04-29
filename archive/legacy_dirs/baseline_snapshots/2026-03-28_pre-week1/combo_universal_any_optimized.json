@@ -1,0 +1,40 @@
+{
+  "combo_name": "combo_universal_any",
+  "description": "Universal benchmark: universal_any screener + any pattern. Competes directly with specialized combos.",
+  "optimized_at": "2026-03-28T13:50:01.425168",
+  "validation_passed": false,
+  "optimization_score": -99.0,
+  "screener": "universal_any",
+  "pattern": "any",
+  "tier1_exits": {
+    "tp1_r": 1.5,
+    "tp2_r": 5.5,
+    "tp1_pct": 0.6,
+    "tp2_pct": 0.25,
+    "runner_pct": 0.15
+  },
+  "tier2_filters": {
+    "min_screener_score": 0.9,
+    "min_rvol": 0.94,
+    "min_adr": 2.0,
+    "max_dist_sma20": 7.34,
+    "min_consolidation_days": 5,
+    "min_volume": 100000,
+    "min_dollar_volume": 47327297.546310425,
+    "require_positive_rs": true,
+    "use_rs_percentile": true,
+    "min_rs_percentile": 70.0,
+    "rs_lookback_days": 60
+  },
+  "tier3_fixed": {
+    "max_loss_pct": 8.0,
+    "max_positions": 5,
+    "position_size_method": "equal_weight",
+    "risk_fraction": 0.005
+  },
+  "validation": {
+    "min_win_rate": 0.4,
+    "min_profit_factor": 1.5,
+    "min_trades": 30
+  }
+}

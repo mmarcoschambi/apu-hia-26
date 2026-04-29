@@ -1,0 +1,16 @@
+{
+  "name": "ema21_pullback",
+  "enabled": true,
+  "min_price": 5.0,
+  "max_price": 500.0,
+  "min_avg_volume": 1000000,
+  "min_adr_pct": 3.5,
+  "max_adr_pct": 10.0,
+  "params": {
+    "ema21_zone_min_r": -0.5,
+    "ema21_zone_max_r": 1.0,
+    "sma50_zone_min_r": 0.0,
+    "sma50_zone_max_r": 3.0,
+    "atr_period": 14
+  }
+}

@@ -1,0 +1,36 @@
+name: combo_stage2_breakout
+status: NO-GO
+pbo: 0.85
+wf_sharpe_mean: 0.45
+wf_sharpe_min: -0.2
+wf_sortino_mean: 0.6
+wf_max_drawdown: 0.35
+scanner_filter: stage2
+pattern_filter: breakout
+regime_blocked:
+- 3
+- 4
+fee_rate: 0.001
+slippage_rate: 0.001
+spx_sma_period: 50
+vix_max: 25.0
+spx_vol_max: 20.0
+green_light_points: 5
+lookback_days: 180
+max_setups: 5
+flat_base_range_pct: 0.15
+vcp_contraction_threshold: 0.7
+min_rvol: 1.0
+min_adr: 1.0
+min_consolidation_days: 5
+max_positions: 4
+max_position_pct: 0.25
+max_exposure_pct: 0.65
+alerts:
+- ❌ PBO=85% — Fallo en validación CSCV (overfitting severo)
+- ❌ Sharpe WF=0.45 — Por debajo del umbral mínimo de 1.0
+- ❌ Drawdown=35% — Excesivo para el perfil de riesgo
+notes: 'Combo rechazado en Fase 2. Aunque el in-sample era prometedor, la validación 
+  walk-forward mostró una degradación masiva y falta de estabilidad en los parámetros.
+  NO USAR en producción.
+'

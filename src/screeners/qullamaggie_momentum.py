@@ -7,9 +7,12 @@ Requiere Fase 0: daily_rs_rankings poblada.
 import pandas as pd
 import numpy as np
 from typing import Optional
+import logging
 
 from .base import BaseScreener, ScreenerConfig, ScreenerResult
 from .registry import ScreenerRegistry
+
+logger = logging.getLogger(__name__)
 
 
 @ScreenerRegistry.register
@@ -89,20 +92,27 @@ class QullamaggieMomentumScreener(BaseScreener):
 
         # RS Percentil
         rs_pct = None
+        used_fallback = False
         try:
             from src.data.rs_rankings import get_rs_percentile
-
             rs_pct = get_rs_percentile(ticker, date=scan_date, metric=p["rs_metric"])
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"RS Ranking lookup error for {ticker} on {scan_date}: {e}")
 
         if rs_pct is None and p.get("rs_fallback_spy") and spy_df is not None:
             rs_pct = self._calc_rs_vs_spy(df, spy_df)
+            used_fallback = True
 
         if rs_pct is None:
             rs_pct = 50.0  # desconocido → neutral
 
         rs_ok = rs_pct >= p["min_rs_percentile"]
+        
+        if not rs_ok:
+            logger.debug(
+                f"Ticker {ticker} failed RS: {rs_pct:.1f} < {p['min_rs_percentile']} "
+                f"(Fallback: {used_fallback}, Date: {scan_date})"
+            )
 
         # MA Stack: Price >= EMA10 >= SMA20 >= SMA50 >= SMA100 >= SMA200
         ema10 = self.ensure_ma(df, 10, kind="ema")

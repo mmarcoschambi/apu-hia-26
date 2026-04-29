@@ -1,0 +1,38 @@
+{
+  "combo_name": "combo_stage2_breakout",
+  "description": "Stage 2 Breakout: Minervini Trend + Classic Breakout. Clean trend continuation setups.",
+  "optimized_at": "2026-03-28T15:03:14.390173",
+  "validation_passed": false,
+  "optimization_score": -99.0,
+  "screener": "minervini_trend",
+  "pattern": "breakout",
+  "tier1_exits": {
+    "tp1_r": 1.5,
+    "tp2_r": 5.5,
+    "tp1_pct": 0.6,
+    "tp2_pct": 0.25,
+    "runner_pct": 0.15
+  },
+  "tier2_filters": {
+    "min_screener_score": 1.0,
+    "min_distance_to_breakout_pct": 1.0,
+    "max_distance_to_breakout_pct": 12.0,
+    "min_rvol": 0.98,
+    "min_adr": 2.0,
+    "max_dist_sma20": 8.38,
+    "min_dollar_volume": 51227035.45246124,
+    "min_consolidation_days": 5,
+    "min_volume": 100000
+  },
+  "tier3_fixed": {
+    "max_loss_pct": 2.0,
+    "max_positions": 5,
+    "position_size_method": "equal_weight",
+    "risk_fraction": 0.005
+  },
+  "validation": {
+    "min_win_rate": 0.38,
+    "min_profit_factor": 1.1,
+    "min_trades": 20
+  }
+}
