@@ -46,3 +46,9 @@ The S4 optimization phase has been successfully completed using the `s4_main_v2`
 
 ---
 **Decision:** Activate paper trading with Trial 431 immediately.
+
+## 📝 Addendum (2026-05-02)
+**Correction on Deployed Candidate:** While Trial 431 was the initial In-Sample winner, subsequent Out-Of-Sample (OOS) validation checks revealed it suffered from overfitting (OOS Sharpe of -0.34). 
+The selection script correctly discarded Trial 431 and promoted **Trial 380**, which demonstrated robust generalization (IS Sharpe: 1.32, OOS Sharpe: 1.53, Calmar: 2.73). 
+
+Consequently, **Trial 380** was successfully injected into `production_config.json` and its parameters have now been fully integrated into the live Finviz paper trading pipeline (`combo_pure_momentum`).
