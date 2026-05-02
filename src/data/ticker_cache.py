@@ -516,7 +516,7 @@ class TickerCache:
         if df_all.empty:
             return result
 
-        df_all["date"] = pd.to_datetime(df_all["date"])
+        df_all["date"] = pd.to_datetime(df_all["date"], format="mixed")
 
         for ticker, grp in df_all.groupby("ticker"):
             grp = grp.drop(columns="ticker").set_index("date")
@@ -670,36 +670,68 @@ class TickerCache:
                 else:
                     return None
             else:
-                df = yf.download(
-                    ticker,
+                df = yf.Ticker(ticker).history(
                     start=start_date,
                     end=end_date,
-                    progress=False,
                     auto_adjust=True,
                 )
+                
+                # yf.Ticker.history returns timezone-aware index, remove timezone for SQLite
+                if not df.empty and getattr(df.index, 'tz', None) is not None:
+                    df.index = df.index.tz_localize(None)
 
             if df.empty:
                 return None
 
-            # Limpieza robusta yfinance
+            # ── [FIX] Tickers con historia insuficiente ─────────────────────
+            # Si el ticker tiene pocos datos (ej: IPO reciente), lo guardamos
+            # igual en Parquet. En la próxima corrida, get_ohlcv lo leerá de disco,
+            # verá que no llega a la fecha requerida (o que sigue teniendo pocos días)
+            # y el engine lo rechazará SIN intentar descargar de nuevo.
+            min_required_days = 200 # Umbral típico para indicadores (SMA200)
+            if len(df) < 10: # Si es extremadamente corto (error de data o muy nuevo)
+                 logger.warning(f"Ticker {ticker} tiene historia mínima ({len(df)} días). Guardando para evitar re-descarga.")
+
+            # ── [FIX] Isolar ticker en DataFrame multi-columna de yfinance ────
             if isinstance(df.columns, pd.MultiIndex):
+                # Caso ideal: yfinance devuelve niveles [Price, Ticker]
                 if "Ticker" in df.columns.names:
                     try:
-                        df = df.xs(ticker, axis=1, level="Ticker")
-                    except:
-                        try:
+                        df = df.xs(ticker.upper(), axis=1, level="Ticker")
+                    except Exception:
+                        # Si no está el ticker exacto, intentar con el primero
+                        # pero SOLO si estamos seguros de que es el que pedimos
+                        if ticker.upper() in df.columns.get_level_values("Ticker"):
+                            df = df.loc[:, (slice(None), ticker.upper())]
                             df.columns = df.columns.droplevel("Ticker")
-                        except:
-                            pass
+                
+                # Si sigue siendo MultiIndex, intentar aplanarlo buscando el ticker
                 if isinstance(df.columns, pd.MultiIndex):
-                    df.columns = df.columns.get_level_values(0)
+                    try:
+                        # Si yfinance devolvió múltiples tickers, buscamos el nuestro
+                        if ticker.upper() in df.columns:
+                            df = df[ticker.upper()]
+                        else:
+                            # Fallback: droplevel solo si el resultado tiene las columnas correctas
+                            # y no hay ambigüedad (solo un ticker)
+                            unique_tickers = df.columns.get_level_values(1).unique()
+                            if len(unique_tickers) == 1:
+                                df.columns = df.columns.droplevel(1)
+                            else:
+                                logger.error(f"Ambiguity in yfinance data for {ticker}: {unique_tickers}")
+                                return None
+                    except: pass
 
+            # Asegurar que no hay columnas duplicadas y nombres limpios
             df = df.loc[:, ~df.columns.duplicated()]
-            required_cols = ["Open", "High", "Low", "Close", "Volume"]
-            if not all(col in df.columns for col in required_cols):
+            if not all(c in df.columns for c in ["Open", "High", "Low", "Close", "Volume"]):
+                # Intentar mapeo de minúsculas si es necesario
                 df.rename(columns={c: c.capitalize() for c in df.columns}, inplace=True)
-            if not all(col in df.columns for col in required_cols):
-                logger.warning(f"Missing columns for {ticker}: {df.columns.tolist()}")
+            
+            # Verificación final: ¿tenemos escalares en las filas?
+            # Si 'Close' sigue siendo un DF o tiene duplicados, fallar para no corromper DB
+            if isinstance(df["Close"], pd.DataFrame):
+                logger.error(f"Data corruption risk for {ticker}: Close is still a DataFrame")
                 return None
 
             # ── Deduplicate dates at source (root cause fix for SPY/VIX dupes) ──
@@ -789,6 +821,19 @@ class TickerCache:
             # ── Guardar en Parquet (reemplaza Pickle) para futuras lecturas ──
             try:
                 df.index.name = "date"
+                
+                # [MERGE] Tarea 1.1b: Mergear con data existente en disco
+                if parquet_path.exists():
+                    try:
+                        old_df = pd.read_parquet(parquet_path)
+                        # Concatenar y eliminar duplicados (quedarse con lo más nuevo)
+                        combined = pd.concat([old_df, df])
+                        # Eliminar duplicados por índice (date)
+                        combined = combined[~combined.index.duplicated(keep="last")].sort_index()
+                        df = combined
+                    except Exception as e:
+                        logger.warning(f"Failed to merge existing parquet for {ticker}: {e}")
+
                 df.to_parquet(parquet_path, engine="pyarrow", compression="snappy")
                 # Si existe el .pkl legado, borrarlo para liberar espacio
                 if pkl_path.exists():

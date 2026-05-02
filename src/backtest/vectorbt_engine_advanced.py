@@ -1131,6 +1131,7 @@ class AdvancedVectorBTEngine:
             except Exception as e:
                 failed.append(f"{ticker} (processing error: {e})")
 
+        self.failed_tickers = failed
         if failed:
             logger.warning(f"⚠️  Skipped {len(failed)} tickers (insufficient data)")
             if len(failed) <= 10:
@@ -3013,6 +3014,75 @@ class AdvancedVectorBTEngine:
             except Exception as e:
                 logger.warning(f"⚠️ Screener cache filter unavailable: {e}")
 
+        # Identify setups on the last day (for live scanning)
+        last_day_idx = entries.index[-1]
+        last_day_sigs = entries.loc[last_day_idx]
+        
+        # Calcular ATR(14) para stop loss operativo (más preciso que SMA20)
+        # TR = max(H-L, |H-Cprev|, |L-Cprev|)
+        try:
+            hl   = self.high - self.low
+            hc   = (self.high - self.close.shift(1)).abs()
+            lc   = (self.low  - self.close.shift(1)).abs()
+            # forma más segura: por columna
+            tr   = pd.DataFrame({
+                col: pd.concat([hl[col], hc[col], lc[col]], axis=1).max(axis=1)
+                for col in self.close.columns
+            })
+            atr14 = tr.rolling(14).mean()
+        except Exception:
+            atr14 = None
+
+        setups = []
+
+        for ticker in last_day_sigs[last_day_sigs].index:
+            try:
+                # Extraer escalar explícitamente, no confiar en .loc con índice ambiguo
+                close_val = self.close[ticker].loc[last_day_idx]
+                # Si devuelve Serie (bug de índice), tomar el último valor
+                if hasattr(close_val, '__len__'):
+                    close_val = close_val.iloc[-1]
+                price = float(close_val)
+
+                if price <= 0 or pd.isna(price):
+                    continue
+
+                # Stop loss: ATR(14) * 2.0 por debajo del precio (Minervini-style)
+                stop = None
+                if atr14 is not None and ticker in atr14.columns:
+                    atr_val = atr14[ticker].loc[last_day_idx]
+                    if hasattr(atr_val, '__len__'):
+                        atr_val = atr_val.iloc[-1]
+                    atr_val = float(atr_val)
+                    if atr_val > 0 and not pd.isna(atr_val):
+                        stop = round(price - 2.0 * atr_val, 2)
+
+                # Fallback: 7% fijo si ATR no disponible
+                if stop is None or stop <= 0 or stop >= price:
+                    stop = round(price * 0.93, 2)
+
+                # Capping: stop no puede estar más del 12% abajo (filtro de cordura)
+                max_stop_dist = price * 0.12
+                if (price - stop) > max_stop_dist:
+                    stop = round(price - max_stop_dist, 2)
+
+                setups.append({
+                    "ticker": ticker,
+                    "date": str(last_day_idx)[:10],
+                    "price": price,
+                    "stop": stop,
+                    "signal_type": signal_label
+                })
+            except Exception as e:
+                logger.debug(f"Setup skip {ticker}: {e}")
+
+        # Verificar que no haya precios duplicados entre tickers distintos
+        if setups:
+            prices = [s["price"] for s in setups]
+            if len(prices) != len(set(prices)) and len(setups) > 1:
+                logger.warning(f"⚠️ [SETUP] Precios duplicados detectados — posible broadcast. Setups descartados.")
+                setups = []
+
         # =====================================================================
         # BASELINE MODE: Use NUMBA CORE directly (same as Advanced mode)
         # =====================================================================
@@ -3966,6 +4036,9 @@ class AdvancedVectorBTEngine:
                 if not trades_df.empty and "symbol" in trades_df.columns
                 else 0
             ),
+            "rejected_tickers": getattr(self, "failed_tickers", []),
+            "entries_mask": entries,
+            "setups": setups,
         }
 
         logger.info(f"✅ Backtest complete!")
