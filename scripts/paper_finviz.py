@@ -40,7 +40,7 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
                     handlers=[logging.StreamHandler(sys.stdout)])
 logger = logging.getLogger(__name__)
-ACTIVE_COMBOS    = ["combo_pure_momentum", "combo_stage2_breakout"]
+ACTIVE_COMBOS    = ["combo_pure_momentum"]
 INITIAL_CAPITAL = 100_000
 
 
