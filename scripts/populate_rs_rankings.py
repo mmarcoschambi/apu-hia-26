@@ -158,6 +158,8 @@ def compute_rs_for_date(conn, target_date):
 
 
 def populate_date(conn, target_date, overwrite=False):
+    if target_date:
+        target_date = str(target_date)[:10]
     if not overwrite:
         existing = conn.execute(
             "SELECT COUNT(*) FROM daily_rs_rankings WHERE date = ?", (target_date,)
