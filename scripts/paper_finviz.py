@@ -172,13 +172,25 @@ def scan_signals(combo_name, universe, date_str, rs_min_pct: float = RS_FINVIZ_M
         if setups:
             logger.info(f"    [Setup] {len(setups)} candidatos detectados hoy para entrar mañana.")
             for s in setups:
+                price = float(s["price"])
+                stop = float(s["stop"])
+                risk_per_share = price - stop
+                if risk_per_share <= 0:
+                    risk_per_share = price * 0.01  # Fallback
+                
+                risk_dollars = kwargs.get("risk_dollars", INITIAL_CAPITAL * 0.005)
+                size = int(risk_dollars / risk_per_share)
+                
+                max_size = int((INITIAL_CAPITAL * 0.25) / price)
+                size = min(max(size, 1), max_size)
+                
                 signals.append({
                     "combo": combo_name,
                     "ticker": s["ticker"],
                     "signal_date": date_str,
-                    "entry_price": s["price"],
-                    "stop_loss": s["stop"],
-                    "position_size": 0,
+                    "entry_price": price,
+                    "stop_loss": stop,
+                    "position_size": size,
                     "rs_mode": "spy_fallback",
                     "source": "finviz_setup"
                 })

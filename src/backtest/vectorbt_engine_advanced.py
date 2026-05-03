@@ -507,6 +507,8 @@ class AdvancedVectorBTEngine:
         use_composite_sector_scoring: bool = False,  # Use Top 40% methodology
         sector_top_percentile: float = 0.40,  # Top 40% of sectors
         require_positive_rs: bool = False,  # CONVERGENCE: False by default (was True)
+        use_sector_etf_filter: bool = False,  # OFF por default - Ablation stage 2
+        sector_etf_sma_period: int = 20,
         # Market regime parameters (NEW)
         use_market_regime_filter: bool = False,  # Enable market context filter
         block_trades_in_stage3: bool = True,  # Block longs in distribution
@@ -642,6 +644,8 @@ class AdvancedVectorBTEngine:
         # Sector rotation parameters (NEW)
         self.use_composite_sector_scoring = use_composite_sector_scoring
         self.sector_top_percentile = sector_top_percentile
+        self.use_sector_etf_filter = use_sector_etf_filter
+        self.sector_etf_sma_period = sector_etf_sma_period
 
         # Market regime parameters (NEW)
         self.use_market_regime_filter = use_market_regime_filter
@@ -2541,6 +2545,102 @@ class AdvancedVectorBTEngine:
 
         return extension
 
+    def _build_sector_etf_mask(self, entries: pd.DataFrame) -> pd.DataFrame:
+        """
+        Builds a boolean mask matching the shape of 'entries'.
+        True if the ticker's sector ETF is > SMA(sector_etf_sma_period) on that date.
+        """
+        import sqlite3
+        import yfinance as yf
+        from pathlib import Path
+
+        tickers = entries.columns.tolist()
+        sector_map = {}
+        
+        # 1. Fetch sectors from DB
+        db_path = Path("data/ticker_cache.db")
+        if db_path.exists():
+            try:
+                conn = sqlite3.connect(db_path)
+                placeholders = ','.join(['?'] * len(tickers))
+                query = f"SELECT ticker, sector FROM universe WHERE ticker IN ({placeholders})"
+                df_sectors = pd.read_sql_query(query, conn, params=tickers)
+                sector_map = dict(zip(df_sectors['ticker'], df_sectors['sector']))
+            except Exception as e:
+                logger.error(f"Error reading sectors from DB: {e}")
+            finally:
+                conn.close()
+
+        # 2. Map Sector to ETF
+        SECTOR_TO_ETF = {
+            'Technology': 'XLK', 'Financial': 'XLF', 'Financial Services': 'XLF',
+            'Energy': 'XLE', 'Healthcare': 'XLV', 'Industrial': 'XLI', 'Industrials': 'XLI',
+            'Consumer Discretionary': 'XLY', 'Consumer Cyclical': 'XLY',
+            'Consumer Staples': 'XLP', 'Consumer Defensive': 'XLP',
+            'Materials': 'XLB', 'Basic Materials': 'XLB',
+            'Real Estate': 'XLRE', 'Utilities': 'XLU',
+            'Communication Services': 'XLC', 'Services': 'XLY',
+        }
+        
+        overrides = {
+            "AMD": "Technology", "NXPI": "Technology", "MCHP": "Technology", "ON": "Technology",
+            "INTC": "Technology", "HIMX": "Technology", "GOOG": "Technology", "DDOG": "Technology",
+            "TWLO": "Technology", "TEAM": "Technology", "GOOGL": "Technology",
+            "EPD": "Energy", "ET": "Energy", "SU": "Energy", "DVN": "Energy", "CTRA": "Energy", "HAL": "Energy"
+        }
+        for t, sec in overrides.items():
+            if t in tickers: sector_map[t] = sec
+
+        ticker_to_etf = {t: SECTOR_TO_ETF.get(sector_map.get(t, ""), None) for t in tickers}
+        unique_etfs = list(set([etf for etf in ticker_to_etf.values() if etf is not None]))
+
+        mask = pd.DataFrame(False, index=entries.index, columns=entries.columns)
+
+        if not unique_etfs:
+            logger.warning("No sector ETFs mapped. Sector ETF filter will block all trades.")
+            return mask
+
+        # 3. Download ETF data
+        start_date = (entries.index[0] - pd.Timedelta(days=self.sector_etf_sma_period * 2)).strftime("%Y-%m-%d")
+        end_date = (entries.index[-1] + pd.Timedelta(days=5)).strftime("%Y-%m-%d")
+        
+        try:
+            logger.info(f"   Downloading data for {len(unique_etfs)} ETFs...")
+            etf_data = yf.download(unique_etfs, start=start_date, end=end_date, progress=False, auto_adjust=False)
+            if etf_data.empty:
+                logger.warning("ETF data download failed. Filter will block all trades.")
+                return mask
+                
+            close_prices = etf_data['Close'] if len(unique_etfs) > 1 else pd.DataFrame(etf_data['Close'], columns=unique_etfs)
+            
+            # Compute SMA
+            sma_df = close_prices.rolling(window=self.sector_etf_sma_period).mean()
+            
+            # Fix timezone before reindexing
+            if close_prices.index.tz is not None:
+                close_prices.index = close_prices.index.tz_localize(None)
+                sma_df.index = sma_df.index.tz_localize(None)
+                
+            # Reindex to match entries
+            close_aligned = close_prices.reindex(entries.index).ffill()
+            sma_aligned = sma_df.reindex(entries.index).ffill()
+            
+            # Build the condition: Close > SMA
+            etf_condition = close_aligned > sma_aligned
+            
+            # Apply to ticker mask
+            for ticker in tickers:
+                etf = ticker_to_etf.get(ticker)
+                if etf and etf in etf_condition.columns:
+                    mask[ticker] = etf_condition[etf]
+                else:
+                    mask[ticker] = False # Block unmapped tickers or fallback to True? We will block if not mapped.
+                    
+        except Exception as e:
+            logger.error(f"Error computing sector ETF mask: {e}")
+            
+        return mask
+
     def run_backtest(self) -> Dict:
         """Execute backtest with partial exits"""
         logger.info("🎯 Starting advanced backtest with partial exits...")
@@ -3757,6 +3857,18 @@ class AdvancedVectorBTEngine:
                 for stage, count in sorted(stage_counts.items()):
                     pct = count / len(market_stages) * 100 if market_stages else 0
                     logger.info(f"      {stage}: {count} days ({pct:.1f}%)")
+
+        # ═══════════════════════════════════════════════════════════════
+        # 📈 FILTRO DE SECTOR ETF STAGE 2 (Ablation Stage 2)
+        # ═══════════════════════════════════════════════════════════════
+        if getattr(self, "use_sector_etf_filter", False):
+            logger.info(f"📈 Aplicando filtro de ETF de Sector (SMA{self.sector_etf_sma_period})...")
+            entries_before = entries.sum().sum()
+            sector_etf_mask = self._build_sector_etf_mask(entries)
+            entries = entries & sector_etf_mask
+            entries_after = entries.sum().sum()
+            logger.info(f"   ❌ Bloqueados por Sector ETF: {entries_before - entries_after}")
+            logger.info(f"   ✅ Entries finales: {entries_after}")
 
         # ═══════════════════════════════════════════════════════════════
         # 🛡️ FILTRO 3: VolTrig Classification (Size Reduction)

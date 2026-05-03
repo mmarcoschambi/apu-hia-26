@@ -24,7 +24,7 @@ def _max_drawdown(equity: pd.Series) -> float:
         return 0.0
     peak = equity.cummax()
     dd = (equity - peak) / peak
-    return float(dd.min())
+    return float(abs(dd.min()))
 
 
 def build_report(date: str) -> dict:
@@ -36,18 +36,32 @@ def build_report(date: str) -> dict:
     equity_path = run_dir / "equity_curve.csv"
     summary_path = run_dir / "run_report.json"
 
-    if (
-        not positions_path.exists()
-        or not equity_path.exists()
-        or not summary_path.exists()
-    ):
+    if not summary_path.exists():
         raise FileNotFoundError(f"Missing artifacts in {run_dir}")
 
-    positions = pd.read_csv(positions_path)
-    equity = pd.read_csv(equity_path)
     summary = json.loads(summary_path.read_text())
 
-    trades = positions[positions["exited"] == True].copy()  # noqa: E712
+    positions = pd.DataFrame()
+    if positions_path.exists():
+        try:
+            positions = pd.read_csv(positions_path)
+        except pd.errors.EmptyDataError:
+            positions = pd.DataFrame()
+
+    equity = pd.DataFrame()
+    if equity_path.exists():
+        try:
+            equity = pd.read_csv(equity_path)
+        except pd.errors.EmptyDataError:
+            equity = pd.DataFrame()
+
+    trades = (
+        positions[positions["exited"] == True].copy()
+        if not positions.empty and "exited" in positions.columns
+        else pd.DataFrame()
+    )  # noqa: E712
+    if trades.empty:
+        trades = pd.DataFrame(columns=["realized_pnl"])
     if "realized_pnl" not in trades.columns:
         trades["realized_pnl"] = 0.0
     trades["realized_pnl"] = trades["realized_pnl"].fillna(0.0)

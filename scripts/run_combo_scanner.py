@@ -181,6 +181,21 @@ def _decision_to_row(d: SignalDecision) -> dict:
         if d.tier2_metrics.rs_percentile is not None
         else None,
         "entry_price": round(d.tier2_metrics.close, 4),
+        "rvol": round(d.tier2_metrics.rvol, 2),
+        "adr_pct": round(d.tier2_metrics.adr_pct, 2),
+        "dist_sma20": round(d.tier2_metrics.dist_sma20, 2),
+        "consol_days": d.tier2_metrics.consol_days,
+        "volume": int(d.tier2_metrics.volume),
+        "dollar_vol_M": round(d.tier2_metrics.dollar_vol_M, 1),
+        "rs_ret": round(d.tier2_metrics.rs_ret, 4)
+        if d.tier2_metrics.rs_ret is not None
+        else None,
+        "rs_percentile": round(d.tier2_metrics.rs_percentile, 1)
+        if d.tier2_metrics.rs_percentile is not None
+        else None,
+        "close": round(d.tier2_metrics.close, 4),
+        "spy_above_sma50": d.tier2_metrics.spy_above_sma50,
+        "spy_above_sma200": d.tier2_metrics.spy_above_sma200,
         "reject_contract": d.reject_contract,
         "mode": d.mode,
     }

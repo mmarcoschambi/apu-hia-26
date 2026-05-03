@@ -83,6 +83,32 @@ def _fetch_last_close_cache(
         return None, f"{ticker}: cache error {e}"
 
 
+def _fetch_close_series_cache(
+    db_path: Path, ticker: str, days: int = 365
+) -> Tuple[pd.Series, Optional[str]]:
+    """Descarga serie de close desde cache local."""
+    try:
+        conn = sqlite3.connect(str(db_path))
+        cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+        rows = conn.execute(
+            "SELECT date, close FROM ohlcv_cache WHERE ticker=? AND date>=? ORDER BY date",
+            (ticker, cutoff),
+        ).fetchall()
+        conn.close()
+        if not rows:
+            return pd.Series(dtype=float), f"{ticker}: no cache rows"
+        df = pd.DataFrame(rows, columns=["date", "close"])
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+        df["close"] = pd.to_numeric(df["close"], errors="coerce")
+        df = df.dropna(subset=["date", "close"]).drop_duplicates(subset=["date"])
+        if df.empty:
+            return pd.Series(dtype=float), f"{ticker}: cache series empty"
+        series = df.set_index("date")["close"].astype(float).sort_index()
+        return series, None
+    except Exception as e:
+        return pd.Series(dtype=float), f"{ticker}: cache series error {e}"
+
+
 def get_market_context_live(
     require_spy_above_sma50: bool = False,
     require_spy_above_sma200: bool = False,
@@ -173,6 +199,37 @@ def get_market_context_live(
         ctx["spy_ok"] = not (require_spy_above_sma50 or require_spy_above_sma200)
         ctx["regime_quality"] = "LOW"
         ctx["warnings"].append(f"SPY fetch failed: {e}; gate degraded")
+
+    if ctx["spy_price"] is None:
+        spy_s, err = _fetch_close_series_cache(db_path, "SPY", days=max(spy_lookback_days + 30, 365))
+        if not spy_s.empty:
+            spy_price = float(spy_s.iloc[-1])
+            ctx["spy_price"] = spy_price
+            spy_ok = True
+
+            if len(spy_s) >= 50:
+                spy_sma50_val = float(spy_s.rolling(50).mean().dropna().iloc[-1])
+                ctx["spy_sma50"] = spy_sma50_val
+                if require_spy_above_sma50:
+                    spy_ok = spy_ok and (spy_price >= spy_sma50_val)
+            elif require_spy_above_sma50:
+                spy_ok = False
+                ctx["warnings"].append("SPY cache insufficient data for SMA50")
+
+            if len(spy_s) >= 200:
+                spy_sma200_val = float(spy_s.rolling(200).mean().dropna().iloc[-1])
+                ctx["spy_sma200"] = spy_sma200_val
+                if require_spy_above_sma200:
+                    spy_ok = spy_ok and (spy_price >= spy_sma200_val)
+            elif require_spy_above_sma200:
+                spy_ok = False
+                ctx["warnings"].append("SPY cache insufficient data for SMA200")
+
+            ctx["spy_ok"] = spy_ok
+            ctx["regime_quality"] = "LOW"
+            ctx["warnings"].append("Using cached SPY series for regime check")
+        elif err:
+            ctx["warnings"].append(err)
 
     # === VIX chain: ^VIX -> VIXY -> cache ^VIX -> cache VIXY -> PASS_WARNING ===
     vix_val, err = _fetch_last_close_yf("^VIX", "10d")

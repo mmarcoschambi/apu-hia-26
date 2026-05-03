@@ -32,7 +32,8 @@ dependencies = [
     "psutil",
     "python-dotenv",
     "colorlog",
-    "loguru"
+    "loguru",
+    "openbb"
 ]
 
 [project.optional-dependencies]

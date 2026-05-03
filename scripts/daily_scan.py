@@ -40,6 +40,7 @@ OUTPUT_DIR = PROJECT_ROOT / "outputs" / "live_signals"
 
 def load_ohlcv(ticker: str, start: str, end: str) -> pd.DataFrame:
     import sqlite3
+
     conn = sqlite3.connect(DB_PATH)
     rows = conn.execute(
         "SELECT date,open,high,low,close,volume FROM ohlcv_cache "
@@ -47,7 +48,8 @@ def load_ohlcv(ticker: str, start: str, end: str) -> pd.DataFrame:
         (ticker, start, end),
     ).fetchall()
     conn.close()
-    if not rows: return pd.DataFrame()
+    if not rows:
+        return pd.DataFrame()
     df = pd.DataFrame(rows, columns=["date", "open", "high", "low", "close", "volume"])
     df["date"] = pd.to_datetime(df["date"], format="mixed")
     df = df.drop_duplicates(subset=["date"]).set_index("date")
@@ -60,11 +62,13 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
     logger.info("=" * 60)
 
     today = pd.Timestamp(date_str)
-    
+
     # 1. Construir universo idéntico al WF
     logger.info(f"Building universe (limit={max_tickers})...")
     universe_start = (today - timedelta(days=730)).strftime("%Y-%m-%d")
-    snap = build_universe_for_fold(DB_PATH, date_str, universe_start, max_tickers=max_tickers)
+    snap = build_universe_for_fold(
+        DB_PATH, date_str, universe_start, max_tickers=max_tickers
+    )
     tickers = snap.tickers
     logger.info(f"Universe: {len(tickers)} tickers selected.")
 
@@ -72,7 +76,7 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
     logger.info("Checking Market Regime (SMA200)...")
     spy_start = (today - timedelta(days=400)).strftime("%Y-%m-%d")
     spy_df = load_ohlcv("SPY", spy_start, date_str)
-    
+
     # 3. Cargar configuraciones de combos
     logger.info("Loading combo configurations...")
     cfg_a, _ = load_combo_merged("combo_pure_momentum")
@@ -86,15 +90,15 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
         "min_adr_pct": 1.2,
         "require_spy_above_sma200": True,
     }
-    
+
     # En cfg_a y cfg_b, inyectar en tier2_filters y screener.params
     for k, v in VALIDATED_OVERRIDES.items():
         cfg_a.setdefault("tier2_filters", {})[k] = v
         cfg_b.setdefault("tier2_filters", {})[k] = v
-        
+
         cfg_a.setdefault("screener", {}).setdefault("params", {})[k] = v
         cfg_b.setdefault("screener", {}).setdefault("params", {})[k] = v
-        
+
         if k in ["min_adr_pct"]:
             cfg_a.setdefault("screener", {})[k] = v
             cfg_b.setdefault("screener", {})[k] = v
@@ -102,57 +106,105 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
     # 4. Scan
     all_signals = []
     logger.info(f"Scanning {len(tickers)} tickers with A+B modes...")
-    
+
     for ticker in tickers:
         df = pd.DataFrame()
         try:
             # Lookback de seguridad para medias móviles
             df_start = (today - timedelta(days=300)).strftime("%Y-%m-%d")
             df = load_ohlcv(ticker, df_start, date_str)
-            
+
             if df.empty or len(df) < 65:
                 continue
 
             # Evaluar ambos modos
-            da = evaluate_ticker(ticker=ticker, df=df, spy_df=spy_df, combo_cfg=cfg_a, mode="A", scan_date=date_str)
-            db = evaluate_ticker(ticker=ticker, df=df, spy_df=spy_df, combo_cfg=cfg_b, mode="B", scan_date=date_str)
-            
-            # Mergear señales
-            merged = merge_ab_signals([da] if da.passed else [], [db] if db.passed else [])
-            for sig in merged:
-                # Calcular Stop Loss y Position Size basados en el capital de papel
-                entry_price = float(df.iloc[-1]["close"])
-                
-                # Regla de Stop base (8% por defecto)
-                stop_pct = 0.08 
-                stop_price = entry_price * (1 - stop_pct)
-                
-                # Sizing basado en riesgo de $1000 por trade
-                risk_dollars = 1000.0
-                shares = risk_dollars / max((entry_price - stop_price), 0.01)
+            da = evaluate_ticker(
+                ticker=ticker,
+                df=df,
+                spy_df=spy_df,
+                combo_cfg=cfg_a,
+                mode="A",
+                scan_date=date_str,
+            )
+            db = evaluate_ticker(
+                ticker=ticker,
+                df=df,
+                spy_df=spy_df,
+                combo_cfg=cfg_b,
+                mode="B",
+                scan_date=date_str,
+            )
 
+            # Mergear señales
+            merged = merge_ab_signals(
+                [da] if da.passed else [], [db] if db.passed else []
+            )
+            for sig in merged:
                 s_dict = sig.to_dict()
                 s_dict["signal_date"] = date_str
                 s_dict["agent_name"] = "A_BOTH"
                 s_dict["combo_name"] = "A_BOTH_PRO"
-                s_dict["entry_price"] = entry_price
+                s_dict["entry_price"] = sig.tier2_metrics.close
+
+                # Inyectar métricas de ejecución al primer nivel (ya resueltas por el engine canónico)
+                # Esto incluye ATR-based stops si el combo lo pide.
+                s_dict["stop_price"] = sig.stop_price
+                s_dict["shares"] = sig.shares
+                s_dict["risk_budget_usd"] = sig.risk_budget_usd
+                s_dict["risk_per_share"] = sig.risk_per_share
+                s_dict["tp1_price"] = sig.tp1_price
+                s_dict["tp2_price"] = sig.tp2_price
+                s_dict["tp1_pct"] = sig.tp1_pct
+                s_dict["tp2_pct"] = sig.tp2_pct
+                s_dict["runner_pct"] = sig.runner_pct
                 
-                # Inyectar métricas de ejecución falsificando tier1_metrics
+                # Mantener compatibilidad retroactiva si alguien lee tier1_metrics
                 if "tier1_metrics" not in s_dict:
                     s_dict["tier1_metrics"] = {}
-                s_dict["tier1_metrics"]["stop_price"] = stop_price
-                s_dict["tier1_metrics"]["shares"] = int(shares)
-                
+                s_dict["tier1_metrics"].update({
+                    "stop_price": sig.stop_price,
+                    "shares": sig.shares,
+                    "risk_budget_usd": sig.risk_budget_usd,
+                    "risk_per_share": sig.risk_per_share,
+                    "tp1_price": sig.tp1_price,
+                    "tp2_price": sig.tp2_price,
+                    "tp1_pct": sig.tp1_pct,
+                    "tp2_pct": sig.tp2_pct,
+                    "runner_pct": sig.runner_pct
+                })
+
+                s_dict["rvol"] = round(sig.tier2_metrics.rvol, 2)
+                s_dict["adr_pct"] = round(sig.tier2_metrics.adr_pct, 2)
+                s_dict["dist_sma20"] = round(sig.tier2_metrics.dist_sma20, 2)
+                s_dict["consol_days"] = sig.tier2_metrics.consol_days
+                s_dict["volume"] = int(sig.tier2_metrics.volume)
+                s_dict["dollar_vol_M"] = round(sig.tier2_metrics.dollar_vol_M, 1)
+                s_dict["rs_ret"] = (
+                    round(sig.tier2_metrics.rs_ret, 4)
+                    if sig.tier2_metrics.rs_ret is not None
+                    else None
+                )
+                s_dict["rs_percentile"] = (
+                    round(sig.tier2_metrics.rs_percentile, 1)
+                    if sig.tier2_metrics.rs_percentile is not None
+                    else None
+                )
+                s_dict["close"] = round(sig.tier2_metrics.close, 4)
+                s_dict["spy_above_sma50"] = sig.tier2_metrics.spy_above_sma50
+                s_dict["spy_above_sma200"] = sig.tier2_metrics.spy_above_sma200
+
                 all_signals.append(s_dict)
-                logger.info(f"  ★ SIGNAL: {ticker:6s} | Mode: {sig.mode:6s} | Score: {sig.entry_score:.3f}")
-        
+                logger.info(
+                    f"  ★ SIGNAL: {ticker:6s} | Mode: {sig.mode:6s} | Score: {sig.entry_score:.3f}"
+                )
+
         except Exception as e:
             logger.error(f"Error scanning {ticker}: {e}")
 
     # 5. Persistir resultados
     out_dir = OUTPUT_DIR / date_str
     out_dir.mkdir(parents=True, exist_ok=True)
-    
+
     df_results = pd.DataFrame(all_signals)
     if not df_results.empty:
         df_results.to_csv(out_dir / "combined.csv", index=False)
@@ -165,8 +217,12 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--date", help="Scan date (YYYY-MM-DD)", default=datetime.now().strftime("%Y-%m-%d"))
+    parser.add_argument(
+        "--date",
+        help="Scan date (YYYY-MM-DD)",
+        default=datetime.now().strftime("%Y-%m-%d"),
+    )
     parser.add_argument("--max-tickers", type=int, default=200)
     args = parser.parse_args()
-    
+
     run_daily_scan(args.date, args.max_tickers)

@@ -38,6 +38,7 @@ class RejectReason(str):
 class Tier2Metrics:
     rvol: float = 0.0
     adr_pct: float = 0.0
+    atr: float = 0.0
     dist_sma20: float = 0.0
     consol_days: int = 0
     volume: float = 0.0
@@ -52,6 +53,7 @@ class Tier2Metrics:
         return {
             "rvol": self.rvol,
             "adr_pct": self.adr_pct,
+            "atr": self.atr,
             "dist_sma20": self.dist_sma20,
             "consol_days": self.consol_days,
             "volume": self.volume,
@@ -79,6 +81,17 @@ class SignalDecision:
     screener_reason: str = ""
     signal_type: str = "breakout"
     cost_model: dict = field(default_factory=dict)
+    
+    # Canonical Execution fields
+    stop_price: Optional[float] = None
+    tp1_price: Optional[float] = None
+    tp2_price: Optional[float] = None
+    tp1_pct: float = 0.0
+    tp2_pct: float = 0.0
+    runner_pct: float = 0.0
+    shares: int = 0
+    risk_budget_usd: float = 0.0
+    risk_per_share: float = 0.0
 
     @property
     def composite_score(self) -> float:
@@ -103,6 +116,15 @@ class SignalDecision:
             "signal_type": self.signal_type,
             "cost_model": self.cost_model,
             "tier2_metrics": self.tier2_metrics.to_dict(),
+            "stop_price": self.stop_price,
+            "tp1_price": self.tp1_price,
+            "tp2_price": self.tp2_price,
+            "tp1_pct": self.tp1_pct,
+            "tp2_pct": self.tp2_pct,
+            "runner_pct": self.runner_pct,
+            "shares": self.shares,
+            "risk_budget_usd": self.risk_budget_usd,
+            "risk_per_share": self.risk_per_share,
         }
 
     @classmethod
@@ -121,7 +143,74 @@ class SignalDecision:
             signal_type=d.get("signal_type", "breakout"),
             cost_model=d.get("cost_model", {}),
             tier2_metrics=t2m,
+            stop_price=d.get("stop_price"),
+            tp1_price=d.get("tp1_price"),
+            tp2_price=d.get("tp2_price"),
+            tp1_pct=d.get("tp1_pct", 0.0),
+            tp2_pct=d.get("tp2_pct", 0.0),
+            runner_pct=d.get("runner_pct", 0.0),
+            shares=d.get("shares", 0),
+            risk_budget_usd=d.get("risk_budget_usd", 0.0),
+            risk_per_share=d.get("risk_per_share", 0.0),
         )
+
+
+def resolve_canonical_risk(
+    entry_price: float,
+    metrics: Tier2Metrics,
+    combo_cfg: dict,
+    risk_dollars: float = 1000.0,
+) -> dict:
+    """
+    Calcula stop, targets y sizing usando la lógica canónica del engine (setups recientes).
+    Misma lógica que vectorbt_engine_advanced.py para asegurar convergencia.
+    """
+    t1 = combo_cfg.get("tier1_strategy", {})
+
+    # --- STOP DISTANCE CALCULATION (Canon Advanced Engine) ---
+    # 1. ATR(14) * 2.0 (Minervini-style)
+    stop_dist = None
+    if metrics.atr > 0:
+        stop_dist = 2.0 * metrics.atr
+
+    # 2. Fallback: 7% fijo si ATR no disponible o inconsistente
+    if stop_dist is None or stop_dist <= 0 or stop_dist >= entry_price:
+        stop_dist = entry_price * 0.07
+
+    # 3. Capping: stop no puede estar más del 12% abajo (filtro de cordura)
+    max_stop_dist = entry_price * 0.12
+    if stop_dist > max_stop_dist:
+        stop_dist = max_stop_dist
+
+    # Hard floor for distance (prevents negative or zero risk)
+    stop_dist = max(stop_dist, entry_price * 0.005)
+
+    stop_price = entry_price - stop_dist
+
+    # Targets basados en R (desde entry_price)
+    tp1_r = t1.get("tp1_r", 1.25)
+    tp2_r = t1.get("tp2_r", 3.0)
+
+    tp1_price = entry_price + (stop_dist * tp1_r)
+    tp2_price = entry_price + (stop_dist * tp2_r)
+
+    tp1_pct = t1.get("tp1_pct", 0.33)
+    tp2_pct = t1.get("tp2_pct", 0.33)
+    runner_pct = round(1.0 - tp1_pct - tp2_pct, 2)
+
+    shares = int(risk_dollars / stop_dist) if stop_dist > 0 else 0
+
+    return {
+        "stop_price": round(stop_price, 4),
+        "tp1_price": round(tp1_price, 4),
+        "tp2_price": round(tp2_price, 4),
+        "tp1_pct": round(tp1_pct, 4),
+        "tp2_pct": round(tp2_pct, 4),
+        "runner_pct": round(runner_pct, 4),
+        "shares": shares,
+        "risk_budget_usd": risk_dollars,
+        "risk_per_share": round(stop_dist, 4),
+    }
 
 
 def compute_tier2_metrics(
@@ -137,6 +226,14 @@ def compute_tier2_metrics(
     high = df["high"]
     low = df["low"]
     volume = df["volume"]
+
+    # ATR calculation (Canonical 14-period)
+    high_low = high - low
+    high_close = np.abs(high - close.shift())
+    low_close = np.abs(low - close.shift())
+    tr = np.maximum(high_low, np.maximum(high_close, low_close))
+    atr = tr.rolling(14).mean().iloc[-1]
+    atr = 0.0 if np.isnan(atr) else float(atr)
 
     sma20 = close.rolling(20).mean()
     avg_vol = volume.rolling(20).mean().replace(0, np.nan)
@@ -384,6 +481,14 @@ def evaluate_ticker(
         "slippage_rate": combo_cfg.get("tier3_fixed", {}).get("slippage_rate", 0.0005),
     }
 
+    # resolve canonical risk levels
+    risk = resolve_canonical_risk(
+        entry_price=metrics.close,
+        metrics=metrics,
+        combo_cfg=combo_cfg,
+        risk_dollars=1000.0, # Default per-trade risk
+    )
+
     return SignalDecision(
         ticker=ticker,
         mode=mode,
@@ -396,6 +501,15 @@ def evaluate_ticker(
         screener_reason=screener_reason,
         signal_type=pattern_cfg.get("signal_type", "breakout"),
         cost_model=cost_model,
+        stop_price=risk["stop_price"],
+        tp1_price=risk["tp1_price"],
+        tp2_price=risk["tp2_price"],
+        tp1_pct=risk["tp1_pct"],
+        tp2_pct=risk["tp2_pct"],
+        runner_pct=risk["runner_pct"],
+        shares=risk["shares"],
+        risk_budget_usd=risk["risk_budget_usd"],
+        risk_per_share=risk["risk_per_share"],
     )
 
 

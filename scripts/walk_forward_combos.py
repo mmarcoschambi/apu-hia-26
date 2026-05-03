@@ -145,6 +145,8 @@ def build_engine_kwargs(combo_name: str, params: dict) -> dict:
         "use_pattern_filter",
         "min_pattern_confidence",
         "pattern_cache_path",
+        "use_sector_etf_filter",
+        "sector_etf_sma_period",
     }
     tier2_clean = {k: v for k, v in tier2.items() if k in ENGINE_TIER2_KEYS}
 

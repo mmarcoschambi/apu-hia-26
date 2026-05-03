@@ -18,3 +18,4 @@ lightgbm
 psutil
 python-dotenv
 colorlog
+openbb

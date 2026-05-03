@@ -31,7 +31,11 @@ class UniverseFetchResult:
 def _build_screener_url(base_url: str, filters: str, sort: str, page: int) -> str:
     """Construye URL del screener con paginación."""
     row_offset = (page - 1) * 20 + 1
-    return f"{base_url}?f={filters}&s={sort}&r={row_offset}"
+    # Finviz usa o= para sort. Para relativevolume descendente usar o=-relativevolume
+    sort_param = sort
+    if sort == "relativevolume":
+        sort_param = "-relativevolume"
+    return f"{base_url}?f={filters}&o={sort_param}&r={row_offset}"
 
 
 def _fetch_page(

@@ -34,6 +34,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 DB_PATH = PROJECT_ROOT / "data" / "ticker_cache.db"
 OUTPUT_DIR = PROJECT_ROOT / "outputs" / "live_signals"
 RUNS_DIR = PROJECT_ROOT / "outputs" / "paper_trading" / "runs"
+INTENTS_DIR = PROJECT_ROOT / "outputs" / "execution_intents"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -75,11 +76,19 @@ def load_ohlcv(ticker: str, date: str, lookback: int = 20) -> pd.DataFrame:
 def load_signals(date: str, agents: list[str] | None = None) -> pd.DataFrame:
     path = OUTPUT_DIR / date / "combined.csv"
     if not path.exists():
-        raise FileNotFoundError(f"Signals not found: {path}")
+        logger.info(f"No signals file for {date}: {path}")
+        return pd.DataFrame()
     df = pd.read_csv(path)
     if agents:
         df = df[df["agent_name"].isin(agents)]
     return df.sort_values("entry_score", ascending=False).reset_index(drop=True)
+
+
+def load_intents(date: str) -> pd.DataFrame:
+    path = INTENTS_DIR / date / "execution_intents.csv"
+    if not path.exists():
+        return pd.DataFrame()
+    return pd.read_csv(path)
 
 
 def compute_position_risk(
@@ -120,14 +129,31 @@ def simulate_run(
 
     if signals.empty:
         logger.warning("No signals to simulate")
-        return {
+        result = {
             "ok": True,
+            "date": date,
+            "starting_capital": capital,
+            "ending_capital": round(capital, 2),
+            "pnl": 0.0,
+            "pnl_pct": 0.0,
+            "orders_count": 0,
+            "fills_count": 0,
+            "trades_count": 0,
+            "positions_open": 0,
+            "slippage_bps": slippage_bps,
+            "fee_bps": fee_bps,
+            "dry_run": dry_run,
             "orders": [],
             "fills": [],
             "positions": [],
             "equity": [],
             "error": None,
         }
+        if not dry_run:
+            run_dir = RUNS_DIR / date
+            run_dir.mkdir(parents=True, exist_ok=True)
+            _save_ledger(run_dir, [], [], [], [], result)
+        return result
 
     run_dir = None
     if not dry_run:
@@ -150,50 +176,104 @@ def simulate_run(
             logger.debug(f"Skipping {ticker}: max positions reached")
             continue
 
-        entry_price = float(signal.get("entry_price", 0))
-        if entry_price <= 0:
-            logger.debug(f"Skipping {ticker}: invalid entry_price {entry_price}")
+        # Canonical execution fields from signal
+        stop_price = signal.get("stop_loss", signal.get("stop_price", None))
+        tp1_price = signal.get("tp1_price", None)
+        tp2_price = signal.get("tp2_price", None)
+        size = signal.get("position_size", signal.get("shares", None))
+        
+        tp1_pct = signal.get("tp1_pct", 0.33)
+        tp2_pct = signal.get("tp2_pct", 0.33)
+        runner_pct = signal.get("runner_pct", 0.34)
+
+        if stop_price is None or tp1_price is None or tp2_price is None or size is None or pd.isna(size):
+            logger.warning(f"Skipping {ticker}: Missing canonical risk/target fields in signal. (Requires stop, TPs, size).")
             continue
+            
+        stop_price = float(stop_price)
+        tp1_price = float(tp1_price)
+        tp2_price = float(tp2_price)
+        size = int(size)
 
-        fill_price = entry_price * slippage_mult
-        stop_pct = 0.08
-        stop_price = entry_price * (1 - stop_pct)
-        tp1_r = 1.25
-        tp2_r = 3.0
-        tp1_price = entry_price * (1 + stop_pct * tp1_r)
-        tp2_price = entry_price * (1 + stop_pct * tp2_r)
-
-        pos = compute_position_risk(entry_price, stop_price, risk_pct, capital)
-        size = pos["size"]
         if size <= 0:
             logger.debug(f"Skipping {ticker}: zero size")
             continue
 
+        # Load data to find the ACTUAL next-day open for entry
+        df_full = load_ohlcv(ticker, date, lookback=HOLDING_DAYS + 5)
+        if df_full.empty:
+            logger.debug(f"Skipping {ticker}: no ohlcv data")
+            continue
+
+        ts_signal = pd.Timestamp(date)
+        all_dates = df_full.index
+
+        if ts_signal not in all_dates:
+            idx_sig_list = all_dates[all_dates <= ts_signal]
+            if len(idx_sig_list) == 0:
+                continue
+            ts_signal = idx_sig_list[-1]
+
+        idx_sig = all_dates.get_loc(ts_signal)
+        if isinstance(idx_sig, slice):
+            idx_sig = idx_sig.start
+
+        # Entrada: Día siguiente (idx + 1)
+        if idx_sig + 1 >= len(all_dates):
+            logger.debug(f"Skipping {ticker}: no future data for entry")
+            continue
+
+        idx_ent = idx_sig + 1
+        idx_ext = min(idx_ent + HOLDING_DAYS, len(all_dates) - 1)
+
+        holding_df = df_full.iloc[idx_ent : idx_ext + 1]
+        if holding_df.empty:
+            continue
+
+        entry_date = all_dates[idx_ent]
+        entry_price_actual = float(holding_df.iloc[0]["open"])
+
+        # Usar el precio real de apertura + slippage
+        fill_price = entry_price_actual * slippage_mult
+        entry_fee = round(fill_price * size * fee_bps / 10000, 2)
+
+        entry_score = float(
+            signal.get(
+                "entry_score",
+                signal.get("normalized_score", signal.get("raw_score", 0)) or 0,
+            )
+        )
+
         order = {
             "order_id": f"ord_{ticker}_{date}",
             "ticker": ticker,
-            "agent": signal["agent_name"],
-            "combo": signal["combo_name"],
-            "signal_date": signal["signal_date"],
-            "entry_score": signal["entry_score"],
-            "entry_price_signal": entry_price,
+            "agent": signal.get("agent_name", signal.get("strategy_id", "unknown")),
+            "combo": signal.get("combo_name", signal.get("strategy_id", "unknown")),
+            "signal_date": signal.get("signal_date", date),
+            "entry_score": entry_score,
+            "entry_price_signal": entry_price_actual,
             "stop_price": round(stop_price, 4),
             "tp1_price": round(tp1_price, 4),
             "tp2_price": round(tp2_price, 4),
             "size_requested": size,
             "size_filled": size,
             "fill_price": round(fill_price, 4),
-            "entry_fee": round(fill_price * size * fee_bps / 10000, 2),
+            "entry_fee": entry_fee,
             "status": "filled",
-            "filled_at": f"{date} 09:30:00",
+            "filled_at": f"{str(entry_date.date())} 09:30:00",
+            "signal_id": signal.get("signal_id"),
+            "intent_id": signal.get("intent_id"),
+            "source_universe": signal.get("source_universe", "local_db"),
+            "decision_source": signal.get("decision_source", "system"),
+            "confirmed_by": signal.get("confirmed_by"),
+            "confirmed_at": signal.get("confirmed_at"),
         }
         orders.append(order)
-        capital -= fill_price * size + order["entry_fee"]
-        equity_curve.append(capital)
+        capital -= (fill_price * size + entry_fee)
 
         pos_rec = {
             "ticker": ticker,
-            "agent": signal["agent_name"],
+            "agent": signal.get("agent_name", signal.get("strategy_id", "unknown")),
             "size": size,
             "entry_price": round(fill_price, 4),
             "stop_price": round(stop_price, 4),
@@ -208,6 +288,12 @@ def simulate_run(
             "realized_pnl": None,
             "rvol": signal.get("rvol", 0),
             "adr_pct": signal.get("adr_pct", 0),
+            "signal_id": signal.get("signal_id"),
+            "intent_id": signal.get("intent_id"),
+            "source_universe": signal.get("source_universe", "local_db"),
+            "decision_source": signal.get("decision_source", "system"),
+            "confirmed_by": signal.get("confirmed_by"),
+            "confirmed_at": signal.get("confirmed_at"),
         }
         positions.append(pos_rec)
         active_tickers[ticker] = pos_rec
@@ -219,124 +305,142 @@ def simulate_run(
             "side": "BUY",
             "price": round(fill_price, 4),
             "size": size,
-            "fee": order["entry_fee"],
-            "timestamp": f"{date} 09:30:00",
+            "fee": entry_fee,
+            "timestamp": f"{str(entry_date.date())} 09:30:00",
         }
         fills.append(fill_rec)
 
         logger.info(
-            f"  OPEN {ticker}  size={size}  entry=${fill_price:.2f}  "
+            f"  OPEN {ticker}  size={size}  entry=${fill_price:.2f} (open=${entry_price_actual:.2f})  "
             f"stop=${stop_price:.2f}  tp1=${tp1_price:.2f}  tp2=${tp2_price:.2f}"
         )
 
-    # Find actual close date for this simulation (Lookahead fix)
-    # El trade entra al día siguiente de la señal y dura HOLDING_DAYS
-    for pos in positions:
-        ticker = pos["ticker"]
-        # Usar un lookback mayor para asegurar que capturamos el futuro del trade
-        df_full = load_ohlcv(ticker, date, lookback=HOLDING_DAYS + 5)
-        if df_full.empty:
-            continue
+        # -------------------------------------------------------------
+        # Simulación de Salidas (dentro del mismo loop)
+        # -------------------------------------------------------------
+        remaining_size = size
+        current_stop = stop_price
+        
+        tp1_filled = False
+        tp2_filled = False
+        
+        size_tp1 = int(size * tp1_pct)
+        size_tp2 = int(size * tp2_pct)
+        
+        total_realized_pnl = 0.0
+        final_exit_reason = "EOD"
+        final_exit_date = holding_df.index[-1]
 
-        try:
-            # La señal ocurrió en 'date'. Entrada es el siguiente día hábil.
-            ts_signal = pd.Timestamp(date)
-            all_dates = df_full.index
+        for current_date, row in holding_df.iterrows():
+            high = float(row["high"])
+            low = float(row["low"])
             
-            # Buscar el índice de la fecha de la señal
-            if ts_signal not in all_dates:
-                # Si no está, buscar la fecha más cercana anterior
-                idx_sig_list = all_dates[all_dates <= ts_signal]
-                if len(idx_sig_list) == 0: continue
-                ts_signal = idx_sig_list[-1]
+            # Stop Check
+            if low <= current_stop:
+                exit_fill = current_stop * (1 - slippage_bps / 10000)
+                exit_fee = round(exit_fill * remaining_size * fee_bps / 10000, 2)
+                pnl = (exit_fill - fill_price) * remaining_size - exit_fee
+                total_realized_pnl += pnl
+                capital += exit_fill * remaining_size - exit_fee
+                
+                fills.append({
+                    "fill_id": f"fill_{ticker}_stop_{date}_{current_date.date()}",
+                    "order_id": f"ord_{ticker}_{date}",
+                    "ticker": ticker,
+                    "side": "SELL",
+                    "price": round(exit_fill, 4),
+                    "size": remaining_size,
+                    "fee": exit_fee,
+                    "timestamp": f"{current_date.date()} 16:00:00",
+                    "reason": "STOP" if current_stop < fill_price else "BREAKEVEN",
+                })
+                remaining_size = 0
+                final_exit_reason = "STOP" if current_stop < fill_price else "BREAKEVEN"
+                final_exit_date = current_date
+                break
             
-            idx_sig = all_dates.get_loc(ts_signal)
-            if isinstance(idx_sig, slice): idx_sig = idx_sig.start
+            # TP1 Check
+            if not tp1_filled and high >= tp1_price and remaining_size > 0:
+                tp1_filled = True
+                fill_sz = min(size_tp1, remaining_size)
+                exit_fill = tp1_price * (1 - slippage_bps / 10000)
+                exit_fee = round(exit_fill * fill_sz * fee_bps / 10000, 2)
+                pnl = (exit_fill - fill_price) * fill_sz - exit_fee
+                total_realized_pnl += pnl
+                capital += exit_fill * fill_sz - exit_fee
+                
+                fills.append({
+                    "fill_id": f"fill_{ticker}_tp1_{date}_{current_date.date()}",
+                    "order_id": f"ord_{ticker}_{date}",
+                    "ticker": ticker,
+                    "side": "SELL",
+                    "price": round(exit_fill, 4),
+                    "size": fill_sz,
+                    "fee": exit_fee,
+                    "timestamp": f"{current_date.date()} 16:00:00",
+                    "reason": "TP1",
+                })
+                remaining_size -= fill_sz
+                current_stop = fill_price # Breakeven tras TP1
             
-            # Entrada: Día siguiente (idx + 1)
-            if idx_sig + 1 >= len(all_dates):
-                pos["exit_reason"] = "no_future_data"
-                continue
-            
-            idx_ent = idx_sig + 1
-            idx_ext = min(idx_ent + HOLDING_DAYS, len(all_dates) - 1)
-            
-            # FILTRAR VENTANA DE HOLDING (Fix crítico: evita lookahead)
-            holding_df = df_full.iloc[idx_ent : idx_ext + 1]
-            if holding_df.empty: continue
+            # TP2 Check
+            if tp1_filled and not tp2_filled and high >= tp2_price and remaining_size > 0:
+                tp2_filled = True
+                fill_sz = min(size_tp2, remaining_size)
+                exit_fill = tp2_price * (1 - slippage_bps / 10000)
+                exit_fee = round(exit_fill * fill_sz * fee_bps / 10000, 2)
+                pnl = (exit_fill - fill_price) * fill_sz - exit_fee
+                total_realized_pnl += pnl
+                capital += exit_fill * fill_sz - exit_fee
+                
+                fills.append({
+                    "fill_id": f"fill_{ticker}_tp2_{date}_{current_date.date()}",
+                    "order_id": f"ord_{ticker}_{date}",
+                    "ticker": ticker,
+                    "side": "SELL",
+                    "price": round(exit_fill, 4),
+                    "size": fill_sz,
+                    "fee": exit_fee,
+                    "timestamp": f"{current_date.date()} 16:00:00",
+                    "reason": "TP2",
+                })
+                remaining_size -= fill_sz
 
-            entry_date = all_dates[idx_ent]
-            entry_price_actual = float(holding_df.iloc[0]["open"])
+        # Salida EOD si queda remanente
+        if remaining_size > 0:
+            eod_price = float(holding_df.iloc[-1]["close"])
+            exit_fill = eod_price * (1 - slippage_bps / 10000)
+            exit_fee = round(exit_fill * remaining_size * fee_bps / 10000, 2)
+            pnl = (exit_fill - fill_price) * remaining_size - exit_fee
+            total_realized_pnl += pnl
+            capital += exit_fill * remaining_size - exit_fee
             
-            # Evaluar Highs y Lows SOLO en la ventana de holding
-            high_in_hold = float(holding_df["high"].max())
-            low_in_hold = float(holding_df["low"].min())
-            
-            exit_reason = "EOD" # Default: fin de holding
-            exit_idx_actual = len(holding_df) - 1
-            
-            # Check de STOP primero (prioridad a la protección)
-            # Buscamos el primer día que toca el stop
-            stops = holding_df[holding_df["low"] <= pos["stop_price"]]
-            if not stops.empty:
-                exit_reason = "STOP"
-                exit_date_actual = stops.index[0]
-                exit_price = pos["stop_price"]
-            else:
-                # Check de TPs
-                tp2s = holding_df[holding_df["high"] >= pos["tp2_price"]]
-                if not tp2s.empty:
-                    exit_reason = "TP2"
-                    exit_date_actual = tp2s.index[0]
-                    exit_price = pos["tp2_price"]
-                else:
-                    tp1s = holding_df[holding_df["high"] >= pos["tp1_price"]]
-                    if not tp1s.empty:
-                        exit_reason = "TP1"
-                        exit_date_actual = tp1s.index[0]
-                        exit_price = pos["tp1_price"]
-                    else:
-                        # Salida por tiempo
-                        exit_date_actual = holding_df.index[-1]
-                        exit_price = float(holding_df.iloc[-1]["close"])
-
-            # Recalcular PnL con precios reales de entrada/salida
-            exit_fill = exit_price * (1 - slippage_bps / 10000)
-            exit_fee = round(exit_fill * pos["size"] * fee_bps / 10000, 2)
-            
-            # Usamos el entry_price que ya tenía la pos (que incluye slippage)
-            realized_pnl = (exit_fill - pos["entry_price"]) * pos["size"] - exit_fee
-
-            fill_exit = {
-                "fill_id": f"fill_{ticker}_exit_{date}",
+            fills.append({
+                "fill_id": f"fill_{ticker}_eod_{date}_{final_exit_date.date()}",
                 "order_id": f"ord_{ticker}_{date}",
                 "ticker": ticker,
                 "side": "SELL",
                 "price": round(exit_fill, 4),
-                "size": pos["size"],
+                "size": remaining_size,
                 "fee": exit_fee,
-                "timestamp": f"{str(exit_date_actual.date())} 16:00:00",
-                "reason": exit_reason,
-            }
-            fills.append(fill_exit)
+                "timestamp": f"{final_exit_date.date()} 16:00:00",
+                "reason": "EOD",
+            })
+            remaining_size = 0
+            final_exit_reason = "EOD"
+            
+        pos_rec["exit_reason"] = final_exit_reason
+        pos_rec["exit_price"] = None # Múltiples precios de salida
+        pos_rec["exit_fee"] = None
+        pos_rec["realized_pnl"] = round(total_realized_pnl, 2)
+        pos_rec["exited"] = True
+        pos_rec["exit_date"] = str(final_exit_date.date())
+        pos_rec["remaining_size"] = remaining_size
 
-            pos["exit_reason"] = exit_reason
-            pos["exit_price"] = round(exit_fill, 4)
-            pos["exit_fee"] = exit_fee
-            pos["realized_pnl"] = round(realized_pnl, 2)
-            pos["exited"] = True
-            pos["exit_date"] = str(exit_date_actual.date())
-
-            capital += exit_fill * pos["size"] - exit_fee
-
-            logger.info(
-                f"  CLOSE {ticker}  reason={exit_reason}  date={pos['exit_date']}  "
-                f"price=${exit_fill:.2f}  pnl=${realized_pnl:.2f}"
-            )
-        except Exception as e:
-            logger.error(f"Error simulating exit for {ticker}: {e}")
-            continue
-
+        logger.info(
+            f"  CLOSE {ticker}  reason={final_exit_reason}  date={pos_rec['exit_date']}  "
+            f"pnl=${total_realized_pnl:.2f}"
+        )
 
     equity_curve.append(capital)
 
@@ -413,8 +517,13 @@ def main():
     date = args.date or datetime.now().strftime("%Y-%m-%d")
 
     try:
-        signals = load_signals(date, agents=args.agents)
-        logger.info(f"Loaded {len(signals)} signals for {date}")
+        intents = load_intents(date)
+        if not intents.empty:
+            signals = intents
+            logger.info(f"Loaded {len(signals)} execution intents for {date}")
+        else:
+            signals = load_signals(date, agents=args.agents)
+            logger.info(f"Loaded {len(signals)} signals for {date}")
     except FileNotFoundError as e:
         logger.error(f"{e}")
         sys.exit(1)
