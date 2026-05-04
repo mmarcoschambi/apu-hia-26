@@ -308,6 +308,63 @@ def prepare_numba_arrays(engine, release_dataframes: bool = False) -> Dict:
     total_bytes = sum(arr.nbytes for arr in arrays.values())
     logger.info(f"   ✅ Arrays prepared: {total_bytes / (1024**2):.1f} MB total")
 
+    # ============================================
+    # HYPOTHESIS A: SECTOR STRENGTH MULTIPLIER
+    # ============================================
+    try:
+        if getattr(engine, "use_sector_dynamic_sizing", False):
+            # Ensure we have the sector distance matrix and mapping
+            # This is built in _build_sector_etf_mask, which is called before simulation
+            if not hasattr(engine, "etf_dist_matrix") or not hasattr(engine, "ticker_to_etf_map"):
+                logger.info("   🔍 Building sector ETF mapping for dynamic sizing...")
+                # We use a dummy entries matrix to trigger mask building
+                dummy_entries = pd.DataFrame(False, index=engine.close.index, columns=engine.close.columns)
+                engine._build_sector_etf_mask(dummy_entries)
+
+            dist_matrix = engine.etf_dist_matrix
+            ticker_map = engine.ticker_to_etf_map
+            mult_map = engine.sector_multiplier_map
+            
+            # Initialize array with 1.0 (no change)
+            n_rows, n_cols = engine.close.shape
+            sector_mult_arr = np.ones((n_rows, n_cols), dtype=np.float32)
+            
+            # Buckets from plan
+            # weak: <= 0.00
+            # low: (0.00, 0.01]
+            # mid: (0.01, 0.02]
+            # high: (0.02, 0.03]
+            # extreme: > 0.03
+            
+            for j, ticker in enumerate(engine.close.columns):
+                etf = ticker_map.get(ticker)
+                if etf and etf in dist_matrix.columns:
+                    dists = dist_matrix[etf].values
+                    for i in range(n_rows):
+                        d = dists[i]
+                        if pd.isna(d):
+                            bucket = "weak"
+                        elif d <= 0.00:
+                            bucket = "weak"
+                        elif d <= 0.01:
+                            bucket = "low"
+                        elif d <= 0.02:
+                            bucket = "mid"
+                        elif d <= 0.03:
+                            bucket = "high"
+                        else:
+                            bucket = "extreme"
+                        
+                        sector_mult_arr[i, j] = mult_map.get(bucket, 1.0)
+            
+            arrays["sector_multiplier"] = sector_mult_arr
+            logger.info("   ✅ Sector strength multiplier array prepared")
+        else:
+            arrays["sector_multiplier"] = np.ones(engine.close.shape, dtype=np.float32)
+    except Exception as e:
+        logger.warning(f"   ⚠️ Could not prepare sector multiplier array: {e}")
+        arrays["sector_multiplier"] = np.ones(engine.close.shape, dtype=np.float32)
+
     # Log shapes for debugging
     logger.info(
         f"   📊 Array shapes: close={arrays['close'].shape}, high={arrays['high'].shape}"
@@ -578,6 +635,8 @@ class AdvancedVectorBTEngine:
         pattern_cache_path: str = "data/pattern_matrix.pkl",  # Path to precomputed patterns
         screener_cache_path: Optional[str] = None,
         screener_name: Optional[str] = None,
+        # NEW: Hypothesis A - Dynamic Sector Sizing
+        sector_multiplier_map: Optional[Dict[str, float]] = None,
         # NEW: Fee and Slippage settings
         fee_rate: float = 0.001,
         slippage_rate: float = 0.001,
@@ -707,6 +766,10 @@ class AdvancedVectorBTEngine:
         self.pattern_confidence_matrix: Optional[pd.DataFrame] = None
         self.pattern_type_matrix: Optional[pd.DataFrame] = None
 
+        # NEW: Hypothesis A - Dynamic Sector Sizing
+        self.use_sector_dynamic_sizing = sector_multiplier_map is not None
+        self.sector_multiplier_map = sector_multiplier_map if sector_multiplier_map else {}
+
         # Fee and Slippage settings (backward compatible with legacy keys)
         legacy_fee_rate = kwargs.pop("fees", None)
         legacy_slippage_rate = kwargs.pop("slippage", None)
@@ -734,7 +797,7 @@ class AdvancedVectorBTEngine:
         # Volume filters
         self.min_volume = min_volume  # NEW: Min daily volume
         self.min_dollar_volume = min_dollar_volume  # NEW: Min dollar volume
-        self.max_stop_pct = max_stop_pct / 100.0  # Convert to decimal
+        self.max_stop_pct = max_stop_pct / 100.0 if max_stop_pct > 1.0 else max_stop_pct
         self.earnings_days = earnings_days
         self.earnings_cushion = int(
             earnings_cushion
@@ -1994,6 +2057,7 @@ class AdvancedVectorBTEngine:
             ema21_arr=ema21_arr,
             adr_arr=adr_arr,
             rvol_arr=rvol_arr,
+            sector_multiplier_arr=numba_arrays["sector_multiplier"],
             entry_score_arr=entry_score_arr,
             spy_close_arr=spy_close_arr,
             spy_sma50_arr=spy_sma50_arr,
@@ -2549,99 +2613,81 @@ class AdvancedVectorBTEngine:
 
     def _build_sector_etf_mask(self, entries: pd.DataFrame) -> pd.DataFrame:
         """
-        Builds a boolean mask matching the shape of 'entries'.
-        True if the ticker's sector ETF is > SMA(sector_etf_sma_period) on that date.
+        Builds metadata for sectors and a boolean mask matching the shape of 'entries'.
+        Always populates self.ticker_to_etf_map and self.etf_dist_matrix.
+        Returns a mask of True if the filter is disabled.
         """
         import sqlite3
         import yfinance as yf
         from pathlib import Path
+        from src.utils.sector_rotation import SECTOR_MAP, SECTOR_ETFS, get_ticker_sector_mapping
 
         tickers = entries.columns.tolist()
-        sector_map = {}
         
-        # 1. Fetch sectors from DB
-        db_path = Path("data/ticker_cache.db")
-        if db_path.exists():
-            try:
-                conn = sqlite3.connect(db_path)
-                placeholders = ','.join(['?'] * len(tickers))
-                query = f"SELECT ticker, sector FROM universe WHERE ticker IN ({placeholders})"
-                df_sectors = pd.read_sql_query(query, conn, params=tickers)
-                sector_map = dict(zip(df_sectors['ticker'], df_sectors['sector']))
-            except Exception as e:
-                logger.error(f"Error reading sectors from DB: {e}")
-            finally:
-                conn.close()
-
-        # 2. Map Sector to ETF
-        SECTOR_TO_ETF = {
-            'Technology': 'XLK', 'Financial': 'XLF', 'Financial Services': 'XLF',
-            'Energy': 'XLE', 'Healthcare': 'XLV', 'Industrial': 'XLI', 'Industrials': 'XLI',
-            'Consumer Discretionary': 'XLY', 'Consumer Cyclical': 'XLY',
-            'Consumer Staples': 'XLP', 'Consumer Defensive': 'XLP',
-            'Materials': 'XLB', 'Basic Materials': 'XLB',
-            'Real Estate': 'XLRE', 'Utilities': 'XLU',
-            'Communication Services': 'XLC', 'Services': 'XLY',
-        }
+        # Use robust mapping (static map + DB)
+        ticker_to_etf = get_ticker_sector_mapping(tickers)
+        self.ticker_to_etf_map = ticker_to_etf
         
-        overrides = {
-            "AMD": "Technology", "NXPI": "Technology", "MCHP": "Technology", "ON": "Technology",
-            "INTC": "Technology", "HIMX": "Technology", "GOOG": "Technology", "DDOG": "Technology",
-            "TWLO": "Technology", "TEAM": "Technology", "GOOGL": "Technology",
-            "EPD": "Energy", "ET": "Energy", "SU": "Energy", "DVN": "Energy", "CTRA": "Energy", "HAL": "Energy"
-        }
-        for t, sec in overrides.items():
-            if t in tickers: sector_map[t] = sec
-
-        ticker_to_etf = {t: SECTOR_TO_ETF.get(sector_map.get(t, ""), None) for t in tickers}
         unique_etfs = list(set([etf for etf in ticker_to_etf.values() if etf is not None]))
 
-        mask = pd.DataFrame(False, index=entries.index, columns=entries.columns)
-
         if not unique_etfs:
-            logger.warning("No sector ETFs mapped. Sector ETF filter will block all trades.")
-            return mask
+            logger.warning("No sector ETFs mapped.")
+            return pd.DataFrame(True, index=entries.index, columns=entries.columns)
 
-        # 3. Download ETF data
-        start_date = (entries.index[0] - pd.Timedelta(days=self.sector_etf_sma_period * 2)).strftime("%Y-%m-%d")
+        # 3. Download/Load ETF data
+        start_date = (entries.index[0] - pd.Timedelta(days=self.sector_etf_sma_period * 3)).strftime("%Y-%m-%d")
         end_date = (entries.index[-1] + pd.Timedelta(days=5)).strftime("%Y-%m-%d")
         
         try:
-            logger.info(f"   Downloading data for {len(unique_etfs)} ETFs...")
-            etf_data = yf.download(unique_etfs, start=start_date, end=end_date, progress=False, auto_adjust=False)
-            if etf_data.empty:
-                logger.warning("ETF data download failed. Filter will block all trades.")
-                return mask
-                
-            close_prices = etf_data['Close'] if len(unique_etfs) > 1 else pd.DataFrame(etf_data['Close'], columns=unique_etfs)
+            cache = TickerCache()
+            etf_prices = {}
+            for etf in unique_etfs:
+                df_etf = cache.get_ohlcv(etf, start_date, end_date)
+                if df_etf is not None:
+                    # Normalizar columna y zona horaria
+                    s = df_etf['Close'].copy()
+                    if s.index.tz is not None:
+                        s.index = s.index.tz_localize(None)
+                    etf_prices[etf] = s
             
-            # Compute SMA
+            if not etf_prices:
+                return pd.DataFrame(True, index=entries.index, columns=entries.columns)
+                
+            close_prices = pd.DataFrame(etf_prices)
             sma_df = close_prices.rolling(window=self.sector_etf_sma_period).mean()
             
-            # Fix timezone before reindexing
-            if close_prices.index.tz is not None:
-                close_prices.index = close_prices.index.tz_localize(None)
-                sma_df.index = sma_df.index.tz_localize(None)
-                
-            # Reindex to match entries
-            close_aligned = close_prices.reindex(entries.index).ffill()
-            sma_aligned = sma_df.reindex(entries.index).ffill()
+            # Align with entries index (ensure no timezone)
+            idx_clean = entries.index
+            if idx_clean.tz is not None:
+                idx_clean = idx_clean.tz_localize(None)
+
+            close_aligned = close_prices.reindex(idx_clean).ffill()
+            sma_aligned = sma_df.reindex(idx_clean).ffill()
             
+            # Re-align entries index if needed
+            close_aligned.index = entries.index
+            sma_aligned.index = entries.index
+
+            # Store distance for audit/setups
+            self.etf_dist_matrix = (close_aligned / sma_aligned) - 1.0
+            
+            if not getattr(self, "use_sector_etf_filter", False):
+                return pd.DataFrame(True, index=entries.index, columns=entries.columns)
+
             # Build the condition: Close > SMA * (1 + threshold)
             etf_condition = close_aligned > (sma_aligned * (1.0 + self.sector_etf_dist_threshold))
             
-            # Apply to ticker mask
+            mask = pd.DataFrame(True, index=entries.index, columns=entries.columns)
             for ticker in tickers:
                 etf = ticker_to_etf.get(ticker)
                 if etf and etf in etf_condition.columns:
                     mask[ticker] = etf_condition[etf]
-                else:
-                    mask[ticker] = False # Block unmapped tickers or fallback to True? We will block if not mapped.
+            
+            return mask
                     
         except Exception as e:
             logger.error(f"Error computing sector ETF mask: {e}")
-            
-        return mask
+            return pd.DataFrame(True, index=entries.index, columns=entries.columns)
 
     def run_backtest(self) -> Dict:
         """Execute backtest with partial exits"""
@@ -3168,12 +3214,30 @@ class AdvancedVectorBTEngine:
                 if (price - stop) > max_stop_dist:
                     stop = round(price - max_stop_dist, 2)
 
+                # Enriquecer con info de sector si disponible
+                etf_sym = None
+                etf_dist = None
+                if hasattr(self, "ticker_to_etf_map") and self.ticker_to_etf_map:
+                    etf_sym = self.ticker_to_etf_map.get(ticker)
+                
+                if etf_sym and hasattr(self, "etf_dist_matrix") and self.etf_dist_matrix is not None:
+                    try:
+                        if etf_sym in self.etf_dist_matrix.columns:
+                            # last_day_idx is an integer (position), so we must use iloc
+                            dist_val = self.etf_dist_matrix[etf_sym].iloc[last_day_idx]
+                            if pd.notna(dist_val):
+                                etf_dist = float(dist_val)
+                    except Exception as e: 
+                        pass
+
                 setups.append({
                     "ticker": ticker,
-                    "date": str(last_day_idx)[:10],
+                    "date": str(self.close.index[last_day_idx])[:10],
                     "price": price,
                     "stop": stop,
-                    "signal_type": signal_label
+                    "signal_type": signal_label,
+                    "sector_etf": etf_sym,
+                    "sector_etf_dist": etf_dist
                 })
             except Exception as e:
                 logger.debug(f"Setup skip {ticker}: {e}")

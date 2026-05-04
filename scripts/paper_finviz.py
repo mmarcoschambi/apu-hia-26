@@ -33,6 +33,31 @@ from src.utils.market_context_live import get_market_context_live, apply_regime_
 from src.backtest.vectorbt_engine_advanced import AdvancedVectorBTEngine
 from src.data.ticker_cache import TickerCache
 from src.config.dynamic_config import load_production_config, flatten_config
+from src.utils.sector_rotation import SECTOR_MAP, SECTOR_ETFS
+
+def get_etf_dists(date_str: str, sma_period: int = 20) -> dict:
+    """Calcula las distancias a la SMA20 para todos los ETFs directamente, para asegurar metadatos en auditoria."""
+    import yfinance as yf
+    dists = {}
+    try:
+        as_of = pd.Timestamp(date_str)
+        start = (as_of - timedelta(days=sma_period * 2)).strftime("%Y-%m-%d")
+        end_fetch = (as_of + timedelta(days=1)).strftime("%Y-%m-%d")
+        
+        etf_data = yf.download(SECTOR_ETFS, start=start, end=end_fetch, progress=False)["Close"]
+        if isinstance(etf_data.columns, pd.MultiIndex):
+            etf_data.columns = etf_data.columns.get_level_values(0)
+            
+        for etf in SECTOR_ETFS:
+            if etf in etf_data.columns:
+                s = etf_data[etf].ffill()
+                if len(s) >= sma_period:
+                    sma = s.rolling(sma_period).mean().iloc[-1]
+                    dist = (s.iloc[-1] / sma) - 1.0
+                    dists[etf] = dist
+    except Exception as e:
+        logger.warning(f"Error fetching ETF dists for audit: {e}")
+    return dists
 
 OUT_DIR     = ROOT / "outputs" / "paper_finviz"
 DB_PATH     = ROOT / "data" / "ticker_cache.db"
@@ -47,21 +72,46 @@ INITIAL_CAPITAL = 100_000
 
 
 def pre_warm_cache(universe: list[str], date_str: str):
-    """Refresca los últimos 300 días para todo el universo en paralelo.
-    Esto asegura que tras un cleanup o para tickers nuevos tengamos historia 
-    suficiente para los indicadores (SMA200)."""
-    logger.info(f"    [Pre-warm] Refrescando cache (300d) para {len(universe)} tickers...")
+    """Refresca cache de forma inteligente: salta tickers que ya tienen data reciente."""
+    logger.info(f"    [Pre-warm] Analizando frescura de cache para {len(universe)} tickers...")
+    cache = TickerCache()
     as_of = pd.Timestamp(date_str)
     start = (as_of - timedelta(days=300)).strftime("%Y-%m-%d")
-    cache = TickerCache()
     
+    # 1. Obtener estado actual de la DB para estos tickers
+    conn = sqlite3.connect(cache.db_path)
+    placeholders = ",".join(["?"] * len(universe))
+    query = f"SELECT ticker, MAX(date) as last_date FROM ohlcv_cache WHERE ticker IN ({placeholders}) GROUP BY ticker"
+    df_status = pd.read_sql_query(query, conn, params=universe)
+    conn.close()
+    
+    last_dates = dict(zip(df_status["ticker"], df_status["last_date"]))
+    
+    # 2. Decidir cuales necesitan update
+    # Si la data llega hasta hace < 3 dias, asumimos que esta "fresca" para el pre-market
+    to_update = []
+    for t in universe:
+        if t not in last_dates:
+            to_update.append(t)
+            continue
+        
+        last_ts = pd.to_datetime(last_dates[t])
+        days_diff = (as_of - last_ts).days
+        if days_diff > 3: # Margen de seguridad para fines de semana
+            to_update.append(t)
+            
+    if not to_update:
+        logger.info("    [Pre-warm] Todo el universo esta al dia. Saltando descargas.")
+        return
+
+    logger.info(f"    [Pre-warm] Refrescando {len(to_update)} tickers desactualizados...")
     def _fetch(t):
         try:
             cache.get_ohlcv(t, start, date_str)
         except: pass
 
     with ThreadPoolExecutor(max_workers=10) as executor:
-        executor.map(_fetch, universe)
+        executor.map(_fetch, to_update)
     logger.info("    [Pre-warm] Cache actualizado.")
 
 # ── RS FINVIZ MODE ──────────────────────────────────────────────────────────
@@ -213,7 +263,9 @@ def scan_signals(combo_name, universe, date_str, rs_min_pct: float = RS_FINVIZ_M
                     "stop_loss": stop,
                     "position_size": size,
                     "rs_mode": "spy_fallback",
-                    "source": "finviz_setup"
+                    "source": "finviz_setup",
+                    "sector_etf": s.get("sector_etf"),
+                    "sector_etf_dist": s.get("sector_etf_dist")
                 })
 
         # 2. ── TRADES RECIENTES (Ejecutados en los últimos días) ────────────
@@ -331,16 +383,20 @@ def run_pre(date_str, drift_override, rs_min_pct: float = RS_FINVIZ_MIN_PCT_DEFA
                 with_set = {s["ticker"] for s in combo_sigs}
                 without_set = {s["ticker"] for s in combo_sigs_no_sector}
                 
+                dists_cache = get_etf_dists(date_str)
+                
                 for t in without_set:
                     passed_with = t in with_set
-                    # Intentar extraer info de sector del ticker (desde without_set signals)
-                    s_data = next((s for s in combo_sigs_no_sector if s["ticker"] == t), {})
                     
+                    t_str = str(t).strip()
+                    etf_sym = SECTOR_MAP.get(t_str, "")
+                    etf_dist = dists_cache.get(etf_sym, "") if etf_sym else ""
+
                     audit_data.append({
                         "ticker": t,
                         "mode": combo_name,
-                        "sector_etf": s_data.get("sector_etf"),
-                        "sector_etf_dist": s_data.get("sector_etf_dist"),
+                        "sector_etf": etf_sym,
+                        "sector_etf_dist": etf_dist,
                         "passed_with_sector": passed_with,
                         "reject_reason_with_sector": "passed" if passed_with else "tier2_fail:sector_etf:blocked",
                         "passed_without_sector": True,

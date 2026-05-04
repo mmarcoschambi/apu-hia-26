@@ -30,46 +30,107 @@ logger = logging.getLogger(__name__)
 
 # Sector mapping (ticker → sector ETF)
 SECTOR_MAP = {
-    # Technology
+    # Technology & Semi-conductors
     'AAPL': 'XLK', 'MSFT': 'XLK', 'NVDA': 'XLK', 'GOOGL': 'XLK', 'META': 'XLK',
     'TSLA': 'XLK', 'AMD': 'XLK', 'INTC': 'XLK', 'CRM': 'XLK', 'AVGO': 'XLK',
     'ORCL': 'XLK', 'ADBE': 'XLK', 'CSCO': 'XLK', 'ACN': 'XLK', 'QCOM': 'XLK',
-    
+    'MU': 'XLK', 'AMAT': 'XLK', 'LRCX': 'XLK', 'KLAC': 'XLK', 'SNPS': 'XLK',
+    'CDNS': 'XLK', 'PANW': 'XLK', 'FTNT': 'XLK', 'NOW': 'XLK', 'TEAM': 'XLK',
+    'ADSK': 'XLK', 'ZSCALER': 'XLK', 'DDOG': 'XLK', 'MDB': 'XLK', 'SHOP': 'XLK',
+    'NET': 'XLK', 'PLTR': 'XLK', 'MSTR': 'XLK', 'STX': 'XLK', 'WDC': 'XLK',
+    'ASML': 'XLK', 'TSM': 'XLK', 'ARM': 'XLK', 'FSLR': 'XLK', 'ENPH': 'XLK',
+    'ON': 'XLK', 'NXPI': 'XLK', 'MCHP': 'XLK', 'MPWR': 'XLK', 'SMCI': 'XLK',
+
     # Financials
     'JPM': 'XLF', 'BAC': 'XLF', 'WFC': 'XLF', 'GS': 'XLF', 'MS': 'XLF',
     'C': 'XLF', 'SCHW': 'XLF', 'BLK': 'XLF', 'AXP': 'XLF', 'USB': 'XLF',
-    
-    # Healthcare
+    'PYPL': 'XLF', 'SQ': 'XLF', 'COIN': 'XLF', 'HOOD': 'XLF', 'SOFI': 'XLF',
+
+    # Healthcare & Biotech
     'UNH': 'XLV', 'JNJ': 'XLV', 'PFE': 'XLV', 'ABBV': 'XLV', 'LLY': 'XLV',
     'MRK': 'XLV', 'TMO': 'XLV', 'ABT': 'XLV', 'DHR': 'XLV', 'CVS': 'XLV',
-    
-    # Consumer Discretionary
+    'ISRG': 'XLV', 'VRTX': 'XLV', 'REGN': 'XLV', 'NVO': 'XLV', 'ZTS': 'XLV',
+    'AMGN': 'XLV', 'GILD': 'XLV', 'BMY': 'XLV', 'SYK': 'XLV', 'BSX': 'XLV',
+    'VKTX': 'XLV', 'TVTX': 'XLV', 'LWLG': 'XLV',
+
+    # Consumer Discretionary (Growth)
     'AMZN': 'XLY', 'HD': 'XLY', 'NKE': 'XLY', 'MCD': 'XLY', 'SBUX': 'XLY',
     'TGT': 'XLY', 'LOW': 'XLY', 'DIS': 'XLY', 'BKNG': 'XLY', 'CMG': 'XLY',
-    
+    'LULU': 'XLY', 'CELH': 'XLY', 'MNST': 'XLY', 'DECK': 'XLY', 'ONON': 'XLY',
+    'ABNB': 'XLY', 'DASH': 'XLY', 'MAR': 'XLY', 'HLT': 'XLY', 'ORLY': 'XLY',
+    'ROKU': 'XLY', 'DKNG': 'XLY',
+
     # Energy
     'XOM': 'XLE', 'CVX': 'XLE', 'COP': 'XLE', 'SLB': 'XLE', 'EOG': 'XLE',
-    
+    'FANG': 'XLE', 'DVN': 'XLE', 'HES': 'XLE', 'HAL': 'XLE', 'VLO': 'XLE',
+
     # Communication Services
     'NFLX': 'XLC', 'GOOG': 'XLC', 'T': 'XLC', 'VZ': 'XLC', 'CMCSA': 'XLC',
-    
+    'META': 'XLC', 'DIS': 'XLC', 'SNAP': 'XLC', 'PINS': 'XLC', 'TTD': 'XLC',
+
     # Industrials
     'BA': 'XLI', 'CAT': 'XLI', 'GE': 'XLI', 'HON': 'XLI', 'UPS': 'XLI',
-    
+    'UNP': 'XLI', 'DE': 'XLI', 'MMM': 'XLI', 'LMT': 'XLI', 'RTX': 'XLI',
+    'PWR': 'XLI', 'ETN': 'XLI', 'VRT': 'XLI',
+
     # Consumer Staples
     'PG': 'XLP', 'KO': 'XLP', 'PEP': 'XLP', 'WMT': 'XLP', 'COST': 'XLP',
-    
+    'PM': 'XLP', 'MO': 'XLP', 'CL': 'XLP', 'EL': 'XLP', 'KDP': 'XLP',
+
     # Materials
     'LIN': 'XLB', 'APD': 'XLB', 'ECL': 'XLB', 'DD': 'XLB', 'NEM': 'XLB',
-    
+    'FCX': 'XLB', 'NUE': 'XLB', 'SHW': 'XLB', 'VALE': 'XLB', 'AA': 'XLB',
+
     # Utilities
     'NEE': 'XLU', 'DUK': 'XLU', 'SO': 'XLU', 'D': 'XLU', 'AEP': 'XLU',
-    
+    'VST': 'XLU', 'CEG': 'XLU', 'PEG': 'XLU',
+
     # Real Estate
     'PLD': 'XLRE', 'AMT': 'XLRE', 'CCI': 'XLRE', 'EQIX': 'XLRE', 'PSA': 'XLRE'
 }
-
 SECTOR_ETFS = ['XLK', 'XLF', 'XLV', 'XLE', 'XLY', 'XLP', 'XLI', 'XLB', 'XLRE', 'XLU', 'XLC']
+
+SECTOR_TO_ETF = {
+    'Technology': 'XLK', 'Information Technology': 'XLK',
+    'Financial': 'XLF', 'Financial Services': 'XLF', 'Financials': 'XLF',
+    'Energy': 'XLE', 'Healthcare': 'XLV', 'Health Care': 'XLV',
+    'Industrial': 'XLI', 'Industrials': 'XLI',
+    'Consumer Discretionary': 'XLY', 'Consumer Cyclical': 'XLY',
+    'Consumer Staples': 'XLP', 'Consumer Defensive': 'XLP',
+    'Materials': 'XLB', 'Basic Materials': 'XLB',
+    'Real Estate': 'XLRE', 'Utilities': 'XLU',
+    'Communication Services': 'XLC', 'Services': 'XLY', 'Communication': 'XLC'
+}
+
+def get_ticker_sector_mapping(tickers: List[str]) -> Dict[str, str]:
+    """
+    Robustly maps tickers to their corresponding sector ETF.
+    Uses centralized SECTOR_MAP first, then DB lookup.
+    """
+    mapping = {t: SECTOR_MAP.get(t) for t in tickers if t in SECTOR_MAP}
+    
+    remaining = [t for t in tickers if t not in mapping]
+    if not remaining:
+        return mapping
+        
+    # DB Lookup
+    import sqlite3
+    from pathlib import Path
+    db_path = Path("data/ticker_cache.db")
+    if db_path.exists():
+        try:
+            conn = sqlite3.connect(db_path)
+            placeholders = ','.join(['?'] * len(remaining))
+            query = f"SELECT ticker, sector FROM universe WHERE ticker IN ({placeholders})"
+            df = pd.read_sql_query(query, conn, params=remaining)
+            for _, row in df.iterrows():
+                t, sec = row['ticker'], row['sector']
+                etf = SECTOR_TO_ETF.get(sec)
+                if etf: mapping[t] = etf
+        except: pass
+        finally: conn.close()
+        
+    return mapping
 
 
 class SectorRotationAnalyzer:
