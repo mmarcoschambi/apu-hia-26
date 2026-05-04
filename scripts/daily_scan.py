@@ -10,6 +10,7 @@ Scanner diario PRO usando el motor validado del Walk-Forward.
 """
 
 import argparse
+import copy
 import json
 import logging
 import sqlite3
@@ -142,6 +143,12 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
             cfg_a.setdefault("screener", {})[k] = v
             cfg_b.setdefault("screener", {})[k] = v
 
+    # Configs contrafactuales para medir impacto marginal del filtro sectorial.
+    cfg_a_no_sector = copy.deepcopy(cfg_a)
+    cfg_b_no_sector = copy.deepcopy(cfg_b)
+    cfg_a_no_sector.setdefault("tier2_filters", {})["use_sector_etf_filter"] = False
+    cfg_b_no_sector.setdefault("tier2_filters", {})["use_sector_etf_filter"] = False
+
     # 6. Scan
     all_signals = []
     rejection_audit = []
@@ -171,6 +178,15 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
                 scan_date=date_str,
                 sector_etf_dist=dist
             )
+            da_no_sector = evaluate_ticker(
+                ticker=ticker,
+                df=df,
+                spy_df=spy_df,
+                combo_cfg=cfg_a_no_sector,
+                mode="A",
+                scan_date=date_str,
+                sector_etf_dist=dist
+            )
             db = evaluate_ticker(
                 ticker=ticker,
                 df=df,
@@ -180,17 +196,34 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
                 scan_date=date_str,
                 sector_etf_dist=dist
             )
+            db_no_sector = evaluate_ticker(
+                ticker=ticker,
+                df=df,
+                spy_df=spy_df,
+                combo_cfg=cfg_b_no_sector,
+                mode="B",
+                scan_date=date_str,
+                sector_etf_dist=dist
+            )
 
-            # Audit Rejections
-            for d in [da, db]:
-                if not d.passed:
-                    rejection_audit.append({
-                        "ticker": ticker,
-                        "mode": d.mode,
-                        "reject_reason": d.reject_reason,
-                        "sector_etf": etf_symbol,
-                        "sector_etf_dist": dist
-                    })
+            # Auditoria contrafactual: mismo ticker/mode con filtro ON vs OFF.
+            for with_sector, without_sector in [(da, da_no_sector), (db, db_no_sector)]:
+                blocked_by_sector = (
+                    without_sector.passed
+                    and not with_sector.passed
+                    and "sector_etf" in with_sector.reject_reason
+                )
+                rejection_audit.append({
+                    "ticker": ticker,
+                    "mode": with_sector.mode,
+                    "sector_etf": etf_symbol,
+                    "sector_etf_dist": dist,
+                    "passed_with_sector": with_sector.passed,
+                    "reject_reason_with_sector": with_sector.reject_reason,
+                    "passed_without_sector": without_sector.passed,
+                    "reject_reason_without_sector": without_sector.reject_reason,
+                    "blocked_by_sector": blocked_by_sector,
+                })
 
             # Mergear señales
             merged = merge_ab_signals(
