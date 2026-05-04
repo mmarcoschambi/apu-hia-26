@@ -45,6 +45,7 @@ class Tier2Metrics:
     dollar_vol_M: float = 0.0
     rs_ret: Optional[float] = None
     rs_percentile: Optional[float] = None
+    sector_etf_dist: Optional[float] = None  # NEW: Distancia del ETF sectorial a su SMA20
     close: float = 0.0
     spy_above_sma50: bool = True
     spy_above_sma200: bool = True
@@ -60,6 +61,7 @@ class Tier2Metrics:
             "dollar_vol_M": self.dollar_vol_M,
             "rs_ret": self.rs_ret,
             "rs_percentile": self.rs_percentile,
+            "sector_etf_dist": self.sector_etf_dist,
             "close": self.close,
             "spy_above_sma50": self.spy_above_sma50,
             "spy_above_sma200": self.spy_above_sma200,
@@ -352,6 +354,17 @@ def apply_tier2_filters(metrics: Tier2Metrics, t2_cfg: dict) -> tuple[bool, str]
         if not metrics.spy_above_sma200:
             return False, "tier2_fail:market_regime:spy_below_sma200"
 
+    # --- SECTOR ETF FILTER (NEW) ---
+    if t2_cfg.get("use_sector_etf_filter", False):
+        dist = metrics.sector_etf_dist
+        threshold = float(t2_cfg.get("sector_etf_dist_threshold", 0.0))
+        if dist is None:
+            # Si no hay data de ETF, ¿bloqueamos o pasamos?
+            # En backtest bloqueamos por precaución.
+            return False, "tier2_fail:sector_etf:data_missing"
+        if dist <= threshold:
+            return False, f"tier2_fail:sector_etf:dist:{dist:.4f}<={threshold:.4f}"
+
     return True, "passed"
 
 
@@ -364,6 +377,7 @@ def evaluate_ticker(
     skip_tier2: bool = False,
     rs_percentile: Optional[float] = None,
     scan_date: Optional[str] = None,
+    sector_etf_dist: Optional[float] = None,  # NEW
 ) -> SignalDecision:
     """
     Evaluación canónica de un ticker contra un combo.
@@ -448,6 +462,7 @@ def evaluate_ticker(
         )
 
     metrics = compute_tier2_metrics(df, spy_df)
+    metrics.sector_etf_dist = sector_etf_dist  # NEW
     
     # Intentar obtener RS Percentile si no se proporcionó uno
     if rs_percentile is not None:

@@ -26,6 +26,8 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 from src.signals.signal_engine import evaluate_ticker, merge_ab_signals
 from src.integration.combo_loader import load_combo_merged
 from src.integration.universe_builder import build_universe_for_fold
+from src.config.dynamic_config import load_production_config
+from src.utils.sector_rotation import SECTOR_MAP, SECTOR_ETFS
 
 logging.basicConfig(
     level=logging.INFO,
@@ -63,7 +65,41 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
 
     today = pd.Timestamp(date_str)
 
-    # 1. Construir universo idéntico al WF
+    # 1. Cargar Master Config (production_config.json)
+    try:
+        master_cfg = load_production_config()
+        t2_master = master_cfg.get("tier2_filters", {})
+        use_sector_filter = t2_master.get("use_sector_etf_filter", False)
+        logger.info(f"Master Config loaded. Sector Filter: {'ENABLED' if use_sector_filter else 'DISABLED'}")
+    except Exception as e:
+        logger.warning(f"Failed to load master config: {e}. Sector filter will be disabled.")
+        t2_master = {}
+        use_sector_filter = False
+
+    # 2. Pre-fetch ETF data si el filtro está activo
+    etf_dists = {}
+    if use_sector_filter:
+        import yfinance as yf
+        logger.info("Fetching Sector ETF data for filter...")
+        etf_start = (today - timedelta(days=60)).strftime("%Y-%m-%d")
+        try:
+            etf_data = yf.download(SECTOR_ETFS, start=etf_start, end=date_str, progress=False)["Close"]
+            if isinstance(etf_data.columns, pd.MultiIndex):
+                etf_data.columns = etf_data.columns.get_level_values(0)
+            
+            sma_period = t2_master.get("sector_etf_sma_period", 20)
+            for etf in SECTOR_ETFS:
+                if etf in etf_data.columns:
+                    series = etf_data[etf].ffill()
+                    if len(series) >= sma_period:
+                        sma = series.rolling(sma_period).mean().iloc[-1]
+                        current = series.iloc[-1]
+                        etf_dists[etf] = (current / sma) - 1
+            logger.info(f"  ETF Dists calculated for {len(etf_dists)} sectors.")
+        except Exception as e:
+            logger.error(f"Error fetching ETF data: {e}. Filter might fail for some tickers.")
+
+    # 3. Construir universo idéntico al WF
     logger.info(f"Building universe (limit={max_tickers})...")
     universe_start = (today - timedelta(days=730)).strftime("%Y-%m-%d")
     snap = build_universe_for_fold(
@@ -72,17 +108,17 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
     tickers = snap.tickers
     logger.info(f"Universe: {len(tickers)} tickers selected.")
 
-    # 2. Cargar SPY para régimen de mercado (SMA200 real)
+    # 4. Cargar SPY para régimen de mercado (SMA200 real)
     logger.info("Checking Market Regime (SMA200)...")
     spy_start = (today - timedelta(days=400)).strftime("%Y-%m-%d")
     spy_df = load_ohlcv("SPY", spy_start, date_str)
 
-    # 3. Cargar configuraciones de combos
+    # 5. Cargar configuraciones de combos
     logger.info("Loading combo configurations...")
     cfg_a, _ = load_combo_merged("combo_pure_momentum")
     cfg_b, _ = load_combo_merged("combo_stage2_breakout")
 
-    # Después de cargar los combos, aplicar overrides validados:
+    # Aplicar Overrides: Master Config gana, luego VALIDATED_OVERRIDES como fallback/legacy
     VALIDATED_OVERRIDES = {
         "min_rs_percentile": 75,
         "min_trend_intensity": 104,
@@ -91,8 +127,11 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
         "require_spy_above_sma200": True,
     }
 
+    # Combinar t2_master con VALIDATED_OVERRIDES
+    final_t2 = {**VALIDATED_OVERRIDES, **t2_master}
+
     # En cfg_a y cfg_b, inyectar en tier2_filters y screener.params
-    for k, v in VALIDATED_OVERRIDES.items():
+    for k, v in final_t2.items():
         cfg_a.setdefault("tier2_filters", {})[k] = v
         cfg_b.setdefault("tier2_filters", {})[k] = v
 
@@ -103,7 +142,7 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
             cfg_a.setdefault("screener", {})[k] = v
             cfg_b.setdefault("screener", {})[k] = v
 
-    # 4. Scan
+    # 6. Scan
     all_signals = []
     logger.info(f"Scanning {len(tickers)} tickers with A+B modes...")
 
@@ -117,6 +156,10 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
             if df.empty or len(df) < 65:
                 continue
 
+            # Obtener dist del ETF para este ticker
+            etf_symbol = SECTOR_MAP.get(ticker)
+            dist = etf_dists.get(etf_symbol) if etf_symbol else None
+
             # Evaluar ambos modos
             da = evaluate_ticker(
                 ticker=ticker,
@@ -125,6 +168,7 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
                 combo_cfg=cfg_a,
                 mode="A",
                 scan_date=date_str,
+                sector_etf_dist=dist
             )
             db = evaluate_ticker(
                 ticker=ticker,
@@ -133,6 +177,7 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
                 combo_cfg=cfg_b,
                 mode="B",
                 scan_date=date_str,
+                sector_etf_dist=dist
             )
 
             # Mergear señales

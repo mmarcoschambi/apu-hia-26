@@ -40,6 +40,8 @@ from src.signals.signal_engine import (  # noqa: E402
     evaluate_ticker,
     merge_ab_signals,
 )
+from src.config.dynamic_config import load_production_config
+from src.utils.sector_rotation import SECTOR_MAP, SECTOR_ETFS
 
 logging.basicConfig(
     level=logging.INFO,
@@ -138,6 +140,7 @@ def scan_combo(
     all_closes: dict[str, pd.Series],
     mode: SignalMode = "A",
     skip_tier2: bool = False,
+    etf_dists: dict[str, float] | None = None,
 ) -> list[SignalDecision]:
     signals: list[SignalDecision] = []
 
@@ -146,8 +149,14 @@ def scan_combo(
         if df is None or len(df) < 65:
             continue
         rs_pct = _compute_rs_percentile(ticker, all_closes, RS_LOOKBACK)
+        
+        # Obtener dist del ETF
+        etf_symbol = SECTOR_MAP.get(ticker)
+        dist = etf_dists.get(etf_symbol) if etf_dists and etf_symbol else None
+        
         decision = evaluate_ticker(
-            ticker, df, spy_df, combo_cfg, mode, skip_tier2, rs_pct
+            ticker, df, spy_df, combo_cfg, mode, skip_tier2, rs_pct,
+            sector_etf_dist=dist
         )
         decision.mode = mode
         if decision.passed:
@@ -214,6 +223,41 @@ def run_combo_scan(
     logger.info(
         f"Combo Scanner | scan_date={today} | universe={universe_source} | mode={mode}"
     )
+
+    # 1. Cargar Master Config (production_config.json)
+    try:
+        master_cfg = load_production_config()
+        t2_master = master_cfg.get("tier2_filters", {})
+        use_sector_filter = t2_master.get("use_sector_etf_filter", False)
+        logger.info(f"Master Config loaded. Sector Filter: {'ENABLED' if use_sector_filter else 'DISABLED'}")
+    except Exception as e:
+        logger.warning(f"Failed to load master config: {e}. Sector filter will be disabled.")
+        t2_master = {}
+        use_sector_filter = False
+
+    # 2. Pre-fetch ETF data si el filtro está activo
+    etf_dists = {}
+    if use_sector_filter:
+        import yfinance as yf
+        logger.info("Fetching Sector ETF data for filter...")
+        as_of = pd.Timestamp(today)
+        etf_start = (as_of - timedelta(days=60)).strftime("%Y-%m-%d")
+        try:
+            etf_data = yf.download(SECTOR_ETFS, start=etf_start, end=today, progress=False)["Close"]
+            if isinstance(etf_data.columns, pd.MultiIndex):
+                etf_data.columns = etf_data.columns.get_level_values(0)
+            
+            sma_period = t2_master.get("sector_etf_sma_period", 20)
+            for etf in SECTOR_ETFS:
+                if etf in etf_data.columns:
+                    series = etf_data[etf].ffill()
+                    if len(series) >= sma_period:
+                        sma = series.rolling(sma_period).mean().iloc[-1]
+                        current = series.iloc[-1]
+                        etf_dists[etf] = (current / sma) - 1
+            logger.info(f"  ETF Dists calculated for {len(etf_dists)} sectors.")
+        except Exception as e:
+            logger.error(f"Error fetching ETF data: {e}. Filter might fail for some tickers.")
 
     csv_path = Path(universe_file) if universe_file else None
     universe = load_scan_universe(

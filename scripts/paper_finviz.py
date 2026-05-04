@@ -32,6 +32,8 @@ from src.data.finviz_universe_provider import fetch_finviz_universe
 from src.utils.market_context_live import get_market_context_live, apply_regime_override
 from src.backtest.vectorbt_engine_advanced import AdvancedVectorBTEngine
 from src.data.ticker_cache import TickerCache
+from src.config.dynamic_config import load_production_config, flatten_config
+
 OUT_DIR     = ROOT / "outputs" / "paper_finviz"
 DB_PATH     = ROOT / "data" / "ticker_cache.db"
 RESULTS_DIR = ROOT / "outputs" / "best_combos_run"
@@ -85,10 +87,23 @@ def _fmt_price(value, default: str = "N/A"):
         return default
 
 def load_combo_params(name):
-    f = RESULTS_DIR / f"{name}_config.json"
-    if not f.exists():
-        raise FileNotFoundError(f"Config no encontrado: {f}")
-    return json.load(open(f))
+    """Carga parametros desde config/production_config.json (Source of Truth)"""
+    try:
+        config = load_production_config()
+        # Inyectar version flat para compatibilidad con build_engine_kwargs
+        params = {
+            "tier1_strategy": config.get("tier1_strategy", {}),
+            "tier2_filters": config.get("tier2_filters", {}),
+            "tier3_risk": config.get("tier3_risk", {})
+        }
+        logger.info(f"    [Config] Cargados parametros de produccion para {name}")
+        return params
+    except Exception as e:
+        logger.warning(f"    [Config] Fallo carga production_config.json, usando fallback: {e}")
+        f = RESULTS_DIR / f"{name}_config.json"
+        if not f.exists():
+            raise FileNotFoundError(f"Config no encontrado: {f}")
+        return json.load(open(f))
 
 def build_engine_kwargs(combo_name, params, rs_min_pct: float = RS_FINVIZ_MIN_PCT_DEFAULT):
     combo_cfg = json.load(open(COMBOS_DIR / f"{combo_name}.json"))
@@ -109,7 +124,8 @@ def build_engine_kwargs(combo_name, params, rs_min_pct: float = RS_FINVIZ_MIN_PC
     T2 = {"min_rvol","min_adr","max_dist_sma20","min_dollar_volume","min_volume",
           "min_consolidation_days","use_rs_percentile","min_rs_percentile",
           "rs_lookback_days","require_positive_rs","use_pattern_filter",
-          "min_pattern_confidence","pattern_cache_path"}
+          "min_pattern_confidence","pattern_cache_path",
+          "use_sector_etf_filter", "sector_etf_dist_threshold", "sector_etf_sma_period"}
     base = {**{k:v for k,v in tier2.items() if k in T2}, **tier3e, **tier1,
             "signal_type": signal_type, "screener_name": screener_name,
             "screener_cache_path": None,
