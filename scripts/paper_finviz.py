@@ -21,7 +21,7 @@ Usage:
     python3 scripts/paper_finviz.py --phase pre --rs-min 60   # aflojar RS threshold
 Outputs -> outputs/paper_finviz/
 """
-import argparse, json, logging, sys, sqlite3
+import argparse, copy, json, logging, sys, sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
@@ -105,7 +105,7 @@ def load_combo_params(name):
             raise FileNotFoundError(f"Config no encontrado: {f}")
         return json.load(open(f))
 
-def build_engine_kwargs(combo_name, params, rs_min_pct: float = RS_FINVIZ_MIN_PCT_DEFAULT):
+def build_engine_kwargs(combo_name, params, rs_min_pct: float = RS_FINVIZ_MIN_PCT_DEFAULT, force_sector_off: bool = False):
     combo_cfg = json.load(open(COMBOS_DIR / f"{combo_name}.json"))
     tier2 = params.get("tier2_filters", {})
     tier1 = params.get("tier1_strategy", {})
@@ -126,7 +126,12 @@ def build_engine_kwargs(combo_name, params, rs_min_pct: float = RS_FINVIZ_MIN_PC
           "rs_lookback_days","require_positive_rs","use_pattern_filter",
           "min_pattern_confidence","pattern_cache_path",
           "use_sector_etf_filter", "sector_etf_dist_threshold", "sector_etf_sma_period"}
-    base = {**{k:v for k,v in tier2.items() if k in T2}, **tier3e, **tier1,
+    
+    t2_final = {k:v for k,v in tier2.items() if k in T2}
+    if force_sector_off:
+        t2_final["use_sector_etf_filter"] = False
+
+    base = {**t2_final, **tier3e, **tier1,
             "signal_type": signal_type, "screener_name": screener_name,
             "screener_cache_path": None,
             "mode": "production", "risk_dollars": risk_dollars,
@@ -150,9 +155,9 @@ def build_engine_kwargs(combo_name, params, rs_min_pct: float = RS_FINVIZ_MIN_PC
     )
     return base
 
-def scan_signals(combo_name, universe, date_str, rs_min_pct: float = RS_FINVIZ_MIN_PCT_DEFAULT):
+def scan_signals(combo_name, universe, date_str, rs_min_pct: float = RS_FINVIZ_MIN_PCT_DEFAULT, force_sector_off: bool = False):
     params  = load_combo_params(combo_name)
-    kwargs  = build_engine_kwargs(combo_name, params, rs_min_pct=rs_min_pct)
+    kwargs  = build_engine_kwargs(combo_name, params, rs_min_pct=rs_min_pct, force_sector_off=force_sector_off)
     as_of   = pd.Timestamp(date_str)
     start   = (as_of - pd.Timedelta(days=300)).strftime("%Y-%m-%d")
     engine  = AdvancedVectorBTEngine(universe=universe, start_date=start, end_date=date_str,
@@ -307,12 +312,42 @@ def run_pre(date_str, drift_override, rs_min_pct: float = RS_FINVIZ_MIN_PCT_DEFA
     pre_warm_cache(universe, date_str)
 
     signals = []
+    audit_data = []
     if reg_ok and universe:
         for combo_name in ACTIVE_COMBOS:
             logger.info(f"\n  [3/3] Scanning {combo_name} sobre universo Finviz...")
-            combo_sigs = scan_signals(combo_name, universe, date_str, rs_min_pct=rs_min_pct)
+            
+            # 1. Run with sector filter (as configured)
+            combo_sigs = scan_signals(combo_name, universe, date_str, rs_min_pct=rs_min_pct, force_sector_off=False)
             signals.extend(combo_sigs)
             logger.info(f"    Senales {combo_name}: {len(combo_sigs)}")
+
+            # 2. Audit Contrafactual (Solo si el filtro esta activo en config)
+            params = load_combo_params(combo_name)
+            if params.get("tier2_filters", {}).get("use_sector_etf_filter", False):
+                logger.info(f"    [Audit] Generando corrida contrafactual para {combo_name}...")
+                combo_sigs_no_sector = scan_signals(combo_name, universe, date_str, rs_min_pct=rs_min_pct, force_sector_off=True)
+                
+                with_set = {s["ticker"] for s in combo_sigs}
+                without_set = {s["ticker"] for s in combo_sigs_no_sector}
+                
+                for t in without_set:
+                    passed_with = t in with_set
+                    # Intentar extraer info de sector del ticker (desde without_set signals)
+                    s_data = next((s for s in combo_sigs_no_sector if s["ticker"] == t), {})
+                    
+                    audit_data.append({
+                        "ticker": t,
+                        "mode": combo_name,
+                        "sector_etf": s_data.get("sector_etf"),
+                        "sector_etf_dist": s_data.get("sector_etf_dist"),
+                        "passed_with_sector": passed_with,
+                        "reject_reason_with_sector": "passed" if passed_with else "tier2_fail:sector_etf:blocked",
+                        "passed_without_sector": True,
+                        "reject_reason_without_sector": "passed",
+                        "blocked_by_sector": not passed_with,
+                        "source": "finviz_scan"
+                    })
             
         # Deduplicar por ticker, preferir el combo con mayor position_size
         seen = {}
@@ -324,6 +359,15 @@ def run_pre(date_str, drift_override, rs_min_pct: float = RS_FINVIZ_MIN_PCT_DEFA
 
         for s in signals:
             logger.info(f"      {s['ticker']:6s} ({s['combo']}) entrada=${s['entry_price']:.2f}  stop=${s['stop_loss']:.2f}")
+
+    if audit_data:
+        day_dir = OUT_DIR / date_str
+        day_dir.mkdir(parents=True, exist_ok=True)
+        audit_df = pd.DataFrame(audit_data)
+        audit_path = day_dir / "rejection_audit.csv"
+        audit_df.to_csv(audit_path, index=False)
+        logger.info(f"    [Audit] Guardada auditoria en {audit_path}")
+
     elif not reg_ok:
         logger.warning("  [3/3] SKIP - regime bloqueado")
     day_dir = OUT_DIR / date_str

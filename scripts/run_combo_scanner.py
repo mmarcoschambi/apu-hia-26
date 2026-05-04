@@ -19,6 +19,7 @@ Uso:
 """
 
 import argparse
+import copy
 import json
 import logging
 import sqlite3
@@ -324,10 +325,16 @@ def run_combo_scan(
     }
     final_t2 = {**VALIDATED_OVERRIDES, **t2_master}
 
+    all_rejections = []
+
     for name, cfg in configs.items():
         logger.info(f"  Scanning {name}...")
         effective_mode = "A" if name == "combo_pure_momentum" else "B"
         
+        # Config contrafactual
+        cfg_no_sector = copy.deepcopy(cfg)
+        cfg_no_sector.setdefault("tier2_filters", {})["use_sector_etf_filter"] = False
+
         # Inyectar Overrides en la config del agente
         for k, v in final_t2.items():
             cfg.setdefault("tier2_filters", {})[k] = v
@@ -339,6 +346,38 @@ def run_combo_scan(
             cfg, universe, df_map, spy_df, all_closes, effective_mode, skip_tier2,
             etf_dists=etf_dists
         )
+        
+        # Reconstruir impacto marginal para auditoria
+        # Reconstruir impacto marginal para auditoria
+        for ticker in universe:
+            if ticker not in df_map:
+                continue
+            rs_pct = _compute_rs_percentile(ticker, all_closes, RS_LOOKBACK)
+            etf_symbol = SECTOR_MAP.get(ticker)
+            dist = etf_dists.get(etf_symbol) if etf_dists and etf_symbol else None
+
+            d_with = evaluate_ticker(
+                ticker, df_map[ticker], spy_df, cfg, effective_mode, skip_tier2, 
+                rs_percentile=rs_pct, sector_etf_dist=dist
+            )
+            d_without = evaluate_ticker(
+                ticker, df_map[ticker], spy_df, cfg_no_sector, effective_mode, skip_tier2,
+                rs_percentile=rs_pct, sector_etf_dist=dist
+            )
+            
+            is_blocked = d_without.passed and not d_with.passed and "sector_etf" in d_with.reject_reason
+            all_rejections.append({
+                "ticker": ticker,
+                "mode": effective_mode,
+                "passed_with_sector": d_with.passed,
+                "reject_reason_with_sector": d_with.reject_reason,
+                "passed_without_sector": d_without.passed,
+                "reject_reason_without_sector": d_without.reject_reason,
+                "blocked_by_sector": is_blocked,
+                "sector_etf": etf_symbol,
+                "sector_etf_dist": dist
+            })
+
         agent_results[name] = decisions
         all_signals.extend(decisions)
         logger.info(f"  {name}: {len(decisions)} signals")
@@ -352,14 +391,19 @@ def run_combo_scan(
 
     all_signals.sort(key=lambda x: x.entry_score, reverse=True)
 
-    if not dry_run and all_signals:
+    if not dry_run:
         out_dir = OUTPUT_DIR / today
         out_dir.mkdir(parents=True, exist_ok=True)
+        
+        if all_rejections:
+            pd.DataFrame(all_rejections).to_csv(out_dir / "rejection_audit.csv", index=False)
+            logger.info(f"Saved {len(all_rejections)} rejection records to {out_dir / 'rejection_audit.csv'}")
 
-        for name, decisions in agent_results.items():
-            if decisions:
-                df_rows = pd.DataFrame([_decision_to_row(d) for d in decisions])
-                df_rows.to_csv(out_dir / f"{name}.csv", index=False)
+        if all_signals:
+            for name, decisions in agent_results.items():
+                if decisions:
+                    df_rows = pd.DataFrame([_decision_to_row(d) for d in decisions])
+                    df_rows.to_csv(out_dir / f"{name}.csv", index=False)
 
         if mode == "A_BOTH":
             pd.DataFrame([_decision_to_row(d) for d in all_signals]).to_csv(
