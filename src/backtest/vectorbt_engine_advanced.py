@@ -509,6 +509,7 @@ class AdvancedVectorBTEngine:
         require_positive_rs: bool = False,  # CONVERGENCE: False by default (was True)
         use_sector_etf_filter: bool = False,  # OFF por default - Ablation stage 2
         sector_etf_sma_period: int = 20,
+        sector_etf_dist_threshold: float = 0.0,  # NEW: Margin above SMA20 (e.g. 0.02 = 2%)
         # Market regime parameters (NEW)
         use_market_regime_filter: bool = False,  # Enable market context filter
         block_trades_in_stage3: bool = True,  # Block longs in distribution
@@ -646,6 +647,7 @@ class AdvancedVectorBTEngine:
         self.sector_top_percentile = sector_top_percentile
         self.use_sector_etf_filter = use_sector_etf_filter
         self.sector_etf_sma_period = sector_etf_sma_period
+        self.sector_etf_dist_threshold = sector_etf_dist_threshold
 
         # Market regime parameters (NEW)
         self.use_market_regime_filter = use_market_regime_filter
@@ -2625,8 +2627,8 @@ class AdvancedVectorBTEngine:
             close_aligned = close_prices.reindex(entries.index).ffill()
             sma_aligned = sma_df.reindex(entries.index).ffill()
             
-            # Build the condition: Close > SMA
-            etf_condition = close_aligned > sma_aligned
+            # Build the condition: Close > SMA * (1 + threshold)
+            etf_condition = close_aligned > (sma_aligned * (1.0 + self.sector_etf_dist_threshold))
             
             # Apply to ticker mask
             for ticker in tickers:
