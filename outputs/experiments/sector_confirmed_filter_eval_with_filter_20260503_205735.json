@@ -1,0 +1,96 @@
+{
+  "experiment": "Sector Confirmed Filter \u2014 ETF > SMA20 ablation",
+  "hypothesis": "ETF > SMA20 as entry condition improves Sharpe(R) of combo_pure_momentum",
+  "derived_from": "rotation_leaders_eval_20260502_223920 \u2014 late_entry/baseline > early_leader",
+  "period": "2025-01-01 to 2026-04-30",
+  "use_sector_etf_filter": true,
+  "summary": {
+    "sector_confirmed": {
+      "count": 10176,
+      "metrics_5d": {
+        "trades": 10053,
+        "win_rate": 52.94,
+        "pf": 2.168,
+        "sharpe_r": 0.315,
+        "median_ret_pct": 0.25,
+        "mean_ret_pct": 2.02
+      },
+      "metrics_10d": {
+        "trades": 9897,
+        "win_rate": 53.98,
+        "pf": 2.76,
+        "sharpe_r": 0.287,
+        "median_ret_pct": 0.51,
+        "mean_ret_pct": 4.05
+      },
+      "metrics_20d": {
+        "trades": 9599,
+        "win_rate": 55.29,
+        "pf": 3.205,
+        "sharpe_r": 0.417,
+        "median_ret_pct": 0.9,
+        "mean_ret_pct": 7.22
+      }
+    },
+    "sector_not_confirmed": {
+      "count": 0,
+      "metrics_5d": null,
+      "metrics_10d": null,
+      "metrics_20d": null
+    },
+    "all_signals": {
+      "count": 10176,
+      "metrics_5d": {
+        "trades": 10053,
+        "win_rate": 52.94,
+        "pf": 2.168,
+        "sharpe_r": 0.315,
+        "median_ret_pct": 0.25,
+        "mean_ret_pct": 2.02
+      },
+      "metrics_10d": {
+        "trades": 9897,
+        "win_rate": 53.98,
+        "pf": 2.76,
+        "sharpe_r": 0.287,
+        "median_ret_pct": 0.51,
+        "mean_ret_pct": 4.05
+      },
+      "metrics_20d": {
+        "trades": 9599,
+        "win_rate": 55.29,
+        "pf": 3.205,
+        "sharpe_r": 0.417,
+        "median_ret_pct": 0.9,
+        "mean_ret_pct": 7.22
+      }
+    }
+  },
+  "temporal_distribution": {
+    "true": {
+      "2025-01": 630,
+      "2025-02": 392,
+      "2025-03": 188,
+      "2025-04": 203,
+      "2025-05": 860,
+      "2025-06": 561,
+      "2025-07": 1050,
+      "2025-08": 603,
+      "2025-09": 613,
+      "2025-10": 638,
+      "2025-11": 474,
+      "2025-12": 981,
+      "2026-01": 1231,
+      "2026-02": 992,
+      "2026-03": 184,
+      "2026-04": 576
+    }
+  },
+  "config": {
+    "rs_threshold": 58,
+    "min_dollar_volume": 5000000,
+    "breakout_window": 20
+  },
+  "gate_for_production": "delta Sharpe(R) >= +0.10 on BOTH 10d and 20d vs baseline",
+  "timestamp": "2026-05-03T20:57:35.195145"
+}
