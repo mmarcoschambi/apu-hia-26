@@ -1,0 +1,32 @@
+[
+  {
+    "period": "full_sample",
+    "trades": 3334,
+    "gross_pnl_base": 975660.13,
+    "sharpe_r_base": 0.292,
+    "gross_pnl_adj": 1220224.8,
+    "sharpe_r_adj": 0.366,
+    "avg_risk_multiplier": 0.969,
+    "profit_factor_adj": 1.33
+  },
+  {
+    "period": "train",
+    "trades": 2554,
+    "gross_pnl_base": 722118.48,
+    "sharpe_r_base": 0.29,
+    "gross_pnl_adj": 839556.02,
+    "sharpe_r_adj": 0.329,
+    "avg_risk_multiplier": 0.975,
+    "profit_factor_adj": 1.3
+  },
+  {
+    "period": "validation",
+    "trades": 780,
+    "gross_pnl_base": 253541.65,
+    "sharpe_r_base": 0.299,
+    "gross_pnl_adj": 380668.78,
+    "sharpe_r_adj": 0.483,
+    "avg_risk_multiplier": 0.947,
+    "profit_factor_adj": 1.43
+  }
+]

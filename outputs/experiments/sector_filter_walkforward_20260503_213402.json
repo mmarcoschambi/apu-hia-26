@@ -1,0 +1,126 @@
+{
+  "experiment": "Sector Filter Walk-Forward Validation",
+  "train_period": [
+    "2025-01-01",
+    "2025-09-30"
+  ],
+  "validation_period": [
+    "2025-10-01",
+    "2026-04-30"
+  ],
+  "threshold_grid": [
+    0.0,
+    0.005,
+    0.01,
+    0.015,
+    0.02,
+    0.03
+  ],
+  "selected_threshold": 0.0,
+  "train_results": [
+    {
+      "threshold": 0.0,
+      "threshold_pct": 0.0,
+      "count": 5100,
+      "sharpe_10d": 0.138,
+      "sharpe_20d": 0.368,
+      "delta_10d": 0.018,
+      "delta_20d": 0.078
+    },
+    {
+      "threshold": 0.005,
+      "threshold_pct": 0.5,
+      "count": 4673,
+      "sharpe_10d": 0.136,
+      "sharpe_20d": 0.376,
+      "delta_10d": 0.016,
+      "delta_20d": 0.086
+    },
+    {
+      "threshold": 0.01,
+      "threshold_pct": 1.0,
+      "count": 4114,
+      "sharpe_10d": 0.131,
+      "sharpe_20d": 0.385,
+      "delta_10d": 0.011,
+      "delta_20d": 0.095
+    },
+    {
+      "threshold": 0.015,
+      "threshold_pct": 1.5,
+      "count": 3533,
+      "sharpe_10d": 0.106,
+      "sharpe_20d": 0.383,
+      "delta_10d": -0.014,
+      "delta_20d": 0.093
+    },
+    {
+      "threshold": 0.02,
+      "threshold_pct": 2.0,
+      "count": 2957,
+      "sharpe_10d": 0.123,
+      "sharpe_20d": 0.411,
+      "delta_10d": 0.003,
+      "delta_20d": 0.121
+    },
+    {
+      "threshold": 0.03,
+      "threshold_pct": 3.0,
+      "count": 1720,
+      "sharpe_10d": 0.017,
+      "sharpe_20d": 0.281,
+      "delta_10d": -0.103,
+      "delta_20d": -0.009
+    }
+  ],
+  "validation": {
+    "baseline": {
+      "5": {
+        "trades": 5951,
+        "win_rate": 52.71,
+        "pf": 1.363,
+        "sharpe_r": 0.308
+      },
+      "10": {
+        "trades": 5788,
+        "win_rate": 53.32,
+        "pf": 1.559,
+        "sharpe_r": 0.499
+      },
+      "20": {
+        "trades": 5469,
+        "win_rate": 54.89,
+        "pf": 2.463,
+        "sharpe_r": 0.299
+      }
+    },
+    "filtered": {
+      "5": {
+        "trades": 4953,
+        "win_rate": 53.16,
+        "pf": 1.417,
+        "sharpe_r": 0.568
+      },
+      "10": {
+        "trades": 4797,
+        "win_rate": 54.53,
+        "pf": 1.699,
+        "sharpe_r": 0.885
+      },
+      "20": {
+        "trades": 4499,
+        "win_rate": 56.35,
+        "pf": 2.586,
+        "sharpe_r": 0.577
+      }
+    },
+    "delta": {
+      "5": 0.26,
+      "10": 0.386,
+      "20": 0.278
+    }
+  },
+  "gate": "GO if delta_10d >= 0.1 and delta_20d >= 0.1 in validation",
+  "decision": "GO",
+  "timestamp": "2026-05-03T21:34:02.738379"
+}

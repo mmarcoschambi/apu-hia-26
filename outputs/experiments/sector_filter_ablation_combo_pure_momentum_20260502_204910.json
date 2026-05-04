@@ -1,0 +1,254 @@
+{
+  "run_at": "2026-05-02T20:49:10.107196",
+  "combo": "combo_pure_momentum",
+  "variants": [
+    {
+      "name": "S0_baseline_off",
+      "folds": [
+        {
+          "fold": 1,
+          "oos_start": "2022-01-01",
+          "oos_end": "2022-12-31",
+          "trades": 1,
+          "sharpe": 0.84,
+          "pf": 0.0,
+          "win_rate": 0.0,
+          "max_dd": 0.3,
+          "total_return": 0.6,
+          "status": "ok"
+        },
+        {
+          "fold": 2,
+          "oos_start": "2023-01-01",
+          "oos_end": "2023-12-31",
+          "trades": 238,
+          "sharpe": 0.105,
+          "pf": 0.876,
+          "win_rate": 50.0,
+          "max_dd": 9.62,
+          "total_return": 0.54,
+          "status": "ok"
+        },
+        {
+          "fold": 3,
+          "oos_start": "2024-01-01",
+          "oos_end": "2024-12-31",
+          "trades": 248,
+          "sharpe": 0.998,
+          "pf": 10.961,
+          "win_rate": 52.1,
+          "max_dd": 5.38,
+          "total_return": 3.53,
+          "status": "ok"
+        },
+        {
+          "fold": 4,
+          "oos_start": "2025-01-01",
+          "oos_end": "2025-12-31",
+          "trades": 280,
+          "sharpe": 0.299,
+          "pf": 1.079,
+          "win_rate": 55.0,
+          "max_dd": 3.34,
+          "total_return": 1.51,
+          "status": "ok"
+        }
+      ],
+      "aggregate": {
+        "folds": 4,
+        "trades_total": 767,
+        "sharpe_mean": 0.56,
+        "sharpe_min": 0.105,
+        "pf_mean": 3.229,
+        "pf_min": 0.0,
+        "return_mean": 1.54
+      }
+    },
+    {
+      "name": "S1_sma20",
+      "folds": [
+        {
+          "fold": 1,
+          "oos_start": "2022-01-01",
+          "oos_end": "2022-12-31",
+          "trades": 0,
+          "sharpe": 0.0,
+          "pf": 0.0,
+          "win_rate": 0.0,
+          "max_dd": 0.0,
+          "total_return": 0.0,
+          "status": "ok"
+        },
+        {
+          "fold": 2,
+          "oos_start": "2023-01-01",
+          "oos_end": "2023-12-31",
+          "trades": 0,
+          "sharpe": 0.0,
+          "pf": 0.0,
+          "win_rate": 0.0,
+          "max_dd": 0.0,
+          "total_return": 0.0,
+          "status": "ok"
+        },
+        {
+          "fold": 3,
+          "oos_start": "2024-01-01",
+          "oos_end": "2024-12-31",
+          "trades": 0,
+          "sharpe": 0.0,
+          "pf": 0.0,
+          "win_rate": 0.0,
+          "max_dd": 0.0,
+          "total_return": 0.0,
+          "status": "ok"
+        },
+        {
+          "fold": 4,
+          "oos_start": "2025-01-01",
+          "oos_end": "2025-12-31",
+          "trades": 0,
+          "sharpe": 0.0,
+          "pf": 0.0,
+          "win_rate": 0.0,
+          "max_dd": 0.0,
+          "total_return": 0.0,
+          "status": "ok"
+        }
+      ],
+      "aggregate": {
+        "folds": 4,
+        "trades_total": 0,
+        "sharpe_mean": 0.0,
+        "sharpe_min": 0.0,
+        "pf_mean": 0.0,
+        "pf_min": 0.0,
+        "return_mean": 0.0
+      }
+    },
+    {
+      "name": "S2_sma50",
+      "folds": [
+        {
+          "fold": 1,
+          "oos_start": "2022-01-01",
+          "oos_end": "2022-12-31",
+          "trades": 0,
+          "sharpe": 0.0,
+          "pf": 0.0,
+          "win_rate": 0.0,
+          "max_dd": 0.0,
+          "total_return": 0.0,
+          "status": "ok"
+        },
+        {
+          "fold": 2,
+          "oos_start": "2023-01-01",
+          "oos_end": "2023-12-31",
+          "trades": 0,
+          "sharpe": 0.0,
+          "pf": 0.0,
+          "win_rate": 0.0,
+          "max_dd": 0.0,
+          "total_return": 0.0,
+          "status": "ok"
+        },
+        {
+          "fold": 3,
+          "oos_start": "2024-01-01",
+          "oos_end": "2024-12-31",
+          "trades": 0,
+          "sharpe": 0.0,
+          "pf": 0.0,
+          "win_rate": 0.0,
+          "max_dd": 0.0,
+          "total_return": 0.0,
+          "status": "ok"
+        },
+        {
+          "fold": 4,
+          "oos_start": "2025-01-01",
+          "oos_end": "2025-12-31",
+          "trades": 0,
+          "sharpe": 0.0,
+          "pf": 0.0,
+          "win_rate": 0.0,
+          "max_dd": 0.0,
+          "total_return": 0.0,
+          "status": "ok"
+        }
+      ],
+      "aggregate": {
+        "folds": 4,
+        "trades_total": 0,
+        "sharpe_mean": 0.0,
+        "sharpe_min": 0.0,
+        "pf_mean": 0.0,
+        "pf_min": 0.0,
+        "return_mean": 0.0
+      }
+    },
+    {
+      "name": "S3_sma40",
+      "folds": [
+        {
+          "fold": 1,
+          "oos_start": "2022-01-01",
+          "oos_end": "2022-12-31",
+          "trades": 0,
+          "sharpe": 0.0,
+          "pf": 0.0,
+          "win_rate": 0.0,
+          "max_dd": 0.0,
+          "total_return": 0.0,
+          "status": "ok"
+        },
+        {
+          "fold": 2,
+          "oos_start": "2023-01-01",
+          "oos_end": "2023-12-31",
+          "trades": 0,
+          "sharpe": 0.0,
+          "pf": 0.0,
+          "win_rate": 0.0,
+          "max_dd": 0.0,
+          "total_return": 0.0,
+          "status": "ok"
+        },
+        {
+          "fold": 3,
+          "oos_start": "2024-01-01",
+          "oos_end": "2024-12-31",
+          "trades": 0,
+          "sharpe": 0.0,
+          "pf": 0.0,
+          "win_rate": 0.0,
+          "max_dd": 0.0,
+          "total_return": 0.0,
+          "status": "ok"
+        },
+        {
+          "fold": 4,
+          "oos_start": "2025-01-01",
+          "oos_end": "2025-12-31",
+          "trades": 0,
+          "sharpe": 0.0,
+          "pf": 0.0,
+          "win_rate": 0.0,
+          "max_dd": 0.0,
+          "total_return": 0.0,
+          "status": "ok"
+        }
+      ],
+      "aggregate": {
+        "folds": 4,
+        "trades_total": 0,
+        "sharpe_mean": 0.0,
+        "sharpe_min": 0.0,
+        "pf_mean": 0.0,
+        "pf_min": 0.0,
+        "return_mean": 0.0
+      }
+    }
+  ]
+}

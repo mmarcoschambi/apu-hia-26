@@ -1,0 +1,14 @@
+[
+  {
+    "name": "S0_Baseline",
+    "error": "No data available for period 2025-01-01 to 2026-04-30"
+  },
+  {
+    "name": "S1_BinaryFilter",
+    "error": "No data available for period 2025-01-01 to 2026-04-30"
+  },
+  {
+    "name": "S2_DynamicSizing",
+    "error": "No data available for period 2025-01-01 to 2026-04-30"
+  }
+]

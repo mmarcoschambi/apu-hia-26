@@ -1,0 +1,14 @@
+[
+  {
+    "name": "S0_Baseline",
+    "error": "'AdvancedVectorBTEngine' object has no attribute 'run'"
+  },
+  {
+    "name": "S1_BinaryFilter",
+    "error": "'AdvancedVectorBTEngine' object has no attribute 'run'"
+  },
+  {
+    "name": "S2_DynamicSizing",
+    "error": "'AdvancedVectorBTEngine' object has no attribute 'run'"
+  }
+]

@@ -1,0 +1,29 @@
+[
+  {
+    "name": "S0_Baseline",
+    "total_return": 0,
+    "sharpe": 0,
+    "max_drawdown": 0,
+    "trades": 0,
+    "win_rate": 0,
+    "profit_factor": 0
+  },
+  {
+    "name": "S1_BinaryFilter",
+    "total_return": 0,
+    "sharpe": 0,
+    "max_drawdown": 0,
+    "trades": 0,
+    "win_rate": 0,
+    "profit_factor": 0
+  },
+  {
+    "name": "S2_DynamicSizing",
+    "total_return": 0,
+    "sharpe": 0,
+    "max_drawdown": 0,
+    "trades": 0,
+    "win_rate": 0,
+    "profit_factor": 0
+  }
+]
