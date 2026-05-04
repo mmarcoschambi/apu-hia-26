@@ -314,11 +314,30 @@ def run_combo_scan(
             all_closes[ticker] = df["close"]
             df_map[ticker] = df
 
+    # Combinar t2_master con VALIDATED_OVERRIDES (legacy fallback)
+    VALIDATED_OVERRIDES = {
+        "min_rs_percentile": 75,
+        "min_trend_intensity": 104,
+        "require_ma_stack": True,
+        "min_adr_pct": 1.2,
+        "require_spy_above_sma200": True,
+    }
+    final_t2 = {**VALIDATED_OVERRIDES, **t2_master}
+
     for name, cfg in configs.items():
         logger.info(f"  Scanning {name}...")
         effective_mode = "A" if name == "combo_pure_momentum" else "B"
+        
+        # Inyectar Overrides en la config del agente
+        for k, v in final_t2.items():
+            cfg.setdefault("tier2_filters", {})[k] = v
+            cfg.setdefault("screener", {}).setdefault("params", {})[k] = v
+            if k == "min_adr_pct":
+                cfg.setdefault("screener", {})[k] = v
+
         decisions = scan_combo(
-            cfg, universe, df_map, spy_df, all_closes, effective_mode, skip_tier2
+            cfg, universe, df_map, spy_df, all_closes, effective_mode, skip_tier2,
+            etf_dists=etf_dists
         )
         agent_results[name] = decisions
         all_signals.extend(decisions)

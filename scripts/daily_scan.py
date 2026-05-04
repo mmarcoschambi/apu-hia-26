@@ -144,6 +144,7 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
 
     # 6. Scan
     all_signals = []
+    rejection_audit = []
     logger.info(f"Scanning {len(tickers)} tickers with A+B modes...")
 
     for ticker in tickers:
@@ -179,6 +180,17 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
                 scan_date=date_str,
                 sector_etf_dist=dist
             )
+
+            # Audit Rejections
+            for d in [da, db]:
+                if not d.passed:
+                    rejection_audit.append({
+                        "ticker": ticker,
+                        "mode": d.mode,
+                        "reject_reason": d.reject_reason,
+                        "sector_etf": etf_symbol,
+                        "sector_etf_dist": dist
+                    })
 
             # Mergear señales
             merged = merge_ab_signals(
@@ -249,6 +261,10 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
     # 5. Persistir resultados
     out_dir = OUTPUT_DIR / date_str
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    if rejection_audit:
+        pd.DataFrame(rejection_audit).to_csv(out_dir / "rejection_audit.csv", index=False)
+        logger.info(f"Saved {len(rejection_audit)} rejection records to {out_dir / 'rejection_audit.csv'}")
 
     df_results = pd.DataFrame(all_signals)
     if not df_results.empty:

@@ -26,21 +26,51 @@ def run_audit(date_str):
     enabled = t2.get("use_sector_etf_filter", False)
     threshold = float(t2.get("sector_etf_dist_threshold", 0.0))
     
-    if not enabled:
-        logger.warning("El filtro sectorial está DESACTIVADO en config. Auditando impacto teórico.")
+    # 2. Intentar cargar auditoria real (rejection_audit.csv)
+    audit_file = SIGNALS_DIR / date_str / "rejection_audit.csv"
+    signal_file = SIGNALS_DIR / date_str / "combined.csv"
     
-    # 2. Cargar Señales (Combined)
-    signal_path = SIGNALS_DIR / date_str / "combined.csv"
-    if not signal_path.exists():
-        logger.error(f"No se encontró archivo de señales para {date_str} en {signal_path}")
+    if audit_file.exists():
+        logger.info(f"Usando auditoría real desde {audit_file.name}")
+        df_rej = pd.read_csv(audit_file)
+        # Filtrar solo rechazos por sector_etf
+        df_sector_rej = df_rej[df_rej["reject_reason"].str.contains("sector_etf", na=False)]
+        
+        # Cargar señales exitosas para el total
+        df_passed = pd.read_csv(signal_file) if signal_file.exists() else pd.DataFrame()
+        
+        total_candidates = len(df_passed) + len(df_sector_rej)
+        blocked = len(df_sector_rej)
+        pct = (blocked / total_candidates * 100) if total_candidates > 0 else 0
+        
+        print("\n" + "="*60)
+        print(f"AUDITORIA SECTORIAL REAL - {date_str}")
+        print("="*60)
+        print(f"Config: use_sector_etf_filter={enabled} | threshold={threshold}")
+        print(f"Total Candidatos Post-Screener: {total_candidates}")
+        print(f"Bloqueados por Sector ETF:      {blocked} ({pct:.1f}%)")
+        print("-" * 60)
+        if blocked > 0:
+            print("TICKERS BLOQUEADOS REALMENTE:")
+            # Mostrar ticker y la razon específica (que contiene la dist)
+            print(df_sector_rej[["ticker", "mode", "reject_reason"]].to_string(index=False))
+        else:
+            print("Ningún ticker bloqueado realmente por el filtro sectorial.")
+        print("="*60 + "\n")
         return
 
-    df_signals = pd.read_csv(signal_path)
+    # 3. Fallback: Auditoria Teórica (REEVALUACIÓN)
+    logger.warning("No se encontró rejection_audit.csv. Realizando auditoría teórica sobre supervivientes...")
+    if not signal_file.exists():
+        logger.error(f"No se encontró archivo de señales para {date_str}")
+        return
+
+    df_signals = pd.read_csv(signal_file)
     if df_signals.empty:
         logger.info("No hay señales para auditar.")
         return
 
-    # 3. Fetch ETF data
+    # Fetch ETF data (mismo código que antes...)
     logger.info("Descargando data de ETFs...")
     as_of = pd.Timestamp(date_str)
     start = (as_of - timedelta(days=60)).strftime("%Y-%m-%d")
@@ -53,55 +83,24 @@ def run_audit(date_str):
     for etf in SECTOR_ETFS:
         if etf in etf_data.columns:
             series = etf_data[etf].ffill()
-            sma = series.rolling(sma_period).mean().iloc[-1]
-            current = series.iloc[-1]
-            dist = (current / sma) - 1
-            etf_metrics[etf] = {"price": current, "sma": sma, "dist": dist}
+            if len(series) >= sma_period:
+                sma = series.rolling(sma_period).mean().iloc[-1]
+                current = series.iloc[-1]
+                dist = (current / sma) - 1
+                etf_metrics[etf] = {"dist": dist}
 
-    # 4. Analizar impacto
     audit_rows = []
     for _, row in df_signals.iterrows():
         ticker = row["ticker"]
         etf = SECTOR_MAP.get(ticker)
-        
         m = etf_metrics.get(etf)
-        if not m:
-            audit_rows.append({
-                "ticker": ticker, "sector_etf": etf, "dist": None, 
-                "passed": True, "reason": "no_etf_data"
-            })
-            continue
-            
-        passed = m["dist"] > threshold
-        audit_rows.append({
-            "ticker": ticker,
-            "sector_etf": etf,
-            "etf_price": round(m["price"], 2),
-            "etf_sma20": round(m["sma"], 2),
-            "dist": round(m["dist"], 4),
-            "passed": passed,
-            "reason": "" if passed else "sector_below_sma"
-        })
+        if m:
+            passed = m["dist"] > threshold
+            audit_rows.append({"ticker": ticker, "sector_etf": etf, "dist": m["dist"], "passed": passed})
 
     df_audit = pd.DataFrame(audit_rows)
-    
-    # 5. Reporte
-    total = len(df_audit)
     blocked = len(df_audit[~df_audit["passed"]])
-    
-    print("\n" + "="*60)
-    print(f"AUDITORIA SECTORIAL - {date_str}")
-    print("="*60)
-    print(f"Config: use_sector_etf_filter={enabled} | threshold={threshold}")
-    print(f"Total Tickers Analizados: {total}")
-    print(f"Bloqueados (teórico):     {blocked} ({blocked/total*100:.1f}%)")
-    print("-" * 60)
-    if blocked > 0:
-        print("TICKERS BLOQUEADOS POR SECTOR:")
-        print(df_audit[~df_audit["passed"]][["ticker", "sector_etf", "dist"]].to_string(index=False))
-    else:
-        print("Ningún ticker bloqueado por el filtro sectorial.")
-    print("="*60 + "\n")
+    print(f"Bloqueados (teórico sobre supervivientes): {blocked}")
 
 if __name__ == "__main__":
     import argparse
