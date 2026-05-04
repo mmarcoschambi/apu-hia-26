@@ -1,0 +1,143 @@
+{
+  "experiment": "Sector Priority Ranking (A v2.1)",
+  "period": [
+    "2025-01-01",
+    "2026-04-30"
+  ],
+  "results": {
+    "3": {
+      "baseline": {
+        "5": {
+          "trades": 849,
+          "win_rate": 54.3,
+          "pf": 1.447,
+          "sharpe_r": 0.306
+        },
+        "10": {
+          "trades": 837,
+          "win_rate": 54.6,
+          "pf": 1.92,
+          "sharpe_r": 0.551
+        },
+        "20": {
+          "trades": 815,
+          "win_rate": 53.87,
+          "pf": 2.335,
+          "sharpe_r": 0.672
+        }
+      },
+      "sector_rank": {
+        "5": {
+          "trades": 849,
+          "win_rate": 54.53,
+          "pf": 2.491,
+          "sharpe_r": -0.483
+        },
+        "10": {
+          "trades": 837,
+          "win_rate": 56.03,
+          "pf": 6.123,
+          "sharpe_r": -0.717
+        },
+        "20": {
+          "trades": 816,
+          "win_rate": 53.43,
+          "pf": 6.584,
+          "sharpe_r": -0.537
+        }
+      },
+      "delta_10d": -1.268,
+      "delta_20d": -1.209
+    },
+    "5": {
+      "baseline": {
+        "5": {
+          "trades": 1401,
+          "win_rate": 55.67,
+          "pf": 1.433,
+          "sharpe_r": 0.633
+        },
+        "10": {
+          "trades": 1381,
+          "win_rate": 54.09,
+          "pf": 1.715,
+          "sharpe_r": 0.44
+        },
+        "20": {
+          "trades": 1345,
+          "win_rate": 52.42,
+          "pf": 2.608,
+          "sharpe_r": 0.62
+        }
+      },
+      "sector_rank": {
+        "5": {
+          "trades": 1401,
+          "win_rate": 54.18,
+          "pf": 2.245,
+          "sharpe_r": -0.249
+        },
+        "10": {
+          "trades": 1381,
+          "win_rate": 55.32,
+          "pf": 4.458,
+          "sharpe_r": -0.461
+        },
+        "20": {
+          "trades": 1346,
+          "win_rate": 53.27,
+          "pf": 4.954,
+          "sharpe_r": -0.134
+        }
+      },
+      "delta_10d": -0.901,
+      "delta_20d": -0.754
+    },
+    "10": {
+      "baseline": {
+        "5": {
+          "trades": 2671,
+          "win_rate": 53.87,
+          "pf": 1.746,
+          "sharpe_r": 0.396
+        },
+        "10": {
+          "trades": 2631,
+          "win_rate": 52.91,
+          "pf": 2.005,
+          "sharpe_r": 0.25
+        },
+        "20": {
+          "trades": 2558,
+          "win_rate": 52.54,
+          "pf": 2.633,
+          "sharpe_r": 0.491
+        }
+      },
+      "sector_rank": {
+        "5": {
+          "trades": 2671,
+          "win_rate": 55.07,
+          "pf": 2.534,
+          "sharpe_r": 0.244
+        },
+        "10": {
+          "trades": 2631,
+          "win_rate": 55.42,
+          "pf": 3.752,
+          "sharpe_r": -0.021
+        },
+        "20": {
+          "trades": 2560,
+          "win_rate": 54.37,
+          "pf": 4.455,
+          "sharpe_r": 0.293
+        }
+      },
+      "delta_10d": -0.271,
+      "delta_20d": -0.198
+    }
+  },
+  "decision": "NO-GO (Keep Baseline RS Tie-breaker)",
+  "timestamp": "2026-05-04T13:41:41.950295"
+}

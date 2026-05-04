@@ -1,0 +1,123 @@
+{
+  "experiment": "SPY Correlation Filter Walk-Forward Validation (Hypothesis B)",
+  "train_period": [
+    "2025-01-01",
+    "2025-09-30"
+  ],
+  "validation_period": [
+    "2025-10-01",
+    "2026-04-30"
+  ],
+  "threshold_grid": [
+    0.5,
+    0.6,
+    0.7,
+    0.8
+  ],
+  "selected_threshold": 0.8,
+  "train_results": [
+    {
+      "threshold": 0.5,
+      "count": 2633,
+      "trade_reduction_pct": 48.4,
+      "pf": 2.226,
+      "sharpe_10d": -0.786,
+      "sharpe_20d": -0.506,
+      "delta_10d": -0.924,
+      "delta_20d": -0.874
+    },
+    {
+      "threshold": 0.6,
+      "count": 3153,
+      "trade_reduction_pct": 38.2,
+      "pf": 2.116,
+      "sharpe_10d": -0.584,
+      "sharpe_20d": -0.467,
+      "delta_10d": -0.722,
+      "delta_20d": -0.835
+    },
+    {
+      "threshold": 0.7,
+      "count": 3677,
+      "trade_reduction_pct": 27.9,
+      "pf": 2.198,
+      "sharpe_10d": -0.58,
+      "sharpe_20d": -0.455,
+      "delta_10d": -0.718,
+      "delta_20d": -0.823
+    },
+    {
+      "threshold": 0.8,
+      "count": 4213,
+      "trade_reduction_pct": 17.4,
+      "pf": 2.505,
+      "sharpe_10d": -0.423,
+      "sharpe_20d": -0.209,
+      "delta_10d": -0.561,
+      "delta_20d": -0.577
+    }
+  ],
+  "validation": {
+    "baseline": {
+      "5": {
+        "trades": 4953,
+        "win_rate": 53.16,
+        "pf": 1.417,
+        "sharpe_r": 0.568,
+        "max_drawdown": -44.53,
+        "total_return": 81.61
+      },
+      "10": {
+        "trades": 4797,
+        "win_rate": 54.53,
+        "pf": 1.699,
+        "sharpe_r": 0.885,
+        "max_drawdown": -45.71,
+        "total_return": 245.29
+      },
+      "20": {
+        "trades": 4499,
+        "win_rate": 56.35,
+        "pf": 2.586,
+        "sharpe_r": 0.577,
+        "max_drawdown": -106.47,
+        "total_return": 377.0
+      }
+    },
+    "filtered": {
+      "5": {
+        "trades": 4953,
+        "win_rate": 53.16,
+        "pf": 1.417,
+        "sharpe_r": 0.568,
+        "max_drawdown": -44.53,
+        "total_return": 81.61
+      },
+      "10": {
+        "trades": 4797,
+        "win_rate": 54.53,
+        "pf": 1.699,
+        "sharpe_r": 0.885,
+        "max_drawdown": -45.71,
+        "total_return": 245.29
+      },
+      "20": {
+        "trades": 4499,
+        "win_rate": 56.35,
+        "pf": 2.586,
+        "sharpe_r": 0.577,
+        "max_drawdown": -106.47,
+        "total_return": 377.0
+      }
+    },
+    "delta": {
+      "5": 0.0,
+      "10": 0.0,
+      "20": 0.0
+    },
+    "trade_retention": 1.0
+  },
+  "gate": "GO if delta_10d >= 0.1 and delta_20d >= 0.1 and retention >= 0.70 in validation",
+  "decision": "NO-GO",
+  "timestamp": "2026-05-04T12:10:55.259161"
+}
