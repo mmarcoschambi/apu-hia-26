@@ -35,15 +35,18 @@ class TriadStrategy:
     def __init__(self, 
                  avwap_convergence_tolerance: float = 0.02,
                  blue_sky_offset: float = 0.05,
-                 gap_down_threshold: float = -0.01):
+                 gap_down_threshold: float = -0.01,
+                 max_extension_pct: float = 0.0677):
         """
         avwap_convergence_tolerance: AVWAP within X% of base high = convergence
         blue_sky_offset: Buy stop offset above base high
         gap_down_threshold: Market gap % to trigger Camino 2 logic
+        max_extension_pct: Maximum allowed extension from base/SMA for Monster Stocks
         """
         self.avwap_tolerance = avwap_convergence_tolerance
         self.blue_sky_offset = blue_sky_offset
         self.gap_threshold = gap_down_threshold
+        self.max_extension = max_extension_pct
     
     def analyze(self, 
                 base_data: dict,
@@ -79,6 +82,30 @@ class TriadStrategy:
         avwap_price = avwap_data['current_avwap']
         distance_to_avwap_pct = abs(avwap_data['distance_to_avwap_pct'])
         
+        # ============================================
+        # EXPERIMENTAL: STAGE EXTENSION GATE (exptt)
+        # ============================================
+        # Monster Stocks must be caught before they are > 6.77% extended from pivot
+        extension_from_base = (current_price / base_high) - 1
+        if extension_from_base > self.max_extension:
+            logger.info(f"🚫 REJECTED: Extension Gate. Price ${current_price:.2f} is {extension_from_base*100:.2f}% "
+                       f"extended from Base High ${base_high:.2f} (Limit: {self.max_extension*100:.2f}%)")
+            return Signal(
+                camino=None,
+                action='NO_SETUP',
+                entry_price=None,
+                stop_loss=None,
+                position_size_multiplier=0.0,
+                reasoning=f"REJECTED: Extension Gate. Price is {extension_from_base*100:.2f}% extended "
+                          f"from base high. Risk of buying the top of a 'Monster Stock' stage. "
+                          f"Wait for a pullback or tight consolidation (Limit: {self.max_extension*100:.2f}%).",
+                context={
+                    'extension_pct': extension_from_base,
+                    'limit': self.max_extension,
+                    'rejection_reason': 'Extension_Gate'
+                }
+            )
+
         # ============================================
         # CAMINO 3: SAFETY CHECK - AVWAP TOO FAR ABOVE
         # ============================================
