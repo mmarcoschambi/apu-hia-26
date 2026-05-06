@@ -33,7 +33,8 @@ dependencies = [
     "python-dotenv",
     "colorlog",
     "loguru",
-    "openbb"
+    "openbb",
+    "rich"
 ]
 
 [project.optional-dependencies]
