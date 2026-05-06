@@ -530,6 +530,7 @@ class AdvancedVectorBTEngine:
         max_dist_sma20: float = 8.94,  # OPTIMIZED: 8.94%
         # RVOL filters
         min_rvol: float = 0.91,  # OPTIMIZED: 0.91x
+        rvol_breakout_threshold: Optional[float] = None,
         rvol_danger: float = 3.0,  # VALIDATED: Danger zone
         rvol_warning: float = 2.0,  # VALIDATED: Warning zone
         rvol_danger_size: int = 30,  # VALIDATED: 30%
@@ -775,6 +776,7 @@ class AdvancedVectorBTEngine:
         self.max_dist_sma20 = max_dist_sma20
         # RVOL filters
         self.min_rvol = min_rvol  # NEW: Minimum RVOL to enter
+        self.rvol_breakout_threshold = rvol_breakout_threshold
         self.rvol_danger = rvol_danger
         self.rvol_warning = rvol_warning
         self.rvol_danger_size = rvol_danger_size / 100.0  # Convert to decimal
@@ -1444,82 +1446,92 @@ class AdvancedVectorBTEngine:
         gc.collect()
 
         # 3. Market Regime Data (SPY & VIX)
-        try:
-            logger.info("   Loading SPY and VIX data for Market Regime...")
-
-            # Use centralized loader
-            spy_data, vix_data = load_spy_vix_data(
-                start_date=(self.start_date - pd.Timedelta(days=365)).strftime("%Y-%m-%d"),
-                end_date=self.end_date.strftime("%Y-%m-%d"),
-                cache=self.cache,
-            )
-
-            # Assign to internal variables
-            if spy_data is not None and not spy_data.empty:
-                # Dedup SPY index before reindex (same root bug as tickers)
-                if spy_data.index.duplicated().any():
-                    n = spy_data.index.duplicated().sum()
-                    logger.warning(f"   SPY: deduplicating {n} duplicate dates")
-                    spy_data = spy_data[~spy_data.index.duplicated(keep="last")]
-                # Reindex SPY data to match close index
-                self.spy_close = spy_data["close"].reindex(self.close.index).ffill()
-
-                # We need the full dataframe for the classifier (High/Low/Close)
-                # Reindex all columns
-                spy_aligned = spy_data.reindex(self.close.index).ffill()
-            else:
-                self.spy_close = pd.Series(0, index=self.close.index)
-                spy_aligned = pd.DataFrame(
-                    {
-                        "close": self.spy_close,
-                        "high": self.spy_close,
-                        "low": self.spy_close,
-                    }
-                )
-
-            if vix_data is not None and not vix_data.empty:
-                # Dedup VIX index before reindex
-                if vix_data.index.duplicated().any():
-                    n = vix_data.index.duplicated().sum()
-                    logger.warning(f"   VIX: deduplicating {n} duplicate dates")
-                    vix_data = vix_data[~vix_data.index.duplicated(keep="last")]
-                self.vix_close = vix_data["close"].reindex(self.close.index).ffill()
-                vix_aligned = vix_data.reindex(self.close.index).ffill()
-            else:
-                self.vix_close = pd.Series(0, index=self.close.index)
-                vix_aligned = pd.DataFrame({"close": self.vix_close})
-
-            # Initialize classifier
-            self.market_regime_classifier = MarketRegimeClassifier(
-                spy_data=spy_aligned, vix_data=vix_aligned
-            )
-
-            # Calculate Indicators for SPY (using classifier logic internally)
-            # But kept here for legacy access if needed
-            self.spy_ema20 = self.spy_close.ewm(span=20, adjust=False).mean()
-            self.spy_sma200 = self.spy_close.rolling(window=200).mean()
-            self.spy_sma50 = self.spy_close.rolling(window=50).mean()
-
-            # Calculate Market Regime
-            self.market_is_bullish = (self.spy_close > self.spy_sma200) & (self.vix_close < 20)
-            self.market_is_safe = (self.spy_close > self.spy_ema20) & (self.vix_close < 20)
-
-            logger.info(f"   ✅ Market Data Loaded & Aligned")
-
-        except Exception as e:
-            logger.warning(f"⚠️ Failed to load market data (SPY/VIX): {e}")
-            import traceback
-
-            logger.warning(traceback.format_exc())
-            # Initialize with default safe values
+        if self.offline_mode:
             self.market_is_safe = pd.Series(True, index=self.close.index)
+            self.market_is_bullish = pd.Series(True, index=self.close.index)
             self.spy_close = pd.Series(0, index=self.close.index)
             self.vix_close = pd.Series(0, index=self.close.index)
-            # CRITICAL FIX: Initialize spy_sma50 to prevent hasattr() failures
             self.spy_sma50 = pd.Series(np.nan, index=self.close.index)
-            logger.warning(
-                "   ⚠️  spy_sma50 initialized as NaN - SPY > SMA50 filter will block all trades"
-            )
+            self.spy_ema20 = pd.Series(np.nan, index=self.close.index)
+            self.spy_sma200 = pd.Series(np.nan, index=self.close.index)
+            logger.info("   Skipping SPY/VIX load in offline_mode")
+        else:
+            try:
+                logger.info("   Loading SPY and VIX data for Market Regime...")
+
+                # Use centralized loader
+                spy_data, vix_data = load_spy_vix_data(
+                    start_date=(self.start_date - pd.Timedelta(days=365)).strftime("%Y-%m-%d"),
+                    end_date=self.end_date.strftime("%Y-%m-%d"),
+                    cache=self.cache,
+                )
+
+                # Assign to internal variables
+                if spy_data is not None and not spy_data.empty:
+                    # Dedup SPY index before reindex (same root bug as tickers)
+                    if spy_data.index.duplicated().any():
+                        n = spy_data.index.duplicated().sum()
+                        logger.warning(f"   SPY: deduplicating {n} duplicate dates")
+                        spy_data = spy_data[~spy_data.index.duplicated(keep="last")]
+                    # Reindex SPY data to match close index
+                    self.spy_close = spy_data["close"].reindex(self.close.index).ffill()
+
+                    # We need the full dataframe for the classifier (High/Low/Close)
+                    # Reindex all columns
+                    spy_aligned = spy_data.reindex(self.close.index).ffill()
+                else:
+                    self.spy_close = pd.Series(0, index=self.close.index)
+                    spy_aligned = pd.DataFrame(
+                        {
+                            "close": self.spy_close,
+                            "high": self.spy_close,
+                            "low": self.spy_close,
+                        }
+                    )
+
+                if vix_data is not None and not vix_data.empty:
+                    # Dedup VIX index before reindex
+                    if vix_data.index.duplicated().any():
+                        n = vix_data.index.duplicated().sum()
+                        logger.warning(f"   VIX: deduplicating {n} duplicate dates")
+                        vix_data = vix_data[~vix_data.index.duplicated(keep="last")]
+                    self.vix_close = vix_data["close"].reindex(self.close.index).ffill()
+                    vix_aligned = vix_data.reindex(self.close.index).ffill()
+                else:
+                    self.vix_close = pd.Series(0, index=self.close.index)
+                    vix_aligned = pd.DataFrame({"close": self.vix_close})
+
+                # Initialize classifier
+                self.market_regime_classifier = MarketRegimeClassifier(
+                    spy_data=spy_aligned, vix_data=vix_aligned
+                )
+
+                # Calculate Indicators for SPY (using classifier logic internally)
+                # But kept here for legacy access if needed
+                self.spy_ema20 = self.spy_close.ewm(span=20, adjust=False).mean()
+                self.spy_sma200 = self.spy_close.rolling(window=200).mean()
+                self.spy_sma50 = self.spy_close.rolling(window=50).mean()
+
+                # Calculate Market Regime
+                self.market_is_bullish = (self.spy_close > self.spy_sma200) & (self.vix_close < 20)
+                self.market_is_safe = (self.spy_close > self.spy_ema20) & (self.vix_close < 20)
+
+                logger.info(f"   ✅ Market Data Loaded & Aligned")
+
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to load market data (SPY/VIX): {e}")
+                import traceback
+
+                logger.warning(traceback.format_exc())
+                # Initialize with default safe values
+                self.market_is_safe = pd.Series(True, index=self.close.index)
+                self.spy_close = pd.Series(0, index=self.close.index)
+                self.vix_close = pd.Series(0, index=self.close.index)
+                # CRITICAL FIX: Initialize spy_sma50 to prevent hasattr() failures
+                self.spy_sma50 = pd.Series(np.nan, index=self.close.index)
+                logger.warning(
+                    "   ⚠️  spy_sma50 initialized as NaN - SPY > SMA50 filter will block all trades"
+                )
 
         actual_start = self.close.index.min().date()
         actual_end = self.close.index.max().date()
@@ -2639,6 +2651,8 @@ class AdvancedVectorBTEngine:
 
             # Breakout signal (THOR: close > 20d high)
             breakout_signal = self.close > self.high.shift().rolling(20).max()
+            if self.rvol_breakout_threshold is not None:
+                breakout_signal = breakout_signal & (rvol >= self.rvol_breakout_threshold)
 
             # Combine: THOR baseline = liquidity & quality & consolidation & breakout
             entries = liquidity & quality & consolidation & breakout_signal
@@ -2689,6 +2703,8 @@ class AdvancedVectorBTEngine:
             # ================================================================
             if self.signal_type == "breakout":
                 breakout_signal = self.close > self.high.shift().rolling(20).max()
+                if self.rvol_breakout_threshold is not None:
+                    breakout_signal = breakout_signal & (self.rvol >= self.rvol_breakout_threshold)
                 entries = base_entry & breakout_signal
                 logger.info("   Using BREAKOUT signal (close > 20d high)")
 
