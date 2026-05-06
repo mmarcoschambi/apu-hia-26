@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import plotly.express as px
@@ -666,6 +667,145 @@ def _render_warnings(warnings: list[str], title: str = "Artifacts") -> None:
                 st.warning(warning)
 
 
+def _render_market_health_tab() -> None:
+    st.subheader("🛡️ Market Health & Gamma Dashboard")
+
+    # Tab selector for different health views
+    health_sub_tab1, health_sub_tab2 = st.tabs(
+        ["Institutional Dashboard", "Gamma & Dark Pools"]
+    )
+
+    with health_sub_tab1:
+        # Use MarketHealthChecker logic
+        try:
+            from src.data.market_data import MarketDataProvider
+            from src.core.market_context import MarketContext
+
+            # Use cached provider to avoid multiple instantiations
+            if "health_provider" not in st.session_state:
+                st.session_state["health_provider"] = MarketDataProvider()
+
+            ctx_analyzer = MarketContext(st.session_state["health_provider"])
+            # Use a slightly longer cache for live index data in UI
+            context = ctx_analyzer.analyze_indices()
+
+            # Score Calculation (matching market_health_check.py)
+            health_score = 0
+            if context.get("spy_above_ema20", False):
+                health_score += 2
+            if context.get("breadth_improving", False):
+                health_score += 2
+            if context.get("positive_gex", False):
+                health_score += 1
+            if context.get("vix_favorable", True):
+                health_score += 1
+            if context.get("sector_leaders"):
+                health_score += 1
+
+            # Gauge / Metric
+            col1, col2, col3 = st.columns([1, 1, 2])
+            with col1:
+                st.metric(
+                    "Health Score",
+                    f"{health_score}/7",
+                    f"{(health_score / 7 * 100):.0f}%",
+                )
+
+            # Verdict with dynamic color
+            with col3:
+                if health_score >= 6:
+                    st.success(
+                        "🚀 AGGRESSIVE MODE: Full size (2% risk). All 3 Caminos active."
+                    )
+                elif health_score >= 4:
+                    st.info(
+                        "💪 STANDARD MODE: Standard size (1.5-2%). Prefer Camino 1."
+                    )
+                elif health_score >= 2:
+                    st.warning(
+                        "⚠️ DEFENSIVE MODE: Half size (0.5-1%). Perfect Blue Sky only."
+                    )
+                else:
+                    st.error(
+                        "❌ NO TRADE: Go to Cash. Market conditions unfavorable."
+                    )
+
+            # Metric details in grid
+            st.markdown("---")
+            m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+
+            spy_price = context.get("spy_price", 0)
+            spy_ema20 = context.get("spy_ema20", 0)
+            spy_dist = (spy_price - spy_ema20) / spy_ema20 * 100 if spy_ema20 else 0
+
+            with m_col1:
+                st.markdown("**SPY Trend**")
+                st.caption(f"Price: ${spy_price:.2f}")
+                st.caption(f"EMA20: ${spy_ema20:.2f}")
+                st.write(
+                    f"{'✅ ABOVE' if spy_dist > 0 else '❌ BELOW'} ({spy_dist:+.2f}%)"
+                )
+
+            with m_col2:
+                st.markdown("**Breadth**")
+                st.write(
+                    f"{'✅ IMPROVING' if context.get('breadth_improving') else '❌ STALLING'}"
+                )
+                st.caption("Internals strength proxy")
+
+            with m_col3:
+                st.markdown("**Volatility**")
+                st.write(
+                    f"{'✅ FAVORABLE' if context.get('vix_favorable') else '⚠️ ELEVATED'}"
+                )
+                st.caption("VIX < 20 & stable")
+
+            with m_col4:
+                st.markdown("**Gamma (GEX)**")
+                st.write(
+                    f"{'✅ POSITIVE' if context.get('positive_gex') else '⚠️ NEUTRAL/NEG'}"
+                )
+                st.caption("Low vol grind estimate")
+
+            # Sector Leaders
+            st.markdown("---")
+            st.subheader("🎯 Sector Leadership")
+            sector_leaders = context.get("sector_leaders", {})
+            if sector_leaders:
+                # Convert to DF for display
+                rows = []
+                for name, data in sector_leaders.items():
+                    rows.append(
+                        {
+                            "Sector": name,
+                            "Change %": data["change_pct"],
+                            "Symbol": data["symbol"],
+                        }
+                    )
+                sector_df = pd.DataFrame(rows)
+                st.dataframe(sector_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("Sector data not available at this moment.")
+
+        except Exception as e:
+            st.error(f"Error loading Market Health data: {e}")
+
+    with health_sub_tab2:
+        # Render the Live Gamma Dashboard HTML
+        try:
+            template_path = Path("templates/live_gamma_dashboard.html")
+            if template_path.exists():
+                html_content = template_path.read_text()
+                # Use streamlit components to render HTML
+                components.html(html_content, height=750, scrolling=True)
+            else:
+                st.warning(
+                    "Gamma Dashboard template not found in templates/live_gamma_dashboard.html"
+                )
+        except Exception as e:
+            st.error(f"Error rendering Gamma Dashboard: {e}")
+
+
 def _render_pipeline_summary(run: dict, system_view: str) -> None:
     unified_df = _filter_by_system(
         run.get("unified_signals_df", pd.DataFrame()), system_view
@@ -1036,9 +1176,10 @@ def _render_dashboard_v2(
     _render_warnings(combo_run.get("warnings", []), "combo scanner")
     _render_warnings(universe_run.get("warnings", []), "stable universe")
 
-    overview_tab, pipeline_tab, universe_tab, research_tab, legacy_tab = st.tabs(
+    overview_tab, health_tab, pipeline_tab, universe_tab, research_tab, legacy_tab = st.tabs(
         [
             "Overview",
+            "Market Health",
             "Live Pipeline",
             "Universe + Combos",
             "Research / Historical",
@@ -1063,6 +1204,9 @@ def _render_dashboard_v2(
                 st.warning(
                     "⚠ System B is currently blocked in live due to input pricing without historical authorization."
                 )
+
+    with health_tab:
+        _render_market_health_tab()
 
     with pipeline_tab:
         pipe_tab, exec_tab, edge_tab = st.tabs(["Pipeline", "Execution", "Edge"])

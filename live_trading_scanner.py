@@ -49,6 +49,46 @@ class LiveTradingScanner:
             title=f"[bold magenta]🔍 LIVE TRADING SCANNER - {datetime.now().strftime('%H:%M:%S')}[/bold magenta]", 
             border_style="bright_blue", box=box.ROUNDED
         ))
+
+        # Get Market Context
+        try:
+            from src.core.market_context import MarketContext
+            ctx_analyzer = MarketContext(self.data_provider)
+            context = ctx_analyzer.analyze_indices()
+            
+            # Score Calculation
+            health_score = 0
+            if context.get('spy_above_ema20', False): health_score += 2
+            if context.get('breadth_improving', False): health_score += 2
+            if context.get('positive_gex', False): health_score += 1
+            if context.get('vix_favorable', True): health_score += 1
+            if context.get('sector_leaders'): health_score += 1
+            
+            verdict = ""
+            color = "white"
+            if health_score >= 6: 
+                verdict = "🚀 AGGRESSIVE MODE: Full size (2% risk). All 3 Caminos active."
+                color = "bright_green"
+            elif health_score >= 4: 
+                verdict = "💪 STANDARD MODE: Standard size (1.5-2%). Prefer Camino 1."
+                color = "bright_blue"
+            elif health_score >= 2: 
+                verdict = "⚠️ DEFENSIVE MODE: Half size (0.5-1%). Perfect Blue Sky only."
+                color = "yellow"
+            else: 
+                verdict = "❌ NO TRADE: Go to Cash. Market conditions unfavorable."
+                color = "red"
+
+            console.print(Panel(
+                f"[bold {color}]{verdict}[/bold {color}]\n"
+                f"[dim]Score: {health_score}/7 | SPY: {'Above' if context.get('spy_above_ema20') else 'Below'} EMA20 | "
+                f"Breadth: {'Improving' if context.get('breadth_improving') else 'Stalling'} | "
+                f"GEX: {'Positive' if context.get('positive_gex') else 'Neg/Neut'}[/dim]",
+                title=f"[bold {color}]🛡️ MARKET HEALTH STATUS[/bold {color}]",
+                border_style=color, box=box.ROUNDED
+            ))
+        except Exception as e:
+            console.print(f"[dim yellow]Could not fetch market health: {e}[/dim yellow]")
         
         results = []
         actionable_setups = []
