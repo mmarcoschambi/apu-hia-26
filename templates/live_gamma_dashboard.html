@@ -1,0 +1,355 @@
+
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .dash { padding: 1rem 0; font-family: var(--font-sans); }
+  .section-label { font-size: 11px; font-weight: 500; color: var(--color-text-tertiary); letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 8px; }
+  .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 16px; }
+  .metric-card { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 0.75rem 1rem; }
+  .metric-label { font-size: 11px; color: var(--color-text-secondary); margin: 0 0 4px; }
+  .metric-value { font-size: 22px; font-weight: 500; color: var(--color-text-primary); margin: 0; }
+  .metric-sub { font-size: 11px; color: var(--color-text-tertiary); margin: 2px 0 0; }
+  .verdict-box { border-radius: var(--border-radius-md); padding: 0.75rem 1rem; margin-bottom: 16px; }
+  .verdict-title { font-size: 15px; font-weight: 500; margin: 0 0 2px; }
+  .verdict-detail { font-size: 12px; margin: 0; opacity: 0.85; }
+  .card { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1rem 1.25rem; margin-bottom: 12px; }
+  .row-item { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 0.5px solid var(--color-border-tertiary); font-size: 13px; }
+  .row-item:last-child { border-bottom: none; padding-bottom: 0; }
+  .row-label { color: var(--color-text-secondary); }
+  .badge { display: inline-block; font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: var(--border-radius-md); }
+  .badge-green { background: #EAF3DE; color: #3B6D11; }
+  .badge-red { background: #FCEBEB; color: #A32D2D; }
+  .badge-amber { background: #FAEEDA; color: #854F0B; }
+  .badge-gray { background: var(--color-background-secondary); color: var(--color-text-secondary); }
+  .status-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-text-tertiary); margin-bottom: 12px; }
+  .dot-live { width: 7px; height: 7px; border-radius: 50%; background: #639922; flex-shrink: 0; }
+  .dot-stale { width: 7px; height: 7px; border-radius: 50%; background: #EF9F27; flex-shrink: 0; }
+  .refresh-btn { font-size: 11px; padding: 3px 10px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: var(--color-background-primary); color: var(--color-text-secondary); cursor: pointer; margin-left: auto; }
+  .chart-wrap { position: relative; width: 100%; height: 160px; margin-top: 8px; }
+  .error-msg { font-size: 12px; color: var(--color-text-danger, #A32D2D); padding: 8px 0; }
+  .sep { border: none; border-top: 0.5px solid var(--color-border-tertiary); margin: 14px 0; }
+</style>
+
+<div class="dash">
+  <h2 class="sr-only">Dashboard de entorno de mercado en tiempo real: DIX, GEX, VIX y SPX</h2>
+
+  <div class="status-row">
+    <div class="dot-live" id="status-dot"></div>
+    <span id="status-text">Cargando datos...</span>
+    <button class="refresh-btn" onclick="loadAll()">Actualizar</button>
+  </div>
+
+  <p class="section-label">Indicadores del día</p>
+  <div class="metric-grid">
+    <div class="metric-card">
+      <p class="metric-label">SPX</p>
+      <p class="metric-value" id="spx-val">—</p>
+      <p class="metric-sub" id="spx-chg">—</p>
+    </div>
+    <div class="metric-card">
+      <p class="metric-label">VIX</p>
+      <p class="metric-value" id="vix-val">—</p>
+      <p class="metric-sub" id="vix-sub">—</p>
+    </div>
+    <div class="metric-card">
+      <p class="metric-label">DIX (dark pool)</p>
+      <p class="metric-value" id="dix-val">—</p>
+      <p class="metric-sub" id="dix-sub">—</p>
+    </div>
+    <div class="metric-card">
+      <p class="metric-label">GEX</p>
+      <p class="metric-value" id="gex-val">—</p>
+      <p class="metric-sub" id="gex-sub">—</p>
+    </div>
+  </div>
+
+  <div id="verdict-area"></div>
+
+  <p class="section-label">Checklist de entorno</p>
+  <div class="card" id="checklist-card">
+    <div class="row-item"><span class="row-label">VIX bajo (&lt;20 = calma)</span><span id="chk-vix" class="badge badge-gray">—</span></div>
+    <div class="row-item"><span class="row-label">GEX positivo (implica baja vol)</span><span id="chk-gex" class="badge badge-gray">—</span></div>
+    <div class="row-item"><span class="row-label">DIX alto (&gt;45% = dark pools alcistas)</span><span id="chk-dix" class="badge badge-gray">—</span></div>
+    <div class="row-item"><span class="row-label">SPX en tendencia alcista</span><span id="chk-spx" class="badge badge-gray">—</span></div>
+  </div>
+
+  <p class="section-label">Historial reciente — DIX y GEX (30 días)</p>
+  <div class="card" style="padding-bottom: 0.5rem;">
+    <div style="display:flex; gap:16px; font-size:12px; color:var(--color-text-secondary); margin-bottom:4px;">
+      <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#378ADD;"></span>DIX %</span>
+      <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#3B6D11;"></span>GEX (norm.)</span>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="histChart" role="img" aria-label="Historial de DIX y GEX últimos 30 días">Cargando...</canvas>
+    </div>
+  </div>
+
+  <div id="data-date" style="font-size:11px; color:var(--color-text-tertiary); margin-top:8px; text-align:right;"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+let histChart = null;
+
+async function fetchSQZ() {
+  const url = 'https://squeezemetrics.com/monitor/dix?raw=1';
+  const csvUrl = 'https://squeezemetrics.com/monitor/download/dix.csv';
+  try {
+    const resp = await fetch('https://squeezemetrics.com/monitor/download/dix.csv');
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const text = await resp.text();
+    return parseSQZcsv(text);
+  } catch(e) {
+    return null;
+  }
+}
+
+function parseSQZcsv(text) {
+  const lines = text.trim().split('\n');
+  const header = lines[0].split(',').map(h => h.trim().toLowerCase());
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',');
+    if (cols.length < 3) continue;
+    const obj = {};
+    header.forEach((h, idx) => { obj[h] = cols[idx] ? cols[idx].trim() : ''; });
+    rows.push(obj);
+  }
+  return rows;
+}
+
+async function fetchYahoo(symbol) {
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    const r = data.chart.result[0];
+    const meta = r.meta;
+    return {
+      price: meta.regularMarketPrice,
+      prev: meta.chartPreviousClose,
+      pct: ((meta.regularMarketPrice - meta.chartPreviousClose) / meta.chartPreviousClose * 100)
+    };
+  } catch(e) {
+    return null;
+  }
+}
+
+function gexBadge(gex) {
+  if (gex === null || gex === undefined) return ['—', 'badge-gray'];
+  const v = parseFloat(gex);
+  if (isNaN(v)) return ['—', 'badge-gray'];
+  if (v > 0) return ['Positivo', 'badge-green'];
+  if (v < 0) return ['Negativo', 'badge-red'];
+  return ['Neutro', 'badge-amber'];
+}
+
+function dixBadge(dix) {
+  if (dix === null || dix === undefined) return ['—', 'badge-gray'];
+  const v = parseFloat(dix);
+  if (isNaN(v)) return ['—', 'badge-gray'];
+  const pct = v > 1 ? v : v * 100;
+  if (pct > 45) return ['Alcista', 'badge-green'];
+  if (pct < 40) return ['Bajista', 'badge-red'];
+  return ['Neutro', 'badge-amber'];
+}
+
+function vixBadge(vix) {
+  if (!vix) return ['—', 'badge-gray'];
+  if (vix < 15) return ['Muy bajo', 'badge-green'];
+  if (vix < 20) return ['Bajo', 'badge-green'];
+  if (vix < 30) return ['Elevado', 'badge-amber'];
+  return ['Alto', 'badge-red'];
+}
+
+function spxBadge(pct) {
+  if (pct === null || pct === undefined) return ['—', 'badge-gray'];
+  if (pct > 0.3) return ['Alcista', 'badge-green'];
+  if (pct < -0.3) return ['Bajista', 'badge-red'];
+  return ['Lateral', 'badge-amber'];
+}
+
+function getVerdict(vix, gexVal, dixPct, spxPct) {
+  let score = 0;
+  let notes = [];
+  if (vix && vix < 20) { score++; } else if (vix && vix >= 30) { score -= 2; notes.push('VIX alto = entorno hostil'); }
+  if (gexVal !== null && !isNaN(gexVal)) {
+    if (gexVal > 0) { score++; } else { score--; notes.push('GEX negativo = mayor volatilidad'); }
+  }
+  if (dixPct !== null && !isNaN(dixPct)) {
+    if (dixPct > 45) { score++; } else if (dixPct < 40) { score--; notes.push('DIX bajo = dark pools bajistas'); }
+  }
+  if (spxPct !== null && !isNaN(spxPct)) {
+    if (spxPct > 0.3) { score++; } else if (spxPct < -0.5) { score--; }
+  }
+  if (score >= 3) return { title: 'Entorno favorable', detail: 'GEX positivo + DIX alcista + VIX bajo. Convergencia para operar largos.', bg: '#EAF3DE', color: '#27500A' };
+  if (score === 2) return { title: 'Entorno moderado', detail: 'La mayoría de filtros a favor. Operar con tamaño normal, stops ajustados.', bg: '#EAF3DE', color: '#27500A' };
+  if (score === 1 || score === 0) return { title: 'Entorno mixto', detail: (notes[0] || 'Señales contradictorias.') + ' Reducir exposición.', bg: '#FAEEDA', color: '#633806' };
+  return { title: 'Entorno hostil — precaución', detail: (notes.join('. ') || 'Múltiples señales negativas.') + ' No forzar setups.', bg: '#FCEBEB', color: '#791F1F' };
+}
+
+function renderHistChart(rows) {
+  const last30 = rows.slice(-30);
+  const labels = last30.map(r => r.date ? r.date.slice(5) : '');
+  
+  let dixCol = null, gexCol = null;
+  const keys = Object.keys(last30[0] || {});
+  for (const k of keys) {
+    if (k.includes('dix')) dixCol = k;
+    if (k.includes('gex')) gexCol = k;
+  }
+  if (!dixCol) dixCol = keys[1];
+  if (!gexCol) gexCol = keys[2];
+
+  const dixData = last30.map(r => {
+    const v = parseFloat(r[dixCol]);
+    return isNaN(v) ? null : (v <= 1 ? +(v * 100).toFixed(2) : +v.toFixed(2));
+  });
+
+  const gexRaw = last30.map(r => parseFloat(r[gexCol]));
+  const gexMax = Math.max(...gexRaw.filter(v => !isNaN(v)));
+  const gexMin = Math.min(...gexRaw.filter(v => !isNaN(v)));
+  const gexData = gexRaw.map(v => {
+    if (isNaN(v)) return null;
+    if (gexMax === gexMin) return 50;
+    return +((v - gexMin) / (gexMax - gexMin) * 60 + 20).toFixed(2);
+  });
+
+  const ctx = document.getElementById('histChart').getContext('2d');
+  if (histChart) histChart.destroy();
+  histChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'DIX %',
+          data: dixData,
+          borderColor: '#378ADD',
+          backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          pointRadius: 0,
+          tension: 0.3,
+          borderDash: [],
+        },
+        {
+          label: 'GEX (norm.)',
+          data: gexData,
+          borderColor: '#3B6D11',
+          backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          pointRadius: 0,
+          tension: 0.3,
+          borderDash: [4, 3],
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+      scales: {
+        x: { ticks: { font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 6 }, grid: { display: false } },
+        y: { ticks: { font: { size: 10 } }, grid: { color: 'rgba(128,128,128,0.1)' } }
+      }
+    }
+  });
+}
+
+async function loadAll() {
+  document.getElementById('status-dot').className = 'dot-stale';
+  document.getElementById('status-text').textContent = 'Actualizando...';
+
+  const [sqzRows, spxData, vixData] = await Promise.all([
+    fetchSQZ(),
+    fetchYahoo('%5EGSPC'),
+    fetchYahoo('%5EVIX')
+  ]);
+
+  let dixVal = null, gexVal = null, latestDate = null;
+
+  if (sqzRows && sqzRows.length > 0) {
+    const last = sqzRows[sqzRows.length - 1];
+    const keys = Object.keys(last);
+    const dixKey = keys.find(k => k.includes('dix'));
+    const gexKey = keys.find(k => k.includes('gex'));
+    const dateKey = keys.find(k => k.includes('date')) || keys[0];
+    if (dixKey) dixVal = parseFloat(last[dixKey]);
+    if (gexKey) gexVal = parseFloat(last[gexKey]);
+    latestDate = last[dateKey] || null;
+    renderHistChart(sqzRows);
+  } else {
+    document.getElementById('histChart').parentElement.innerHTML = '<p class="error-msg">No se pudo cargar el historial de SQZ. Es posible que requiera autenticación o el CSV cambió de URL.</p>';
+  }
+
+  const dixPct = dixVal !== null ? (dixVal <= 1 ? dixVal * 100 : dixVal) : null;
+  const vixPrice = vixData ? vixData.price : null;
+  const spxPct = spxData ? spxData.pct : null;
+
+  if (spxData) {
+    document.getElementById('spx-val').textContent = spxData.price.toLocaleString('en-US', {maximumFractionDigits: 0});
+    const pct = spxData.pct.toFixed(2);
+    const el = document.getElementById('spx-chg');
+    el.textContent = (spxData.pct >= 0 ? '+' : '') + pct + '%';
+    el.style.color = spxData.pct >= 0 ? '#3B6D11' : '#A32D2D';
+  }
+
+  if (vixData) {
+    document.getElementById('vix-val').textContent = vixData.price.toFixed(1);
+    const sub = document.getElementById('vix-sub');
+    if (vixData.price < 20) { sub.textContent = 'Volatilidad baja'; sub.style.color = '#3B6D11'; }
+    else if (vixData.price < 30) { sub.textContent = 'Volatilidad elevada'; sub.style.color = '#854F0B'; }
+    else { sub.textContent = 'Volatilidad alta'; sub.style.color = '#A32D2D'; }
+  }
+
+  if (dixPct !== null && !isNaN(dixPct)) {
+    document.getElementById('dix-val').textContent = dixPct.toFixed(1) + '%';
+    const sub = document.getElementById('dix-sub');
+    if (dixPct > 45) { sub.textContent = 'Dark pools alcistas'; sub.style.color = '#3B6D11'; }
+    else if (dixPct < 40) { sub.textContent = 'Dark pools bajistas'; sub.style.color = '#A32D2D'; }
+    else { sub.textContent = 'Zona neutra'; sub.style.color = '#854F0B'; }
+  } else {
+    document.getElementById('dix-val').textContent = 'N/A';
+    document.getElementById('dix-sub').textContent = 'Ver squeezemetrics.com';
+  }
+
+  if (gexVal !== null && !isNaN(gexVal)) {
+    const gexB = gexVal >= 1e9 ? (gexVal / 1e9).toFixed(1) + 'B' : gexVal >= 1e6 ? (gexVal / 1e6).toFixed(0) + 'M' : gexVal.toFixed(0);
+    document.getElementById('gex-val').textContent = (gexVal >= 0 ? '+' : '') + gexB;
+    const sub = document.getElementById('gex-sub');
+    if (gexVal > 0) { sub.textContent = 'Baja volatilidad implícita'; sub.style.color = '#3B6D11'; }
+    else { sub.textContent = 'Alta volatilidad implícita'; sub.style.color = '#A32D2D'; }
+  } else {
+    document.getElementById('gex-val').textContent = 'N/A';
+    document.getElementById('gex-sub').textContent = 'Ver squeezemetrics.com';
+  }
+
+  const [vixTxt, vixCls] = vixBadge(vixPrice);
+  const [gexTxt, gexCls] = gexBadge(gexVal);
+  const [dixTxt, dixCls] = dixBadge(dixPct);
+  const [spxTxt, spxCls] = spxBadge(spxPct);
+  document.getElementById('chk-vix').textContent = vixTxt;
+  document.getElementById('chk-vix').className = 'badge ' + vixCls;
+  document.getElementById('chk-gex').textContent = gexTxt;
+  document.getElementById('chk-gex').className = 'badge ' + gexCls;
+  document.getElementById('chk-dix').textContent = dixTxt;
+  document.getElementById('chk-dix').className = 'badge ' + dixCls;
+  document.getElementById('chk-spx').textContent = spxTxt;
+  document.getElementById('chk-spx').className = 'badge ' + spxCls;
+
+  const v = getVerdict(vixPrice, gexVal, dixPct, spxPct);
+  document.getElementById('verdict-area').innerHTML =
+    '<div class="verdict-box" style="background:' + v.bg + ';">' +
+    '<p class="verdict-title" style="color:' + v.color + ';">' + v.title + '</p>' +
+    '<p class="verdict-detail" style="color:' + v.color + ';">' + v.detail + '</p>' +
+    '</div>';
+
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+  document.getElementById('status-dot').className = 'dot-live';
+  document.getElementById('status-text').textContent = 'Actualizado ' + timeStr + (latestDate ? ' · Datos SQZ: ' + latestDate : '');
+  if (latestDate) document.getElementById('data-date').textContent = 'Última sesión SQZ registrada: ' + latestDate;
+}
+
+loadAll();
+</script>

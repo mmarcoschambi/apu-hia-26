@@ -20,6 +20,9 @@ __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
+.venv/
+*.egg-info/
+momentum_v2.egg-info/
 
 # Sensitive data
 .env
@@ -29,6 +32,8 @@ telemetry-id
 data/*
 !data/README.md
 !data/.gitignore
+live_alerts.txt
+live_scan_results.json
 
 # Models (Excluir todo por defecto)
 models/*
@@ -53,3 +58,6 @@ logs/
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Study material (copyrighted)
+study/

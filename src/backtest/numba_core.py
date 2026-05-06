@@ -17,6 +17,7 @@ def simulate_fast_core(
     ema21_arr,
     adr_arr,
     rvol_arr,
+    sector_multiplier_arr,
     entry_score_arr,
     spy_close_arr,
     spy_sma50_arr,
@@ -400,6 +401,9 @@ def simulate_fast_core(
                         risk_amt = risk_dollars
                     else:
                         risk_amt = current_equity * risk_pct_per_trade
+
+                    # Apply sector multiplier (dynamic sizing)
+                    risk_amt = risk_amt * sector_multiplier_arr[t, i]
 
                     if risk_amt <= 0:
                         continue

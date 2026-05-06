@@ -148,20 +148,16 @@ def prepare_numba_arrays(engine, release_dataframes: bool = False) -> Dict:
 
         # --- COMPONENTE 1A: RS 60d (medio plazo) ---
         rs_lookback = getattr(engine, "rs_lookback_days", 60)
-        rs_raw_60 = close_df.pct_change(rs_lookback)
-        score_rs_60 = rs_raw_60.rank(axis=1, pct=True, ascending=True).astype(
-            np.float32
-        )
+        rs_raw_60 = close_df.pct_change(rs_lookback, fill_method=None)
+        score_rs_60 = rs_raw_60.rank(axis=1, pct=True, ascending=True).astype(np.float32)
         score_rs_60 = score_rs_60.ffill().fillna(0.5)
         del rs_raw_60  # MEMORY OPT: liberar intermedio inmediatamente
 
         # --- COMPONENTE 1B: RS 20d (corto plazo - momentum reciente) ---
         rs_short = getattr(engine, "rs_short_lookback_days", 20)
         rs_short_w = getattr(engine, "rs_short_weight", 0.35)
-        rs_raw_20 = close_df.pct_change(rs_short)
-        score_rs_20 = rs_raw_20.rank(axis=1, pct=True, ascending=True).astype(
-            np.float32
-        )
+        rs_raw_20 = close_df.pct_change(rs_short, fill_method=None)
+        score_rs_20 = rs_raw_20.rank(axis=1, pct=True, ascending=True).astype(np.float32)
         score_rs_20 = score_rs_20.ffill().fillna(0.5)
         del rs_raw_20  # MEMORY OPT: liberar intermedio inmediatamente
 
@@ -173,9 +169,7 @@ def prepare_numba_arrays(engine, release_dataframes: bool = False) -> Dict:
 
         # --- COMPONENTE 2: Proximidad a maximo de 52 semanas ---
         max_52wk = close_df.rolling(window=252, min_periods=50).max()
-        proximity_52wk = (
-            (close_df / max_52wk.replace(0, np.nan)).clip(0.0, 1.0).astype(np.float32)
-        )
+        proximity_52wk = (close_df / max_52wk.replace(0, np.nan)).clip(0.0, 1.0).astype(np.float32)
         proximity_52wk = proximity_52wk.ffill().fillna(0.5)
 
         # --- PONDERACION FINAL ---
@@ -282,9 +276,7 @@ def prepare_numba_arrays(engine, release_dataframes: bool = False) -> Dict:
             f"   📊 Entry score calculated: mean={entry_score.mean():.3f}, std={entry_score.std():.3f}"
         )
     except Exception as e:
-        logger.warning(
-            f"   ⚠️ Could not calculate entry_score: {e}. Using uniform score."
-        )
+        logger.warning(f"   ⚠️ Could not calculate entry_score: {e}. Using uniform score.")
         arrays["entry_score"] = np.ones_like(arrays["close"], dtype=np.float32)
 
     # Market data arrays
@@ -318,24 +310,26 @@ def prepare_numba_arrays(engine, release_dataframes: bool = False) -> Dict:
             if not hasattr(engine, "etf_dist_matrix") or not hasattr(engine, "ticker_to_etf_map"):
                 logger.info("   🔍 Building sector ETF mapping for dynamic sizing...")
                 # We use a dummy entries matrix to trigger mask building
-                dummy_entries = pd.DataFrame(False, index=engine.close.index, columns=engine.close.columns)
+                dummy_entries = pd.DataFrame(
+                    False, index=engine.close.index, columns=engine.close.columns
+                )
                 engine._build_sector_etf_mask(dummy_entries)
 
             dist_matrix = engine.etf_dist_matrix
             ticker_map = engine.ticker_to_etf_map
             mult_map = engine.sector_multiplier_map
-            
+
             # Initialize array with 1.0 (no change)
             n_rows, n_cols = engine.close.shape
             sector_mult_arr = np.ones((n_rows, n_cols), dtype=np.float32)
-            
+
             # Buckets from plan
             # weak: <= 0.00
             # low: (0.00, 0.01]
             # mid: (0.01, 0.02]
             # high: (0.02, 0.03]
             # extreme: > 0.03
-            
+
             for j, ticker in enumerate(engine.close.columns):
                 etf = ticker_map.get(ticker)
                 if etf and etf in dist_matrix.columns:
@@ -354,9 +348,9 @@ def prepare_numba_arrays(engine, release_dataframes: bool = False) -> Dict:
                             bucket = "high"
                         else:
                             bucket = "extreme"
-                        
+
                         sector_mult_arr[i, j] = mult_map.get(bucket, 1.0)
-            
+
             arrays["sector_multiplier"] = sector_mult_arr
             logger.info("   ✅ Sector strength multiplier array prepared")
         else:
@@ -366,9 +360,7 @@ def prepare_numba_arrays(engine, release_dataframes: bool = False) -> Dict:
         arrays["sector_multiplier"] = np.ones(engine.close.shape, dtype=np.float32)
 
     # Log shapes for debugging
-    logger.info(
-        f"   📊 Array shapes: close={arrays['close'].shape}, high={arrays['high'].shape}"
-    )
+    logger.info(f"   📊 Array shapes: close={arrays['close'].shape}, high={arrays['high'].shape}")
 
     # OPTIONAL: Release DataFrames after converting to arrays
     # Only do this for single-chunk mode to save memory
@@ -459,8 +451,7 @@ def get_dynamic_thresholds(
             "min_adr": base_min_adr * 1.6,  # +60% más estricto
             "max_dist_sma20": base_max_dist_sma20 * 0.71,  # -29% menos extensión
             "max_stop_pct": base_max_stop_pct * 0.92,  # -8% stops más ajustados
-            "min_dollar_volume": base_min_dollar_volume
-            * 1.67,  # +67% más liquidez requerida
+            "min_dollar_volume": base_min_dollar_volume * 1.67,  # +67% más liquidez requerida
             "min_consolidation_days": int(
                 base_min_consolidation_days * 1.2
             ),  # +20% más consolidación
@@ -508,9 +499,7 @@ def get_position_size(entry_price, stop_loss, risk_per_trade=150):
     Returns:
         Number of shares to buy based on fixed risk amount
     """
-    RISK_PER_TRADE = (
-        risk_per_trade  # Dólares Fijos. Puede ser sobrescrito por parametro.
-    )
+    RISK_PER_TRADE = risk_per_trade  # Dólares Fijos. Puede ser sobrescrito por parametro.
 
     risk_per_share = abs(entry_price - stop_loss)
 
@@ -799,9 +788,7 @@ class AdvancedVectorBTEngine:
         self.min_dollar_volume = min_dollar_volume  # NEW: Min dollar volume
         self.max_stop_pct = max_stop_pct / 100.0 if max_stop_pct > 1.0 else max_stop_pct
         self.earnings_days = earnings_days
-        self.earnings_cushion = int(
-            earnings_cushion
-        )  # Post-earnings buffer in trading days
+        self.earnings_cushion = int(earnings_cushion)  # Post-earnings buffer in trading days
         self.use_earnings_calendar = use_earnings_calendar  # NEW flag
 
         # Market regime parameters (NEW)
@@ -837,9 +824,7 @@ class AdvancedVectorBTEngine:
         self.use_sma50_atr_filter = use_sma50_atr_filter
         self.max_sma50_atr_extension = max_sma50_atr_extension
         self.min_consolidation_days = min_consolidation_days
-        self.use_adaptive_filtering = (
-            use_adaptive_filtering  # NEW: Adaptive filter engine flag
-        )
+        self.use_adaptive_filtering = use_adaptive_filtering  # NEW: Adaptive filter engine flag
         self.require_positive_rs = (
             require_positive_rs  # NEW: Require RS > 0 to eliminate weak stocks
         )
@@ -867,9 +852,7 @@ class AdvancedVectorBTEngine:
                 f"📊 IBD-Style RS: RS≥{self.min_rs_percentile}%, Lookback={self.rs_lookback_days}d"
             )
         if self.use_sma50_atr_filter:
-            logger.info(
-                f"📏 SMA50/ATR: Max extension={self.max_sma50_atr_extension}x ATR"
-            )
+            logger.info(f"📏 SMA50/ATR: Max extension={self.max_sma50_atr_extension}x ATR")
 
         # Initialize market regime classifier if enabled
         if _preloaded_regime_classifier is not None:
@@ -888,19 +871,13 @@ class AdvancedVectorBTEngine:
                     self.end_date.strftime("%Y-%m-%d"),
                     cache=self.data_provider,
                 )
-                self.market_regime_classifier = MarketRegimeClassifier(
-                    spy_data, vix_data
-                )
+                self.market_regime_classifier = MarketRegimeClassifier(spy_data, vix_data)
                 logger.info("   ✅ Market regime classifier initialized")
                 logger.info(f"   🚫 Block Stage 3: {self.block_trades_in_stage3}")
                 logger.info(f"   🚫 Block Stage 4: {self.block_trades_in_stage4}")
-                logger.info(
-                    f"   📊 Adjust risk by regime: {self.adjust_risk_by_regime}"
-                )
+                logger.info(f"   📊 Adjust risk by regime: {self.adjust_risk_by_regime}")
             except Exception as e:
-                logger.error(
-                    f"   ❌ Failed to initialize market regime classifier: {e}"
-                )
+                logger.error(f"   ❌ Failed to initialize market regime classifier: {e}")
                 logger.warning("   ⚠️  Continuing without market regime filter")
                 self.use_market_regime_filter = False
 
@@ -950,9 +927,7 @@ class AdvancedVectorBTEngine:
             # Stats
             total_entries = conf_df.size
             patterns_found = (conf_df > 0).sum().sum()
-            detection_rate = (
-                patterns_found / total_entries * 100 if total_entries > 0 else 0
-            )
+            detection_rate = patterns_found / total_entries * 100 if total_entries > 0 else 0
 
             logger.info(
                 f"✅ Pattern cache loaded: {len(available_tickers)} tickers, "
@@ -1032,15 +1007,11 @@ class AdvancedVectorBTEngine:
         rs_short = getattr(self, "rs_short_lookback_days", 20)
         rs_short_w = getattr(self, "rs_short_weight", 0.35)
 
-        rs_raw_60 = close_df.pct_change(rs_lookback)
-        score_rs_60 = (
-            rs_raw_60.rank(axis=1, pct=True, ascending=True).ffill().fillna(0.5)
-        )
+        rs_raw_60 = close_df.pct_change(rs_lookback, fill_method=None)
+        score_rs_60 = rs_raw_60.rank(axis=1, pct=True, ascending=True).ffill().fillna(0.5)
 
-        rs_raw_20 = close_df.pct_change(rs_short)
-        score_rs_20 = (
-            rs_raw_20.rank(axis=1, pct=True, ascending=True).ffill().fillna(0.5)
-        )
+        rs_raw_20 = close_df.pct_change(rs_short, fill_method=None)
+        score_rs_20 = rs_raw_20.rank(axis=1, pct=True, ascending=True).ffill().fillna(0.5)
 
         score_rs = (1.0 - rs_short_w) * score_rs_60 + rs_short_w * score_rs_20
         return score_rs.values.astype(_np.float32)
@@ -1070,9 +1041,7 @@ class AdvancedVectorBTEngine:
         self.universe = filter_blacklisted_tickers(self.universe)
         filtered_count = original_count - len(self.universe)
         if filtered_count > 0:
-            logger.info(
-                f"🚫 Filtered {filtered_count} blacklisted tickers from universe"
-            )
+            logger.info(f"🚫 Filtered {filtered_count} blacklisted tickers from universe")
 
         # Add 365 days lookback for ATH/VCP calculation
         fetch_start_date = self.start_date - pd.Timedelta(days=365)
@@ -1114,17 +1083,13 @@ class AdvancedVectorBTEngine:
                 offline=self.offline_mode,
             )
         except Exception as e:
-            logger.warning(
-                f"⚠️  Batch load failed ({e}), falling back to per-ticker fetch"
-            )
+            logger.warning(f"⚠️  Batch load failed ({e}), falling back to per-ticker fetch")
             raw_batch = {}
 
         # Tickers no cubiertos por batch → fallback individual (downloads nuevos)
         missing_tickers = [t for t in self.universe if t not in raw_batch]
         if missing_tickers:
-            logger.info(
-                f"   Downloading {len(missing_tickers)} tickers not in cache..."
-            )
+            logger.info(f"   Downloading {len(missing_tickers)} tickers not in cache...")
 
             def fetch_ticker(ticker):
                 try:
@@ -1162,9 +1127,7 @@ class AdvancedVectorBTEngine:
                 futures = {executor.submit(fetch_ticker, t): t for t in missing_tickers}
                 for i, future in enumerate(as_completed(futures)):
                     if (i + 1) % 50 == 0:
-                        logger.info(
-                            f"   Download progress: {i + 1}/{len(missing_tickers)}..."
-                        )
+                        logger.info(f"   Download progress: {i + 1}/{len(missing_tickers)}...")
                     ticker, df, failure_reason, partial_msg = future.result()
                     if df is not None:
                         raw_batch[ticker] = df
@@ -1192,9 +1155,7 @@ class AdvancedVectorBTEngine:
                 if len(df) >= min_required_days:
                     all_data[ticker] = df
                     if len(df) < expected_days * 0.8:
-                        partial_data.append(
-                            f"{ticker} ({len(df)}/{expected_days} days)"
-                        )
+                        partial_data.append(f"{ticker} ({len(df)}/{expected_days} days)")
                 else:
                     failed.append(f"{ticker} (len={len(df)} < min={min_required_days})")
             except Exception as e:
@@ -1211,9 +1172,7 @@ class AdvancedVectorBTEngine:
         if partial_data and len(partial_data) <= 5:
             logger.info(f"ℹ️  Partial data: {', '.join(partial_data)}")
         elif len(partial_data) > 5:
-            logger.info(
-                f"ℹ️  {len(partial_data)} tickers with partial data (gaps in history)"
-            )
+            logger.info(f"ℹ️  {len(partial_data)} tickers with partial data (gaps in history)")
 
         if len(all_data) == 0:
             raise ValueError(
@@ -1235,9 +1194,7 @@ class AdvancedVectorBTEngine:
         self.close = pd.DataFrame(close_data).ffill()
         self.high = pd.DataFrame(high_data).ffill()
         self.low = pd.DataFrame(low_data).ffill()
-        self.volume = pd.DataFrame(volume_data).fillna(
-            0
-        )  # Volume should be 0 if missing
+        self.volume = pd.DataFrame(volume_data).fillna(0)  # Volume should be 0 if missing
 
         # Deduplicate index: algunos tickers tienen fechas repetidas en la DB
         # lo que contamina el DataFrame y rompe reindex() con duplicate labels.
@@ -1352,15 +1309,9 @@ class AdvancedVectorBTEngine:
             _df = getattr(self, _attr)
             if _df.index.duplicated().any():
                 setattr(self, _attr, _df[~_df.index.duplicated(keep="last")])
-        self.sma_20 = self.sma_20.reindex(
-            index=self.close.index, columns=self.close.columns
-        )
-        self.sma_50 = self.sma_50.reindex(
-            index=self.close.index, columns=self.close.columns
-        )
-        self.adr_pct = self.adr_pct.reindex(
-            index=self.close.index, columns=self.close.columns
-        )
+        self.sma_20 = self.sma_20.reindex(index=self.close.index, columns=self.close.columns)
+        self.sma_50 = self.sma_50.reindex(index=self.close.index, columns=self.close.columns)
+        self.adr_pct = self.adr_pct.reindex(index=self.close.index, columns=self.close.columns)
 
         # Log cache utilization
         if cache_available_count > 0:
@@ -1368,21 +1319,13 @@ class AdvancedVectorBTEngine:
                 f"   ✅ Using precomputed metrics for {cache_available_count}/{len(all_data)} tickers from SQLite cache"
             )
         else:
-            logger.warning(
-                "   ⚠️ No precomputed metrics found in cache, will calculate on the fly"
-            )
+            logger.warning("   ⚠️ No precomputed metrics found in cache, will calculate on the fly")
 
         # Extract context columns (ADR, RVOL, trend, etc.)
         # Calculate context metrics on the fly if missing (crucial fix for missing cache data)
-        self.avg_volume_20 = pd.DataFrame(
-            index=self.close.index, columns=self.close.columns
-        )
-        self.trend_aligned = pd.DataFrame(
-            index=self.close.index, columns=self.close.columns
-        )
-        self.dollar_volume = pd.DataFrame(
-            index=self.close.index, columns=self.close.columns
-        )
+        self.avg_volume_20 = pd.DataFrame(index=self.close.index, columns=self.close.columns)
+        self.trend_aligned = pd.DataFrame(index=self.close.index, columns=self.close.columns)
+        self.dollar_volume = pd.DataFrame(index=self.close.index, columns=self.close.columns)
 
         for t, df in all_data.items():
             # ADR already loaded from cache if available, calculate if missing
@@ -1431,9 +1374,7 @@ class AdvancedVectorBTEngine:
         )
 
         if cache_hit_rate < 0.1:
-            logger.info(
-                "   ⚠️ Precomputed metrics not available, calculating on the fly..."
-            )
+            logger.info("   ⚠️ Precomputed metrics not available, calculating on the fly...")
             self.sma_20 = self.close.rolling(20, min_periods=1).mean()
             logger.info("   ⚠️ SMA50 missing in cache, calculating on the fly...")
             self.sma_50 = self.close.rolling(50, min_periods=1).mean()
@@ -1508,9 +1449,7 @@ class AdvancedVectorBTEngine:
 
             # Use centralized loader
             spy_data, vix_data = load_spy_vix_data(
-                start_date=(self.start_date - pd.Timedelta(days=365)).strftime(
-                    "%Y-%m-%d"
-                ),
+                start_date=(self.start_date - pd.Timedelta(days=365)).strftime("%Y-%m-%d"),
                 end_date=self.end_date.strftime("%Y-%m-%d"),
                 cache=self.cache,
             )
@@ -1562,12 +1501,8 @@ class AdvancedVectorBTEngine:
             self.spy_sma50 = self.spy_close.rolling(window=50).mean()
 
             # Calculate Market Regime
-            self.market_is_bullish = (self.spy_close > self.spy_sma200) & (
-                self.vix_close < 20
-            )
-            self.market_is_safe = (self.spy_close > self.spy_ema20) & (
-                self.vix_close < 20
-            )
+            self.market_is_bullish = (self.spy_close > self.spy_sma200) & (self.vix_close < 20)
+            self.market_is_safe = (self.spy_close > self.spy_ema20) & (self.vix_close < 20)
 
             logger.info(f"   ✅ Market Data Loaded & Aligned")
 
@@ -1594,9 +1529,7 @@ class AdvancedVectorBTEngine:
         if len(failed) > 0:
             logger.info(f"🛡️  Filtered out {len(failed)} tickers (insufficient data)")
 
-        logger.info(
-            f"   Date range: {actual_start} to {actual_end} ({len(self.close)} days)"
-        )
+        logger.info(f"   Date range: {actual_start} to {actual_end} ({len(self.close)} days)")
 
         if actual_start > self.start_date.date() or actual_end < self.end_date.date():
             logger.warning(
@@ -1606,9 +1539,7 @@ class AdvancedVectorBTEngine:
         # TRUNCATE data to requested date range (BUG FIX)
         # This ensures backtest runs exactly from start_date to end_date
         if actual_start < self.start_date.date():
-            logger.info(
-                f"   🔧 Truncating data to start_date: {self.start_date.date()}"
-            )
+            logger.info(f"   🔧 Truncating data to start_date: {self.start_date.date()}")
             self.close = self.close.loc[self.start_date :]
             self.high = (
                 self.high.loc[self.start_date :]
@@ -1669,21 +1600,15 @@ class AdvancedVectorBTEngine:
             self.sma_50 = self.sma_50.astype(np.float32)
         if hasattr(self, "adr_pct") and isinstance(self.adr_pct, pd.DataFrame):
             self.adr_pct = self.adr_pct.astype(np.float32)
-        if hasattr(self, "avg_volume_20") and isinstance(
-            self.avg_volume_20, pd.DataFrame
-        ):
+        if hasattr(self, "avg_volume_20") and isinstance(self.avg_volume_20, pd.DataFrame):
             self.avg_volume_20 = self.avg_volume_20.astype(np.float32)
-        if hasattr(self, "dollar_volume") and isinstance(
-            self.dollar_volume, pd.DataFrame
-        ):
+        if hasattr(self, "dollar_volume") and isinstance(self.dollar_volume, pd.DataFrame):
             self.dollar_volume = self.dollar_volume.astype(np.float32)
         if hasattr(self, "ema_8") and isinstance(self.ema_8, pd.DataFrame):
             self.ema_8 = self.ema_8.astype(np.float32)
         if hasattr(self, "ema_21") and isinstance(self.ema_21, pd.DataFrame):
             self.ema_21 = self.ema_21.astype(np.float32)
-        if hasattr(self, "dist_sma20_pct") and isinstance(
-            self.dist_sma20_pct, pd.DataFrame
-        ):
+        if hasattr(self, "dist_sma20_pct") and isinstance(self.dist_sma20_pct, pd.DataFrame):
             self.dist_sma20_pct = self.dist_sma20_pct.astype(np.float32)
         if hasattr(self, "rvol") and isinstance(self.rvol, pd.DataFrame):
             self.rvol = self.rvol.astype(np.float32)
@@ -1741,6 +1666,7 @@ class AdvancedVectorBTEngine:
         # ──────────────────────────────────────────────────────────────────────
         try:
             from src.backtest.signal_engine import inject_precomputed_signals
+
             inject_precomputed_signals(self)
         except ImportError:
             logger.warning("⚠️ signal_engine.py no encontrado. Saltando inyección de señales.")
@@ -1796,11 +1722,7 @@ class AdvancedVectorBTEngine:
                 else (
                     "WIN"
                     if pnl > 0
-                    else (
-                        "SMALL_LOSS"
-                        if pnl > -shares * 0.5 * risk_per_share
-                        else "BIG_LOSS"
-                    )
+                    else ("SMALL_LOSS" if pnl > -shares * 0.5 * risk_per_share else "BIG_LOSS")
                 )
             ),
             "was_stopped_out": was_stopped_out,
@@ -1871,24 +1793,18 @@ class AdvancedVectorBTEngine:
         # MEMORY OPTIMIZATION: Use pre-calculated arrays if available
         # FIX: Keep as float32 to save 50% memory, Numba handles conversion internally
         if numba_arrays is not None:
-            logger.info(
-                "   🚀 Using pre-calculated NumPy arrays (memory optimized - float32)"
-            )
+            logger.info("   🚀 Using pre-calculated NumPy arrays (memory optimized - float32)")
             close_arr = numba_arrays["close"].astype(np.float32)
             high_arr = numba_arrays["high"].astype(np.float32)
             low_arr = numba_arrays["low"].astype(np.float32)
             # Open not in numba_arrays, use close as fallback
             open_arr = close_arr
             # NEW: Volume and RVOL from numba_arrays
-            volume_arr = numba_arrays.get("volume", np.zeros_like(close_arr)).astype(
+            volume_arr = numba_arrays.get("volume", np.zeros_like(close_arr)).astype(np.float32)
+            rvol_arr = numba_arrays.get("rvol", np.zeros_like(close_arr)).astype(np.float32)
+            entry_score_arr = numba_arrays.get("entry_score", np.ones_like(close_arr)).astype(
                 np.float32
             )
-            rvol_arr = numba_arrays.get("rvol", np.zeros_like(close_arr)).astype(
-                np.float32
-            )
-            entry_score_arr = numba_arrays.get(
-                "entry_score", np.ones_like(close_arr)
-            ).astype(np.float32)
         else:
             # Fallback: Convert from DataFrames (legacy mode)
             logger.info("   🐌 Converting from DataFrames (legacy mode - float32)")
@@ -1931,18 +1847,10 @@ class AdvancedVectorBTEngine:
         # Convertir indicadores a arrays de numpy para Numba
         # MEMORY OPTIMIZATION: Use pre-calculated arrays if available
         if numba_arrays is not None:
-            sma20_arr = numba_arrays.get("sma_20", np.zeros_like(close_arr)).astype(
-                np.float32
-            )
-            ema10_arr = numba_arrays.get("ema_10", np.zeros_like(close_arr)).astype(
-                np.float32
-            )
-            ema8_arr = numba_arrays.get("ema_8", np.zeros_like(close_arr)).astype(
-                np.float32
-            )
-            ema21_arr = numba_arrays.get("ema_21", np.zeros_like(close_arr)).astype(
-                np.float32
-            )
+            sma20_arr = numba_arrays.get("sma_20", np.zeros_like(close_arr)).astype(np.float32)
+            ema10_arr = numba_arrays.get("ema_10", np.zeros_like(close_arr)).astype(np.float32)
+            ema8_arr = numba_arrays.get("ema_8", np.zeros_like(close_arr)).astype(np.float32)
+            ema21_arr = numba_arrays.get("ema_21", np.zeros_like(close_arr)).astype(np.float32)
         else:
             # Fallback: Use DataFrames (legacy mode)
             sma20_arr = (
@@ -1993,11 +1901,7 @@ class AdvancedVectorBTEngine:
         # 2. Ejecutar Numba Core
         # Parámetros de riesgo
         # CRITICAL FIX: Convertir risk_dollars a risk_pct para compatibilidad con V6_PRO
-        if (
-            self.use_fixed_dollar_risk
-            and hasattr(self, "risk_dollars")
-            and self.risk_dollars > 0
-        ):
+        if self.use_fixed_dollar_risk and hasattr(self, "risk_dollars") and self.risk_dollars > 0:
             # Calcular risk_pct equivalente basado en capital inicial
             # risk_dollars = equity * risk_pct => risk_pct = risk_dollars / equity
             risk_pct_per_trade = self.risk_dollars / self.initial_capital
@@ -2006,9 +1910,7 @@ class AdvancedVectorBTEngine:
             )
         else:
             risk_pct_per_trade = self.risk_pct  # Ej: 0.01 (1%)
-            logger.info(
-                f"   💰 Numba Core usando DYNAMIC RISK: {risk_pct_per_trade * 100:.2f}%"
-            )
+            logger.info(f"   💰 Numba Core usando DYNAMIC RISK: {risk_pct_per_trade * 100:.2f}%")
 
         max_exposure_pct = self.max_exposure_pct  # Ej: 0.25 (25%)
         be_threshold_r = 1.0  # Mover a BE al 1R (si trailing stop activo)
@@ -2031,9 +1933,7 @@ class AdvancedVectorBTEngine:
         logger.info(
             f"   TP Distribution: {tp1_pct * 100:.0f}% / {tp2_pct * 100:.0f}% / {runner_pct * 100:.0f}%"
         )
-        logger.info(
-            f"   Max Stop %%: {max_stop_pct * 100:.1f}% (decimal: {max_stop_pct})"
-        )
+        logger.info(f"   Max Stop %%: {max_stop_pct * 100:.1f}% (decimal: {max_stop_pct})")
         logger.info(f"   Trailing Stop: {self.use_trailing_stop}")
         logger.info(f"   ATR Stop Mode: {self.use_atr_stop}")
         if self.use_atr_stop:
@@ -2087,9 +1987,7 @@ class AdvancedVectorBTEngine:
         # DEBUG: Reportar estadísticas de entradas y trades
         total_entries = entries_arr.sum()
         total_trades = len(trades_log)
-        conversion_rate = (
-            (total_trades / total_entries * 100) if total_entries > 0 else 0
-        )
+        conversion_rate = (total_trades / total_entries * 100) if total_entries > 0 else 0
 
         logger.info(f"📊 Numba Core Results:")
         logger.info(f"   Entry signals found: {total_entries}")
@@ -2098,19 +1996,13 @@ class AdvancedVectorBTEngine:
         logger.info(f"   Final equity: ${equity_curve_arr[-1]:,.2f}")
 
         if total_entries > 0 and total_trades == 0:
-            logger.error(
-                f"   ❌ CRITICAL: {total_entries} entry signals but 0 trades executed!"
-            )
-            logger.error(
-                f"   Check: max_stop_pct={max_stop_pct}, risk_dollars={self.risk_dollars}"
-            )
+            logger.error(f"   ❌ CRITICAL: {total_entries} entry signals but 0 trades executed!")
+            logger.error(f"   Check: max_stop_pct={max_stop_pct}, risk_dollars={self.risk_dollars}")
             logger.error(
                 f"   Common causes: Stop distance too small, insufficient cash, or position sizing bug"
             )
         elif conversion_rate < 5:
-            logger.warning(
-                f"   ⚠️ Low conversion rate ({conversion_rate:.1f}%) - Check parameters"
-            )
+            logger.warning(f"   ⚠️ Low conversion rate ({conversion_rate:.1f}%) - Check parameters")
             logger.warning(
                 f"   May indicate: Restrictive filters, large stop distances, or insufficient capital"
             )
@@ -2156,9 +2048,7 @@ class AdvancedVectorBTEngine:
             trades_df["exit_date"] = close.index[trades_df["day_idx"].astype(int)]
 
             # NUEVO: Mapear fecha de entrada real
-            trades_df["entry_date"] = close.index[
-                trades_df["entry_day_idx"].astype(int)
-            ]
+            trades_df["entry_date"] = close.index[trades_df["entry_day_idx"].astype(int)]
 
             trades_df["symbol"] = close.columns[trades_df["col_idx"].astype(int)]
 
@@ -2215,22 +2105,16 @@ class AdvancedVectorBTEngine:
                         )
                     except Exception:
                         signal_type_vals.append(
-                            self.signal_type.upper()
-                            if hasattr(self, "signal_type")
-                            else "MOMENTUM"
+                            self.signal_type.upper() if hasattr(self, "signal_type") else "MOMENTUM"
                         )
                 trades_df["signal_type"] = signal_type_vals
             else:
                 trades_df["signal_type"] = (
-                    self.signal_type.upper()
-                    if hasattr(self, "signal_type")
-                    else "MOMENTUM"
+                    self.signal_type.upper() if hasattr(self, "signal_type") else "MOMENTUM"
                 )
 
             # Enriquecer con dist_sma20_pct para derive_tier2_filters.py
-            if hasattr(self, "dist_sma20_pct") and isinstance(
-                self.dist_sma20_pct, pd.DataFrame
-            ):
+            if hasattr(self, "dist_sma20_pct") and isinstance(self.dist_sma20_pct, pd.DataFrame):
                 dist_vals = []
                 for _, row in trades_df.iterrows():
                     try:
@@ -2240,9 +2124,7 @@ class AdvancedVectorBTEngine:
                             entry_date in self.dist_sma20_pct.index
                             and sym in self.dist_sma20_pct.columns
                         ):
-                            dist_vals.append(
-                                float(self.dist_sma20_pct.loc[entry_date, sym])
-                            )
+                            dist_vals.append(float(self.dist_sma20_pct.loc[entry_date, sym]))
                         else:
                             dist_vals.append(np.nan)
                     except Exception:
@@ -2255,18 +2137,13 @@ class AdvancedVectorBTEngine:
 
             # -- RS Percentile at Entry --
             if self.use_rs_percentile and hasattr(self, "close"):
-                rs_percentile = self.calculate_rs_percentile(
-                    lookback_days=self.rs_lookback_days
-                )
+                rs_percentile = self.calculate_rs_percentile(lookback_days=self.rs_lookback_days)
                 rs_vals = []
                 for _, row in trades_df.iterrows():
                     try:
                         entry_date = row["entry_date"]
                         sym = row["symbol"]
-                        if (
-                            entry_date in rs_percentile.index
-                            and sym in rs_percentile.columns
-                        ):
+                        if entry_date in rs_percentile.index and sym in rs_percentile.columns:
                             rs_vals.append(float(rs_percentile.loc[entry_date, sym]))
                         else:
                             rs_vals.append(np.nan)
@@ -2280,9 +2157,7 @@ class AdvancedVectorBTEngine:
             if self.pattern_confidence_matrix is not None and len(trades_df) > 0:
                 pattern_conf = self.pattern_confidence_matrix
                 pattern_types = (
-                    self.pattern_type_matrix
-                    if self.pattern_type_matrix is not None
-                    else None
+                    self.pattern_type_matrix if self.pattern_type_matrix is not None else None
                 )
 
                 pattern_confidences = []
@@ -2293,10 +2168,7 @@ class AdvancedVectorBTEngine:
                         entry_date = row["entry_date"]
                         sym = row["symbol"]
 
-                        if (
-                            entry_date in pattern_conf.index
-                            and sym in pattern_conf.columns
-                        ):
+                        if entry_date in pattern_conf.index and sym in pattern_conf.columns:
                             conf = float(pattern_conf.loc[entry_date, sym])
                         else:
                             conf = 0.0
@@ -2305,10 +2177,7 @@ class AdvancedVectorBTEngine:
 
                         # Pattern type
                         if pattern_types is not None:
-                            if (
-                                entry_date in pattern_types.index
-                                and sym in pattern_types.columns
-                            ):
+                            if entry_date in pattern_types.index and sym in pattern_types.columns:
                                 ptype = str(pattern_types.loc[entry_date, sym])
                             else:
                                 ptype = "NONE"
@@ -2341,9 +2210,7 @@ class AdvancedVectorBTEngine:
                     calc_pattern_bonus
                 )
 
-                logger.info(
-                    f"   🎯 Pattern info added to trades: {len(trades_df)} trades"
-                )
+                logger.info(f"   🎯 Pattern info added to trades: {len(trades_df)} trades")
                 logger.info(
                     f"      Trades with pattern (conf > 0): {(trades_df['pattern_confidence'] > 0).sum()}"
                 )
@@ -2451,9 +2318,7 @@ class AdvancedVectorBTEngine:
                             f"| WR before={(_n_before > 0 and (trades_df['pnl'] > 0).sum() / _n_before or 0):.1%}"
                         )
                     else:
-                        logger.warning(
-                            "   ⚠️ ML model not found -- skipping post-filter"
-                        )
+                        logger.warning("   ⚠️ ML model not found -- skipping post-filter")
                 except Exception as _me:
                     logger.warning(f"   ⚠️ ML post-filter error: {_me}")
 
@@ -2488,9 +2353,7 @@ class AdvancedVectorBTEngine:
         post_buffer_bdays = self.earnings_cushion  # trading days AFTER earnings
 
         # Start with all safe (no danger)
-        danger_mask = pd.DataFrame(
-            False, index=self.close.index, columns=self.close.columns
-        )
+        danger_mask = pd.DataFrame(False, index=self.close.index, columns=self.close.columns)
 
         tickers_with_data = 0
         events_applied = 0
@@ -2510,10 +2373,7 @@ class AdvancedVectorBTEngine:
                     end_danger = event_date + pd.offsets.BDay(post_buffer_bdays)
 
                     # Only apply if danger zone overlaps our backtest range
-                    if (
-                        start_danger <= self.close.index[-1]
-                        and end_danger >= self.close.index[0]
-                    ):
+                    if start_danger <= self.close.index[-1] and end_danger >= self.close.index[0]:
                         danger_mask.loc[start_danger:end_danger, ticker] = True
                         events_applied += 1
 
@@ -2563,9 +2423,7 @@ class AdvancedVectorBTEngine:
         Returns:
             DataFrame with RS percentile (0-100) for each ticker per day
         """
-        logger.info(
-            f"📈 Calculating RS Percentile (IBD-style, {lookback_days}d lookback)..."
-        )
+        logger.info(f"📈 Calculating RS Percentile (IBD-style, {lookback_days}d lookback)...")
 
         # Calculate performance for each ticker
         performance = self.close.pct_change(lookback_days)
@@ -2574,9 +2432,7 @@ class AdvancedVectorBTEngine:
         # RS = percentile of performance vs all stocks that day
         rs_percentile = performance.rank(axis=1, pct=True) * 100
 
-        logger.info(
-            f"   ✅ RS Percentile calculated (mean: {rs_percentile.mean().mean():.1f})"
-        )
+        logger.info(f"   ✅ RS Percentile calculated (mean: {rs_percentile.mean().mean():.1f})")
 
         return rs_percentile
 
@@ -2605,9 +2461,7 @@ class AdvancedVectorBTEngine:
         # Extension = (Price - SMA50) / ATR
         extension = (self.close - sma50) / atr
 
-        logger.info(
-            f"   ✅ Extension calculated (mean: {extension.mean().mean():.2f}x ATR)"
-        )
+        logger.info(f"   ✅ Extension calculated (mean: {extension.mean().mean():.2f}x ATR)")
 
         return extension
 
@@ -2623,11 +2477,11 @@ class AdvancedVectorBTEngine:
         from src.utils.sector_rotation import SECTOR_MAP, SECTOR_ETFS, get_ticker_sector_mapping
 
         tickers = entries.columns.tolist()
-        
+
         # Use robust mapping (static map + DB)
         ticker_to_etf = get_ticker_sector_mapping(tickers)
         self.ticker_to_etf_map = ticker_to_etf
-        
+
         unique_etfs = list(set([etf for etf in ticker_to_etf.values() if etf is not None]))
 
         if not unique_etfs:
@@ -2635,9 +2489,11 @@ class AdvancedVectorBTEngine:
             return pd.DataFrame(True, index=entries.index, columns=entries.columns)
 
         # 3. Download/Load ETF data
-        start_date = (entries.index[0] - pd.Timedelta(days=self.sector_etf_sma_period * 3)).strftime("%Y-%m-%d")
+        start_date = (
+            entries.index[0] - pd.Timedelta(days=self.sector_etf_sma_period * 3)
+        ).strftime("%Y-%m-%d")
         end_date = (entries.index[-1] + pd.Timedelta(days=5)).strftime("%Y-%m-%d")
-        
+
         try:
             cache = TickerCache()
             etf_prices = {}
@@ -2645,17 +2501,17 @@ class AdvancedVectorBTEngine:
                 df_etf = cache.get_ohlcv(etf, start_date, end_date)
                 if df_etf is not None:
                     # Normalizar columna y zona horaria
-                    s = df_etf['Close'].copy()
+                    s = df_etf["Close"].copy()
                     if s.index.tz is not None:
                         s.index = s.index.tz_localize(None)
                     etf_prices[etf] = s
-            
+
             if not etf_prices:
                 return pd.DataFrame(True, index=entries.index, columns=entries.columns)
-                
+
             close_prices = pd.DataFrame(etf_prices)
             sma_df = close_prices.rolling(window=self.sector_etf_sma_period).mean()
-            
+
             # Align with entries index (ensure no timezone)
             idx_clean = entries.index
             if idx_clean.tz is not None:
@@ -2663,28 +2519,28 @@ class AdvancedVectorBTEngine:
 
             close_aligned = close_prices.reindex(idx_clean).ffill()
             sma_aligned = sma_df.reindex(idx_clean).ffill()
-            
+
             # Re-align entries index if needed
             close_aligned.index = entries.index
             sma_aligned.index = entries.index
 
             # Store distance for audit/setups
             self.etf_dist_matrix = (close_aligned / sma_aligned) - 1.0
-            
+
             if not getattr(self, "use_sector_etf_filter", False):
                 return pd.DataFrame(True, index=entries.index, columns=entries.columns)
 
             # Build the condition: Close > SMA * (1 + threshold)
             etf_condition = close_aligned > (sma_aligned * (1.0 + self.sector_etf_dist_threshold))
-            
+
             mask = pd.DataFrame(True, index=entries.index, columns=entries.columns)
             for ticker in tickers:
                 etf = ticker_to_etf.get(ticker)
                 if etf and etf in etf_condition.columns:
                     mask[ticker] = etf_condition[etf]
-            
+
             return mask
-                    
+
         except Exception as e:
             logger.error(f"Error computing sector ETF mask: {e}")
             return pd.DataFrame(True, index=entries.index, columns=entries.columns)
@@ -2694,11 +2550,7 @@ class AdvancedVectorBTEngine:
         logger.info("🎯 Starting advanced backtest with partial exits...")
 
         # Load data (skip if already loaded -- avoids double load in optimize_3tier)
-        if (
-            not hasattr(self, "close")
-            or self.close is None
-            or len(self.close.columns) == 0
-        ):
+        if not hasattr(self, "close") or self.close is None or len(self.close.columns) == 0:
             self.load_data()
         else:
             logger.debug("   ⏩ Data already loaded, skipping load_data()")
@@ -2791,6 +2643,12 @@ class AdvancedVectorBTEngine:
             # Combine: THOR baseline = liquidity & quality & consolidation & breakout
             entries = liquidity & quality & consolidation & breakout_signal
 
+            # Store for watchlist
+            self.last_liquidity = liquidity
+            self.last_quality = quality
+            self.last_consolidation = consolidation
+            self.last_base_entry = self.close > 0  # Placeholder
+
             logger.info(f"   📊 THOR-baseline entries: {entries.sum().sum()}")
             logger.info(f"      Liquidity passed: {liquidity.sum().sum()}")
             logger.info(f"      Quality passed: {quality.sum().sum()}")
@@ -2806,6 +2664,23 @@ class AdvancedVectorBTEngine:
             # NOTE: All quality filters (RVOL, ADR, dist_sma20, consolidation)
             # are handled by the Adaptive Filter Engine to avoid double-filtering
             base_entry = self.close > safe_sma20
+
+            # RS Calculation for watchlist
+            rs_short_lb = getattr(self, "rs_short_lookback_days", 20)
+            rs_20d_raw = self.close.ffill().pct_change(rs_short_lb, fill_method=None)
+            self.rs_20d = rs_20d_raw.rank(axis=1, pct=True) * 100
+
+            # Store for watchlist
+            self.last_base_entry = base_entry
+            self.last_liquidity = pd.DataFrame(
+                True, index=base_entry.index, columns=base_entry.columns
+            )
+            self.last_quality = pd.DataFrame(
+                True, index=base_entry.index, columns=base_entry.columns
+            )
+            self.last_consolidation = pd.DataFrame(
+                True, index=base_entry.index, columns=base_entry.columns
+            )
 
             # ================================================================
             # SIGNAL TYPE ROUTING
@@ -2883,9 +2758,7 @@ class AdvancedVectorBTEngine:
                 # 4. Price within pivot_dist_max% below pivot (not extended)
                 pivot_high_now = self.high.rolling(pivot_window).max()
                 dist_to_pivot_pct = (
-                    (pivot_high_now - self.close)
-                    / pivot_high_now.replace(0, float("nan"))
-                    * 100
+                    (pivot_high_now - self.close) / pivot_high_now.replace(0, float("nan")) * 100
                 )
                 near_pivot = (
                     (dist_to_pivot_pct >= 0) & (dist_to_pivot_pct <= pivot_dist_max)
@@ -2895,9 +2768,7 @@ class AdvancedVectorBTEngine:
                 rolling_high = self.high.rolling(pivot_window).max()
                 rolling_low = self.low.rolling(pivot_window).min()
                 base_range_pct = (
-                    (rolling_high - rolling_low)
-                    / rolling_low.replace(0, float("nan"))
-                    * 100
+                    (rolling_high - rolling_low) / rolling_low.replace(0, float("nan")) * 100
                 )
                 tight_base = (base_range_pct < depth_max_pct).fillna(False)
 
@@ -2912,13 +2783,7 @@ class AdvancedVectorBTEngine:
                         & tight_base
                     )
                 else:
-                    entries = (
-                        base_entry
-                        & pivot_break
-                        & atr_contracting
-                        & near_pivot
-                        & tight_base
-                    )
+                    entries = base_entry & pivot_break & atr_contracting & near_pivot & tight_base
 
                 logger.info(
                     f"   VCP v2: pivot_win={pivot_window} atr_ratio<{atr_ratio_th}"
@@ -2957,9 +2822,7 @@ class AdvancedVectorBTEngine:
 
                 # Max down-day volume in lookback (shifted 1 to avoid lookahead)
                 down_vol = self.volume.where(is_down, other=float("nan"))
-                max_down_vol = (
-                    down_vol.rolling(pp_lookback, min_periods=1).max().shift(1)
-                )
+                max_down_vol = down_vol.rolling(pp_lookback, min_periods=1).max().shift(1)
                 max_down_vol = max_down_vol.fillna(
                     self.volume.rolling(pp_lookback, min_periods=1).mean().shift(1)
                 )
@@ -2986,38 +2849,24 @@ class AdvancedVectorBTEngine:
                 fb_max_rng = getattr(self, "fb_max_range", 7.0)
 
                 # Rolling range% across the base window
-                roll_high = self.high.rolling(
-                    fb_min_bars, min_periods=fb_min_bars
-                ).max()
+                roll_high = self.high.rolling(fb_min_bars, min_periods=fb_min_bars).max()
                 roll_low = self.low.rolling(fb_min_bars, min_periods=fb_min_bars).min()
-                base_rng_pct = (
-                    (roll_high - roll_low) / roll_low.replace(0, float("nan")) * 100
-                )
+                base_rng_pct = (roll_high - roll_low) / roll_low.replace(0, float("nan")) * 100
                 is_tight = (base_rng_pct < fb_max_rng).fillna(False)
 
                 # Flat check: middle third lows not >2% below left/right thirds
                 third = max(fb_min_bars // 3, 5)
-                left_low = (
-                    self.low.rolling(third, min_periods=1)
-                    .min()
-                    .shift(fb_min_bars - third)
-                )
+                left_low = self.low.rolling(third, min_periods=1).min().shift(fb_min_bars - third)
                 mid_low = self.low.rolling(third, min_periods=1).min().shift(third)
                 right_low = self.low.rolling(third, min_periods=1).min()
-                is_cup = (
-                    (mid_low < left_low * 0.98) & (mid_low < right_low * 0.98)
-                ).fillna(False)
+                is_cup = ((mid_low < left_low * 0.98) & (mid_low < right_low * 0.98)).fillna(False)
                 is_flat = is_tight & (~is_cup)
 
                 # Breakout: close > rolling max of prior base (no lookahead)
                 upper_boundary = (
-                    self.high.shift(1)
-                    .rolling(fb_min_bars, min_periods=fb_min_bars)
-                    .max()
+                    self.high.shift(1).rolling(fb_min_bars, min_periods=fb_min_bars).max()
                 )
-                fb_breakout = (
-                    self.close > upper_boundary.replace(0, float("nan"))
-                ).fillna(False)
+                fb_breakout = (self.close > upper_boundary.replace(0, float("nan"))).fillna(False)
 
                 entries = base_entry & is_flat & fb_breakout
                 logger.info(
@@ -3030,9 +2879,7 @@ class AdvancedVectorBTEngine:
                 entries = base_entry
                 logger.info("   Using TREND signal (close > SMA20)")
 
-            logger.info(
-                f"   ADVANCED MODE entries (before filters): {entries.sum().sum()}"
-            )
+            logger.info(f"   ADVANCED MODE entries (before filters): {entries.sum().sum()}")
             logger.info(f"      Base entry passed: {base_entry.sum().sum()}")
 
         # Signal types: label entries with their signal type
@@ -3165,18 +3012,20 @@ class AdvancedVectorBTEngine:
         # Identify setups on the last day (for live scanning)
         last_day_idx = entries.index[-1]
         last_day_sigs = entries.loc[last_day_idx]
-        
+
         # Calcular ATR(14) para stop loss operativo (más preciso que SMA20)
         # TR = max(H-L, |H-Cprev|, |L-Cprev|)
         try:
-            hl   = self.high - self.low
-            hc   = (self.high - self.close.shift(1)).abs()
-            lc   = (self.low  - self.close.shift(1)).abs()
+            hl = self.high - self.low
+            hc = (self.high - self.close.shift(1)).abs()
+            lc = (self.low - self.close.shift(1)).abs()
             # forma más segura: por columna
-            tr   = pd.DataFrame({
-                col: pd.concat([hl[col], hc[col], lc[col]], axis=1).max(axis=1)
-                for col in self.close.columns
-            })
+            tr = pd.DataFrame(
+                {
+                    col: pd.concat([hl[col], hc[col], lc[col]], axis=1).max(axis=1)
+                    for col in self.close.columns
+                }
+            )
             atr14 = tr.rolling(14).mean()
         except Exception:
             atr14 = None
@@ -3188,7 +3037,7 @@ class AdvancedVectorBTEngine:
                 # Extraer escalar explícitamente, no confiar en .loc con índice ambiguo
                 close_val = self.close[ticker].loc[last_day_idx]
                 # Si devuelve Serie (bug de índice), tomar el último valor
-                if hasattr(close_val, '__len__'):
+                if hasattr(close_val, "__len__"):
                     close_val = close_val.iloc[-1]
                 price = float(close_val)
 
@@ -3199,7 +3048,7 @@ class AdvancedVectorBTEngine:
                 stop = None
                 if atr14 is not None and ticker in atr14.columns:
                     atr_val = atr14[ticker].loc[last_day_idx]
-                    if hasattr(atr_val, '__len__'):
+                    if hasattr(atr_val, "__len__"):
                         atr_val = atr_val.iloc[-1]
                     atr_val = float(atr_val)
                     if atr_val > 0 and not pd.isna(atr_val):
@@ -3219,26 +3068,32 @@ class AdvancedVectorBTEngine:
                 etf_dist = None
                 if hasattr(self, "ticker_to_etf_map") and self.ticker_to_etf_map:
                     etf_sym = self.ticker_to_etf_map.get(ticker)
-                
-                if etf_sym and hasattr(self, "etf_dist_matrix") and self.etf_dist_matrix is not None:
+
+                if (
+                    etf_sym
+                    and hasattr(self, "etf_dist_matrix")
+                    and self.etf_dist_matrix is not None
+                ):
                     try:
                         if etf_sym in self.etf_dist_matrix.columns:
                             # last_day_idx is an integer (position), so we must use iloc
                             dist_val = self.etf_dist_matrix[etf_sym].iloc[last_day_idx]
                             if pd.notna(dist_val):
                                 etf_dist = float(dist_val)
-                    except Exception as e: 
+                    except Exception as e:
                         pass
 
-                setups.append({
-                    "ticker": ticker,
-                    "date": str(self.close.index[last_day_idx])[:10],
-                    "price": price,
-                    "stop": stop,
-                    "signal_type": signal_label,
-                    "sector_etf": etf_sym,
-                    "sector_etf_dist": etf_dist
-                })
+                setups.append(
+                    {
+                        "ticker": ticker,
+                        "date": str(self.close.index[last_day_idx])[:10],
+                        "price": price,
+                        "stop": stop,
+                        "signal_type": signal_label,
+                        "sector_etf": etf_sym,
+                        "sector_etf_dist": etf_dist,
+                    }
+                )
             except Exception as e:
                 logger.debug(f"Setup skip {ticker}: {e}")
 
@@ -3246,7 +3101,9 @@ class AdvancedVectorBTEngine:
         if setups:
             prices = [s["price"] for s in setups]
             if len(prices) != len(set(prices)) and len(setups) > 1:
-                logger.warning(f"⚠️ [SETUP] Precios duplicados detectados — posible broadcast. Setups descartados.")
+                logger.warning(
+                    f"⚠️ [SETUP] Precios duplicados detectados — posible broadcast. Setups descartados."
+                )
                 setups = []
 
         # =====================================================================
@@ -3258,9 +3115,7 @@ class AdvancedVectorBTEngine:
         # has proper day-by-day position tracking.
         # =====================================================================
         if is_baseline_mode:
-            logger.info(
-                "   ⚡ BASELINE MODE: Using Numba Core (same engine as Advanced)"
-            )
+            logger.info("   ⚡ BASELINE MODE: Using Numba Core (same engine as Advanced)")
 
             # Calculate ATR for Numba core
             atr = self.calculate_atr(14)
@@ -3282,9 +3137,7 @@ class AdvancedVectorBTEngine:
                 )
             else:
                 n_chunks = int(np.ceil(total_days / chunk_size_days))
-                logger.info(
-                    f"📊 Multi-chunk mode: {total_days} days -> {n_chunks} chunks"
-                )
+                logger.info(f"📊 Multi-chunk mode: {total_days} days -> {n_chunks} chunks")
                 equity_curve, trades_df = self._run_multi_chunk_backtest(
                     entries, atr, avwap, signal_types, n_chunks
                 )
@@ -3293,14 +3146,10 @@ class AdvancedVectorBTEngine:
             if len(equity_curve) == 0:
                 return self._empty_results()
 
-            total_return = (
-                equity_curve.iloc[-1] - self.initial_capital
-            ) / self.initial_capital
-            returns = equity_curve.pct_change().dropna()
+            total_return = (equity_curve.iloc[-1] - self.initial_capital) / self.initial_capital
+            returns = equity_curve.pct_change(fill_method=None).dropna()
             sharpe = (
-                returns.mean() / (returns.std() + 1e-10) * np.sqrt(252)
-                if len(returns) > 0
-                else 0
+                returns.mean() / (returns.std() + 1e-10) * np.sqrt(252) if len(returns) > 0 else 0
             )
 
             cum_max = equity_curve.cummax()
@@ -3312,15 +3161,9 @@ class AdvancedVectorBTEngine:
             winners = len(trades_df[trades_df["pnl"] > 0]) if len(trades_df) > 0 else 0
             win_rate = winners / all_exits_count if all_exits_count > 0 else 0
 
-            total_profit = (
-                trades_df[trades_df["pnl"] > 0]["pnl"].sum()
-                if len(trades_df) > 0
-                else 0
-            )
+            total_profit = trades_df[trades_df["pnl"] > 0]["pnl"].sum() if len(trades_df) > 0 else 0
             total_loss = (
-                abs(trades_df[trades_df["pnl"] < 0]["pnl"].sum())
-                if len(trades_df) > 0
-                else 0
+                abs(trades_df[trades_df["pnl"] < 0]["pnl"].sum()) if len(trades_df) > 0 else 0
             )
             if total_loss > 0:
                 profit_factor = total_profit / total_loss
@@ -3380,20 +3223,14 @@ class AdvancedVectorBTEngine:
                     )
                     dynamic_thresholds.loc[date, "min_rvol"] = thresholds["min_rvol"]
                     dynamic_thresholds.loc[date, "min_adr"] = thresholds["min_adr"]
-                    dynamic_thresholds.loc[date, "max_dist_sma20"] = thresholds[
-                        "max_dist_sma20"
-                    ]
-                    dynamic_thresholds.loc[date, "max_stop_pct"] = thresholds[
-                        "max_stop_pct"
-                    ]
+                    dynamic_thresholds.loc[date, "max_dist_sma20"] = thresholds["max_dist_sma20"]
+                    dynamic_thresholds.loc[date, "max_stop_pct"] = thresholds["max_stop_pct"]
                 except:
                     # Fallback to defaults if VIX data is missing
                     dynamic_thresholds.loc[date, "min_rvol"] = self.min_rvol
                     dynamic_thresholds.loc[date, "min_adr"] = self.min_adr
                     dynamic_thresholds.loc[date, "max_dist_sma20"] = self.max_dist_sma20
-                    dynamic_thresholds.loc[date, "max_stop_pct"] = (
-                        self.max_stop_pct * 100
-                    )
+                    dynamic_thresholds.loc[date, "max_stop_pct"] = self.max_stop_pct * 100
 
             # Usar thresholds dinámicos en lugar de estáticos
             self.min_rvol_dynamic = dynamic_thresholds["min_rvol"]
@@ -3429,14 +3266,10 @@ class AdvancedVectorBTEngine:
         # 🔧 ADAPTIVE FILTER ENGINE - TIERED FILTERING SYSTEM (OPTIMIZADO)
         # ═════════════════════════════════════════════════════════
         if self.use_adaptive_filtering:
-            logger.info(
-                "🔧 Applying Adaptive Filter Engine (TIER 1-2-3) - OPTIMIZADO..."
-            )
+            logger.info("🔧 Applying Adaptive Filter Engine (TIER 1-2-3) - OPTIMIZADO...")
 
             # Initialize filter engine
-            self.filter_engine = AdaptiveFilterEngine(
-                use_dynamic=True, logger_obj=logger
-            )
+            self.filter_engine = AdaptiveFilterEngine(use_dynamic=True, logger_obj=logger)
 
             total_entries_pre_filter = entries.sum().sum()
             self.rejection_stats_tier = {"TIER1": 0, "TIER2": 0, "TIER3": 0}
@@ -3466,9 +3299,7 @@ class AdvancedVectorBTEngine:
             sma50_s = _to_series(sma50_aligned).astype(float)
 
             warmup_mask = sma50_s.isna()  # dates before SMA50 ready
-            t1_block = (
-                warmup_mask | (spy_s < sma50_s) | (vix_s >= self.max_vix_threshold)
-            )
+            t1_block = warmup_mask | (spy_s < sma50_s) | (vix_s >= self.max_vix_threshold)
 
             # Apply TIER 1 as row-mask (all tickers blocked on bad days)
             t1_block_2d = t1_block.values[:, None]  # (days, 1) → broadcasts
@@ -3536,12 +3367,8 @@ class AdvancedVectorBTEngine:
                 dist_g = (close_g - sma20_safe) / sma20_safe * 100
 
                 # Build per-date threshold arrays using pre-computed thresh_map
-                rvol_thr = vix_good.round(1).map(
-                    {v: thresh_map[v]["min_rvol"] for v in unique_vix}
-                )
-                adr_thr = vix_good.round(1).map(
-                    {v: thresh_map[v]["min_adr"] for v in unique_vix}
-                )
+                rvol_thr = vix_good.round(1).map({v: thresh_map[v]["min_rvol"] for v in unique_vix})
+                adr_thr = vix_good.round(1).map({v: thresh_map[v]["min_adr"] for v in unique_vix})
                 dist_thr = vix_good.round(1).map(
                     {v: thresh_map[v]["max_dist_sma20"] for v in unique_vix}
                 )
@@ -3577,14 +3404,10 @@ class AdvancedVectorBTEngine:
 
                         _rnd2.seed(42)
                         _rej_rows = []
-                        _flat_idx = np.argwhere(
-                            to_reject
-                        )  # (n, 2) array of [date_idx, col_idx]
+                        _flat_idx = np.argwhere(to_reject)  # (n, 2) array of [date_idx, col_idx]
                         _sample_n = max(1, int(len(_flat_idx) * 0.02))
                         _chosen = _flat_idx[
-                            _rnd2.sample(
-                                range(len(_flat_idx)), min(_sample_n, len(_flat_idx))
-                            )
+                            _rnd2.sample(range(len(_flat_idx)), min(_sample_n, len(_flat_idx)))
                         ]
                         for _di, _ci in _chosen:
                             _d = good_dates[_di]
@@ -3598,8 +3421,7 @@ class AdvancedVectorBTEngine:
                                     "dist_sma20_pct": float(dist_g.values[_di, _ci]),
                                     "context_vol": float(volume_g.values[_di, _ci]),
                                     "context_dollar_vol": float(
-                                        close_g.values[_di, _ci]
-                                        * volume_g.values[_di, _ci]
+                                        close_g.values[_di, _ci] * volume_g.values[_di, _ci]
                                     ),
                                     "entry_score": 0.0,  # rejected before scoring
                                     "stop_distance_pct": 4.0,  # unknown at rejection time
@@ -3620,18 +3442,14 @@ class AdvancedVectorBTEngine:
                             import os as _os2
 
                             if _os2.path.exists(_rej_path):
-                                _rej_df.to_csv(
-                                    _rej_path, mode="a", header=False, index=False
-                                )
+                                _rej_df.to_csv(_rej_path, mode="a", header=False, index=False)
                             else:
                                 _rej_df.to_csv(_rej_path, index=False)
                             logger.info(
                                 f"   💾 ML: saved {len(_rej_rows)} rejected samples to {_rej_path}"
                             )
                     except Exception as _re:
-                        logger.debug(
-                            f"   Rejected sample capture failed (non-critical): {_re}"
-                        )
+                        logger.debug(f"   Rejected sample capture failed (non-critical): {_re}")
 
                 # Lightweight rejection details (one row per date, not per ticker — fast)
                 if t2_rejected > 0:
@@ -3649,10 +3467,7 @@ class AdvancedVectorBTEngine:
                         )
 
             # ─── TIER 3: Consolidation filter (vectorized) ─────────────────────
-            if (
-                hasattr(self, "consolidation_days")
-                and not self.consolidation_days.empty
-            ):
+            if hasattr(self, "consolidation_days") and not self.consolidation_days.empty:
                 try:
                     good_dates3 = entries.index[~t1_block]
                     vix_good3 = vix_s.loc[good_dates3]
@@ -3675,9 +3490,7 @@ class AdvancedVectorBTEngine:
                     entries.loc[good_dates3] = pd.DataFrame(
                         active_g3 & ~fail_t3, index=good_dates3, columns=entries.columns
                     )
-                    logger.info(
-                        f"   ✅ TIER3 vectorized: {t3_rejected} entries blocked"
-                    )
+                    logger.info(f"   ✅ TIER3 vectorized: {t3_rejected} entries blocked")
                 except Exception as _e3:
                     logger.warning(f"   ⚠️ TIER3 vectorized error (non-critical): {_e3}")
 
@@ -3685,19 +3498,11 @@ class AdvancedVectorBTEngine:
             total_entries_post_filter = entries.sum().sum()
             rejected_entries = total_entries_pre_filter - total_entries_post_filter
 
-            logger.info(
-                f"   📊 Entries antes de Adaptive Filter: {total_entries_pre_filter}"
-            )
+            logger.info(f"   📊 Entries antes de Adaptive Filter: {total_entries_pre_filter}")
             logger.info(f"   ❌ Entries rechazadas por TIER:")
-            logger.info(
-                f"      TIER 1 (Market Safety): {self.rejection_stats_tier['TIER1']}"
-            )
-            logger.info(
-                f"      TIER 2 (Dynamic Quality): {self.rejection_stats_tier['TIER2']}"
-            )
-            logger.info(
-                f"      TIER 3 (Optional): {self.rejection_stats_tier['TIER3']}"
-            )
+            logger.info(f"      TIER 1 (Market Safety): {self.rejection_stats_tier['TIER1']}")
+            logger.info(f"      TIER 2 (Dynamic Quality): {self.rejection_stats_tier['TIER2']}")
+            logger.info(f"      TIER 3 (Optional): {self.rejection_stats_tier['TIER3']}")
             logger.info(f"   ✅ Entries finales: {total_entries_post_filter}")
 
             # Save rejection details for Streamlit dashboard
@@ -3720,9 +3525,7 @@ class AdvancedVectorBTEngine:
             print("\n" + "=" * 70)
             print("📊 ADAPTIVE FILTER ENGINE - RESUMEN (OPTIMIZADO)")
             print("=" * 70)
-            print(
-                f"  Total de Rechazos: {total_entries_pre_filter - total_entries_post_filter}"
-            )
+            print(f"  Total de Rechazos: {total_entries_pre_filter - total_entries_post_filter}")
             print(f"  • TIER 1 (Market Safety): {self.rejection_stats_tier['TIER1']}")
             print(f"  • TIER 2 (Dynamic Quality): {self.rejection_stats_tier['TIER2']}")
             print(f"  TIER 3 (Optional): {self.rejection_stats_tier['TIER3']}")
@@ -3737,9 +3540,7 @@ class AdvancedVectorBTEngine:
             # ═══════════════════════════════════════════════════════════════
             # 🛡️ FILTRO DE RIESGO 0: HARD FLOOR (Precio < SMA20)
             # ═══════════════════════════════════════════════════════════════
-            logger.info(
-                "🔍 Aplicando filtro HARD FLOOR: Precio >= SMA20 (Trend Alignment)..."
-            )
+            logger.info("🔍 Aplicando filtro HARD FLOOR: Precio >= SMA20 (Trend Alignment)...")
 
             safe_sma20_check = self.sma_20.reindex(self.close.index).fillna(0)
             below_sma20_mask = self.close < safe_sma20_check
@@ -3754,9 +3555,7 @@ class AdvancedVectorBTEngine:
             # ═══════════════════════════════════════════════════════════════
             # 🛡️ FILTRO DE RIESGO: SOBREEXTENSIÓN (Dist SMA20 > threshold)
             # ═══════════════════════════════════════════════════════════════
-            logger.info(
-                f"🔍 Aplicando filtro de sobreextensión (dist_sma20_pct > threshold)..."
-            )
+            logger.info(f"🔍 Aplicando filtro de sobreextensión (dist_sma20_pct > threshold)...")
 
             if self.use_dynamic_thresholds and hasattr(self, "max_dist_sma20_dynamic"):
                 overextended_mask = pd.DataFrame(
@@ -3767,9 +3566,7 @@ class AdvancedVectorBTEngine:
                 for date in self.dist_sma20_pct.index:
                     if date in self.max_dist_sma20_dynamic.index:
                         threshold = self.max_dist_sma20_dynamic.loc[date]
-                        overextended_mask.loc[date] = (
-                            self.dist_sma20_pct.loc[date] > threshold
-                        )
+                        overextended_mask.loc[date] = self.dist_sma20_pct.loc[date] > threshold
             else:
                 overextended_mask = self.dist_sma20_pct > self.max_dist_sma20
 
@@ -3780,9 +3577,7 @@ class AdvancedVectorBTEngine:
             total_entries_after = entries.sum().sum()
 
             logger.info(f"   📊 Entries antes del filtro: {total_entries_before}")
-            logger.info(
-                f"   ❌ Entries rechazadas (>7% sobre SMA20): {rejected_entries}"
-            )
+            logger.info(f"   ❌ Entries rechazadas (>7% sobre SMA20): {rejected_entries}")
             logger.info(f"   ✅ Entries finales: {total_entries_after}")
 
             if rejected_entries > 0:
@@ -3797,9 +3592,7 @@ class AdvancedVectorBTEngine:
             # 🛡️ FILTRO DE LIQUIDEZ: RVOL Mínimo, ADR Mínimo, Volumen Mínimo
             # ═══════════════════════════════════════════════════════════════
             if self.use_dynamic_thresholds and hasattr(self, "min_rvol_dynamic"):
-                logger.info(
-                    "🔍 Aplicando filtros de liquidez con UMBRALES DINÁMICOS..."
-                )
+                logger.info("🔍 Aplicando filtros de liquidez con UMBRALES DINÁMICOS...")
 
                 low_rvol_mask = pd.DataFrame(
                     False, index=self.rvol.index, columns=self.rvol.columns
@@ -3844,9 +3637,7 @@ class AdvancedVectorBTEngine:
             logger.info(
                 f"   📊 Entries antes de filtros de liquidez: {total_entries_pre_liquidity}"
             )
-            logger.info(
-                f"   ❌ Rechazadas por RVOL<{self.min_rvol}x: {rejected_low_rvol}"
-            )
+            logger.info(f"   ❌ Rechazadas por RVOL<{self.min_rvol}x: {rejected_low_rvol}")
             logger.info(f"   ❌ Rechazadas por ADR<{self.min_adr}%: {rejected_low_adr}")
             logger.info(
                 f"   ❌ Rechazadas por Vol<{self.min_volume / 1000:.0f}k: {rejected_low_volume}"
@@ -3859,34 +3650,23 @@ class AdvancedVectorBTEngine:
             # ═══════════════════════════════════════════════════════════════
             # 🌍 FILTRO DE RÉGIMEN DE MERCADO (Market Context)
             # ═══════════════════════════════════════════════════════════════
-            if (
-                self.use_market_regime_filter
-                and self.market_regime_classifier is not None
-            ):
+            if self.use_market_regime_filter and self.market_regime_classifier is not None:
                 logger.info("🌍 Aplicando filtro de régimen de mercado...")
 
                 market_stages = {}
                 blocked_entries = 0
                 total_entries_pre_regime = entries.sum().sum()
 
-                blocked_mask = pd.DataFrame(
-                    False, index=entries.index, columns=entries.columns
-                )
+                blocked_mask = pd.DataFrame(False, index=entries.index, columns=entries.columns)
 
                 for date in entries.index:
                     context = self.market_regime_classifier.get_market_context(date)
                     market_stages[date] = context
 
                     should_block = False
-                    if (
-                        self.block_trades_in_stage4
-                        and context["market_stage"] == "STAGE_4"
-                    ):
+                    if self.block_trades_in_stage4 and context["market_stage"] == "STAGE_4":
                         should_block = True
-                    elif (
-                        self.block_trades_in_stage3
-                        and context["market_stage"] == "STAGE_3"
-                    ):
+                    elif self.block_trades_in_stage3 and context["market_stage"] == "STAGE_3":
                         should_block = True
 
                     if should_block:
@@ -3904,9 +3684,7 @@ class AdvancedVectorBTEngine:
 
                 total_entries_post_regime = entries.sum().sum()
 
-                logger.info(
-                    f"   📊 Entries antes de filtro de régimen: {total_entries_pre_regime}"
-                )
+                logger.info(f"   📊 Entries antes de filtro de régimen: {total_entries_pre_regime}")
                 logger.info(f"   ❌ Entries bloqueadas por régimen: {blocked_entries}")
                 logger.info(f"   ✅ Entries finales: {total_entries_post_regime}")
 
@@ -3928,7 +3706,9 @@ class AdvancedVectorBTEngine:
         # 📈 FILTRO DE SECTOR ETF STAGE 2 (Ablation Stage 2)
         # ═══════════════════════════════════════════════════════════════
         if getattr(self, "use_sector_etf_filter", False):
-            logger.info(f"📈 Aplicando filtro de ETF de Sector (SMA{self.sector_etf_sma_period})...")
+            logger.info(
+                f"📈 Aplicando filtro de ETF de Sector (SMA{self.sector_etf_sma_period})..."
+            )
             entries_before = entries.sum().sum()
             sector_etf_mask = self._build_sector_etf_mask(entries)
             entries = entries & sector_etf_mask
@@ -3948,9 +3728,7 @@ class AdvancedVectorBTEngine:
 
         # Crear máscaras de clasificación
         self.voltrig_danger = self.rvol >= self.rvol_danger
-        self.voltrig_warning = (self.rvol >= self.rvol_warning) & (
-            self.rvol < self.rvol_danger
-        )
+        self.voltrig_warning = (self.rvol >= self.rvol_warning) & (self.rvol < self.rvol_danger)
         self.voltrig_safe = self.rvol < self.rvol_warning
 
         # Contar entries por categoría
@@ -3964,9 +3742,7 @@ class AdvancedVectorBTEngine:
         logger.info(
             f"   ⚠️  Warning (RVOL>={self.rvol_warning}x): {warning_entries} entries → Size {int(self.rvol_warning_size * 100)}%"
         )
-        logger.info(
-            f"   ✅ Safe (RVOL<{self.rvol_warning}x): {safe_entries} entries → Size 100%"
-        )
+        logger.info(f"   ✅ Safe (RVOL<{self.rvol_warning}x): {safe_entries} entries → Size 100%")
 
         # ═══════════════════════════════════════════════════════════════
         # 🛡️ FILTRO 4: High Volatility ADR Check
@@ -3982,12 +3758,8 @@ class AdvancedVectorBTEngine:
         high_adr_entries = (entries & self.high_adr).sum().sum()
         med_adr_entries = (entries & self.med_adr).sum().sum()
 
-        logger.info(
-            f"   🔥 High ADR (>{self.adr_high}%): {high_adr_entries} entries → Size 25%"
-        )
-        logger.info(
-            f"   ⚠️  Med ADR (>{self.adr_med}%): {med_adr_entries} entries → Size 33%"
-        )
+        logger.info(f"   🔥 High ADR (>{self.adr_high}%): {high_adr_entries} entries → Size 25%")
+        logger.info(f"   ⚠️  Med ADR (>{self.adr_med}%): {med_adr_entries} entries → Size 33%")
 
         # ═══════════════════════════════════════════════════════════════
         # 📊 FILTRO 5: IBD-Style RS Percentile (Ranking vs Market)
@@ -3998,9 +3770,7 @@ class AdvancedVectorBTEngine:
             )
 
             # Calculate RS percentile (0-100)
-            rs_percentile = self.calculate_rs_percentile(
-                lookback_days=self.rs_lookback_days
-            )
+            rs_percentile = self.calculate_rs_percentile(lookback_days=self.rs_lookback_days)
 
             # Filter: Only entries with RS >= threshold
             low_rs_mask = rs_percentile < self.min_rs_percentile
@@ -4011,12 +3781,8 @@ class AdvancedVectorBTEngine:
 
             rejected_low_rs = total_entries_pre_rs - total_entries_post_rs
 
-            logger.info(
-                f"   📊 Entries antes del filtro RS Percentile: {total_entries_pre_rs}"
-            )
-            logger.info(
-                f"   ❌ Rechazadas por RS<{self.min_rs_percentile}: {rejected_low_rs}"
-            )
+            logger.info(f"   📊 Entries antes del filtro RS Percentile: {total_entries_pre_rs}")
+            logger.info(f"   ❌ Rechazadas por RS<{self.min_rs_percentile}: {rejected_low_rs}")
             logger.info(f"   ✅ Entries finales: {total_entries_post_rs}")
 
             # --- RS DIVERGENCE FILTER ---
@@ -4028,9 +3794,7 @@ class AdvancedVectorBTEngine:
                 rs_short_lb = getattr(self, "rs_short_lookback_days", 20)
                 rs_20d_raw = self.close.ffill().pct_change(rs_short_lb)
                 rs_20d_pct = rs_20d_raw.rank(axis=1, pct=True) * 100
-                rs_20d_pct = rs_20d_pct.reindex(entries.index).reindex(
-                    columns=entries.columns
-                )
+                rs_20d_pct = rs_20d_pct.reindex(entries.index).reindex(columns=entries.columns)
                 rs_60d_strong = rs_percentile >= self.min_rs_percentile
                 rs_20d_weak = rs_20d_pct < 40.0
                 divergence_mask = rs_60d_strong & rs_20d_weak
@@ -4062,13 +3826,9 @@ class AdvancedVectorBTEngine:
             entries = entries & ~overextended_mask
             total_entries_post_extension = entries.sum().sum()
 
-            rejected_overextended = (
-                total_entries_pre_extension - total_entries_post_extension
-            )
+            rejected_overextended = total_entries_pre_extension - total_entries_post_extension
 
-            logger.info(
-                f"   📊 Entries antes del filtro Extension: {total_entries_pre_extension}"
-            )
+            logger.info(f"   📊 Entries antes del filtro Extension: {total_entries_pre_extension}")
             logger.info(
                 f"   ❌ Rechazadas por extensión>{self.max_sma50_atr_extension}x ATR: {rejected_overextended}"
             )
@@ -4102,9 +3862,7 @@ class AdvancedVectorBTEngine:
 
         if total_days <= chunk_size_days:
             # SINGLE-CHUNK MODE: Small enough to run in one pass
-            logger.info(
-                f"📊 Single-chunk mode: {total_days} days (≤ {chunk_size_days})"
-            )
+            logger.info(f"📊 Single-chunk mode: {total_days} days (≤ {chunk_size_days})")
             equity_curve, trades_df = self._run_single_backtest_chunk(
                 entries, atr, avwap, signal_types
             )
@@ -4120,9 +3878,7 @@ class AdvancedVectorBTEngine:
 
         # 🛡️ SAFETY CHECK: Verificar si hay resultados antes de calcular métricas
         if len(equity_curve) == 0:
-            logger.error(
-                "❌ CRITICAL: Empty equity curve - simulation failed completely"
-            )
+            logger.error("❌ CRITICAL: Empty equity curve - simulation failed completely")
             raise ValueError(
                 "Backtest simulation failed to generate equity curve. "
                 "This usually indicates a data loading error or crash in the simulation engine. "
@@ -4130,15 +3886,9 @@ class AdvancedVectorBTEngine:
             )
 
         # Calculate metrics
-        total_return = (
-            equity_curve.iloc[-1] - self.initial_capital
-        ) / self.initial_capital
-        returns = equity_curve.pct_change().dropna()
-        sharpe = (
-            returns.mean() / (returns.std() + 1e-10) * np.sqrt(252)
-            if len(returns) > 0
-            else 0
-        )
+        total_return = (equity_curve.iloc[-1] - self.initial_capital) / self.initial_capital
+        returns = equity_curve.pct_change(fill_method=None).dropna()
+        sharpe = returns.mean() / (returns.std() + 1e-10) * np.sqrt(252) if len(returns) > 0 else 0
 
         cum_max = equity_curve.cummax()
         drawdown = (equity_curve - cum_max) / cum_max
@@ -4155,12 +3905,8 @@ class AdvancedVectorBTEngine:
 
         # MAR Ratio = Annualized Return / Max Drawdown
         # Calmar Ratio = Annualized Return / Absolute Max Drawdown
-        mar_ratio = (
-            annualized_return / abs(max_dd) if max_dd < 0 and max_dd != -1 else 0
-        )
-        calmar_ratio = (
-            annualized_return / abs(max_dd) if max_dd < 0 and max_dd != -1 else 0
-        )
+        mar_ratio = annualized_return / abs(max_dd) if max_dd < 0 and max_dd != -1 else 0
+        calmar_ratio = annualized_return / abs(max_dd) if max_dd < 0 and max_dd != -1 else 0
 
         # DEBUG: Check entries count (optional - comment out if not needed)
         # logger.info(f"🔍 DEBUG entries shape: {entries.shape}")
@@ -4179,14 +3925,8 @@ class AdvancedVectorBTEngine:
         win_rate = winners / all_exits_count if all_exits_count > 0 else 0
 
         # Calculate Profit Factor
-        total_profit = (
-            trades_df[trades_df["pnl"] > 0]["pnl"].sum() if len(trades_df) > 0 else 0
-        )
-        total_loss = (
-            abs(trades_df[trades_df["pnl"] < 0]["pnl"].sum())
-            if len(trades_df) > 0
-            else 0
-        )
+        total_profit = trades_df[trades_df["pnl"] > 0]["pnl"].sum() if len(trades_df) > 0 else 0
+        total_loss = abs(trades_df[trades_df["pnl"] < 0]["pnl"].sum()) if len(trades_df) > 0 else 0
         if total_loss > 0:
             profit_factor = total_profit / total_loss
         elif total_profit > 0:
@@ -4219,6 +3959,317 @@ class AdvancedVectorBTEngine:
             "setups": setups,
         }
 
+        # Build watchlist with scores (Relative Strength)
+        watchlist_mask = (
+            self.last_base_entry & self.last_liquidity & self.last_quality & self.last_consolidation
+        ).iloc[-1]
+        watchlist_tickers = watchlist_mask[watchlist_mask].index.tolist()
+
+        scores_dict = {}
+        if hasattr(self, "rs_20d") and self.rs_20d is not None:
+            latest_rs = self.rs_20d.iloc[-1]
+            for t in watchlist_tickers:
+                scores_dict[t] = float(latest_rs.get(t, 0))
+        else:
+            for t in watchlist_tickers:
+                scores_dict[t] = 0.0
+
+        results["eligible_watchlist"] = scores_dict
+
+        # Build minimal watchlist_detail for diagnostic (fast)
+        watchlist_detail = {}
+        try:
+            diag_close = getattr(self, "_diagnostic_close", None)
+            if (
+                (diag_close is not None) or (hasattr(self, "close") and self.close is not None)
+            ) and len(watchlist_tickers) > 0:
+                rvol_df = getattr(self, "_diagnostic_rvol", None)
+                if rvol_df is None:
+                    rvol_df = getattr(self, "rvol", None)
+                adr_df = getattr(self, "_diagnostic_adr_pct", None)
+                if adr_df is None:
+                    adr_df = getattr(self, "adr_pct", None)
+                dvol_df = getattr(self, "_diagnostic_dollar_volume", None)
+                if dvol_df is None:
+                    dvol_df = getattr(self, "dollar_volume", None)
+                sma20_df = getattr(self, "_diagnostic_sma_20", None)
+                if sma20_df is None:
+                    sma20_df = getattr(self, "sma_20", None)
+                ema10_df = getattr(self, "_diagnostic_ema_10", None)
+                if ema10_df is None:
+                    ema10_df = getattr(self, "ema_10", None)
+                sma50_df = getattr(self, "_diagnostic_sma_50", None)
+                if sma50_df is None:
+                    sma50_df = getattr(self, "sma_50", None)
+                # sma_100 / sma_200 no existen como atributos del engine
+                dist_sma20_df = getattr(self, "_diagnostic_dist_sma20", None)
+                if dist_sma20_df is None:
+                    dist_sma20_df = getattr(self, "dist_sma20_pct", None)
+                high_df = getattr(self, "_diagnostic_high", None)
+                if high_df is None:
+                    high_df = getattr(self, "high", None)
+                volume_df = getattr(self, "_diagnostic_volume", None)
+                if volume_df is None:
+                    volume_df = getattr(self, "volume", None)
+                sec_map = getattr(self, "ticker_to_etf_map", {})
+                sec_dist = getattr(self, "etf_dist_matrix", None)
+
+                def _latest_value(df, ticker, default=float("nan")):
+                    if df is None or ticker not in df.columns or df.empty:
+                        return default
+                    series = df[ticker]
+                    if series.empty:
+                        return default
+                    value = series.iloc[-1]
+                    if pd.isna(value):
+                        valid = series.dropna()
+                        if valid.empty:
+                            return default
+                        value = valid.iloc[-1]
+                    try:
+                        return float(value)
+                    except Exception:
+                        return default
+
+                def _calc_sma(series, period):
+                    # min_periods reducido para tolerar historias de ~210 dias habiles (300 dias calendario)
+                    min_p = min(period, max(int(period * 0.8), 5))
+                    val = series.rolling(period, min_periods=min_p).mean().iloc[-1]
+                    return float(val)
+
+                def _calc_ema(series, span):
+                    return float(series.ewm(span=span, adjust=False, min_periods=1).mean().iloc[-1])
+
+                def _calc_rvol(series, period=20):
+                    # min_periods=5 para que funcione con historias cortas o dias parciales
+                    avg = series.rolling(period, min_periods=5).mean().iloc[-1]
+                    # usar ultimo valor no-nulo del volumen
+                    valid = series.dropna()
+                    last = valid.iloc[-1] if not valid.empty else float("nan")
+                    if pd.isna(last) or pd.isna(avg) or avg == 0:
+                        return float("nan")
+                    return float(last / avg)
+
+                _diag_logged = False
+                for ticker in watchlist_tickers:
+                    close_source = diag_close if diag_close is not None else self.close
+                    if ticker not in close_source.columns:
+                        continue
+                    try:
+                        close_series = close_source[ticker]
+                        high_series = (
+                            high_df[ticker]
+                            if (high_df is not None and ticker in high_df.columns)
+                            else None
+                        )
+                        volume_series = (
+                            volume_df[ticker]
+                            if (volume_df is not None and ticker in volume_df.columns)
+                            else None
+                        )
+
+                        valid_close = close_series.dropna()
+                        if valid_close.empty:
+                            continue
+                        price = float(valid_close.iloc[-1])
+                        if price < 1.0:
+                            continue
+                        adr = _latest_value(adr_df, ticker, default=float("nan"))
+                        dvol = _latest_value(dvol_df, ticker, default=float("nan"))
+                        if pd.isna(dvol) and volume_series is not None:
+                            dvol = float(
+                                price * volume_series.rolling(20, min_periods=1).mean().iloc[-1]
+                            )
+
+                        s20 = _latest_value(sma20_df, ticker, default=float("nan"))
+                        if pd.isna(s20):
+                            s20 = _calc_sma(close_series, 20)
+
+                        rvol = _latest_value(rvol_df, ticker, default=float("nan"))
+                        if pd.isna(rvol) and volume_series is not None:
+                            rvol = _calc_rvol(volume_series, 20)
+
+                        breakout = False
+                        breakout_level = float("nan")
+                        breakout_gap_pct = float("nan")
+                        if high_series is not None:
+                            breakout_level = float(
+                                high_series.shift(1).rolling(20, min_periods=20).max().iloc[-1]
+                            )
+                            breakout = not pd.isna(breakout_level) and price > breakout_level
+                            if not pd.isna(breakout_level) and breakout_level > 0:
+                                breakout_gap_pct = ((price / breakout_level) - 1.0) * 100
+
+                        # Usar dist_sma20 pre-calculado del engine si disponible
+                        dist_sma20_pre = _latest_value(dist_sma20_df, ticker, default=float("nan"))
+                        dist_sma20 = (
+                            dist_sma20_pre
+                            if not pd.isna(dist_sma20_pre)
+                            else (((price / s20) - 1.0) * 100 if s20 > 0 else float("nan"))
+                        )
+                        sector_etf_ok = True
+                        sector_etf_dist = float("nan")
+                        sector_trigger = "OK"
+                        sector_etf_sym = sec_map.get(ticker) if sec_map else None
+                        if (
+                            sector_etf_sym
+                            and sec_dist is not None
+                            and sector_etf_sym in sec_dist.columns
+                        ):
+                            sector_etf_dist = float(sec_dist[sector_etf_sym].iloc[-1])
+                            sector_threshold = float(
+                                getattr(self, "sector_etf_dist_threshold", 0.0)
+                            )
+                            sector_etf_ok = sector_etf_dist > sector_threshold
+                            sector_trigger = (
+                                f"{sector_etf_sym} > SMA20"
+                                if sector_threshold <= 0
+                                else f"{sector_etf_sym} > SMA20 + {sector_threshold * 100:.1f}%"
+                            )
+
+                        e10 = _latest_value(ema10_df, ticker, default=float("nan"))
+                        if pd.isna(e10):
+                            e10 = _calc_ema(close_series, 10)
+
+                        s50 = _latest_value(sma50_df, ticker, default=float("nan"))
+                        if pd.isna(s50):
+                            s50 = _calc_sma(close_series, 50)
+
+                        # sma100/200 calculados on-the-fly (no son atributos del engine)
+                        s100 = _calc_sma(close_series, 100)
+                        s200 = _calc_sma(close_series, 200)
+
+                        tol = 0.002
+                        ma_levels = [
+                            ("P", price, "EMA10", e10),
+                            ("EMA10", e10, "SMA20", s20),
+                            ("SMA20", s20, "SMA50", s50),
+                            ("SMA50", s50, "SMA100", s100),
+                            ("SMA100", s100, "SMA200", s200),
+                        ]
+                        ma_trigger = "OK"
+                        ma_status = "complete"
+                        ma_gap_pct = float("nan")
+                        for left_name, left_val, right_name, right_val in ma_levels:
+                            if pd.isna(left_val) or pd.isna(right_val):
+                                ma_trigger = f"{left_name}/{right_name} N/A"
+                                ma_status = "incomplete"
+                                break
+                            threshold = right_val * (1 - tol)
+                            if left_val < threshold:
+                                ma_gap_pct = ((left_val / right_val) - 1.0) * 100
+                                if left_name == "P":
+                                    ma_trigger = f"P>{right_name}"
+                                else:
+                                    ma_trigger = f"{left_name}>{right_name}"
+                                ma_status = "broken"
+                                break
+
+                        ma_stack = not any(
+                            pd.isna(v) for v in (price, e10, s20, s50, s100, s200)
+                        ) and (
+                            price >= e10 * (1 - tol)
+                            and e10 >= s20 * (1 - tol)
+                            and s20 >= s50 * (1 - tol)
+                            and s50 >= s100 * (1 - tol)
+                            and s100 >= s200 * (1 - tol)
+                        )
+                        if not _diag_logged:
+                            logger.debug(
+                                f"[DIAG] {ticker}: price={price:.2f} e10={e10:.2f} s20={s20:.2f} "
+                                f"s50={s50:.2f} s100={s100:.2f} s200={s200:.2f} "
+                                f"rvol={rvol} ma_stack={ma_stack} close_len={len(close_series)}"
+                            )
+                            _diag_logged = True
+
+                        reasons = []
+                        if not breakout:
+                            reasons.append("Falta breakout")
+                        if not ma_stack:
+                            reasons.append("MA stack roto")
+                        if not sector_etf_ok:
+                            reasons.append("Sector ETF bloqueado")
+                        if rvol < getattr(self, "min_rvol", 1.1):
+                            reasons.append("RVOL bajo")
+                        if abs(dist_sma20) > getattr(self, "max_dist_sma20", 6.77):
+                            reasons.append("Extendido de SMA20")
+
+                        waiting_for = "OK"
+                        if not breakout:
+                            if not pd.isna(breakout_level):
+                                waiting_for = f"Breakout > {breakout_level:.2f}"
+                            else:
+                                waiting_for = "Breakout pending"
+                        elif not sector_etf_ok:
+                            waiting_for = sector_trigger
+                        elif ma_status == "incomplete":
+                            waiting_for = f"{ma_trigger}"
+                        elif ma_status == "broken":
+                            waiting_for = f"{ma_trigger} ({ma_gap_pct:.2f}%)"
+                        elif pd.notna(rvol) and rvol < getattr(self, "min_rvol", 1.1):
+                            waiting_for = f"RVOL >= {getattr(self, 'min_rvol', 1.1):.2f}"
+                        elif pd.notna(dist_sma20) and abs(dist_sma20) > getattr(
+                            self, "max_dist_sma20", 6.77
+                        ):
+                            waiting_for = (
+                                f"Dist SMA20 <= {getattr(self, 'max_dist_sma20', 6.77):.2f}%"
+                            )
+
+                        proximity_score = 100.0
+                        if not breakout:
+                            proximity_score -= 40.0
+                        if (not ma_stack) and ma_status != "incomplete":
+                            proximity_score -= 30.0
+                        if not sector_etf_ok:
+                            proximity_score -= 15.0
+                        if pd.notna(rvol) and rvol < 1.0:
+                            proximity_score -= 10.0
+                        if pd.notna(dist_sma20):
+                            max_dist = float(getattr(self, "max_dist_sma20", 6.77))
+                            if abs(dist_sma20) > max_dist:
+                                excess = abs(dist_sma20) - max_dist
+                                proximity_score -= min(20.0, excess * 2.5)
+                        proximity_score = max(0.0, min(100.0, proximity_score))
+
+                        watchlist_detail[ticker] = {
+                            "score": scores_dict.get(ticker, 0),
+                            "rs_pct": scores_dict.get(ticker, 0),
+                            "price": round(price, 2),
+                            "rvol": round(rvol, 2) if not pd.isna(rvol) else None,
+                            "adr": round(adr, 2) if not pd.isna(adr) else None,
+                            "dollar_volume_m": round(dvol / 1e6, 2) if not pd.isna(dvol) else None,
+                            "dist_sma20_pct": round(dist_sma20, 2)
+                            if not pd.isna(dist_sma20)
+                            else None,
+                            "breakout_level": round(breakout_level, 2)
+                            if not pd.isna(breakout_level)
+                            else None,
+                            "breakout_gap_pct": round(breakout_gap_pct, 2)
+                            if not pd.isna(breakout_gap_pct)
+                            else None,
+                            "breakout": breakout,
+                            "ma_stack": ma_stack,
+                            "ma_status": ma_status,
+                            "ma_trigger": ma_trigger,
+                            "ma_gap_pct": round(ma_gap_pct, 2) if not pd.isna(ma_gap_pct) else None,
+                            "sector_etf": sector_etf_sym,
+                            "sector_etf_dist_pct": round(sector_etf_dist * 100, 2)
+                            if not pd.isna(sector_etf_dist)
+                            else None,
+                            "sector_trigger": sector_trigger,
+                            "sector_etf_ok": sector_etf_ok,
+                            "waiting_for": waiting_for,
+                            "proximity_score": round(proximity_score, 2),
+                            "primary_reason": reasons[0] if reasons else "OK",
+                            "reasons": reasons,
+                        }
+                    except Exception as tick_err:
+                        logger.debug(f"watchlist_detail ticker {ticker}: {tick_err}")
+        except Exception as e:
+            logger.warning(f"Watchlist detail error: {e}", exc_info=True)
+
+        results["watchlist_detail"] = watchlist_detail
+
         logger.info(f"✅ Backtest complete!")
         logger.info(f"   Return: {total_return * 100:.2f}%")
         logger.info(f"   Annualized Return: {annualized_return * 100:.2f}%")
@@ -4238,17 +4289,13 @@ class AdvancedVectorBTEngine:
 
             _sim_secs = time.perf_counter() - _bt0
             _rss_post_mb = _res3.getrusage(_res3.RUSAGE_SELF).ru_maxrss / 1024
-            logger.info(
-                f"⏱ Simulation: {_sim_secs:.1f}s | RSS peak: {_rss_post_mb:.0f} MB"
-            )
+            logger.info(f"⏱ Simulation: {_sim_secs:.1f}s | RSS peak: {_rss_post_mb:.0f} MB")
         except Exception:
             pass
 
         return results
 
-    def get_position_size_by_regime(
-        self, date: pd.Timestamp, base_risk_dollars: float
-    ) -> float:
+    def get_position_size_by_regime(self, date: pd.Timestamp, base_risk_dollars: float) -> float:
         """
         Ajusta tamaño de posición según régimen de mercado.
 
@@ -4333,15 +4380,10 @@ class AdvancedVectorBTEngine:
                 combined_stats.update(filter_stats)
 
         # Add detailed rejection reasons from rejection_details_df
-        if (
-            hasattr(self, "rejection_details_df")
-            and self.rejection_details_df is not None
-        ):
+        if hasattr(self, "rejection_details_df") and self.rejection_details_df is not None:
             if not self.rejection_details_df.empty:
                 # Group by reason and sum counts
-                reason_counts = self.rejection_details_df.groupby("reason")[
-                    "count"
-                ].sum()
+                reason_counts = self.rejection_details_df.groupby("reason")["count"].sum()
                 for reason, count in reason_counts.items():
                     combined_stats[reason] = int(count)
 
@@ -4363,10 +4405,60 @@ class AdvancedVectorBTEngine:
         """
         logger.info("🔄 Running single-chunk backtest with Numba Core...")
 
+        # Preserve diagnostic copies before releasing the engine DataFrames.
+        # These are used later to build watchlist_detail safely.
+        self._diagnostic_close = (
+            self.close.copy() if hasattr(self, "close") and self.close is not None else None
+        )
+        self._diagnostic_high = (
+            self.high.copy() if hasattr(self, "high") and self.high is not None else None
+        )
+        self._diagnostic_low = (
+            self.low.copy() if hasattr(self, "low") and self.low is not None else None
+        )
+        self._diagnostic_volume = (
+            self.volume.copy() if hasattr(self, "volume") and self.volume is not None else None
+        )
+        self._diagnostic_sma_20 = (
+            self.sma_20.copy() if hasattr(self, "sma_20") and self.sma_20 is not None else None
+        )
+        self._diagnostic_sma_50 = (
+            self.sma_50.copy() if hasattr(self, "sma_50") and self.sma_50 is not None else None
+        )
+        self._diagnostic_adr_pct = (
+            self.adr_pct.copy() if hasattr(self, "adr_pct") and self.adr_pct is not None else None
+        )
+        self._diagnostic_rvol = (
+            self.rvol.copy() if hasattr(self, "rvol") and self.rvol is not None else None
+        )
+        self._diagnostic_dist_sma20 = (
+            self.dist_sma20_pct.copy()
+            if hasattr(self, "dist_sma20_pct") and self.dist_sma20_pct is not None
+            else None
+        )
+        self._diagnostic_avg_volume_20 = (
+            self.avg_volume_20.copy()
+            if hasattr(self, "avg_volume_20") and self.avg_volume_20 is not None
+            else None
+        )
+        self._diagnostic_dollar_volume = (
+            self.dollar_volume.copy()
+            if hasattr(self, "dollar_volume") and self.dollar_volume is not None
+            else None
+        )
+        self._diagnostic_ema_10 = (
+            self.ema_10.copy() if hasattr(self, "ema_10") and self.ema_10 is not None else None
+        )
+        self._diagnostic_ema_8 = (
+            self.ema_8.copy() if hasattr(self, "ema_8") and self.ema_8 is not None else None
+        )
+        self._diagnostic_ema_21 = (
+            self.ema_21.copy() if hasattr(self, "ema_21") and self.ema_21 is not None else None
+        )
+
         # Load pattern cache if enabled
         if (
-            getattr(self, "use_pattern_filter", False)
-            or getattr(self, "pattern_bonus_high", 0) > 0
+            getattr(self, "use_pattern_filter", False) or getattr(self, "pattern_bonus_high", 0) > 0
         ) and self.pattern_confidence_matrix is None:
             self._load_pattern_cache()
 
@@ -4386,8 +4478,8 @@ class AdvancedVectorBTEngine:
                 import numpy as _np_rc
 
                 self.close = pd.DataFrame(
-                    _np_rc.empty(
-                        (len(_close_index), len(_close_columns)), dtype="float32"
+                    _np_rc.full(
+                        (len(_close_index), len(_close_columns)), _np_rc.nan, dtype="float32"
                     ),
                     index=_close_index,
                     columns=_close_columns,
@@ -4481,9 +4573,7 @@ class AdvancedVectorBTEngine:
             chunk_atr = atr.iloc[start_idx:end_idx]
             chunk_avwap = avwap.iloc[start_idx:end_idx]
             chunk_signal_types = (
-                signal_types.iloc[start_idx:end_idx]
-                if signal_types is not None
-                else None
+                signal_types.iloc[start_idx:end_idx] if signal_types is not None else None
             )
 
             # Slice all other indicators that may be used
@@ -4504,10 +4594,7 @@ class AdvancedVectorBTEngine:
             for attr in indicator_attrs:
                 if hasattr(self, attr) and getattr(self, attr) is not None:
                     original_df = getattr(self, attr)
-                    if (
-                        isinstance(original_df, pd.DataFrame)
-                        and len(original_df) == total_days
-                    ):
+                    if isinstance(original_df, pd.DataFrame) and len(original_df) == total_days:
                         original_indicators[attr] = original_df
                         setattr(self, attr, original_df.iloc[start_idx:end_idx])
 
@@ -4523,10 +4610,7 @@ class AdvancedVectorBTEngine:
             for attr in market_attrs:
                 if hasattr(self, attr) and getattr(self, attr) is not None:
                     original_series = getattr(self, attr)
-                    if (
-                        isinstance(original_series, pd.Series)
-                        and len(original_series) >= end_idx
-                    ):
+                    if isinstance(original_series, pd.Series) and len(original_series) >= end_idx:
                         original_market[attr] = original_series
                         setattr(self, attr, original_series.iloc[start_idx:end_idx])
 
@@ -4588,9 +4672,7 @@ class AdvancedVectorBTEngine:
             # Concatenate equity curves (they should have unique indices)
             combined_equity = pd.concat(all_equity_curves)
             # Handle any duplicate indices by keeping last value
-            combined_equity = combined_equity[
-                ~combined_equity.index.duplicated(keep="last")
-            ]
+            combined_equity = combined_equity[~combined_equity.index.duplicated(keep="last")]
         else:
             combined_equity = pd.Series(dtype=float)
 
@@ -4629,9 +4711,7 @@ class AdvancedVectorBTEngine:
                 ]
             )
 
-        logger.info(
-            f"✅ Multi-chunk backtest complete: {len(combined_trades)} total trades"
-        )
+        logger.info(f"✅ Multi-chunk backtest complete: {len(combined_trades)} total trades")
 
         return combined_equity, combined_trades
 

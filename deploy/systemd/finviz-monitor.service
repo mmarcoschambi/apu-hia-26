@@ -1,0 +1,15 @@
+[Unit]
+Description=Momentum V2 Finviz Monitor (sample daemon wrapper)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/momentum-v2
+EnvironmentFile=/opt/momentum-v2/.env
+ExecStart=/usr/bin/env bash /opt/momentum-v2/scripts/run_finviz_monitor.sh
+StandardOutput=append:/opt/momentum-v2/logs/finviz_monitor.log
+StandardError=append:/opt/momentum-v2/logs/finviz_monitor.log
+
+[Install]
+WantedBy=multi-user.target

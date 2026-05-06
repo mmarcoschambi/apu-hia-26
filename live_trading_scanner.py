@@ -17,6 +17,13 @@ import pandas as pd
 from typing import List, Dict
 import argparse
 
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich import box
+
+console = Console()
+
 project_root = Path(__file__).resolve().parent
 sys.path.insert(0, str(project_root))
 
@@ -35,31 +42,33 @@ class LiveTradingScanner:
         
     def scan_watchlist(self, symbols: List[str]) -> List[Dict]:
         """Escanea watchlist y retorna setups accionables"""
-        print(f"\n{'='*80}")
-        print(f"🔍 LIVE TRADING SCANNER - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"{'='*80}")
-        print(f"📋 Scanning {len(symbols)} symbols...\n")
+        
+        console.clear()
+        console.print(Panel(
+            f"[bold cyan]Scanning {len(symbols)} symbols...[/bold cyan]", 
+            title=f"[bold magenta]🔍 LIVE TRADING SCANNER - {datetime.now().strftime('%H:%M:%S')}[/bold magenta]", 
+            border_style="bright_blue", box=box.ROUNDED
+        ))
         
         results = []
         actionable_setups = []
         
-        for i, symbol in enumerate(symbols, 1):
-            print(f"[{i}/{len(symbols)}] {symbol}...", end=" ", flush=True)
-            
-            try:
-                result = self.scanner.scan_symbol(symbol)
-                results.append(result)
+        with console.status("[bold green]Scanning market data...") as status:
+            for i, symbol in enumerate(symbols, 1):
+                status.update(f"[bold green]Scanning market data... ({i}/{len(symbols)}) [yellow]{symbol}[/yellow]")
                 
-                # Filtrar solo setups accionables
-                if result.get('signal') and result['signal'].action in ['BUY_STOP', 'MANUAL_WATCH']:
-                    actionable_setups.append(result)
-                    print("✅ SETUP FOUND!")
-                else:
-                    print("—")
+                try:
+                    result = self.scanner.scan_symbol(symbol)
+                    results.append(result)
                     
-            except Exception as e:
-                print(f"❌ Error: {e}")
-                results.append({'symbol': symbol, 'error': str(e)})
+                    # Filtrar solo setups accionables
+                    if result.get('signal') and result['signal'].action in ['BUY_STOP', 'MANUAL_WATCH']:
+                        actionable_setups.append(result)
+                        console.print(f"[green]✅ {symbol}: SETUP FOUND![/green]")
+                        
+                except Exception as e:
+                    console.print(f"[red]❌ Error on {symbol}: {e}[/red]")
+                    results.append({'symbol': symbol, 'error': str(e)})
         
         # Guardar resultados
         self._save_results(results, actionable_setups)
@@ -70,62 +79,79 @@ class LiveTradingScanner:
         return actionable_setups
     
     def _print_summary(self, setups: List[Dict]):
-        """Print actionable summary for quick decision making"""
+        """Print actionable summary for quick decision making using Rich"""
+        
+        console.print("\n")
         
         if not setups:
-            print(f"\n{'='*80}")
-            print("⚠️  NO ACTIONABLE SETUPS")
-            print("This is normal - the system waits for high-probability opportunities.")
-            print(f"{'='*80}\n")
+            console.print(Panel(
+                "[yellow]This is normal - the system waits for high-probability opportunities.[/yellow]", 
+                title="[bold yellow]⚠️ NO ACTIONABLE SETUPS FOUND[/bold yellow]", 
+                border_style="yellow", box=box.ROUNDED
+            ))
             return
-        
-        print(f"\n{'='*80}")
-        print(f"🎯 ACTIONABLE SETUPS ({len(setups)} found)")
-        print(f"{'='*80}\n")
+            
+        console.print(Panel(
+            f"[bold green]Found {len(setups)} actionable setups ready for review.[/bold green]", 
+            title="[bold green]🎯 ACTIONABLE SETUPS[/bold green]", 
+            border_style="green", box=box.ROUNDED
+        ))
         
         # Separar por tipo
         buy_stops = [s for s in setups if s['signal'].action == 'BUY_STOP']
         manual_watches = [s for s in setups if s['signal'].action == 'MANUAL_WATCH']
         
         if buy_stops:
-            print("📍 BUY STOP ORDERS (Place now, execute automatically):")
-            print("-" * 80)
+            table = Table(title="[bold cyan]📍 BUY STOP ORDERS (Place now, execute automatically)[/bold cyan]", box=box.SIMPLE_HEAD)
+            table.add_column("Symbol", style="bold yellow")
+            table.add_column("Setup", style="magenta")
+            table.add_column("Entry", justify="right", style="green")
+            table.add_column("Stop", justify="right", style="red")
+            table.add_column("Risk %", justify="right", style="bright_red")
+            table.add_column("Size", justify="right", style="cyan")
+            table.add_column("Action", style="bold bright_green")
+            
             for setup in buy_stops:
-                self._print_setup_card(setup)
-        
+                signal = setup['signal']
+                risk_pct = 0.0
+                if signal.entry_price and signal.stop_loss:
+                    risk_pct = ((signal.entry_price - signal.stop_loss) / signal.entry_price) * 100
+                    
+                table.add_row(
+                    setup['symbol'],
+                    signal.camino.name if signal.camino else 'UNKNOWN',
+                    f"${signal.entry_price:.2f}" if signal.entry_price else "TBD",
+                    f"${signal.stop_loss:.2f}" if signal.stop_loss else "TBD",
+                    f"{risk_pct:.2f}%",
+                    f"{signal.position_size_multiplier*100:.0f}%",
+                    f"Buy Stop @ ${signal.entry_price:.2f}"
+                )
+            console.print(table)
+            
         if manual_watches:
-            print("\n👀 MANUAL WATCH (Monitor during market hours):")
-            print("-" * 80)
+            table = Table(title="[bold yellow]👀 MANUAL WATCH (Monitor during market hours)[/bold yellow]", box=box.SIMPLE_HEAD)
+            table.add_column("Symbol", style="bold yellow")
+            table.add_column("Setup", style="magenta")
+            table.add_column("Entry", justify="right", style="green")
+            table.add_column("Stop", justify="right", style="red")
+            table.add_column("Action", style="bold yellow")
+            
             for setup in manual_watches:
-                self._print_setup_card(setup)
+                signal = setup['signal']
+                table.add_row(
+                    setup['symbol'],
+                    signal.camino.name if signal.camino else 'UNKNOWN',
+                    f"${signal.entry_price:.2f}" if signal.entry_price else "TBD",
+                    f"${signal.stop_loss:.2f}" if signal.stop_loss else "TBD",
+                    "Watch for VWAP reclaim"
+                )
+            console.print(table)
+            
+        console.print("\n[dim]💾 Results saved to: live_scan_results.json | 📝 Alerts saved to: live_alerts.txt[/dim]\n")
         
-        print(f"\n{'='*80}")
-        print("💾 Results saved to: live_scan_results.json")
-        print("📝 Alerts saved to: live_alerts.txt")
-        print(f"{'='*80}\n")
-    
     def _print_setup_card(self, setup: Dict):
-        """Print compact setup card"""
-        signal = setup['signal']
-        symbol = setup['symbol']
-        
-        print(f"\n🔹 {symbol} - {signal.camino.name if signal.camino else 'UNKNOWN'}")
-        print(f"   Entry:  ${signal.entry_price:.2f}" if signal.entry_price else "   Entry:  TBD")
-        print(f"   Stop:   ${signal.stop_loss:.2f}" if signal.stop_loss else "   Stop:   TBD")
-        
-        if signal.entry_price and signal.stop_loss:
-            risk_per_share = signal.entry_price - signal.stop_loss
-            risk_pct = (risk_per_share / signal.entry_price) * 100
-            print(f"   Risk:   {risk_pct:.2f}% (${risk_per_share:.2f}/share)")
-        
-        print(f"   Size:   {signal.position_size_multiplier*100:.0f}% of standard")
-        print(f"   📋 {signal.reasoning[:70]}...")
-        
-        # Quick action items
-        if signal.action == 'BUY_STOP':
-            print(f"   ⚡ ACTION: Place Buy Stop at ${signal.entry_price:.2f}")
-        else:
-            print(f"   ⚡ ACTION: Watch for VWAP reclaim during market hours")
+        # Obsolete, replaced by rich table in _print_summary
+        pass
     
     def _save_results(self, all_results: List[Dict], actionable: List[Dict]):
         """Save results to file for later reference"""
@@ -177,11 +203,12 @@ class LiveTradingScanner:
         Monitor mode: Continuamente escanea durante RTH
         Útil para Camino 2 (VWAP Reclaim) que requiere timing preciso
         """
-        print(f"\n{'='*80}")
-        print("🔴 LIVE MONITOR MODE")
-        print(f"Rescanning every {interval_minutes} minutes during market hours")
-        print("Press Ctrl+C to stop")
-        print(f"{'='*80}\n")
+        console.clear()
+        console.print(Panel(
+            f"[bold green]Rescanning {len(symbols)} symbols every {interval_minutes} minutes during market hours[/bold green]\n[dim]Press Ctrl+C to stop[/dim]", 
+            title="[bold red]🔴 LIVE MONITOR MODE ACTIVATED[/bold red]", 
+            border_style="red", box=box.HEAVY
+        ))
         
         try:
             while True:
@@ -192,30 +219,53 @@ class LiveTradingScanner:
                 market_close = dt_time(16, 0)
                 
                 if market_open <= now <= market_close:
-                    print(f"\n⏰ {datetime.now().strftime('%H:%M:%S')} - Scanning...")
                     self.scan_watchlist(symbols)
-                    print(f"\n💤 Next scan in {interval_minutes} minutes...")
-                    time.sleep(interval_minutes * 60)
+                    
+                    next_scan = datetime.now() + pd.Timedelta(minutes=interval_minutes)
+                    with console.status(f"[bold blue]💤 Sleeping... Next scan at {next_scan.strftime('%H:%M:%S')} (in {interval_minutes} minutes)[/bold blue]") as status:
+                        time.sleep(interval_minutes * 60)
                 else:
-                    print(f"⏸️  Outside market hours. Waiting...")
-                    time.sleep(300)  # Check every 5 min
+                    with console.status(f"[bold yellow]⏸️  Outside market hours. Waiting for 9:30 AM ET...[/bold yellow]") as status:
+                        time.sleep(300)  # Check every 5 min
                     
         except KeyboardInterrupt:
-            print("\n\n✋ Monitor stopped by user.")
+            console.print("\n\n[bold red]✋ Monitor stopped by user.[/bold red]")
 
 
 def load_watchlist_from_file() -> List[str]:
-    """Load watchlist from acciones_activas.csv or default"""
-    watchlist_file = project_root / "outputs/backtests/acciones_activas.csv"
+    """Load dynamic daily watchlist from Finviz snapshot, fallback to CSV or default"""
     
+    # 1. Try to load from today's Finviz snapshot first
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    snapshot_file = project_root / "outputs" / "paper_finviz" / today_str / "snapshot.json"
+    
+    if snapshot_file.exists():
+        try:
+            with open(snapshot_file, 'r') as f:
+                snap = json.load(f)
+                watchlist_scored = snap.get("watchlist_scored", {})
+                
+                # Sort by RS score descending and take the top 50 to avoid overloading the intraday scanner
+                sorted_wl = sorted(watchlist_scored.items(), key=lambda x: x[1], reverse=True)
+                tickers = [t for t, _ in sorted_wl[:50]]
+                
+                if tickers:
+                    console.print(f"[bold green]✅ Loaded {len(tickers)} candidates from today's Finviz Watchlist ({today_str})[/bold green]")
+                    return tickers
+        except Exception as e:
+            console.print(f"[yellow]⚠️ Error reading Finviz snapshot {snapshot_file}: {e}[/yellow]")
+
+    # 2. Fallback to old CSV
+    watchlist_file = project_root / "outputs/backtests/acciones_activas.csv"
     if watchlist_file.exists():
         try:
             df = pd.read_csv(watchlist_file)
             return df['Ticker'].tolist()
         except Exception as e:
-            print(f"⚠️  Error reading {watchlist_file}: {e}")
+            console.print(f"[yellow]⚠️ Error reading {watchlist_file}: {e}[/yellow]")
     
-    # Fallback
+    # 3. Ultimate Fallback
+    console.print("[bold yellow]⚠️ Using hardcoded fallback watchlist.[/bold yellow]")
     return ['AAPL', 'NVDA', 'TSLA', 'GOOGL', 'META', 'MSFT']
 
 

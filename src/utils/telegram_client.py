@@ -6,6 +6,9 @@ import os
 from typing import Iterable, Optional
 
 import httpx
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 def escape_html(text: str) -> str:
