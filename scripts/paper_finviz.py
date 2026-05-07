@@ -5,16 +5,6 @@ Usa Finviz como universo dinamico. NO mezclar con paper_local_db ni con backtest
 Objetivo: detectar si Finviz descubre oportunidades que el universo local no captura.
 El drift gate esta desactivado aqui (bloque_on_high_drift=False).
 
-RS FIX (2026-04-29):
-  El motor usa use_rs_percentile=True por defecto, lo que hace que consulte
-  daily_rs_rankings (DB local). Para tickers fuera de la DB devuelve None y
-  cae a rs_pct=50, fallando el umbral min_rs_percentile=85 -> 0 senales.
-  Solucion: en modo Finviz desactivamos use_rs_percentile y bajamos
-  min_rs_percentile a un umbral operativo bajo (RS_FINVIZ_MIN_PCT).
-  El screener Qullamaggie calcula el RS relativo vs SPY on-the-fly con los
-  precios descargados de Yahoo (rs_fallback_spy=True), sin tocar la DB local.
-  Esto hace el sistema 100% independiente de daily_rs_rankings.
-
 Usage:
     python3 scripts/paper_finviz.py --phase pre
     python3 scripts/paper_finviz.py --phase pre --drift-override 100
@@ -37,6 +27,7 @@ from src.data.ticker_cache import TickerCache
 from src.config.dynamic_config import load_production_config, flatten_config
 from src.utils.sector_rotation import SECTOR_MAP, SECTOR_ETFS
 from src.utils.terminal_gui import print_terminal_brief
+from src.utils.data_quality import calculate_data_quality as shared_calculate_quality
 
 
 def get_etf_dists(date_str: str, sma_period: int = 20) -> dict:
@@ -97,7 +88,6 @@ def pre_warm_cache(universe: list[str], date_str: str):
     last_dates = dict(zip(df_status["ticker"], df_status["last_date"]))
 
     # 2. Decidir cuales necesitan update
-    # Si la data llega hasta hace < 3 dias, asumimos que esta "fresca" para el pre-market
     to_update = []
     for t in universe:
         if t not in last_dates:
@@ -106,7 +96,7 @@ def pre_warm_cache(universe: list[str], date_str: str):
 
         last_ts = pd.to_datetime(last_dates[t])
         days_diff = (as_of - last_ts).days
-        if days_diff > 3:  # Margen de seguridad para fines de semana
+        if days_diff > 3:
             to_update.append(t)
 
     if not to_update:
@@ -127,10 +117,6 @@ def pre_warm_cache(universe: list[str], date_str: str):
 
 
 # ── RS FINVIZ MODE ──────────────────────────────────────────────────────────
-# Umbral de RS relativo-vs-SPY para el modo exploración Finviz.
-# El screener Qullamaggie calcula esto on-the-fly (sin DB local).
-# 60 = ligeramente mejor que el mercado (suficiente para scouting).
-# Subir a 70-80 para señales mas selectivas; bajar a 40-50 para maximo flujo.
 RS_FINVIZ_MIN_PCT_DEFAULT = 60.0
 
 FINVIZ_CFG = {
@@ -170,7 +156,6 @@ def load_combo_params(name):
     """Carga parametros desde config/production_config.json (Source of Truth)"""
     try:
         config = load_production_config()
-        # Inyectar version flat para compatibilidad con build_engine_kwargs
         params = {
             "tier1_strategy": config.get("tier1_strategy", {}),
             "tier2_filters": config.get("tier2_filters", {}),
@@ -208,22 +193,11 @@ def build_engine_kwargs(
             v = round(v * 100, 1)
         tier3e[k2] = v
     T2 = {
-        "min_rvol",
-        "min_adr",
-        "max_dist_sma20",
-        "min_dollar_volume",
-        "min_volume",
-        "min_consolidation_days",
-        "use_rs_percentile",
-        "min_rs_percentile",
-        "rs_lookback_days",
-        "require_positive_rs",
-        "use_pattern_filter",
-        "min_pattern_confidence",
-        "pattern_cache_path",
-        "use_sector_etf_filter",
-        "sector_etf_dist_threshold",
-        "sector_etf_sma_period",
+        "min_rvol", "min_adr", "max_dist_sma20", "min_dollar_volume", "min_volume",
+        "min_consolidation_days", "use_rs_percentile", "min_rs_percentile",
+        "rs_lookback_days", "require_positive_rs", "use_pattern_filter",
+        "min_pattern_confidence", "pattern_cache_path", "use_sector_etf_filter",
+        "sector_etf_dist_threshold", "sector_etf_sma_period",
     }
 
     t2_final = {k: v for k, v in tier2.items() if k in T2}
@@ -231,9 +205,7 @@ def build_engine_kwargs(
         t2_final["use_sector_etf_filter"] = False
 
     base = {
-        **t2_final,
-        **tier3e,
-        **tier1,
+        **t2_final, **tier3e, **tier1,
         "signal_type": signal_type,
         "screener_name": screener_name,
         "screener_cache_path": None,
@@ -244,21 +216,13 @@ def build_engine_kwargs(
         "offline_mode": False,
     }
 
-    # ── FINVIZ RS OVERRIDE ──────────────────────────────────────────────────
-    # Desactivar el filtro de RS basado en DB local (daily_rs_rankings).
-    # Para tickers fuera de la DB, get_rs_percentile() devuelve None y el
-    # screener Qullamaggie aplica fallback SPY automaticamente (rs_fallback_spy=True).
-    # Usamos min_rs_percentile reducido para no bloquear buenos candidatos nuevos.
-    base["use_rs_percentile"] = False  # no filtrar via DB -> usa fallback SPY
-    base["min_rs_percentile"] = rs_min_pct  # umbral operativo para el fallback
-    base["require_positive_rs"] = True  # mantener: exigir RS > 0 vs SPY
-    # Desactivar screener cache: estos tickers no estan en el cache historico local
+    base["use_rs_percentile"] = False
+    base["min_rs_percentile"] = rs_min_pct
+    base["require_positive_rs"] = True
     base["screener_cache_path"] = None
 
     logger.info(
-        f"  [RS-FINVIZ] use_rs_percentile=False | "
-        f"min_rs_percentile={rs_min_pct} (fallback SPY) | "
-        f"screener_cache desactivado"
+        f"  [RS-FINVIZ] use_rs_percentile=False | min_rs_percentile={rs_min_pct} | screener_cache desactivado"
     )
     return base
 
@@ -304,6 +268,7 @@ def scan_signals(
             try:
                 close = engine_obj.close[ticker]
                 high = engine_obj.high[ticker]
+                vol_series = engine_obj.volume[ticker]
                 ema10 = engine_obj.ema_10[ticker]
                 sma20 = engine_obj.sma_20[ticker]
                 sma50 = engine_obj.sma_50[ticker]
@@ -318,27 +283,18 @@ def scan_signals(
                 s200 = float(sma200.iloc[-1])
 
                 rvol = 1.0
-                if (
-                    hasattr(engine_obj, "rvol")
-                    and engine_obj.rvol is not None
-                    and ticker in engine_obj.rvol.columns
-                ):
+                if (hasattr(engine_obj, "rvol") and engine_obj.rvol is not None 
+                    and ticker in engine_obj.rvol.columns):
                     rvol = float(engine_obj.rvol[ticker].iloc[-1])
 
                 adr = 0.0
-                if (
-                    hasattr(engine_obj, "adr_pct")
-                    and engine_obj.adr_pct is not None
-                    and ticker in engine_obj.adr_pct.columns
-                ):
+                if (hasattr(engine_obj, "adr_pct") and engine_obj.adr_pct is not None 
+                    and ticker in engine_obj.adr_pct.columns):
                     adr = float(engine_obj.adr_pct[ticker].iloc[-1])
 
                 dvol = 0.0
-                if (
-                    hasattr(engine_obj, "dollar_volume")
-                    and engine_obj.dollar_volume is not None
-                    and ticker in engine_obj.dollar_volume.columns
-                ):
+                if (hasattr(engine_obj, "dollar_volume") and engine_obj.dollar_volume is not None 
+                    and ticker in engine_obj.dollar_volume.columns):
                     dvol = float(engine_obj.dollar_volume[ticker].iloc[-1])
 
                 prev_high_20 = float(high.shift(1).rolling(20).max().iloc[-1])
@@ -354,38 +310,33 @@ def scan_signals(
                 )
 
                 dist_sma20 = ((price / s20) - 1.0) * 100 if s20 > 0 else 0.0
+                avg_vol_20 = float(vol_series.rolling(20).mean().iloc[-1])
 
                 sector_etf = None
                 sector_etf_dist = None
                 sector_etf_ok = True
                 if hasattr(engine_obj, "ticker_to_etf_map") and engine_obj.ticker_to_etf_map:
                     sector_etf = engine_obj.ticker_to_etf_map.get(ticker)
-                if (
-                    sector_etf
-                    and hasattr(engine_obj, "etf_dist_matrix")
-                    and engine_obj.etf_dist_matrix is not None
-                ):
+                if (sector_etf and hasattr(engine_obj, "etf_dist_matrix") 
+                    and engine_obj.etf_dist_matrix is not None):
                     if sector_etf in engine_obj.etf_dist_matrix.columns:
                         sector_etf_dist = float(engine_obj.etf_dist_matrix[sector_etf].iloc[-1])
                         sector_etf_ok = sector_etf_dist > 0.0
 
                 reasons = []
-                if not breakout:
-                    reasons.append("Falta breakout")
-                if not ma_stack:
-                    reasons.append("MA stack roto")
-                if not sector_etf_ok:
-                    reasons.append("Sector ETF bloqueado")
-                if rvol < float(getattr(engine_obj, "min_rvol", 1.1)):
-                    reasons.append("RVOL bajo")
-                if abs(dist_sma20) > float(getattr(engine_obj, "max_dist_sma20", 6.77)):
-                    reasons.append("Extendido de SMA20")
+                if not breakout: reasons.append("Falta breakout")
+                if not ma_stack: reasons.append("MA stack roto")
+                if not sector_etf_ok: reasons.append("Sector ETF bloqueado")
+                if rvol < float(getattr(engine_obj, "min_rvol", 1.1)): reasons.append("RVOL bajo")
+                if abs(dist_sma20) > float(getattr(engine_obj, "max_dist_sma20", 6.77)): reasons.append("Extendido de SMA20")
 
                 reasons = sorted(reasons, key=lambda r: reason_priority.get(r, 99))
 
                 detail[ticker] = {
                     "score": score,
                     "price": round(price, 2),
+                    "breakout_level": round(prev_high_20, 2),
+                    "avg_volume_20d": round(avg_vol_20, 0),
                     "rs_pct": round(score, 1),
                     "ema10": round(e10, 2),
                     "sma20": round(s20, 2),
@@ -399,416 +350,168 @@ def scan_signals(
                     "breakout": breakout,
                     "ma_stack": ma_stack,
                     "sector_etf": sector_etf,
-                    "sector_etf_dist": None
-                    if sector_etf_dist is None
-                    else round(sector_etf_dist * 100, 2),
+                    "sector_etf_dist": None if sector_etf_dist is None else round(sector_etf_dist * 100, 2),
                     "sector_etf_ok": sector_etf_ok,
                     "primary_reason": reasons[0] if reasons else "OK",
                     "reasons": reasons,
                 }
             except Exception as e:
-                detail[ticker] = {
-                    "score": score,
-                    "reasons": [f"No se pudo calcular diagnóstico: {e}"],
-                }
-
+                detail[ticker] = {"score": score, "reasons": [f"No se pudo calcular diagnóstico: {e}"]}
         return detail
 
     try:
         result = engine.run_backtest()
-
-        # ── TRACKING DE TICKERS RECHAZADOS POR HISTORIA ─────────────────────
+        
         rejected_short = result.get("rejected_tickers", [])
         if rejected_short:
-            # Extraer solo el ticker de strings como "TICKER (len=...)"
             rejected_short = [str(t).split(" (")[0] for t in rejected_short]
-
             rejected_path = OUT_DIR / "rejected_short_history.json"
             current_rejected = set()
             if rejected_path.exists():
-                try:
-                    current_rejected = set(json.load(open(rejected_path)))
-                except:
-                    pass
-
+                try: current_rejected = set(json.load(open(rejected_path)))
+                except: pass
             new_rejected = [t for t in rejected_short if t not in current_rejected]
             if new_rejected:
                 current_rejected.update(new_rejected)
-                with open(rejected_path, "w") as f:
-                    json.dump(sorted(list(current_rejected)), f, indent=2)
-                logger.info(
-                    f"    [Cache] {len(new_rejected)} tickers nuevos marcados con historia insuficiente"
-                )
+                with open(rejected_path, "w") as f: json.dump(sorted(list(current_rejected)), f, indent=2)
+                logger.info(f"    [Cache] {len(new_rejected)} tickers nuevos marcados con historia insuficiente")
 
         trades_df = result.get("trades_df", pd.DataFrame())
         setups = result.get("setups", [])
         signals = []
 
-        # 1. ── SETUPS FRESCOS (Detectados hoy para entrar mañana) ───────────
         if setups:
             logger.info(f"    [Setup] {len(setups)} candidatos detectados hoy para entrar mañana.")
             for s in setups:
                 price = float(s["price"])
                 stop = float(s["stop"])
-                risk_per_share = price - stop
-                if risk_per_share <= 0:
-                    risk_per_share = price * 0.01  # Fallback
-
+                risk_per_share = price - stop if price - stop > 0 else price * 0.01
                 risk_dollars = kwargs.get("risk_dollars", INITIAL_CAPITAL * 0.005)
-                size = int(risk_dollars / risk_per_share)
+                size = min(max(int(risk_dollars / risk_per_share), 1), int((INITIAL_CAPITAL * 0.25) / price))
+                
+                signals.append({
+                    "combo": combo_name, "ticker": s["ticker"], "signal_date": date_str,
+                    "entry_price": price, "stop_loss": stop, "tp1_price": price + (risk_per_share * 1.25),
+                    "tp2_price": price + (risk_per_share * 3.00), "position_size": size,
+                    "rvol": float(engine.rvol[s["ticker"]].iloc[-1]) if hasattr(engine, "rvol") and engine.rvol is not None else 1.0,
+                    "adr": float(engine.adr_pct[s["ticker"]].iloc[-1]) if hasattr(engine, "adr_pct") and engine.adr_pct is not None else 0.0,
+                    "dollar_volume_m": float(engine.dollar_volume[s["ticker"]].iloc[-1]) / 1e6 if hasattr(engine, "dollar_volume") and engine.dollar_volume is not None else 0.0,
+                    "score": result.get("eligible_watchlist", {}).get(s["ticker"], 0.5),
+                    "rs_mode": "spy_fallback", "source": "finviz_setup",
+                    "sector_etf": s.get("sector_etf"), "sector_etf_dist": s.get("sector_etf_dist"),
+                })
 
-                max_size = int((INITIAL_CAPITAL * 0.25) / price)
-                size = min(max(size, 1), max_size)
-
-                # --- TP CALCULATION ---
-                tp1 = price + (risk_per_share * 1.25)
-                tp2 = price + (risk_per_share * 3.00)
-
-                # --- EXTRA METRICS ---
-                rvol_val = 1.0
-                if hasattr(engine, "rvol") and engine.rvol is not None:
-                    try:
-                        rvol_val = float(engine.rvol[s["ticker"]].iloc[-1])
-                    except:
-                        pass
-
-                adr_val = 0.0
-                if hasattr(engine, "adr_pct") and engine.adr_pct is not None:
-                    try:
-                        adr_val = float(engine.adr_pct[s["ticker"]].iloc[-1])
-                    except:
-                        pass
-
-                dv_val = 0.0
-                if hasattr(engine, "dollar_volume") and engine.dollar_volume is not None:
-                    try:
-                        dv_val = float(engine.dollar_volume[s["ticker"]].iloc[-1]) / 1e6  # Millions
-                    except:
-                        pass
-
-                signals.append(
-                    {
-                        "combo": combo_name,
-                        "ticker": s["ticker"],
-                        "signal_date": date_str,
-                        "entry_price": price,
-                        "stop_loss": stop,
-                        "tp1_price": tp1,
-                        "tp2_price": tp2,
-                        "position_size": size,
-                        "rvol": rvol_val,
-                        "adr": adr_val,
-                        "dollar_volume_m": dv_val,
-                        "score": result.get("eligible_watchlist", {}).get(s["ticker"], 0.5),
-                        "rs_mode": "spy_fallback",
-                        "source": "finviz_setup",
-                        "sector_etf": s.get("sector_etf"),
-                        "sector_etf_dist": s.get("sector_etf_dist"),
-                    }
-                )
-
-        # 2. ── TRADES RECIENTES (Ejecutados en los últimos días) ────────────
         if not trades_df.empty:
             col = "entry_date" if "entry_date" in trades_df.columns else None
             if col:
-                # Intentar primero con la ventana de 3 días (señales frescas)
                 as_of = pd.Timestamp(date_str)
                 lookback_dates = set(pd.bdate_range(end=as_of, periods=3).strftime("%Y-%m-%d"))
                 mask = trades_df[col].astype(str).str[:10].isin(lookback_dates)
                 today_t = trades_df[mask]
-
-                # ── FALLBACK ELIMINADO ──────────────────────────────────────
-                # Antes: si no había señales recientes, tomaba el último trade
-                # del backtest sin importar la antigüedad → precio desactualizado.
-                # Fix: si no hay nada en la ventana de 3 días hábiles, no se
-                # emite señal. Los trades viejos (>3 días) son historia, no alertas.
-                if today_t.empty and not signals:
-                    last_date = str(trades_df[col].max())[:10]
-                    days_old = (as_of - pd.Timestamp(last_date)).days
-                    logger.info(
-                        f"    [INFO] No hay señales en la ventana de 3 días. "
-                        f"Último trade en backtest: {last_date} ({days_old} días atrás). "
-                        f"Descartado — precio histórico, no válido para pre-market."
-                    )
-                    today_t = pd.DataFrame()  # explícitamente vacío, no emitir
             else:
                 today_t = trades_df.tail(5)
 
-            if not today_t.empty:
-                for _, row in today_t.iterrows():
-                    ticker = str(row.get("ticker", row.get("symbol", "?")))
-                    # Evitar duplicados si ya está en setups
-                    if any(s["ticker"] == ticker for s in signals):
-                        continue
-
-                    entry = float(row.get("entry_price", 0))
-                    stop = float(row.get("stop_loss", 0))
-                    risk = entry - stop
-
-                    signals.append(
-                        {
-                            "combo": combo_name,
-                            "ticker": ticker,
-                            "signal_date": str(row[col])[:10] if col else date_str,
-                            "entry_price": entry,
-                            "stop_loss": stop,
-                            "tp1_price": float(row.get("tp1_price", entry + risk * 1.25)),
-                            "tp2_price": float(row.get("tp2_price", entry + risk * 3.0)),
-                            "position_size": float(row.get("shares", row.get("position_size", 0))),
-                            "rs_mode": "spy_fallback",
-                            "source": "backtest_trade",
-                        }
-                    )
-        watchlist_scored = result.get("eligible_watchlist", {})
-        # Motor already computes watchlist_detail internally, use it directly
-        watchlist_detail = result.get("watchlist_detail", {})
+            for _, row in today_t.iterrows():
+                ticker = str(row.get("ticker", row.get("symbol", "?")))
+                if any(s["ticker"] == ticker for s in signals): continue
+                entry = float(row.get("entry_price", 0))
+                stop = float(row.get("stop_loss", 0))
+                risk = entry - stop
+                signals.append({
+                    "combo": combo_name, "ticker": ticker, "signal_date": str(row[col])[:10] if col else date_str,
+                    "entry_price": entry, "stop_loss": stop, "tp1_price": float(row.get("tp1_price", entry + risk * 1.25)),
+                    "tp2_price": float(row.get("tp2_price", entry + risk * 3.0)),
+                    "position_size": float(row.get("shares", row.get("position_size", 0))),
+                    "rs_mode": "spy_fallback", "source": "backtest_trade",
+                })
 
         return {
             "signals": signals,
             "watchlist": result.get("eligible_watchlist", {}),
-            "watchlist_detail": watchlist_detail,
+            "watchlist_detail": result.get("watchlist_detail", {}),
         }
     except Exception as e:
         logger.error(f"Scan error ({combo_name}): {e}", exc_info=True)
-        return {"signals": [], "watchlist": []}
+        return {"signals": [], "watchlist": [], "watchlist_detail": {}}
     finally:
         engine.cleanup()
 
 
-def load_journal():
-    jf = OUT_DIR / "journal.json"
-    return json.load(open(jf)) if jf.exists() else []
-
-
-def save_journal(entries):
-    with open(OUT_DIR / "journal.json", "w") as f:
-        json.dump(entries, f, indent=2, default=str)
-
-
-def run_pre(
-    date_str,
-    drift_override,
-    rs_min_pct: float = RS_FINVIZ_MIN_PCT_DEFAULT,
-    top_n: int = 5,
-    hq_n: int = 5,
-):
+def run_pre(date_str, drift_override, rs_min_pct=RS_FINVIZ_MIN_PCT_DEFAULT, top_n=5, hq_n=5):
     logger.info("=" * 60)
-    logger.info("PAPER FINVIZ - PRE-MARKET  [sistema separado, NO comparar con backtest]")
+    logger.info("PAPER FINVIZ - PRE-MARKET")
     logger.info("=" * 60)
-    logger.info(f"  Fecha:  {date_str}")
-    logger.info(f"  Combos: {ACTIVE_COMBOS}")
-    logger.info(f"  RS min (fallback SPY): {rs_min_pct}")
-    logger.info(f"  AVISO:  Universo Finviz dinamico - resultados NO comparables con WF/backtest")
-    logger.info("\n  [1/3] Regime check...")
+    
     latest_db_date = _get_latest_ohlcv_date(DB_PATH)
-    if latest_db_date:
-        logger.info(f"    [Date] Usando ultimo cierre disponible en DB: {latest_db_date}")
-        date_str = latest_db_date
-    ctx = get_market_context_live(
-        require_spy_above_sma200=True, spy_lookback_days=300, max_vix=35.0, db_path=DB_PATH
-    )
+    if latest_db_date: date_str = latest_db_date
+    
+    ctx = get_market_context_live(require_spy_above_sma200=True, db_path=DB_PATH)
     regime = apply_regime_override(ctx, "none")
     reg_ok = regime.get("effective_regime_ok", False)
-    logger.info(
-        f"    SPY: ${_fmt_price(ctx.get('spy_price'))}  SMA200: ${_fmt_price(ctx.get('spy_sma200'))}  "
-        f"VIX: {_fmt_price(ctx.get('vix'))}  Regime: {'PASS' if reg_ok else 'BLOCKED'}"
-    )
-    logger.info("\n  [2/3] Cargando universo Finviz (drift gate desactivado)...")
+    
     finviz_result = fetch_finviz_universe(FINVIZ_CFG)
     universe = finviz_result.tickers if finviz_result.ok else []
-    logger.info(
-        f"    Finviz ok={finviz_result.ok}  tickers={len(universe)}  pages={finviz_result.pages_ok}"
-    )
-
-    # ── PRE-FILTRO: Tickers con historia insuficiente ──────────────────────
+    
     rejected_path = OUT_DIR / "rejected_short_history.json"
     if rejected_path.exists():
         try:
             rejected = set(json.load(open(rejected_path)))
-            before = len(universe)
             universe = [t for t in universe if t not in rejected]
-            if len(universe) < before:
-                logger.info(
-                    f"    Pre-filtro: {before - len(universe)} tickers con historia insuficiente excluidos"
-                )
-        except Exception as e:
-            logger.warning(f"    Error cargando pre-filtro: {e}")
+        except: pass
 
-    if finviz_result.error:
-        logger.warning(f"    Finviz error: {finviz_result.error}")
-    if not finviz_result.ok:
-        logger.warning("    Finviz fetch fallido - abortando pre")
-        return None
-    logger.info(f"    Sample: {universe[:10]}")
-
-    # ── [PRE-WARM] ──────────────────────────────────────────────────────────
-    # Descargar los últimos 30 días para todos los tickers del universo.
-    # El motor necesita data fresca para detectar setups de 'hoy'.
+    if not finviz_result.ok: return None
     pre_warm_cache(universe, date_str)
 
-    signals = []
-    watchlist_scores = {}
-    watchlist_details = {}
-    audit_data = []
+    signals, watchlist_scores, watchlist_details, audit_data = [], {}, {}, []
 
     if reg_ok and universe:
         for combo_name in ACTIVE_COMBOS:
-            logger.info(f"\n  [3/3] Scanning {combo_name} sobre universo Finviz...")
-
-            # 1. Run with sector filter
-            res = scan_signals(
-                combo_name, universe, date_str, rs_min_pct=rs_min_pct, force_sector_off=False
-            )
-            combo_sigs = res["signals"]
-            signals.extend(combo_sigs)
-
-            # Merge watchlist scores
+            res = scan_signals(combo_name, universe, date_str, rs_min_pct=rs_min_pct)
+            signals.extend(res["signals"])
             for t, score in res.get("watchlist", {}).items():
-                if t not in watchlist_scores or score > watchlist_scores[t]:
-                    watchlist_scores[t] = score
-
-            # Merge watchlist diagnostics
+                if t not in watchlist_scores or score > watchlist_scores[t]: watchlist_scores[t] = score
             for t, detail in res.get("watchlist_detail", {}).items():
-                if t not in watchlist_details or detail.get("score", 0) > watchlist_details[t].get(
-                    "score", 0
-                ):
+                if t not in watchlist_details or detail.get("score", 0) > watchlist_details[t].get("score", 0):
                     watchlist_details[t] = detail
 
-            logger.info(f"    Senales {combo_name}: {len(combo_sigs)}")
-            logger.info(f"    Watchlist {combo_name}: {len(res['watchlist'])} candidatos técnicos")
-            # 2. Audit Contrafactual
-            params = load_combo_params(combo_name)
-            if params.get("tier2_filters", {}).get("use_sector_etf_filter", False):
-                logger.info(f"    [Audit] Generando corrida contrafactual para {combo_name}...")
-                res_no_sector = scan_signals(
-                    combo_name, universe, date_str, rs_min_pct=rs_min_pct, force_sector_off=True
-                )
-                combo_sigs_no_sector = res_no_sector["signals"]
-
-                with_set = {s["ticker"] for s in combo_sigs}
-                without_set = {s["ticker"] for s in combo_sigs_no_sector}
-
-                dists_cache = get_etf_dists(date_str)
-
-                for t in without_set:
-                    passed_with = t in with_set
-
-                    t_str = str(t).strip()
-                    etf_sym = SECTOR_MAP.get(t_str, "")
-                    etf_dist = dists_cache.get(etf_sym, "") if etf_sym else ""
-
-                    audit_data.append(
-                        {
-                            "ticker": t,
-                            "mode": combo_name,
-                            "sector_etf": etf_sym,
-                            "sector_etf_dist": etf_dist,
-                            "passed_with_sector": passed_with,
-                            "reject_reason_with_sector": "passed"
-                            if passed_with
-                            else "tier2_fail:sector_etf:blocked",
-                            "passed_without_sector": True,
-                            "reject_reason_without_sector": "passed",
-                            "blocked_by_sector": not passed_with,
-                            "source": "finviz_scan",
-                        }
-                    )
-
-        # Deduplicar por ticker, preferir el combo con mayor position_size
         seen = {}
         for s in signals:
             t = s["ticker"]
-            if t not in seen or s.get("position_size", 0) > seen[t].get("position_size", 0):
-                seen[t] = s
+            if t not in seen or s.get("position_size", 0) > seen[t].get("position_size", 0): seen[t] = s
         signals = list(seen.values())
 
-        for s in signals:
-            logger.info(
-                f"      {s['ticker']:6s} ({s['combo']}) entrada=${s['entry_price']:.2f}  stop=${s['stop_loss']:.2f}"
-            )
+    # 4. Enriquecer con Calidad de Datos
+    for ticker, detail in watchlist_details.items():
+        q_status, q_reasons = shared_calculate_quality(detail)
+        detail["data_quality_status"] = q_status
+        detail["data_quality_reasons"] = q_reasons
+        detail["is_promotable"] = q_status == "ok"
 
-    if audit_data:
-        day_dir = OUT_DIR / date_str
-        day_dir.mkdir(parents=True, exist_ok=True)
-        audit_df = pd.DataFrame(audit_data)
-        audit_path = day_dir / "rejection_audit.csv"
-        audit_df.to_csv(audit_path, index=False)
-        logger.info(f"    [Audit] Guardada auditoria en {audit_path}")
-
-    elif not reg_ok:
-        logger.warning("  [3/3] SKIP - regime bloqueado")
     day_dir = OUT_DIR / date_str
     day_dir.mkdir(parents=True, exist_ok=True)
     snap = {
-        "date": date_str,
-        "source": "finviz",
-        "universe_size": len(universe),
-        "universe_sample": universe[:30],
-        "finviz_pages_ok": finviz_result.pages_ok,
-        "finviz_warnings": finviz_result.parse_warnings,
-        "regime_ok": reg_ok,
-        "signals": signals,
-        "signals_count": len(signals),
-        "watchlist_scored": watchlist_scores,
-        "watchlist_detail": watchlist_details,
-        "rs_mode": "spy_fallback",
-        "rs_min_pct": rs_min_pct,
-        "drift_gate": "disabled",
-        "generated_at": datetime.now().isoformat(),
+        "date": date_str, "source": "finviz", "universe_size": len(universe),
+        "regime_ok": reg_ok, "signals": signals, "signals_count": len(signals),
+        "watchlist_detail": watchlist_details, "generated_at": datetime.now().isoformat(),
     }
-    with open(day_dir / "snapshot.json", "w") as f:
-        json.dump(snap, f, indent=2)
-    journal = [e for e in load_journal() if e.get("date") != date_str]
-    journal.append(
-        {"date": date_str, "universe_size": len(universe), "regime_ok": reg_ok, "signals": signals}
-    )
-    save_journal(journal)
-    all_sigs = [s for e in journal for s in e.get("signals", [])]
-    logger.info(f"\n  Journal acumulado: {len(journal)} dias / {len(all_sigs)} senales totales")
-    logger.info(f"  Snapshot: {day_dir / 'snapshot.json'}")
-    logger.info("PRE-MARKET FINVIZ COMPLETE")
-
-    # NEW: Pretty Terminal GUI
+    with open(day_dir / "snapshot.json", "w") as f: json.dump(snap, f, indent=2)
+    
     print_terminal_brief(snap, top_n=top_n, hq_n=hq_n)
-
     return snap
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Paper trading universo Finviz (separado del pipeline local)"
-    )
+    parser = argparse.ArgumentParser(description="Paper trading universo Finviz")
     parser.add_argument("--phase", choices=["pre"], default="pre")
     parser.add_argument("--date", default=None)
-    parser.add_argument(
-        "--drift-override",
-        type=float,
-        default=100.0,
-        help="Max drift%% permitido (default 100 = sin restriccion)",
-    )
-    parser.add_argument(
-        "--rs-min",
-        type=float,
-        default=RS_FINVIZ_MIN_PCT_DEFAULT,
-        help=f"Umbral minimo de RS relativo vs SPY para modo Finviz (default: {RS_FINVIZ_MIN_PCT_DEFAULT})",
-    )
-    parser.add_argument(
-        "--top-n", type=int, default=5, help="Cantidad de tickers en NEAREST TO SIGNAL"
-    )
-    parser.add_argument(
-        "--hq-n", type=int, default=5, help="Cantidad de tickers en HIGH QUALITY SETUPS"
-    )
+    parser.add_argument("--drift-override", type=float, default=100.0)
+    parser.add_argument("--rs-min", type=float, default=RS_FINVIZ_MIN_PCT_DEFAULT)
+    parser.add_argument("--top-n", type=int, default=5)
+    parser.add_argument("--hq-n", type=int, default=5)
     args = parser.parse_args()
     date_str = args.date or datetime.now().strftime("%Y-%m-%d")
     if args.phase == "pre":
-        run_pre(
-            date_str,
-            args.drift_override,
-            rs_min_pct=args.rs_min,
-            top_n=args.top_n,
-            hq_n=args.hq_n,
-        )
-
+        run_pre(date_str, args.drift_override, rs_min_pct=args.rs_min, top_n=args.top_n, hq_n=args.hq_n)
 
 if __name__ == "__main__":
     main()

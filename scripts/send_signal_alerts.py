@@ -85,10 +85,23 @@ def load_signals(
 ) -> pd.DataFrame:
     combined_path = OUTPUT_DIR / date / "combined.csv"
     if not combined_path.exists():
-        return pd.DataFrame()
+        # Retornar DF vacio con columnas minimas esperadas
+        return pd.DataFrame(columns=[
+            "ticker", "agent_name", "entry_score", "entry_price", 
+            "stop_loss", "rvol", "dollar_vol_M"
+        ])
 
-    df = pd.read_csv(combined_path)
-    df = _flatten_metrics(df)
+    try:
+        df = pd.read_csv(combined_path)
+        df = _flatten_metrics(df)
+    except Exception:
+        return pd.DataFrame(columns=["ticker", "agent_name", "entry_score"])
+
+    # Normalizar entry_score
+    if "entry_score" not in df.columns:
+        df["entry_score"] = 0.5
+    else:
+        df["entry_score"] = pd.to_numeric(df["entry_score"], errors='coerce').fillna(0.5)
 
     if agents:
         df = df[df["agent_name"].isin(agents)]
@@ -379,18 +392,24 @@ def _save_snapshot(
 
 
 def _build_top_candidates(df: pd.DataFrame, limit: int = 5) -> list[dict]:
+    if df.empty or "entry_score" not in df.columns:
+        return []
+    
     high = df[df["entry_score"] >= 0.7].head(limit)
     result = []
     for _, row in high.iterrows():
-        result.append(
-            {
-                "ticker": row["ticker"],
-                "score": float(row["entry_score"]),
-                "price": float(row.get("entry_price", 0)),
-                "rvol": float(row.get("rvol", 0)),
-                "dv_M": float(row.get("dollar_vol_M", 0)),
-            }
-        )
+        try:
+            result.append(
+                {
+                    "ticker": row["ticker"],
+                    "score": float(row["entry_score"]),
+                    "price": float(row.get("entry_price", 0)),
+                    "rvol": float(row.get("rvol", 0)),
+                    "dv_M": float(row.get("dollar_vol_M", 0)),
+                }
+            )
+        except (ValueError, TypeError):
+            continue
     return result
 
 
@@ -429,6 +448,13 @@ def main():
     date = args.date or datetime.now().strftime("%Y-%m-%d")
 
     df = load_signals(date, agents=args.agents, tickers=args.tickers)
+
+    if df.empty:
+        print(f"  No signals found for {date}")
+        if args.telegram:
+            _save_snapshot(date, df, [], [], args.top, args.min_score)
+            _mark_sent(date, "no_signals", 0)
+        return
 
     text = build_alert_text(
         df,

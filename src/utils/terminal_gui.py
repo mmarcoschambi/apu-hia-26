@@ -10,6 +10,8 @@ from rich import box
 
 from src.utils.sector_rotation import SectorRotationAnalyzer
 
+from src.utils.data_quality import calculate_data_quality
+
 console = Console()
 
 
@@ -218,10 +220,56 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
 
         console.print(diag)
 
-        nearest = sorted(
-            watchlist_detail.items(), key=lambda x: x[1].get("proximity_score", 0), reverse=True
+        nearest_ok = []
+        nearest_warn = []
+        for ticker, data in watchlist_detail.items():
+            status, _ = calculate_data_quality(data)
+            if status == "bad":
+                continue
+            
+            data["_display_status"] = status
+            if status == "warn":
+                nearest_warn.append((ticker, data))
+            else:
+                nearest_ok.append((ticker, data))
+
+        nearest_ok = sorted(
+            nearest_ok, key=lambda x: x[1].get("proximity_score", 0), reverse=True
         )[:top_n]
-        if nearest:
+        
+        nearest_warn = sorted(
+            nearest_warn, key=lambda x: x[1].get("proximity_score", 0), reverse=True
+        )[:top_n]
+
+        def _estado(data):
+            if data.get("_display_status") == "warn":
+                return "[yellow]⚠ Data incompleta[/yellow]"
+            
+            max_dist = 6.77
+            try:
+                max_dist = float(data.get("max_dist_sma20", max_dist))
+            except Exception:
+                pass
+            if (
+                (not data.get("breakout"))
+                and data.get("ma_stack")
+                and data.get("sector_etf_ok", True)
+            ):
+                rvol = data.get("rvol")
+                dist = data.get("dist_sma20_pct")
+                if (rvol is None or float(rvol) >= 1.0) and (
+                    dist is None or abs(float(dist)) <= max_dist
+                ):
+                    return "⏳ Breakout"
+            if data.get("breakout") and data.get("dist_sma20_pct") is not None:
+                try:
+                    if abs(float(data.get("dist_sma20_pct"))) > max_dist:
+                        return "📉 Consolidar"
+                except Exception:
+                    pass
+            return "🔧 Setup incompleto"
+
+        if nearest_ok:
             console.print("\n[bold cyan]🎯 NEAREST TO SIGNAL[/bold cyan]")
             near = Table(box=box.SIMPLE_HEAD, title_justify="left")
             near.add_column("Ticker", style="bold yellow")
@@ -233,32 +281,7 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
             near.add_column("Waiting")
             near.add_column("Prox", justify="right")
 
-            def _estado(data):
-                max_dist = 6.77
-                try:
-                    max_dist = float(data.get("max_dist_sma20", max_dist))
-                except Exception:
-                    pass
-                if (
-                    (not data.get("breakout"))
-                    and data.get("ma_stack")
-                    and data.get("sector_etf_ok", True)
-                ):
-                    rvol = data.get("rvol")
-                    dist = data.get("dist_sma20_pct")
-                    if (rvol is None or float(rvol) >= 1.0) and (
-                        dist is None or abs(float(dist)) <= max_dist
-                    ):
-                        return "⏳ Breakout"
-                if data.get("breakout") and data.get("dist_sma20_pct") is not None:
-                    try:
-                        if abs(float(data.get("dist_sma20_pct"))) > max_dist:
-                            return "📉 Consolidar"
-                    except Exception:
-                        pass
-                return "🔧 Setup incompleto"
-
-            for ticker, data in nearest:
+            for ticker, data in nearest_ok:
                 prox = float(data.get("proximity_score", 0))
                 prox_style = "green" if prox >= 80 else "yellow" if prox >= 50 else "red"
                 near.add_row(
@@ -271,16 +294,42 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
                     str(data.get("waiting_for", "OK")),
                     f"[{prox_style}]{prox:.0f}[/{prox_style}]",
                 )
-
             console.print(near)
 
-        high_quality = [
-            (t, d)
-            for t, d in watchlist_detail.items()
-            if d.get("rs_pct", d.get("score", 0)) >= 90
-            and d.get("ma_stack")
-            and d.get("sector_etf_ok", True)
-        ]
+        if nearest_warn:
+            console.print("\n[bold yellow]📡 DATA INCOMPLETE RADAR (VIGILANCIA)[/bold yellow]")
+            near_w = Table(box=box.SIMPLE_HEAD, title_justify="left", border_style="dim")
+            near_w.add_column("Ticker", style="bold dim yellow")
+            near_w.add_column("Estado")
+            near_w.add_column("RS", justify="right")
+            near_w.add_column("Prox", justify="right")
+
+            for ticker, data in nearest_warn:
+                prox = float(data.get("proximity_score", 0))
+                near_w.add_row(
+                    ticker,
+                    _estado(data),
+                    f"{data.get('rs_pct', data.get('score', 0)):.1f}",
+                    f"{prox:.0f}",
+                )
+            console.print(near_w)
+
+        high_quality = []
+        for t, d in watchlist_detail.items():
+            status, _ = calculate_data_quality(d)
+            if status != "ok": continue
+            
+            max_dist = 6.77
+            try: max_dist = float(d.get("max_dist_sma20", max_dist))
+            except: pass
+            
+            dist = d.get("dist_sma20_pct")
+            if (d.get("rs_pct", d.get("score", 0)) >= 90
+                and d.get("ma_stack")
+                and d.get("sector_etf_ok", True)
+                and (dist is not None and abs(float(dist)) <= max_dist)):
+                high_quality.append((t, d))
+
         high_quality.sort(
             key=lambda x: (
                 x[1].get("breakout", False),
@@ -320,7 +369,6 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> str:
     date = snapshot.get("date", "n/a")
     regime_ok = snapshot.get("regime_ok", False)
     signals = snapshot.get("signals", [])
-    watchlist_scored = snapshot.get("watchlist_scored", {})
     watchlist_detail = snapshot.get("watchlist_detail", {})
 
     lines = [
@@ -335,41 +383,45 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> str:
         lines.append("\n🔥 <b>HOT SECTORS</b>")
         for row in hot_sectors:
             lines.append(
-                f"• <b>{row['sector_etf']}</b> | Rank {row.get('rank', '-')} | RS {row.get('rs', 0):.2%} | S1 {'✓' if row.get('tradeable') else '✗'}"
+                f"• <b>{row['sector_etf']}</b> | RS {row.get('rs', 0):.1%} | S1 {'✓' if row.get('tradeable') else '✗'}"
             )
 
     if watchlist_detail:
-        nearest = sorted(
-            watchlist_detail.items(), key=lambda x: x[1].get("proximity_score", 0), reverse=True
-        )[:top_n]
-        if nearest:
-            lines.append("\n🎯 <b>NEAREST TO SIGNAL</b>")
-            for ticker, data in nearest:
-                lines.append(
-                    f"• <b>{ticker}</b> [{data.get('waiting_for', 'OK')}] RS {data.get('rs_pct', data.get('score', 0)):.1f} | "
-                    f"Break {data.get('breakout_level', 'N/A')} | Dist {data.get('dist_sma20_pct', 'N/A')}% | RVOL {data.get('rvol', 'N/A')} | P {data.get('proximity_score', 0):.0f}"
-                )
+        nearest_ok = []
+        nearest_warn = []
+        for ticker, data in watchlist_detail.items():
+            status, _ = calculate_data_quality(data)
+            if status == "bad": continue
+            if status == "warn": nearest_warn.append((ticker, data))
+            else: nearest_ok.append((ticker, data))
 
-        high_quality = [
-            (t, d)
-            for t, d in watchlist_detail.items()
-            if d.get("rs_pct", d.get("score", 0)) >= 90
-            and d.get("ma_stack")
-            and d.get("sector_etf_ok", True)
-        ]
+        nearest_ok = sorted(nearest_ok, key=lambda x: x[1].get("proximity_score", 0), reverse=True)[:top_n]
+        if nearest_ok:
+            lines.append("\n🎯 <b>NEAREST TO SIGNAL</b>")
+            for ticker, data in nearest_ok:
+                lines.append(f"• <b>{ticker}</b> RS {data.get('rs_pct', data.get('score', 0)):.0f} | Break {data.get('breakout_level', 'N/A')} | P {data.get('proximity_score', 0):.0f}")
+
+        high_quality = []
+        for t, d in watchlist_detail.items():
+            status, _ = calculate_data_quality(d)
+            if status != "ok": continue
+            max_dist = 6.77
+            try: max_dist = float(d.get("max_dist_sma20", max_dist))
+            except: pass
+            dist = d.get("dist_sma20_pct")
+            if (d.get("rs_pct", d.get("score", 0)) >= 90 and d.get("ma_stack") and d.get("sector_etf_ok", True)
+                and (dist is not None and abs(float(dist)) <= max_dist)):
+                high_quality.append((t, d))
+
         if high_quality:
             lines.append("\n🏆 <b>HIGH QUALITY SETUPS</b>")
-            for ticker, data in high_quality[:hq_n]:
-                lines.append(
-                    f"• <b>{ticker}</b> RS {data.get('rs_pct', data.get('score', 0)):.1f} | "
-                    f"Break {'✓' if data.get('breakout') else '✗'} | Dist {data.get('dist_sma20_pct', 'N/A')}% | "
-                    f"RVOL {data.get('rvol', 'N/A')} | {data.get('waiting_for', 'OK')}"
-                )
-    elif watchlist_scored:
-        watchlist = sorted(watchlist_scored.items(), key=lambda x: x[1], reverse=True)[:10]
-        if watchlist:
-            lines.append("\n🔭 <b>WATCHLIST</b>")
-            lines.append(", ".join([f"{t}:{int(score)}" for t, score in watchlist]))
+            for ticker, data in sorted(high_quality, key=lambda x: x[1].get("rs_pct", 0), reverse=True)[:hq_n]:
+                lines.append(f"• <b>{ticker}</b> RS {data.get('rs_pct', 0):.0f} | Break {'✓' if data.get('breakout') else '✗'} | RVOL {data.get('rvol', '1.0')}")
+
+        if nearest_warn:
+            lines.append("\n📡 <b>DATA INCOMPLETE RADAR</b>")
+            for ticker, data in nearest_warn[:3]:
+                lines.append(f"• {ticker} (RS {data.get('rs_pct', 0):.0f})")
 
     return "\n".join(lines)
 
