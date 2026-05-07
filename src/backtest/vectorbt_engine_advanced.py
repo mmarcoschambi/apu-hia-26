@@ -557,6 +557,9 @@ class AdvancedVectorBTEngine:
         use_sector_etf_filter: bool = False,  # OFF por default - Ablation stage 2
         sector_etf_sma_period: int = 20,
         sector_etf_dist_threshold: float = 0.0,  # NEW: Margin above SMA20 (e.g. 0.02 = 2%)
+        use_breadth_filter: bool = False,
+        breadth_filter_mode: str = "sma20",
+        breadth_filter_threshold: float = 0.50,
         # Market regime parameters (NEW)
         use_market_regime_filter: bool = False,  # Enable market context filter
         block_trades_in_stage3: bool = True,  # Block longs in distribution
@@ -701,6 +704,9 @@ class AdvancedVectorBTEngine:
         self.use_sector_etf_filter = use_sector_etf_filter
         self.sector_etf_sma_period = sector_etf_sma_period
         self.sector_etf_dist_threshold = sector_etf_dist_threshold
+        self.use_breadth_filter = use_breadth_filter
+        self.breadth_filter_mode = breadth_filter_mode
+        self.breadth_filter_threshold = breadth_filter_threshold
 
         # Market regime parameters (NEW)
         self.use_market_regime_filter = use_market_regime_filter
@@ -2619,6 +2625,74 @@ class AdvancedVectorBTEngine:
             logger.error(f"Error computing sector ETF mask: {e}")
             return pd.DataFrame(True, index=entries.index, columns=entries.columns)
 
+    def _build_breadth_mask(self, entries: pd.DataFrame) -> pd.DataFrame:
+        """Builds a market breadth gate aligned to the entries index."""
+        import sqlite3
+
+        if not getattr(self, "use_breadth_filter", False):
+            return pd.DataFrame(True, index=entries.index, columns=entries.columns)
+
+        tickers = entries.columns.tolist()
+        lookback_days = 252 if self.breadth_filter_mode == "nh_nl" else 20
+        fetch_start = (entries.index[0] - pd.Timedelta(days=lookback_days * 2)).strftime("%Y-%m-%d")
+        fetch_end = entries.index[-1].strftime("%Y-%m-%d")
+
+        try:
+            db_path = PROJECT_ROOT / "data" / "ticker_cache.db"
+            conn = sqlite3.connect(str(db_path))
+            df = pd.read_sql_query(
+                "SELECT ticker, date, close, high, low FROM ohlcv_cache WHERE ticker IN (%s) AND date BETWEEN ? AND ? ORDER BY ticker, date"
+                % ",".join(["?"] * len(tickers)),
+                conn,
+                params=tickers + [fetch_start, fetch_end],
+            )
+            conn.close()
+
+            if df.empty:
+                logger.warning("No data returned for breadth mask; allowing all entries")
+                return pd.DataFrame(True, index=entries.index, columns=entries.columns)
+
+            df["date"] = pd.to_datetime(df["date"], format="mixed").dt.normalize()
+            df["ticker"] = df["ticker"].str.upper().str.strip()
+            df = df.sort_values(["ticker", "date"]).drop_duplicates(
+                subset=["ticker", "date"], keep="last"
+            )
+            close_pivot = df.pivot(index="date", columns="ticker", values="close").reindex(
+                entries.index
+            )
+            high_pivot = df.pivot(index="date", columns="ticker", values="high").reindex(
+                entries.index
+            )
+            low_pivot = df.pivot(index="date", columns="ticker", values="low").reindex(
+                entries.index
+            )
+
+            if self.breadth_filter_mode == "nh_nl":
+                rolling_high = high_pivot.shift(1).rolling(252, min_periods=252).max()
+                rolling_low = low_pivot.shift(1).rolling(252, min_periods=252).min()
+                new_highs = (close_pivot >= rolling_high).sum(axis=1)
+                new_lows = (close_pivot <= rolling_low).sum(axis=1)
+                denom = (new_highs + new_lows).replace(0, np.nan)
+                ratio = (new_highs / denom).fillna(0.0)
+                gate = ratio >= self.breadth_filter_threshold
+                self.breadth_metric_series = ratio
+            else:
+                sma20 = close_pivot.rolling(20, min_periods=20).mean()
+                above = (close_pivot > sma20).sum(axis=1)
+                universe_size = close_pivot.notna().sum(axis=1).replace(0, np.nan)
+                ratio = (above / universe_size).fillna(0.0)
+                gate = ratio >= self.breadth_filter_threshold
+                self.breadth_metric_series = ratio
+
+            gate = gate.reindex(entries.index).fillna(False)
+            mask = pd.DataFrame(False, index=entries.index, columns=entries.columns)
+            mask.loc[:, :] = np.asarray(gate.values)[:, None]
+            return mask
+
+        except Exception as e:
+            logger.error(f"Error computing breadth mask: {e}")
+            return pd.DataFrame(True, index=entries.index, columns=entries.columns)
+
     def run_backtest(self) -> Dict:
         """Execute backtest with partial exits"""
         logger.info("🎯 Starting advanced backtest with partial exits...")
@@ -3803,6 +3877,17 @@ class AdvancedVectorBTEngine:
             entries = entries & sector_etf_mask
             entries_after = entries.sum().sum()
             logger.info(f"   ❌ Bloqueados por Sector ETF: {entries_before - entries_after}")
+            logger.info(f"   ✅ Entries finales: {entries_after}")
+
+        if getattr(self, "use_breadth_filter", False):
+            logger.info(
+                f"🌎 Aplicando filtro de breadth ({self.breadth_filter_mode}, threshold={self.breadth_filter_threshold:.2f})..."
+            )
+            entries_before = entries.sum().sum()
+            breadth_mask = self._build_breadth_mask(entries)
+            entries = entries & breadth_mask
+            entries_after = entries.sum().sum()
+            logger.info(f"   ❌ Bloqueados por Breadth: {entries_before - entries_after}")
             logger.info(f"   ✅ Entries finales: {entries_after}")
 
         # ═══════════════════════════════════════════════════════════════
