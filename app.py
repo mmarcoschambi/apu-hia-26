@@ -143,6 +143,7 @@ def _convert_yaml_to_production_dict(combo: ComboConfig) -> dict:
             "min_rvol": combo.min_rvol,
             "min_adr": combo.min_adr,
             "min_consolidation_days": combo.min_consolidation_days,
+            "rs_breakout_min": getattr(combo, "rs_breakout_min", None),
             "flat_base_range_pct": combo.flat_base_range_pct,
             "vcp_contraction_threshold": combo.vcp_contraction_threshold,
         },
@@ -235,6 +236,7 @@ if _yaml_combos_available and _yaml_go_combos:
                     "min_rvol": _yc.min_rvol,
                     "min_adr": _yc.min_adr,
                     "min_consolidation_days": _yc.min_consolidation_days,
+                    "rs_breakout_min": getattr(_yc, "rs_breakout_min", None),
                 }
             )
 
@@ -257,6 +259,7 @@ if _yaml_combos_available and _yaml_go_combos:
             _yaml_combo_params = {
                 "fee_rate": _yc.fee_rate,
                 "slippage_rate": _yc.slippage_rate,
+                "rs_breakout_min": getattr(_yc, "rs_breakout_min", None),
                 "regime_blocked": _yc.regime_blocked,
                 "scanner_filter": _yc.scanner_filter,
                 "pattern_filter": _yc.pattern_filter,
@@ -420,14 +423,10 @@ def score_trades_ml(trades_df, model_payload):
                 pd.to_numeric(df["context_dollar_vol"], errors="coerce").fillna(0)
             )
 
-        if (
-            "rs_divergence" not in df.columns
-            and "rs_60d" in df.columns
-            and "rs_20d" in df.columns
-        ):
-            df["rs_divergence"] = pd.to_numeric(
-                df["rs_60d"], errors="coerce"
-            ) - pd.to_numeric(df["rs_20d"], errors="coerce")
+        if "rs_divergence" not in df.columns and "rs_60d" in df.columns and "rs_20d" in df.columns:
+            df["rs_divergence"] = pd.to_numeric(df["rs_60d"], errors="coerce") - pd.to_numeric(
+                df["rs_20d"], errors="coerce"
+            )
 
         if (
             "rs_momentum_flag" not in df.columns
@@ -595,10 +594,7 @@ else:
     trade_df_for_grouper = pd.DataFrame()
 
 has_r = (
-    (
-        "r_multiple" in grouped_trades.columns
-        and grouped_trades["r_multiple"].abs().sum() > 0
-    )
+    ("r_multiple" in grouped_trades.columns and grouped_trades["r_multiple"].abs().sum() > 0)
     if not grouped_trades.empty
     else False
 )
@@ -671,9 +667,7 @@ def _render_market_health_tab() -> None:
     st.subheader("🛡️ Market Health & Gamma Dashboard")
 
     # Tab selector for different health views
-    health_sub_tab1, health_sub_tab2 = st.tabs(
-        ["Institutional Dashboard", "Gamma & Dark Pools"]
-    )
+    health_sub_tab1, health_sub_tab2 = st.tabs(["Institutional Dashboard", "Gamma & Dark Pools"])
 
     with health_sub_tab1:
         # Use MarketHealthChecker logic
@@ -714,21 +708,13 @@ def _render_market_health_tab() -> None:
             # Verdict with dynamic color
             with col3:
                 if health_score >= 6:
-                    st.success(
-                        "🚀 AGGRESSIVE MODE: Full size (2% risk). All 3 Caminos active."
-                    )
+                    st.success("🚀 AGGRESSIVE MODE: Full size (2% risk). All 3 Caminos active.")
                 elif health_score >= 4:
-                    st.info(
-                        "💪 STANDARD MODE: Standard size (1.5-2%). Prefer Camino 1."
-                    )
+                    st.info("💪 STANDARD MODE: Standard size (1.5-2%). Prefer Camino 1.")
                 elif health_score >= 2:
-                    st.warning(
-                        "⚠️ DEFENSIVE MODE: Half size (0.5-1%). Perfect Blue Sky only."
-                    )
+                    st.warning("⚠️ DEFENSIVE MODE: Half size (0.5-1%). Perfect Blue Sky only.")
                 else:
-                    st.error(
-                        "❌ NO TRADE: Go to Cash. Market conditions unfavorable."
-                    )
+                    st.error("❌ NO TRADE: Go to Cash. Market conditions unfavorable.")
 
             # Metric details in grid
             st.markdown("---")
@@ -742,29 +728,21 @@ def _render_market_health_tab() -> None:
                 st.markdown("**SPY Trend**")
                 st.caption(f"Price: ${spy_price:.2f}")
                 st.caption(f"EMA20: ${spy_ema20:.2f}")
-                st.write(
-                    f"{'✅ ABOVE' if spy_dist > 0 else '❌ BELOW'} ({spy_dist:+.2f}%)"
-                )
+                st.write(f"{'✅ ABOVE' if spy_dist > 0 else '❌ BELOW'} ({spy_dist:+.2f}%)")
 
             with m_col2:
                 st.markdown("**Breadth**")
-                st.write(
-                    f"{'✅ IMPROVING' if context.get('breadth_improving') else '❌ STALLING'}"
-                )
+                st.write(f"{'✅ IMPROVING' if context.get('breadth_improving') else '❌ STALLING'}")
                 st.caption("Internals strength proxy")
 
             with m_col3:
                 st.markdown("**Volatility**")
-                st.write(
-                    f"{'✅ FAVORABLE' if context.get('vix_favorable') else '⚠️ ELEVATED'}"
-                )
+                st.write(f"{'✅ FAVORABLE' if context.get('vix_favorable') else '⚠️ ELEVATED'}")
                 st.caption("VIX < 20 & stable")
 
             with m_col4:
                 st.markdown("**Gamma (GEX)**")
-                st.write(
-                    f"{'✅ POSITIVE' if context.get('positive_gex') else '⚠️ NEUTRAL/NEG'}"
-                )
+                st.write(f"{'✅ POSITIVE' if context.get('positive_gex') else '⚠️ NEUTRAL/NEG'}")
                 st.caption("Low vol grind estimate")
 
             # Sector Leaders
@@ -807,15 +785,9 @@ def _render_market_health_tab() -> None:
 
 
 def _render_pipeline_summary(run: dict, system_view: str) -> None:
-    unified_df = _filter_by_system(
-        run.get("unified_signals_df", pd.DataFrame()), system_view
-    )
-    routed_df = _filter_by_system(
-        run.get("routed_signals_df", pd.DataFrame()), system_view
-    )
-    execution_df = _filter_by_system(
-        run.get("execution_plan_df", pd.DataFrame()), system_view
-    )
+    unified_df = _filter_by_system(run.get("unified_signals_df", pd.DataFrame()), system_view)
+    routed_df = _filter_by_system(run.get("routed_signals_df", pd.DataFrame()), system_view)
+    execution_df = _filter_by_system(run.get("execution_plan_df", pd.DataFrame()), system_view)
     phase3 = run.get("phase3_summary", {})
     router = run.get("router_summary", {})
     edge = run.get("edge_report", {})
@@ -879,12 +851,8 @@ def _render_pipeline_summary(run: dict, system_view: str) -> None:
 
 
 def _render_execution_table(run: dict, system_view: str) -> None:
-    execution_df = _filter_by_system(
-        run.get("execution_plan_df", pd.DataFrame()), system_view
-    )
-    rejected_df = _filter_by_system(
-        run.get("risk_rejected_df", pd.DataFrame()), system_view
-    )
+    execution_df = _filter_by_system(run.get("execution_plan_df", pd.DataFrame()), system_view)
+    rejected_df = _filter_by_system(run.get("risk_rejected_df", pd.DataFrame()), system_view)
     if execution_df.empty:
         st.info("No execution plan rows found for this view.")
     else:
@@ -908,9 +876,7 @@ def _render_execution_table(run: dict, system_view: str) -> None:
         ]
         st.dataframe(
             execution_df[columns].sort_values(
-                by=[
-                    c for c in ["trade_date", "source_system", "ticker"] if c in columns
-                ]
+                by=[c for c in ["trade_date", "source_system", "ticker"] if c in columns]
             ),
             use_container_width=True,
             height=360,
@@ -923,17 +889,13 @@ def _render_execution_table(run: dict, system_view: str) -> None:
 def _render_edge_panel(run: dict, system_view: str) -> None:
     edge_report = run.get("edge_report", {})
     preflight = edge_report.get("preflight", {})
-    metrics_df = _filter_by_system(
-        run.get("edge_metrics_df", pd.DataFrame()), system_view
-    )
+    metrics_df = _filter_by_system(run.get("edge_metrics_df", pd.DataFrame()), system_view)
     promotions_df = _filter_by_system(
         run.get("promotion_decisions_df", pd.DataFrame()), system_view
     )
 
     header_cols = st.columns(5)
-    header_cols[0].metric(
-        "Preflight", "PASS ✓" if preflight.get("passed") else "BLOCKED ✗"
-    )
+    header_cols[0].metric("Preflight", "PASS ✓" if preflight.get("passed") else "BLOCKED ✗")
     header_cols[1].metric("Common Sessions", f"{preflight.get('common_sessions', 0):,}")
     header_cols[2].metric("PROMOTE", f"{edge_report.get('promote_count', 0)}")
     header_cols[3].metric("HOLD", f"{edge_report.get('hold_count', 0)}")
@@ -942,9 +904,7 @@ def _render_edge_panel(run: dict, system_view: str) -> None:
     # Degradation warning
     if edge_report.get("rolling_degradation_detected"):
         pct = edge_report.get("rolling_degradation_pct", 0)
-        st.warning(
-            f"⚠ Rolling degradation detected: {pct:.0%} of rolling windows below threshold."
-        )
+        st.warning(f"⚠ Rolling degradation detected: {pct:.0%} of rolling windows below threshold.")
 
     if preflight.get("errors"):
         for error in preflight.get("errors") or []:
@@ -1034,9 +994,7 @@ def _render_universe_panel(universe_run: dict) -> None:
 
 def _render_combo_panel(combo_run: dict, selected_agent: str) -> None:
     summary = combo_run.get("combo_scan_summary", {})
-    combo_df = _filter_combo_df(
-        combo_run.get("combo_signals_df", pd.DataFrame()), selected_agent
-    )
+    combo_df = _filter_combo_df(combo_run.get("combo_signals_df", pd.DataFrame()), selected_agent)
     agent_tables = combo_run.get("agent_tables", {})
     agents = summary.get("agents", {})
 
@@ -1079,9 +1037,7 @@ def _render_combo_panel(combo_run: dict, selected_agent: str) -> None:
                 ]
                 if column in combo_df.columns
             ]
-            st.dataframe(
-                combo_df[visible].head(250), use_container_width=True, height=360
-            )
+            st.dataframe(combo_df[visible].head(250), use_container_width=True, height=360)
 
     if agents:
         with st.expander("Agent breakdown", expanded=False):
@@ -1212,9 +1168,7 @@ def _render_dashboard_v2(
         pipe_tab, exec_tab, edge_tab = st.tabs(["Pipeline", "Execution", "Edge"])
         with pipe_tab:
             st.subheader("Unified Signals (F1)")
-            f1 = _filter_by_system(
-                run.get("unified_signals_df", pd.DataFrame()), system_view
-            )
+            f1 = _filter_by_system(run.get("unified_signals_df", pd.DataFrame()), system_view)
             if f1.empty:
                 st.info("No F1 signals found.")
             else:
@@ -1233,9 +1187,7 @@ def _render_dashboard_v2(
                 ]
                 st.dataframe(f1[cols].head(250), use_container_width=True, height=260)
             st.subheader("Routed Signals (F2)")
-            f2 = _filter_by_system(
-                run.get("routed_signals_df", pd.DataFrame()), system_view
-            )
+            f2 = _filter_by_system(run.get("routed_signals_df", pd.DataFrame()), system_view)
             if not f2.empty:
                 cols = [
                     c
@@ -1267,9 +1219,7 @@ def _render_dashboard_v2(
         st.subheader("Historical Calibration")
         _render_phase_status(historical_run)
         _render_pipeline_summary(historical_run, system_view)
-        hist_edge_tab, hist_exec_tab = st.tabs(
-            ["Historical Edge", "Historical Execution"]
-        )
+        hist_edge_tab, hist_exec_tab = st.tabs(["Historical Edge", "Historical Execution"])
         with hist_edge_tab:
             _render_edge_panel(historical_run, system_view)
         with hist_exec_tab:
@@ -1431,13 +1381,9 @@ def get_cache_date_range():
     try:
         cache = get_ticker_cache()
         # Use LIMIT 1 optimization for MIN/MAX
-        cursor = cache.conn.execute(
-            "SELECT date FROM ohlcv_cache ORDER BY date ASC LIMIT 1"
-        )
+        cursor = cache.conn.execute("SELECT date FROM ohlcv_cache ORDER BY date ASC LIMIT 1")
         min_date = cursor.fetchone()
-        cursor = cache.conn.execute(
-            "SELECT date FROM ohlcv_cache ORDER BY date DESC LIMIT 1"
-        )
+        cursor = cache.conn.execute("SELECT date FROM ohlcv_cache ORDER BY date DESC LIMIT 1")
         max_date = cursor.fetchone()
 
         if min_date and max_date:
@@ -1563,9 +1509,7 @@ def run_vectorbt_backtest_ui(
             # Adapt minimum required days to the backtest period length
             import math as _math
 
-            _period_days = (
-                pd.to_datetime(str(end_date)) - pd.to_datetime(str(start_date))
-            ).days
+            _period_days = (pd.to_datetime(str(end_date)) - pd.to_datetime(str(start_date))).days
             _trading_days_est = int(_period_days * 5 / 7)  # rough estimate
             _auto_min_days = max(10, min(100, int(_trading_days_est * 0.5)))
             min_required_days = (
@@ -1636,9 +1580,7 @@ def run_vectorbt_backtest_ui(
                         ORDER BY initial_adv DESC, ticker ASC 
                         LIMIT ?
                     """
-                    cursor = conn.execute(
-                        query, (selection_start, min_required_days, max_symbols)
-                    )
+                    cursor = conn.execute(query, (selection_start, min_required_days, max_symbols))
                 else:
                     # Rebalance mensual con límite
                     query = f"""
@@ -1758,9 +1700,7 @@ def run_vectorbt_backtest_ui(
         )
 
         # Update progress after backtest completes
-        status_text.markdown(
-            "✅ **Backtest completado - generando visualizaciones...**"
-        )
+        status_text.markdown("✅ **Backtest completado - generando visualizaciones...**")
         progress_bar.progress(0.9)
 
         # Universe funnel display
@@ -1781,9 +1721,7 @@ def run_vectorbt_backtest_ui(
             st.sidebar.caption(f"⏱ init:{_pi}s bt:{_pb}s total:{_pt}s")
 
         # BUG FIX: Always update session state and persistence to avoid stale data
-        st.session_state["adaptive_filter_rejections"] = (
-            rejection_stats if rejection_stats else {}
-        )
+        st.session_state["adaptive_filter_rejections"] = rejection_stats if rejection_stats else {}
 
         # Also persist to disk so diagnostics tab works after rerun
         with open("outputs/backtests/rejection_stats.json", "w") as f:
@@ -1811,18 +1749,12 @@ def run_vectorbt_backtest_ui(
         trades = results["trades"]
         if not trades.empty:
             symbol_col = "symbol" if "symbol" in trades.columns else "ticker"
-            entry_date_col = (
-                "entry_date" if "entry_date" in trades.columns else "Entry Timestamp"
-            )
-            exit_date_col = (
-                "exit_date" if "exit_date" in trades.columns else "Exit Timestamp"
-            )
+            entry_date_col = "entry_date" if "entry_date" in trades.columns else "Entry Timestamp"
+            exit_date_col = "exit_date" if "exit_date" in trades.columns else "Exit Timestamp"
             entry_price_col = (
                 "entry_price" if "entry_price" in trades.columns else "Avg Entry Price"
             )
-            exit_price_col = (
-                "exit_price" if "exit_price" in trades.columns else "Avg Exit Price"
-            )
+            exit_price_col = "exit_price" if "exit_price" in trades.columns else "Avg Exit Price"
 
             # Robust column extraction -- handles ticker/symbol and datetime formats
             def _get_col(df, *names, default=None):
@@ -1863,9 +1795,7 @@ def run_vectorbt_backtest_ui(
                     "signal_type": trades["entry_signal"]
                     if "entry_signal" in trades.columns
                     else signal_type,
-                    "stop_loss": trades["stop_loss"]
-                    if "stop_loss" in trades.columns
-                    else np.nan,
+                    "stop_loss": trades["stop_loss"] if "stop_loss" in trades.columns else np.nan,
                     "tp1_target": trades["tp1_target"]
                     if "tp1_target" in trades.columns
                     else np.nan,
@@ -1896,16 +1826,12 @@ def run_vectorbt_backtest_ui(
                     if len(_loss) > 0 and abs(_loss.sum()) > 0
                     else float("inf")
                 )
-                _r = (
-                    trades["r_multiple"].mean() if "r_multiple" in trades.columns else 0
-                )
+                _r = trades["r_multiple"].mean() if "r_multiple" in trades.columns else 0
                 # Equity curve for Sharpe/DD
                 _eq = results.get("equity_curve")
                 if _eq is not None and len(_eq) > 1:
                     _ret = _eq.pct_change().dropna()
-                    _sharpe = (
-                        (_ret.mean() / _ret.std() * (252**0.5)) if _ret.std() > 0 else 0
-                    )
+                    _sharpe = (_ret.mean() / _ret.std() * (252**0.5)) if _ret.std() > 0 else 0
                     _peak = _eq.cummax()
                     _dd = ((_eq - _peak) / _peak).min()
                 else:
@@ -1972,8 +1898,7 @@ def render_metric_cards(metrics):
     for m in metrics:
         v_class = (
             "positive"
-            if "+" in str(m["value"])
-            or (isinstance(m["value"], (int, float)) and m["value"] > 0)
+            if "+" in str(m["value"]) or (isinstance(m["value"], (int, float)) and m["value"] > 0)
             else ("negative" if "-" in str(m["value"]) else "")
         )
         html += f'<div class="metric-card"><div class="metric-label">{m["label"]}</div><div class="metric-value {v_class}">{m["value"]}</div>'
@@ -2007,35 +1932,15 @@ def render_scorecard(metrics_dict):
 
     def get_color(val, metric_type):
         if metric_type == "sharpe":
-            return (
-                "score-green"
-                if val > 1.2
-                else ("score-yellow" if val > 0.7 else "score-red")
-            )
+            return "score-green" if val > 1.2 else ("score-yellow" if val > 0.7 else "score-red")
         if metric_type == "win_rate":
-            return (
-                "score-green"
-                if val > 55
-                else ("score-yellow" if val > 45 else "score-red")
-            )
+            return "score-green" if val > 55 else ("score-yellow" if val > 45 else "score-red")
         if metric_type == "pf":
-            return (
-                "score-green"
-                if val > 1.5
-                else ("score-yellow" if val > 1.1 else "score-red")
-            )
+            return "score-green" if val > 1.5 else ("score-yellow" if val > 1.1 else "score-red")
         if metric_type == "dd":
-            return (
-                "score-green"
-                if val < 10
-                else ("score-yellow" if val < 20 else "score-red")
-            )
+            return "score-green" if val < 10 else ("score-yellow" if val < 20 else "score-red")
         if metric_type == "avg_r":
-            return (
-                "score-green"
-                if val > 1.5
-                else ("score-yellow" if val > 1.0 else "score-red")
-            )
+            return "score-green" if val > 1.5 else ("score-yellow" if val > 1.0 else "score-red")
         return ""
 
     html = '<div class="scorecard-container">'
@@ -2111,9 +2016,7 @@ with st.sidebar:
         help="Filters Universe + Combos tables in Dashboard 2.0.",
     )
     if dashboard_view == "Integrated 2.0":
-        st.caption(
-            "Legacy controls remain available below but are ignored by Dashboard 2.0."
-        )
+        st.caption("Legacy controls remain available below but are ignored by Dashboard 2.0.")
     st.divider()
 
     # ── RUN SCRIPTS (opt-in, Dashboard 2.0 only) ────────────────────
@@ -2128,13 +2031,18 @@ with st.sidebar:
                 """Run a script showing live output line by line via Popen."""
                 import subprocess as _sp
                 import time as _time
+
                 log_placeholder = st.empty()
                 status_placeholder = st.empty()
                 log_lines: list = []
                 try:
                     proc = _sp.Popen(
-                        cmd, stdout=_sp.PIPE, stderr=_sp.STDOUT,
-                        text=True, cwd=cwd, bufsize=1,
+                        cmd,
+                        stdout=_sp.PIPE,
+                        stderr=_sp.STDOUT,
+                        text=True,
+                        cwd=cwd,
+                        bufsize=1,
                     )
                     status_placeholder.info(f"⏳ Running {label}...")
                     while True:
@@ -2144,9 +2052,7 @@ with st.sidebar:
                         if line:
                             log_lines.append(line.rstrip())
                             # Show last 30 lines rolling
-                            log_placeholder.code(
-                                "\n".join(log_lines[-30:]), language=None
-                            )
+                            log_placeholder.code("\n".join(log_lines[-30:]), language=None)
                     rc = proc.wait()
                     if rc == 0:
                         status_placeholder.success(f"✓ {label} completed successfully")
@@ -2168,8 +2074,12 @@ with st.sidebar:
                 st.caption("Reads ~400 tickers from DB — typically 1-3 min. Output streams below.")
                 _run_script_streaming(
                     "run_combo_scanner.py",
-                    ["python3", f"{_base}/scripts/run_combo_scanner.py",
-                     "--universe-source", "stable"],
+                    [
+                        "python3",
+                        f"{_base}/scripts/run_combo_scanner.py",
+                        "--universe-source",
+                        "stable",
+                    ],
                     _base,
                 )
 
@@ -2182,9 +2092,7 @@ with st.sidebar:
         st.subheader("🎯 Combo Activo (YAML)")
 
         _yaml_combo_names = [c.name for c in _yaml_go_combos]
-        _yaml_labels = [
-            f"{c.name} (Sharpe WF: {c.wf_sharpe_mean:.2f})" for c in _yaml_go_combos
-        ]
+        _yaml_labels = [f"{c.name} (Sharpe WF: {c.wf_sharpe_mean:.2f})" for c in _yaml_go_combos]
 
         # Restore previous selection or default to first
         _prev_yaml_combo = st.session_state.get("active_yaml_combo")
@@ -2200,9 +2108,7 @@ with st.sidebar:
         )
 
         # Update session state and global reference
-        _selected_combo_name = _yaml_combo_names[
-            _yaml_labels.index(_yaml_selected_label)
-        ]
+        _selected_combo_name = _yaml_combo_names[_yaml_labels.index(_yaml_selected_label)]
         st.session_state["active_yaml_combo"] = _selected_combo_name
         _active_yaml_combo = get_combo_by_name(_yaml_combos, _selected_combo_name)
 
@@ -2252,9 +2158,7 @@ with st.sidebar:
                     f"★ {combo.get('combo_score', combo.get('score', 0.0)):.2f}"
                 )
                 _combo_options.append(label)
-            current_combo = st.session_state.get(
-                "active_combo_label", _combo_options[0]
-            )
+            current_combo = st.session_state.get("active_combo_label", _combo_options[0])
             if current_combo not in _combo_options:
                 current_combo = _combo_options[0]
             _combo_sel = st.selectbox(
@@ -2290,9 +2194,7 @@ with st.sidebar:
         if _vcp_available:
             _v_sh = _vcp_oos.get("oos_sharpe", 0)
             _v_ok = str(_vcp_oos.get("passed", "False")) == "True"
-            _strategy_options.append(
-                f"VCP {'✅' if _v_ok else '⚠'}  Sharpe {_v_sh:.2f} OOS"
-            )
+            _strategy_options.append(f"VCP {'✅' if _v_ok else '⚠'}  Sharpe {_v_sh:.2f} OOS")
         if _pp_available:
             _p_sh = _pp_oos.get("oos_sharpe", 0)
             _p_ok = str(_pp_oos.get("passed", "False")) == "True"
@@ -2341,9 +2243,7 @@ with st.sidebar:
 
     if _use_vcp:
         _vcp_is = _vcp_oos.get("is_sharpe_comparable", 0)
-        st.caption(
-            f"VCP | IS: {_vcp_is:.2f} -> OOS: {_vcp_oos.get('oos_sharpe', 0):.2f}"
-        )
+        st.caption(f"VCP | IS: {_vcp_is:.2f} -> OOS: {_vcp_oos.get('oos_sharpe', 0):.2f}")
     elif _use_pp:
         st.caption(f"Pocket Pivot | OOS: {_pp_oos.get('oos_sharpe', 'sin validar')}")
     elif _use_fb:
@@ -2409,9 +2309,7 @@ with st.sidebar:
         cache_min, cache_max = get_cache_date_range()
         start_date = st.date_input("Start", value=cache_max - timedelta(days=365))
         end_date = st.date_input("End", value=cache_max)
-        scan_mode = st.radio(
-            "Source", ["Manual", "All Market", "Sector"], horizontal=True
-        )
+        scan_mode = st.radio("Source", ["Manual", "All Market", "Sector"], horizontal=True)
         tickers_input = st.text_area("Tickers (CSV)", "APP, PLTR", height=70)
 
         # ── MEMORY SAVER: US-only filter ─────────────────────────────────
@@ -2465,9 +2363,7 @@ with st.sidebar:
     with st.expander("Risk Management", expanded=False):
         equity = st.number_input(
             "Equity ($)",
-            value=int(
-                _raw_config.get("ui_defaults", {}).get("initial_capital", 100000)
-            ),
+            value=int(_raw_config.get("ui_defaults", {}).get("initial_capital", 100000)),
         )
 
         # Compounding toggle
@@ -2487,9 +2383,7 @@ with st.sidebar:
                 help="Percentage of equity to risk per trade (compounding mode)",
             )
             risk_dollars = 0  # Not used in compounding mode
-            st.info(
-                f"Risk: ${equity * (risk_pct / 100):,.0f} per trade (1.0% of equity)"
-            )
+            st.info(f"Risk: ${equity * (risk_pct / 100):,.0f} per trade (1.0% of equity)")
         else:
             risk_dollars = st.number_input(
                 "Risk per Trade ($)",
@@ -2603,12 +2497,8 @@ with st.sidebar:
         st.text(
             f"RVOL Warning: {_t3.get('rvol_warning', 2.0)}x -> {_t3.get('rvol_warning_size', 0.75) * 100:.0f}% size"
         )
-        st.text(
-            f"ADR High: {_t3.get('adr_high', 6.0)}% | ADR Med: {_t3.get('adr_med', 5.0)}%"
-        )
-        st.text(
-            f"SPY > SMA50: {'ON' if _mr.get('require_spy_above_sma50', True) else 'OFF'}"
-        )
+        st.text(f"ADR High: {_t3.get('adr_high', 6.0)}% | ADR Med: {_t3.get('adr_med', 5.0)}%")
+        st.text(f"SPY > SMA50: {'ON' if _mr.get('require_spy_above_sma50', True) else 'OFF'}")
 
     st.markdown("---")
     benchmark_ticker = st.selectbox("Benchmark", ["SPY", "QQQ", "IWM", "DIA"], index=0)
@@ -2716,9 +2606,7 @@ if dashboard_view == "Integrated 2.0":
     _render_dashboard_v2(
         mode=dashboard_mode.lower(),
         system_view=system_view,
-        selected_combo_run=None
-        if selected_combo_run == "latest"
-        else selected_combo_run,
+        selected_combo_run=None if selected_combo_run == "latest" else selected_combo_run,
         selected_agent=selected_agent,
     )
 else:
@@ -2755,11 +2643,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
         """Fetch benchmark returns - tries cache first, then yfinance direct, then SQLite."""
         import yfinance as yf
 
-        s_str = (
-            start.strftime("%Y-%m-%d")
-            if isinstance(start, datetime)
-            else str(start)[:10]
-        )
+        s_str = start.strftime("%Y-%m-%d") if isinstance(start, datetime) else str(start)[:10]
         e_str = end.strftime("%Y-%m-%d") if isinstance(end, datetime) else str(end)[:10]
 
         # 1. Try yfinance direct (most reliable, always fresh)
@@ -2840,18 +2724,14 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
         st.caption(f"Strategy activa: **{_cur_sig_label}**{_oos_badge}")
         # --- Trade-based metrics (from grouped complete trades) ---
         total_trades = len(grouped_trades)
-        winners = (
-            int(grouped_trades["is_winner"].sum()) if not grouped_trades.empty else 0
-        )
+        winners = int(grouped_trades["is_winner"].sum()) if not grouped_trades.empty else 0
         losers = total_trades - winners
         net_pnl = grouped_trades["total_pnl"].sum() if not grouped_trades.empty else 0
         win_rate = (winners / total_trades * 100) if total_trades > 0 else 0
 
         # Profit factor
         gross_profit = (
-            grouped_trades[grouped_trades["is_winner"]]["total_pnl"].sum()
-            if winners > 0
-            else 0
+            grouped_trades[grouped_trades["is_winner"]]["total_pnl"].sum() if winners > 0 else 0
         )
         gross_loss = (
             abs(grouped_trades[~grouped_trades["is_winner"]]["total_pnl"].sum())
@@ -2862,34 +2742,20 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
 
         # Avg win/loss
         avg_win = (
-            grouped_trades[grouped_trades["is_winner"]]["total_pnl"].mean()
-            if winners > 0
-            else 0
+            grouped_trades[grouped_trades["is_winner"]]["total_pnl"].mean() if winners > 0 else 0
         )
         avg_loss = (
-            grouped_trades[~grouped_trades["is_winner"]]["total_pnl"].mean()
-            if losers > 0
-            else 0
+            grouped_trades[~grouped_trades["is_winner"]]["total_pnl"].mean() if losers > 0 else 0
         )
 
         # R-multiples (already calculated above)
         avg_r = grouped_trades["r_multiple"].mean() if has_r else 0
 
         # Exit analysis
-        hit_tp1 = (
-            int(grouped_trades["hit_tp1"].sum())
-            if "hit_tp1" in grouped_trades.columns
-            else 0
-        )
-        hit_tp2 = (
-            int(grouped_trades["hit_tp2"].sum())
-            if "hit_tp2" in grouped_trades.columns
-            else 0
-        )
+        hit_tp1 = int(grouped_trades["hit_tp1"].sum()) if "hit_tp1" in grouped_trades.columns else 0
+        hit_tp2 = int(grouped_trades["hit_tp2"].sum()) if "hit_tp2" in grouped_trades.columns else 0
         had_runner = (
-            int(grouped_trades["had_runner"].sum())
-            if "had_runner" in grouped_trades.columns
-            else 0
+            int(grouped_trades["had_runner"].sum()) if "had_runner" in grouped_trades.columns else 0
         )
         was_stopped = (
             int(grouped_trades["was_stopped_out"].sum())
@@ -2899,9 +2765,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
 
         # Avg hold days
         avg_hold = (
-            grouped_trades["hold_days"].mean()
-            if "hold_days" in grouped_trades.columns
-            else 0
+            grouped_trades["hold_days"].mean() if "hold_days" in grouped_trades.columns else 0
         )
 
         # Entry Score statistics
@@ -2930,9 +2794,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                 },
                 {
                     "label": "Profit Factor",
-                    "value": f"{profit_factor:.2f}"
-                    if profit_factor != float("inf")
-                    else "INF",
+                    "value": f"{profit_factor:.2f}" if profit_factor != float("inf") else "INF",
                 },
                 {
                     "label": "Avg Win / Loss",
@@ -3042,9 +2904,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
 
             # Top features
             if feat_imp:
-                top_feats = sorted(feat_imp.items(), key=lambda x: x[1], reverse=True)[
-                    :5
-                ]
+                top_feats = sorted(feat_imp.items(), key=lambda x: x[1], reverse=True)[:5]
                 feat_str = " | ".join([f"{f}: {v:.1f}" for f, v in top_feats])
                 st.caption(f"Top features: {feat_str}")
             st.caption(f"Features usadas: {len(features)}")
@@ -3083,9 +2943,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                     benchmark_ticker=benchmark_ticker,
                 )
                 st.session_state[_qs_key] = _analyzer.get_quantstats_metrics(
-                    benchmark_data=benchmark_returns
-                    if not benchmark_returns.empty
-                    else None
+                    benchmark_data=benchmark_returns if not benchmark_returns.empty else None
                 )
             qs_metrics = st.session_state[_qs_key]
             analyzer = QuantStatsAnalyzer(
@@ -3133,9 +2991,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                             },
                             {
                                 "label": "Total Return",
-                                "value": f"{total_ret * 100:+.2f}%"
-                                if total_ret
-                                else "N/A",
+                                "value": f"{total_ret * 100:+.2f}%" if total_ret else "N/A",
                             },
                             {
                                 "label": "Max DD",
@@ -3153,21 +3009,15 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                         [
                             {
                                 "label": "Total Trades",
-                                "value": f"{int(total_trades)}"
-                                if total_trades
-                                else "N/A",
+                                "value": f"{int(total_trades)}" if total_trades else "N/A",
                             },
                             {
                                 "label": "Win Rate",
-                                "value": f"{win_rate * 100:.1f}%"
-                                if win_rate
-                                else "N/A",
+                                "value": f"{win_rate * 100:.1f}%" if win_rate else "N/A",
                             },
                             {
                                 "label": "Profit Factor",
-                                "value": f"{profit_factor:.2f}"
-                                if profit_factor
-                                else "N/A",
+                                "value": f"{profit_factor:.2f}" if profit_factor else "N/A",
                             },
                         ]
                     )
@@ -3215,9 +3065,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                             },
                             {
                                 "label": "Win/Loss Ratio",
-                                "value": f"{avg_wl_ratio:.2f}"
-                                if avg_wl_ratio
-                                else "N/A",
+                                "value": f"{avg_wl_ratio:.2f}" if avg_wl_ratio else "N/A",
                             },
                         ]
                     )
@@ -3235,15 +3083,11 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                             },
                             {
                                 "label": "Max Consec. Wins",
-                                "value": f"{int(max_cons_wins)}"
-                                if max_cons_wins
-                                else "N/A",
+                                "value": f"{int(max_cons_wins)}" if max_cons_wins else "N/A",
                             },
                             {
                                 "label": "Max Consec. Losses",
-                                "value": f"{int(max_cons_losses)}"
-                                if max_cons_losses
-                                else "N/A",
+                                "value": f"{int(max_cons_losses)}" if max_cons_losses else "N/A",
                             },
                         ]
                     )
@@ -3257,15 +3101,11 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                         [
                             {
                                 "label": "Skewness",
-                                "value": f"{skewness:.3f}"
-                                if skewness is not None
-                                else "N/A",
+                                "value": f"{skewness:.3f}" if skewness is not None else "N/A",
                             },
                             {
                                 "label": "Kurtosis",
-                                "value": f"{kurtosis:.3f}"
-                                if kurtosis is not None
-                                else "N/A",
+                                "value": f"{kurtosis:.3f}" if kurtosis is not None else "N/A",
                             },
                             {
                                 "label": "Avg Hold Days",
@@ -3291,9 +3131,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                             },
                             {
                                 "label": "Info Ratio",
-                                "value": f"{info_ratio:.2f}"
-                                if info_ratio is not None
-                                else "N/A",
+                                "value": f"{info_ratio:.2f}" if info_ratio is not None else "N/A",
                             },
                         ]
                     )
@@ -3317,9 +3155,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                 # Get daily returns (simplified: use trade returns as daily returns)
                 # For more accuracy, we'd map to calendar days
                 trade_returns = (
-                    mc_df["total_pnl"].values / equity
-                    if equity > 0
-                    else np.zeros(len(mc_df))
+                    mc_df["total_pnl"].values / equity if equity > 0 else np.zeros(len(mc_df))
                 )
 
                 def run_monte_carlo(
@@ -3366,9 +3202,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                             sharpe_ratios[i] = 0
 
                         # Calculate win rate
-                        win_rates[i] = (
-                            (sampled_returns > 0).sum() / len(sampled_returns) * 100
-                        )
+                        win_rates[i] = (sampled_returns > 0).sum() / len(sampled_returns) * 100
 
                     return {
                         "final_capital": final_capitals,
@@ -3403,9 +3237,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                         mc_key = f"mc_results_{mc_simulations}_{mc_resample}"
                         if mc_key not in st.session_state:
                             with st.spinner("Running Monte Carlo simulations..."):
-                                n_trades_val = (
-                                    len(trade_returns) if mc_resample else None
-                                )
+                                n_trades_val = len(trade_returns) if mc_resample else None
                                 mc_results = run_monte_carlo(
                                     trade_returns,
                                     n_simulations=mc_simulations,
@@ -3414,9 +3246,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                                 st.session_state[mc_key] = mc_results
 
                 # Display results if available
-                mc_results = st.session_state.get(
-                    f"mc_results_{mc_simulations}_{mc_resample}"
-                )
+                mc_results = st.session_state.get(f"mc_results_{mc_simulations}_{mc_resample}")
 
                 if mc_results and len(mc_results.get("final_capital", [])) > 0:
                     st.success(f"Completed {mc_simulations:,} simulations")
@@ -3496,14 +3326,10 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                     with mc_summary_cols[3]:
                         st.markdown("**Win Rate Distribution (%)**")
                         wr_color_p10 = (
-                            "green"
-                            if wr_p10 > 50
-                            else ("orange" if wr_p10 > 40 else "red")
+                            "green" if wr_p10 > 50 else ("orange" if wr_p10 > 40 else "red")
                         )
                         wr_color_p90 = (
-                            "green"
-                            if wr_p90 > 50
-                            else ("orange" if wr_p90 > 40 else "red")
+                            "green" if wr_p90 > 50 else ("orange" if wr_p90 > 40 else "red")
                         )
                         st.markdown(
                             f"P10: <span style='color:{wr_color_p10}'>{wr_p10:.1f}%</span> | "
@@ -3801,9 +3627,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                     with col3:
                         st.metric("Big Wins (≥2R)", f"{rd.get('big_wins_pct', 'N/A')}%")
                     with col4:
-                        st.metric(
-                            "Big Losses (≤-1R)", f"{rd.get('big_losses_pct', 'N/A')}%"
-                        )
+                        st.metric("Big Losses (≤-1R)", f"{rd.get('big_losses_pct', 'N/A')}%")
 
                 # Context Analysis
                 ctx = analysis.get("context", {})
@@ -3813,23 +3637,15 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
 
                     rvol_corr = ctx.get("rvol_correlation", {})
                     with col1:
-                        st.metric(
-                            "RVOL-PnL Corr", f"{rvol_corr.get('corr_vs_pnl', 'N/A')}"
-                        )
+                        st.metric("RVOL-PnL Corr", f"{rvol_corr.get('corr_vs_pnl', 'N/A')}")
 
                     adr_corr = ctx.get("adr_correlation", {})
                     with col2:
-                        st.metric(
-                            "ADR-PnL Corr", f"{adr_corr.get('corr_vs_pnl', 'N/A')}"
-                        )
+                        st.metric("ADR-PnL Corr", f"{adr_corr.get('corr_vs_pnl', 'N/A')}")
 
                 # Pattern Analysis
                 pat = analysis.get("pattern_performance", {})
-                if (
-                    pat
-                    and "summary" in pat
-                    and "total_trades" in pat.get("summary", {})
-                ):
+                if pat and "summary" in pat and "total_trades" in pat.get("summary", {}):
                     st.markdown("#### Pattern Detection Performance")
 
                     # Summary
@@ -4006,9 +3822,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                 f"🤖 **TradeScorer ML**: OOF AUC={oof_auc:.3f} | Trained on {n_trades:,} trades | Ordena por 'High ML Score' para ver predicciones"
             )
         else:
-            st.caption(
-                "💡 Ejecuta `python3 train_trade_scorer.py` para entrenar el modelo ML"
-            )
+            st.caption("💡 Ejecuta `python3 train_trade_scorer.py` para entrenar el modelo ML")
 
         # Quick Sort / Filter Options
         st.markdown("### 🔍 Filter & Sort")
@@ -4088,54 +3902,36 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                 _sort_col_date = "final_exit_date" if _has_exit_date else None
 
                 if quick_sort == "Latest First" and _sort_col_date:
-                    display_df = display_source.sort_values(
-                        _sort_col_date, ascending=False
-                    )[show_cols]
+                    display_df = display_source.sort_values(_sort_col_date, ascending=False)[
+                        show_cols
+                    ]
                 elif quick_sort == "Oldest First" and _sort_col_date:
-                    display_df = display_source.sort_values(
-                        _sort_col_date, ascending=True
-                    )[show_cols]
+                    display_df = display_source.sort_values(_sort_col_date, ascending=True)[
+                        show_cols
+                    ]
                 elif quick_sort == "Top Winners ($)" and _has_pnl:
-                    display_df = display_source.sort_values(
-                        "total_pnl", ascending=False
-                    )[show_cols]
+                    display_df = display_source.sort_values("total_pnl", ascending=False)[show_cols]
                 elif quick_sort == "Top Losers ($)" and _has_pnl:
-                    display_df = display_source.sort_values(
-                        "total_pnl", ascending=True
-                    )[show_cols]
-                elif (
-                    quick_sort == "High R-Multiple"
-                    and "r_multiple" in display_source.columns
-                ):
-                    display_df = display_source.sort_values(
-                        "r_multiple", ascending=False
-                    )[show_cols]
-                elif (
-                    quick_sort == "High Entry Score"
-                    and "entry_score" in display_source.columns
-                ):
-                    display_df = display_source.sort_values(
-                        "entry_score", ascending=False
-                    )[show_cols]
-                elif (
-                    quick_sort == "Low Entry Score"
-                    and "entry_score" in display_source.columns
-                ):
-                    display_df = display_source.sort_values(
-                        "entry_score", ascending=True
-                    )[show_cols]
-                elif (
-                    quick_sort == "High ML Score"
-                    and "ml_score" in display_source.columns
-                ):
-                    display_df = display_source.sort_values(
-                        "ml_score", ascending=False
-                    )[show_cols]
+                    display_df = display_source.sort_values("total_pnl", ascending=True)[show_cols]
+                elif quick_sort == "High R-Multiple" and "r_multiple" in display_source.columns:
+                    display_df = display_source.sort_values("r_multiple", ascending=False)[
+                        show_cols
+                    ]
+                elif quick_sort == "High Entry Score" and "entry_score" in display_source.columns:
+                    display_df = display_source.sort_values("entry_score", ascending=False)[
+                        show_cols
+                    ]
+                elif quick_sort == "Low Entry Score" and "entry_score" in display_source.columns:
+                    display_df = display_source.sort_values("entry_score", ascending=True)[
+                        show_cols
+                    ]
+                elif quick_sort == "High ML Score" and "ml_score" in display_source.columns:
+                    display_df = display_source.sort_values("ml_score", ascending=False)[show_cols]
                 else:
                     if _sort_col_date:
-                        display_df = display_source.sort_values(
-                            _sort_col_date, ascending=False
-                        )[show_cols]
+                        display_df = display_source.sort_values(_sort_col_date, ascending=False)[
+                            show_cols
+                        ]
                     else:
                         display_df = display_source[show_cols]
         else:
@@ -4169,24 +3965,16 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
             elif quick_sort == "Top Losers ($)":
                 display_df = df[partial_cols].sort_values("pnl", ascending=True)
             elif quick_sort == "High Entry Score" and "entry_score" in partial_cols:
-                display_df = df[partial_cols].sort_values(
-                    "entry_score", ascending=False
-                )
+                display_df = df[partial_cols].sort_values("entry_score", ascending=False)
             elif quick_sort == "Low Entry Score" and "entry_score" in partial_cols:
                 display_df = df[partial_cols].sort_values("exit_date", ascending=True)
             else:
                 display_df = df[partial_cols].sort_values("exit_date", ascending=False)
 
         _sym_col_name = (
-            "symbol"
-            if "symbol" in df.columns
-            else ("ticker" if "ticker" in df.columns else None)
+            "symbol" if "symbol" in df.columns else ("ticker" if "ticker" in df.columns else None)
         )
-        _symbol_list = (
-            sorted(df[_sym_col_name].dropna().unique().tolist())
-            if _sym_col_name
-            else []
-        )
+        _symbol_list = sorted(df[_sym_col_name].dropna().unique().tolist()) if _sym_col_name else []
         selected_symbol = st.selectbox("Filter Symbol", ["All"] + _symbol_list)
         if selected_symbol != "All" and _sym_col_name:
             display_df = display_df[display_df[_sym_col_name] == selected_symbol]
@@ -4204,14 +3992,9 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
         if apply_date_filter and start_date and end_date:
             filter_start = pd.to_datetime(start_date)
             filter_end = pd.to_datetime(end_date)
-            date_col = (
-                "entry_date"
-                if "entry_date" in display_df.columns
-                else "final_exit_date"
-            )
+            date_col = "entry_date" if "entry_date" in display_df.columns else "final_exit_date"
             display_df = display_df[
-                (display_df[date_col] >= filter_start)
-                & (display_df[date_col] <= filter_end)
+                (display_df[date_col] >= filter_start) & (display_df[date_col] <= filter_end)
             ]
 
         # Show debug badge if filtering changed row count
@@ -4234,8 +4017,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                     st.caption(f"Available trade dates: {_dmin} to {_dmax}")
             elif _post_filter_count < _pre_filter_count:
                 st.caption(
-                    f"Showing {_post_filter_count}/{_pre_filter_count} trades "
-                    f"(date filter applied)"
+                    f"Showing {_post_filter_count}/{_pre_filter_count} trades (date filter applied)"
                 )
 
         if not display_df.empty:
@@ -4243,9 +4025,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
             date_cols = [c for c in display_df_display.columns if "date" in c.lower()]
             for col in date_cols:
                 if col in display_df_display.columns:
-                    display_df_display[col] = display_df_display[col].apply(
-                        format_date_short
-                    )
+                    display_df_display[col] = display_df_display[col].apply(format_date_short)
 
             has_score = "entry_score" in display_df_display.columns
         else:
@@ -4268,9 +4048,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                 min_value=0,
                 max_value=100,
             ),
-            "pattern_type": st.column_config.TextColumn(
-                "Pattern", help="Detected Chart Pattern"
-            ),
+            "pattern_type": st.column_config.TextColumn("Pattern", help="Detected Chart Pattern"),
         }
         # Add ML score column config if present
         if "ml_score" in display_df_display.columns:
@@ -4336,9 +4114,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
             )
 
             if st.button("Show Detailed Chart"):
-                dash = InteractiveDashboard(
-                    df=df
-                )  # PERF Item 6: evita re-leer CSV desde disco
+                dash = InteractiveDashboard(df=df)  # PERF Item 6: evita re-leer CSV desde disco
 
                 # If it's a grouped trade, we need all partials
                 if view_mode == "Complete Trades":
@@ -4356,9 +4132,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                                 "date": p["exit_date"],
                                 "price": p["exit_price"],
                                 "type": p["exit_phase"],
-                                "qty_pct": (
-                                    p["shares"] / main_trade["total_shares"] * 100
-                                )
+                                "qty_pct": (p["shares"] / main_trade["total_shares"] * 100)
                                 if main_trade["total_shares"] > 0
                                 else 0,
                             }
@@ -4512,9 +4286,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                 st.markdown("**Underwater Plot (Drawdowns)**")
                 if len(strat_returns) > 0:
                     dd = qs.stats.to_drawdown_series(strat_returns)
-                    fig_dd = px.area(
-                        x=dd.index, y=dd * 100, color_discrete_sequence=["#ff4b4b"]
-                    )
+                    fig_dd = px.area(x=dd.index, y=dd * 100, color_discrete_sequence=["#ff4b4b"])
                     fig_dd.update_layout(
                         template="plotly_dark",
                         height=300,
@@ -4530,9 +4302,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                 st.markdown(f"**Rolling Beta vs {benchmark_ticker}**")
                 try:
                     # Align benchmark exactly to strategy returns
-                    aligned_bench_local = aligned_bench.reindex(
-                        strat_returns.index
-                    ).fillna(0)
+                    aligned_bench_local = aligned_bench.reindex(strat_returns.index).fillna(0)
 
                     # Determine best window (min between 126 and 1/3 of total data)
                     available_days = len(strat_returns)
@@ -4567,15 +4337,13 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
             st.markdown("### Monthly Returns (%)")
             import pandas as pd
 
-            if len(strat_returns) > 0 and isinstance(
-                strat_returns.index, pd.DatetimeIndex
-            ):
+            if len(strat_returns) > 0 and isinstance(strat_returns.index, pd.DatetimeIndex):
                 monthly_ret = qs.stats.monthly_returns(strat_returns) * 100
                 # Format for display
                 st.dataframe(
-                    monthly_ret.style.background_gradient(
-                        cmap="RdYlGn", axis=None
-                    ).format("{:.2f}%"),
+                    monthly_ret.style.background_gradient(cmap="RdYlGn", axis=None).format(
+                        "{:.2f}%"
+                    ),
                     use_container_width=True,
                 )
             else:
@@ -4585,9 +4353,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
             st.markdown("---")
             if st.button("Generate Full PDF Tearsheet"):
                 with st.spinner("Generating professional PDF report..."):
-                    report_path = analyzer.generate_pdf_report(
-                        benchmark_ticker=benchmark_ticker
-                    )
+                    report_path = analyzer.generate_pdf_report(benchmark_ticker=benchmark_ticker)
                     if report_path:
                         st.success(f"PDF Report generated successfully!")
                         with open(report_path, "rb") as f:
@@ -4630,9 +4396,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                 pass
         elif os.path.exists("outputs/backtests/adaptive_filter_rejections.csv"):
             try:
-                rej_csv = pd.read_csv(
-                    "outputs/backtests/adaptive_filter_rejections.csv"
-                )
+                rej_csv = pd.read_csv("outputs/backtests/adaptive_filter_rejections.csv")
                 rejections = dict(zip(rej_csv.iloc[:, 0], rej_csv.iloc[:, 1]))
             except Exception as e:
                 st.error(f"Error loading rejection data: {e}")
@@ -4672,9 +4436,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                             reason = "Tier 3: Secondary Filters"
                         else:
                             # Default cleaning
-                            reason = (
-                                k.replace("blocked_by_", "").replace("_", " ").title()
-                            )
+                            reason = k.replace("blocked_by_", "").replace("_", " ").title()
 
                         rej_items_raw.append({"Reason": reason, "Count": int(v)})
 
@@ -4808,9 +4570,9 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                             exposure_series = pd.Series(0, index=dates)
 
                             for _, trade in grouped_trades.iterrows():
-                                mask = (
-                                    exposure_series.index >= trade["entry_date"]
-                                ) & (exposure_series.index <= trade["final_exit_date"])
+                                mask = (exposure_series.index >= trade["entry_date"]) & (
+                                    exposure_series.index <= trade["final_exit_date"]
+                                )
                                 exposure_series[mask] += 1
 
                             fig_exp = px.area(
@@ -4846,11 +4608,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                 # Dynamic interpretation based on actual exposure
                 if exposure > 0:
                     exposure_quality = (
-                        "excelente"
-                        if exposure < 15
-                        else "moderado"
-                        if exposure < 30
-                        else "alto"
+                        "excelente" if exposure < 15 else "moderado" if exposure < 30 else "alto"
                     )
                     in_market_pct = exposure
                     in_cash_pct = 100 - exposure
@@ -4894,9 +4652,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
                     """)
                 else:
                     st.info("**Beta**")
-                    st.write(
-                        "Métrica no disponible o beta cercano a cero (estrategia neutral)."
-                    )
+                    st.write("Métrica no disponible o beta cercano a cero (estrategia neutral).")
             # --- END EXPERT ANALYSIS ---
 
             st.markdown("---")
@@ -4909,10 +4665,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
             # Categorize by tier
             def categorize_tier(filter_name):
                 fn = filter_name.lower()
-                if any(
-                    x in fn
-                    for x in ["tier1", "spy", "market", "regime", "vix", "warmup"]
-                ):
+                if any(x in fn for x in ["tier1", "spy", "market", "regime", "vix", "warmup"]):
                     return "Tier 1 (Market Safety)"
                 elif any(
                     x in fn
@@ -4969,9 +4722,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
             with st.expander("Full Rejection Detail"):
                 st.dataframe(rej_df, use_container_width=True)
         else:
-            st.info(
-                "No rejection data available. Run a backtest to see filter diagnostics."
-            )
+            st.info("No rejection data available. Run a backtest to see filter diagnostics.")
 
         # --- Trade Distribution Analysis ---
         if not grouped_trades.empty:
@@ -5013,9 +4764,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
     # =========================================================================
     with t5:
         st.header("⚙️ Configuración del Sistema")
-        st.caption(
-            f"Parámetros activos cargados desde: `config/production_config.json`"
-        )
+        st.caption(f"Parámetros activos cargados desde: `config/production_config.json`")
 
         col_i1, col_i2 = st.columns(2)
 
@@ -5031,9 +4780,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
 
             st.info(f"**TP1:** {tp1_pct:.0f}% de posición @ {tp1_r:.1f}R")
             st.info(f"**TP2:** {tp2_pct:.0f}% de posición @ {tp2_r:.1f}R")
-            st.info(
-                f"**Runner:** {runner_pct:.0f}% con EMA8/EMA21 crossover + ATR trailing"
-            )
+            st.info(f"**Runner:** {runner_pct:.0f}% con EMA8/EMA21 crossover + ATR trailing")
 
             st.markdown("**Gestión de Riesgo:**")
             max_stop = _t1.get("max_stop_pct", 0) * 100
@@ -5050,9 +4797,7 @@ if dashboard_view == "Legacy" and not _trades_df.empty:
             min_dollar_vol = _t2.get("min_dollar_volume", 0)
 
             st.info(f"**RVOL Mínimo:** {min_rvol:.1f}x (volumen relativo)")
-            st.info(
-                f"**Distancia Max SMA20:** {max_dist_sma20:.1f}% (evita sobreextensión)"
-            )
+            st.info(f"**Distancia Max SMA20:** {max_dist_sma20:.1f}% (evita sobreextensión)")
             st.info(f"**ADR Mínimo:** {min_adr:.2f}% (rango promedio diario)")
             st.info(f"**Volumen Mínimo:** ${min_dollar_vol:,.0f} (liquidez)")
 
@@ -5384,9 +5129,7 @@ el pánico institucional está confirmado — la señal de peligro más fuerte a
                     template="plotly_dark",
                     height=700,
                     margin=dict(l=20, r=20, t=60, b=20),
-                    legend=dict(
-                        orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
-                    ),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                     hovermode="x unified",
                 )
                 fig.update_yaxes(title_text="Precio ($)", row=1, col=1)
@@ -5435,8 +5178,7 @@ el pánico institucional está confirmado — la señal de peligro más fuerte a
                         [
                             t
                             for t in transitions
-                            if "STAGE_3" in t["Nuevo Stage"]
-                            or "STAGE_4" in t["Nuevo Stage"]
+                            if "STAGE_3" in t["Nuevo Stage"] or "STAGE_4" in t["Nuevo Stage"]
                         ]
                     )
 
@@ -5484,9 +5226,7 @@ el pánico institucional está confirmado — la señal de peligro más fuerte a
     # =========================================================================
     with t7:
         st.markdown("## 🎓 Anatomía del Trade - Modo Educativo")
-        st.caption(
-            "Aprende cómo funciona el sistema analizando trades reales paso a paso"
-        )
+        st.caption("Aprende cómo funciona el sistema analizando trades reales paso a paso")
 
         if not grouped_trades.empty:
             # Trade selector
@@ -5506,9 +5246,7 @@ el pánico institucional está confirmado — la señal de peligro más fuerte a
 
             # Sort by absolute PnL to show most impactful trades
             interesting_trades["abs_pnl"] = interesting_trades["total_pnl"].abs()
-            interesting_trades = interesting_trades.sort_values(
-                "abs_pnl", ascending=False
-            )
+            interesting_trades = interesting_trades.sort_values("abs_pnl", ascending=False)
 
             selected_trade_desc = st.selectbox(
                 "Trade:",
@@ -5535,9 +5273,7 @@ el pánico institucional está confirmado — la señal de peligro más fuerte a
             m4.metric("Entry Score", f"{trade.get('entry_score', 0):.2f}")
             m5.metric(
                 "R-Multiple",
-                f"{trade.get('r_multiple', 0):+.2f}R"
-                if "r_multiple" in trade
-                else "N/A",
+                f"{trade.get('r_multiple', 0):+.2f}R" if "r_multiple" in trade else "N/A",
             )
 
             # PHASE 1: PRE-ENTRADA
@@ -5669,9 +5405,7 @@ el pánico institucional está confirmado — la señal de peligro más fuerte a
             with col_pm1:
                 st.markdown("#### Métricas de Performance")
 
-                win_rate_pct = (
-                    (grouped_trades["total_pnl"] > 0).sum() / len(grouped_trades) * 100
-                )
+                win_rate_pct = (grouped_trades["total_pnl"] > 0).sum() / len(grouped_trades) * 100
                 avg_win = (
                     grouped_trades[grouped_trades["total_pnl"] > 0]["total_pnl"].mean()
                     if (grouped_trades["total_pnl"] > 0).any()
@@ -5700,9 +5434,7 @@ el pánico institucional está confirmado — la señal de peligro más fuerte a
                 lessons = []
 
                 if trade.get("entry_score", 0) >= 0.7 and trade["total_pnl"] > 0:
-                    lessons.append(
-                        "✅ **Score alto + ganador** - Sistema funcionó como esperado"
-                    )
+                    lessons.append("✅ **Score alto + ganador** - Sistema funcionó como esperado")
                 elif trade.get("entry_score", 0) < 0.4 and trade["total_pnl"] < 0:
                     lessons.append(
                         "⚠️ **Score bajo + perdedor** - Confirmación de que scores bajos son más riesgosos"
@@ -5712,23 +5444,15 @@ el pánico institucional está confirmado — la señal de peligro más fuerte a
                         "📚 **Score alto pero perdió** - Incluso buenos setups fallan (probabilidades)"
                     )
                 elif trade.get("entry_score", 0) < 0.4 and trade["total_pnl"] > 0:
-                    lessons.append(
-                        "🎲 **Score bajo pero ganó** - Caso fortuito, no replicable"
-                    )
+                    lessons.append("🎲 **Score bajo pero ganó** - Caso fortuito, no replicable")
 
                 if trade["hold_days"] < 3:
-                    lessons.append(
-                        "⚡ **Trade corto** - Sistema detectó debilidad y cortó rápido"
-                    )
+                    lessons.append("⚡ **Trade corto** - Sistema detectó debilidad y cortó rápido")
                 elif trade["hold_days"] > 10:
-                    lessons.append(
-                        "🏃 **Trade extendido** - El momentum se mantuvo varios días"
-                    )
+                    lessons.append("🏃 **Trade extendido** - El momentum se mantuvo varios días")
 
                 if trade.get("rs_percentile", 0) >= 80:
-                    lessons.append(
-                        "🚀 **RS alto** - Líder relativo del mercado (IBD style)"
-                    )
+                    lessons.append("🚀 **RS alto** - Líder relativo del mercado (IBD style)")
 
                 for lesson in lessons:
                     st.write(lesson)
@@ -5912,13 +5636,7 @@ el pánico institucional está confirmado — la señal de peligro más fuerte a
                         shares_exited = exit_row.get("shares", 0)
                         exit_reason = exit_row.get("exit_reason", "N/A")
 
-                        emoji = (
-                            "🎯"
-                            if "TP" in str(exit_reason)
-                            else "🛑"
-                            if pnl < 0
-                            else "📤"
-                        )
+                        emoji = "🎯" if "TP" in str(exit_reason) else "🛑" if pnl < 0 else "📤"
 
                         timeline_data.append(
                             {
@@ -5965,17 +5683,13 @@ el pánico institucional está confirmado — la señal de peligro más fuerte a
                 improvements = []
 
                 if trade.get("entry_score", 0) < 0.4:
-                    improvements.append(
-                        "⚠️ Entry score bajo - considerar umbral más alto"
-                    )
+                    improvements.append("⚠️ Entry score bajo - considerar umbral más alto")
                 if trade.get("rs_percentile", 0) < 50:
                     improvements.append("⚠️ RS bajo - no era líder de mercado")
                 if trade["total_pnl"] < 0 and trade["hold_days"] < 2:
                     improvements.append("⚠️ Stop muy ajustado o entrada prematura")
                 if abs(trade["total_pnl"]) < 50:
-                    improvements.append(
-                        "⚠️ PnL pequeño - ajustar risk/size o skip setups débiles"
-                    )
+                    improvements.append("⚠️ PnL pequeño - ajustar risk/size o skip setups débiles")
 
                 if improvements:
                     for imp in improvements:
@@ -6054,13 +5768,9 @@ el pánico institucional está confirmado — la señal de peligro más fuerte a
                     "OOS WR": f"{oos.get('oos_win_rate', 0):.0f}%"
                     if oos.get("oos_win_rate")
                     else "-",
-                    "OOS DD": f"{oos.get('oos_max_dd', 0):.1f}%"
-                    if oos.get("oos_max_dd")
-                    else "-",
+                    "OOS DD": f"{oos.get('oos_max_dd', 0):.1f}%" if oos.get("oos_max_dd") else "-",
                     "OOS Period": oos.get("period", "-"),
-                    "Passed": "✅"
-                    if str(oos.get("passed", "False")) == "True"
-                    else "⚠",
+                    "Passed": "✅" if str(oos.get("passed", "False")) == "True" else "⚠",
                 }
             except Exception as _e:
                 return {"Signal": signal, "Error": str(_e)}

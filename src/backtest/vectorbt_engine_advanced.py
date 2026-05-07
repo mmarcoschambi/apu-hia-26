@@ -566,6 +566,7 @@ class AdvancedVectorBTEngine:
         max_vix_threshold: float = 35.0,  # PROFESSIONAL: VIX > 35 = NO trades (was 30)
         require_spy_above_sma50: bool = True,  # PROFESSIONAL: SPY > SMA50 required
         min_consolidation_days: int = 10,  # PROFESSIONAL: VCP quality (was 5)
+        max_consolidation_range: float = 15.0,  # Max H-L range % in consolidation window
         use_adaptive_filtering: bool = False,  # NEW: Use AdaptiveFilterEngine with tiered filtering
         # Survivorship bias protection (NEW)
         min_pre_history_days: int = 200,  # Min trading days required before start_date (200 ≈ 1 year)
@@ -573,6 +574,9 @@ class AdvancedVectorBTEngine:
         # NEW: RS IBD-style parameters
         use_rs_percentile: bool = False,  # Use IBD-style RS ranking (0-100 percentile)
         min_rs_percentile: float = 80.0,  # Minimum RS percentile (80 = Top 20%)
+        min_rs_percentile_breakout: Optional[
+            float
+        ] = None,  # Breakout gate using cross-sectional RS percentile
         rs_lookback_days: int = 60,  # Lookback for RS calculation (60 = 3 months)
         rs_short_lookback_days: int = 20,  # Short-term RS lookback (20d = 1 month momentum)
         rs_short_weight: float = 0.35,  # Weight of 20d RS in entry score (0 = disabled)
@@ -803,6 +807,7 @@ class AdvancedVectorBTEngine:
         self.max_vix_threshold = max_vix_threshold
         self.require_spy_above_sma50 = require_spy_above_sma50
         self.min_consolidation_days = min_consolidation_days
+        self.max_consolidation_range = max_consolidation_range
         self.use_adaptive_filtering = use_adaptive_filtering
         self.min_pre_history_days = min_pre_history_days  # Survivorship bias protection
         self.use_pit_universe = (
@@ -814,6 +819,10 @@ class AdvancedVectorBTEngine:
         # NEW: RS IBD-style parameters
         self.use_rs_percentile = use_rs_percentile
         self.min_rs_percentile = min_rs_percentile
+        breakout_alias = kwargs.pop("rs_breakout_min", None)
+        self.min_rs_percentile_breakout = (
+            min_rs_percentile_breakout if min_rs_percentile_breakout is not None else breakout_alias
+        )
         self.rs_lookback_days = rs_lookback_days
         self.rs_short_lookback_days = rs_short_lookback_days
         self.rs_short_weight = rs_short_weight
@@ -837,6 +846,7 @@ class AdvancedVectorBTEngine:
         self.rejection_details_df = None  # Store detailed rejection reasons
 
         self.cache = TickerCache()
+        self.rs_matrix: Optional[pd.DataFrame] = None
         self.data_provider = MarketDataProvider()  # For earnings data
         self.data: Dict[str, pd.DataFrame] = {}
 
@@ -1268,6 +1278,58 @@ class AdvancedVectorBTEngine:
                 f"   🛡️  Masked out {non_tradeable.sum().sum():,} cells ({masked_out_pct:.1f}%) "
                 f"as non-tradeable (pre-IPO, post-delist, not in S&P 500)"
             )
+        # ============================================
+
+        # ============================================
+        # RS MATRIX: Cross-sectional RS percentile gate for breakout signal
+        # ============================================
+        if self.min_rs_percentile_breakout is not None:
+            import sqlite3 as _sqlite3
+
+            _db_path = PROJECT_ROOT / "data" / "ticker_cache.db"
+            logger.info(
+                f"📊 Loading RS matrix for breakout gate "
+                f"(threshold={self.min_rs_percentile_breakout})..."
+            )
+            try:
+                _conn = _sqlite3.connect(str(_db_path))
+                _rs_raw = pd.read_sql_query(
+                    "SELECT date, ticker, rs_composite FROM daily_rs_rankings "
+                    "WHERE date >= ? AND date <= ?",
+                    _conn,
+                    params=(
+                        self.start_date.strftime("%Y-%m-%d"),
+                        self.end_date.strftime("%Y-%m-%d"),
+                    ),
+                )
+                _conn.close()
+                if _rs_raw.empty:
+                    logger.warning(
+                        "⚠️  daily_rs_rankings is empty for this period — "
+                        "rs_breakout gate will be SKIPPED"
+                    )
+                else:
+                    _rs_raw["date"] = pd.to_datetime(_rs_raw["date"])
+                    _rs_pivot = _rs_raw.pivot(index="date", columns="ticker", values="rs_composite")
+                    _rs_pivot = (
+                        _rs_pivot.reindex(
+                            index=self.close.index,
+                            columns=self.close.columns,
+                        )
+                        .ffill()
+                        .fillna(0.0)
+                        .astype(np.float32)
+                    )
+                    self.rs_matrix = _rs_pivot
+                    _coverage = (_rs_pivot > 0).sum().sum()
+                    _total = _rs_pivot.shape[0] * _rs_pivot.shape[1]
+                    logger.info(
+                        f"   ✅ RS matrix built: {_rs_pivot.shape} | "
+                        f"coverage={_coverage / _total * 100:.1f}%"
+                    )
+                    del _rs_raw, _rs_pivot
+            except Exception as _rs_err:
+                logger.error(f"❌ Failed to load RS matrix: {_rs_err} — gate will be SKIPPED")
         # ============================================
 
         # Initialize precomputed metrics from cache
@@ -2644,15 +2706,19 @@ class AdvancedVectorBTEngine:
             quality = dist_sma20_pct <= self.max_dist_sma20
 
             # Consolidation: BOTH range AND days (THOR logic)
-            consolidation = (
-                (consolidation_days >= self.min_consolidation_days)
-                & (consolidation_range <= 15.0)  # THOR default max_consolidation_range
+            consolidation = (consolidation_days >= self.min_consolidation_days) & (
+                consolidation_range <= self.max_consolidation_range
             )
 
             # Breakout signal (THOR: close > 20d high)
             breakout_signal = self.close > self.high.shift().rolling(20).max()
             if self.rvol_breakout_threshold is not None:
                 breakout_signal = breakout_signal & (rvol >= self.rvol_breakout_threshold)
+
+            if self.rs_matrix is not None and self.min_rs_percentile_breakout is not None:
+                breakout_signal = breakout_signal & (
+                    self.rs_matrix >= self.min_rs_percentile_breakout
+                )
 
             # Combine: THOR baseline = liquidity & quality & consolidation & breakout
             entries = liquidity & quality & consolidation & breakout_signal
@@ -2705,7 +2771,14 @@ class AdvancedVectorBTEngine:
                 breakout_signal = self.close > self.high.shift().rolling(20).max()
                 if self.rvol_breakout_threshold is not None:
                     breakout_signal = breakout_signal & (self.rvol >= self.rvol_breakout_threshold)
-                entries = base_entry & breakout_signal
+                if self.rs_matrix is not None and self.min_rs_percentile_breakout is not None:
+                    breakout_signal = breakout_signal & (
+                        self.rs_matrix >= self.min_rs_percentile_breakout
+                    )
+                consolidation = (self.consolidation_days >= self.min_consolidation_days) & (
+                    self.consolidation_range <= self.max_consolidation_range
+                )
+                entries = base_entry & consolidation & breakout_signal
                 logger.info("   Using BREAKOUT signal (close > 20d high)")
 
             elif self.signal_type == "vcp":

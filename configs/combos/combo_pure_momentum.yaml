@@ -20,8 +20,10 @@ max_setups: 8
 flat_base_range_pct: 0.15
 vcp_contraction_threshold: 0.7
 min_rvol: 1.5
+rs_breakout_min: 70
 min_adr: 1.2
 min_consolidation_days: 5
+max_consolidation_range: 10.0
 max_positions: 6
 max_position_pct: 0.2
 max_exposure_pct: 0.75

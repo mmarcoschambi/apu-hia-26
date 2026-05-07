@@ -83,7 +83,7 @@ class SignalDecision:
     screener_reason: str = ""
     signal_type: str = "breakout"
     cost_model: dict = field(default_factory=dict)
-    
+
     # Canonical Execution fields
     stop_price: Optional[float] = None
     tp1_price: Optional[float] = None
@@ -239,37 +239,23 @@ def compute_tier2_metrics(
 
     sma20 = close.rolling(20).mean()
     avg_vol = volume.rolling(20).mean().replace(0, np.nan)
-    rvol = (
-        (volume / avg_vol).iloc[-1]
-        if not np.isnan(volume.iloc[-1] / avg_vol.iloc[-1])
-        else 0.0
-    )
+    rvol = (volume / avg_vol).iloc[-1] if not np.isnan(volume.iloc[-1] / avg_vol.iloc[-1]) else 0.0
     adr = (((high - low) / close.replace(0, np.nan)) * 100).rolling(20).mean().iloc[-1]
     adr = 0.0 if np.isnan(adr) else adr
-    dist_sma20_val = (
-        (close - sma20.replace(0, np.nan)) / sma20.replace(0, np.nan) * 100
-    ).iloc[-1]
+    dist_sma20_val = ((close - sma20.replace(0, np.nan)) / sma20.replace(0, np.nan) * 100).iloc[-1]
     dist_sma20_val = 0.0 if np.isnan(dist_sma20_val) else dist_sma20_val
     bb_std = close.rolling(20).std()
     inside_bb = (close >= sma20 - bb_std * 2) & (close <= sma20 + bb_std * 2)
     consol_days = int(inside_bb.rolling(20).sum().iloc[-1])
-    dollar_vol = (
-        (close * avg_vol).iloc[-1] if not np.isnan((close * avg_vol).iloc[-1]) else 0.0
-    )
+    dollar_vol = (close * avg_vol).iloc[-1] if not np.isnan((close * avg_vol).iloc[-1]) else 0.0
 
     rs_ret: Optional[float] = None
-    if (
-        spy_df is not None
-        and len(df) >= rs_lookback + 5
-        and len(spy_df) >= rs_lookback + 5
-    ):
+    if spy_df is not None and len(df) >= rs_lookback + 5 and len(spy_df) >= rs_lookback + 5:
         try:
             period = min(rs_lookback, len(df) - 1, len(spy_df) - 1)
             if period > 10:
                 ticker_ret = float(close.iloc[-1] / close.iloc[-period - 1] - 1)
-                spy_close = (
-                    spy_df["close"] if "close" in spy_df.columns else spy_df["Close"]
-                )
+                spy_close = spy_df["close"] if "close" in spy_df.columns else spy_df["Close"]
                 spy_ret = float(spy_close.iloc[-1] / spy_close.iloc[-period - 1] - 1)
                 rs_ret = ticker_ret - spy_ret
         except Exception:
@@ -336,16 +322,14 @@ def apply_tier2_filters(metrics: Tier2Metrics, t2_cfg: dict) -> tuple[bool, str]
         )
     if t2_cfg.get("require_positive_rs", False):
         if metrics.rs_ret is None or metrics.rs_ret <= 0:
-            rs_display = (
-                f"{metrics.rs_ret:.4f}" if metrics.rs_ret is not None else "None"
-            )
+            rs_display = f"{metrics.rs_ret:.4f}" if metrics.rs_ret is not None else "None"
             return False, f"tier2_fail:rs_ret:{rs_display}<=0"
     if t2_cfg.get("use_rs_percentile", False):
         rs_pct = metrics.rs_percentile
         min_rs_pct = float(t2_cfg.get("min_rs_percentile", 0.0))
         if rs_pct is None or rs_pct < min_rs_pct:
             return False, f"tier2_fail:rs_percentile:{rs_pct}<{min_rs_pct:.1f}"
-    
+
     if t2_cfg.get("require_spy_above_sma50", False):
         if not metrics.spy_above_sma50:
             return False, "tier2_fail:market_regime:spy_below_sma50"
@@ -409,6 +393,7 @@ def evaluate_ticker(
     screener_cfg = combo_cfg.get("screener", {})
     t2_cfg = combo_cfg.get("tier2_filters", {})
     pattern_cfg = combo_cfg.get("pattern", {})
+    breakout_min = t2_cfg.get("rs_breakout_min")
 
     screener_name = screener_cfg.get("name")
     pipeline: Optional[ScreenerPipeline] = None
@@ -416,20 +401,18 @@ def evaluate_ticker(
         try:
             # 1. Cargar config base de disco o default
             config = ScreenerRegistry.load_config(screener_name)
-            
+
             # 2. Aplicar overrides desde combo_cfg (que pueden venir de la memoria/argumentos)
             # Esto es CRÍTICO para que los experimentos funcionen
             if "min_adr_pct" in screener_cfg:
                 config.min_adr_pct = screener_cfg["min_adr_pct"]
             if "params" in screener_cfg:
                 config.params.update(screener_cfg["params"])
-            
+
             logger.debug(f"Screener {screener_name} FINAL PARAMS: {config.params}")
 
             screener = ScreenerRegistry.get(screener_name, config)
-            pipeline = ScreenerPipeline(
-                [screener], mode=screener_cfg.get("mode", "all")
-            )
+            pipeline = ScreenerPipeline([screener], mode=screener_cfg.get("mode", "all"))
         except Exception as e:
             logger.debug(f"Screener init error {screener_name}: {e}")
 
@@ -463,18 +446,40 @@ def evaluate_ticker(
 
     metrics = compute_tier2_metrics(df, spy_df)
     metrics.sector_etf_dist = sector_etf_dist  # NEW
-    
+
     # Intentar obtener RS Percentile si no se proporcionó uno
     if rs_percentile is not None:
         metrics.rs_percentile = rs_percentile
     elif scan_date and t2_cfg.get("use_rs_percentile", False):
         try:
             from src.data.rs_rankings import get_rs_percentile
+
             metrics.rs_percentile = get_rs_percentile(
                 ticker, date=scan_date, metric=t2_cfg.get("rs_metric", "rs_composite")
             )
         except Exception as e:
             logger.debug(f"Tier2 RS lookup error {ticker}: {e}")
+
+    if breakout_min is not None and scan_date:
+        try:
+            from src.data.rs_rankings import get_rs_percentile
+
+            breakout_rs = get_rs_percentile(
+                ticker, date=scan_date, metric=t2_cfg.get("rs_metric", "rs_composite")
+            )
+            if breakout_rs is None or breakout_rs < float(breakout_min):
+                return SignalDecision(
+                    ticker=ticker,
+                    mode=mode,
+                    passed=False,
+                    reject_reason=f"breakout_fail:rs_breakout_min:{breakout_rs}<{float(breakout_min):.1f}",
+                    screener_score=screener_score,
+                    screener_reason=screener_reason,
+                    tier2_metrics=metrics,
+                    signal_type=pattern_cfg.get("signal_type", "breakout"),
+                )
+        except Exception as e:
+            logger.debug(f"Breakout RS lookup error {ticker}: {e}")
 
     if not skip_tier2:
         tier2_ok, tier2_reason = apply_tier2_filters(metrics, t2_cfg)
@@ -501,7 +506,7 @@ def evaluate_ticker(
         entry_price=metrics.close,
         metrics=metrics,
         combo_cfg=combo_cfg,
-        risk_dollars=1000.0, # Default per-trade risk
+        risk_dollars=1000.0,  # Default per-trade risk
     )
 
     return SignalDecision(
