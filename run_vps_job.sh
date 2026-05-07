@@ -1,7 +1,7 @@
 #!/bin/bash
 # Wrapper para ejecutar scripts en el VPS con el entorno y variables correctas
 
-PROJECT_DIR="/home/marcos/trade/momentum-v2"
+PROJECT_DIR="/home/xxmalcomandaxx/swing-momentum-v1"
 cd "$PROJECT_DIR" || exit 1
 
 # Cargar y exportar todas las variables del .env
