@@ -366,10 +366,18 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
 
 
 def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> str:
+    """Construye un brief operativo para Telegram con formato visual 'tipo GUI'."""
     date = snapshot.get("date", "n/a")
     regime_ok = snapshot.get("regime_ok", False)
     signals = snapshot.get("signals", [])
     watchlist_detail = snapshot.get("watchlist_detail", {})
+
+    sector_names = {
+        "XLK": "Tecnología", "XLY": "Consumo discrecional", "XLRE": "Real Estate",
+        "XLC": "Comunicaciones", "XLI": "Industriales", "XLF": "Financieras",
+        "XLE": "Energía", "XLV": "Salud", "XLP": "Consumo defensivo",
+        "XLU": "Utilities", "XLB": "Materiales"
+    }
 
     lines = [
         f"🚀 <b>MOMENTUM V2 | {date}</b>",
@@ -382,9 +390,40 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> str:
     if hot_sectors:
         lines.append("\n🔥 <b>HOT SECTORS</b>")
         for row in hot_sectors:
+            etf = row['sector_etf']
+            name = sector_names.get(etf, "")
             lines.append(
-                f"• <b>{row['sector_etf']}</b> | RS {row.get('rs', 0):.1%} | S1 {'✓' if row.get('tradeable') else '✗'}"
+                f"• <b>{etf} {name}</b> | RS {row.get('rs', 0):.1%} | S1 {'✓' if row.get('tradeable') else '✗'}"
             )
+
+    def _fmt_val(v, suffix="", default="N/A"):
+        if v is None: return default
+        try: return f"{float(v):.2f}{suffix}"
+        except: return default
+
+    def _get_tv_link(ticker):
+        # Usar link de símbolos para que TradingView resuelva el exchange (NASDAQ/NYSE) automáticamente
+        return f'<a href="https://www.tradingview.com/symbols/{ticker}/">TradingView</a>'
+
+    def _estado_simple(data):
+        if data.get("_display_status") == "warn":
+            return "⚠ Data incompleta"
+        
+        max_dist = 6.77
+        try: max_dist = float(data.get("max_dist_sma20", max_dist))
+        except: pass
+
+        if not data.get("breakout") and data.get("ma_stack") and data.get("sector_etf_ok", True):
+            rvol = data.get("rvol")
+            dist = data.get("dist_sma20_pct")
+            if (rvol is None or float(rvol) >= 1.0) and (dist is None or abs(float(dist)) <= max_dist):
+                return "⏳ Breakout"
+        if data.get("breakout") and data.get("dist_sma20_pct") is not None:
+            try:
+                if abs(float(data.get("dist_sma20_pct"))) > max_dist:
+                    return "📉 Consolidar"
+            except: pass
+        return "🔧 Setup incompleto"
 
     if watchlist_detail:
         nearest_ok = []
@@ -392,6 +431,7 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> str:
         for ticker, data in watchlist_detail.items():
             status, _ = calculate_data_quality(data)
             if status == "bad": continue
+            data["_display_status"] = status
             if status == "warn": nearest_warn.append((ticker, data))
             else: nearest_ok.append((ticker, data))
 
@@ -399,30 +439,31 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> str:
         if nearest_ok:
             lines.append("\n🎯 <b>NEAREST TO SIGNAL</b>")
             for ticker, data in nearest_ok:
-                lines.append(f"• <b>{ticker}</b> RS {data.get('rs_pct', data.get('score', 0)):.0f} | Break {data.get('breakout_level', 'N/A')} | P {data.get('proximity_score', 0):.0f}")
-
-        high_quality = []
-        for t, d in watchlist_detail.items():
-            status, _ = calculate_data_quality(d)
-            if status != "ok": continue
-            max_dist = 6.77
-            try: max_dist = float(d.get("max_dist_sma20", max_dist))
-            except: pass
-            dist = d.get("dist_sma20_pct")
-            if (d.get("rs_pct", d.get("score", 0)) >= 90 and d.get("ma_stack") and d.get("sector_etf_ok", True)
-                and (dist is not None and abs(float(dist)) <= max_dist)):
-                high_quality.append((t, d))
-
-        if high_quality:
-            lines.append("\n🏆 <b>HIGH QUALITY SETUPS</b>")
-            for ticker, data in sorted(high_quality, key=lambda x: x[1].get("rs_pct", 0), reverse=True)[:hq_n]:
-                lines.append(f"• <b>{ticker}</b> RS {data.get('rs_pct', 0):.0f} | Break {'✓' if data.get('breakout') else '✗'} | RVOL {data.get('rvol', '1.0')}")
+                rs = data.get('rs_pct', data.get('score', 0))
+                prox = data.get('proximity_score', 0)
+                brk = _fmt_val(data.get('breakout_level'))
+                rvol = _fmt_val(data.get('rvol'))
+                dist = _fmt_val(data.get('dist_sma20_pct'), "%")
+                falta = data.get('primary_reason') or (", ".join(data.get('reasons', [])[:2]) or "OK")
+                trigger = data.get('waiting_for', 'OK')
+                
+                lines.append(
+                    f"• <b>{ticker}</b> | RS {rs:.0f} | P {prox:.0f}\n"
+                    f"  Chart: {_get_tv_link(ticker)}\n"
+                    f"  Estado: {_estado_simple(data)}\n"
+                    f"  Break: {brk} | RVOL {rvol} | Dist: {dist}\n"
+                    f"  Falta: {falta}\n"
+                    f"  Live trigger: <code>{trigger}</code>\n"
+                )
 
         if nearest_warn:
             lines.append("\n📡 <b>DATA INCOMPLETE RADAR</b>")
             for ticker, data in nearest_warn[:3]:
-                lines.append(f"• {ticker} (RS {data.get('rs_pct', 0):.0f})")
+                motivo = ", ".join(data.get('reasons', [])[:2]) or "Incompleto"
+                lines.append(f"• <b>{ticker}</b> (RS {data.get('rs_pct', 0):.0f}) | {motivo}")
+            lines.append("<i>Nota: Vigila OK+Warn; solo promueve con Breakout+RVOL live</i>")
 
+    lines.append("\n⚠️ <b>RECORDATORIO:</b> Rotar TELEGRAM_BOT_TOKEN si fue expuesto.")
     return "\n".join(lines)
 
 
