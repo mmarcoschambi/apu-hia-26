@@ -32,6 +32,16 @@ Adding a binary market breadth gate improves OOS Sharpe without worsening risk.
 - GO if the edge appears across at least 2 thresholds
 - Otherwise NO-GO
 
+## Validation Status
+- Technical validation: PASS after fixing `_build_breadth_mask()` path resolution.
+- Production validation: PENDING fold-by-fold walk-forward.
+
 ## Scope
 - Stage 1: Hypothesis A, `% universe above SMA20`
 - Stage 2: Hypothesis B, `new highs / (new highs + new lows)` only if Stage 1 fails
+
+## Executive Summary
+- Detailed results and final verdict are documented in `docs/analysis/BREADTH_EXECUTIVE_SUMMARY.md`.
+
+## Current Readout
+- Promising, but not production-ready until walk-forward stability is confirmed.

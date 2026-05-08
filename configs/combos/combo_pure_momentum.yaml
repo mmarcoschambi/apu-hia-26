@@ -1,4 +1,4 @@
-name: combo_pure_momentum
+﻿name: combo_pure_momentum
 status: GO
 pbo: 0.09  # Probability of overfitting (bajo = bueno)
 wf_sharpe_mean: 1.72
@@ -20,19 +20,24 @@ max_setups: 8
 flat_base_range_pct: 0.15
 vcp_contraction_threshold: 0.7
 min_rvol: 1.5
-rs_breakout_min: 70
 min_adr: 1.2
 min_consolidation_days: 5
-max_consolidation_range: 10.0
+max_consolidation_range: 15.0  # baseline validado; 10.0 testado y descartado exp#3
 max_positions: 6
 max_position_pct: 0.2
 max_exposure_pct: 0.75
+be_threshold_r: 1.0
+tp1_pct: 0.5
+tp2_pct: 0.3
+runner_pct: 0.2
 alerts:
-- PBO=9% — muy robusto
+- PBO=9% muy robusto
 - Mayor slippage (15bps) por velocidad de breakouts
-- Max positions=6 — mayor diversificación
-notes: 'Combo agresivo de momentum puro. Mayor tolerancia a VIX (30) y volatilidad
-  (25%). Requiere RVOL>1.5 para confirmar volumen institucional. Validado con 8 ventanas
-  walk-forward.
-
-  '
+- Max positions=6 mayor diversificacion
+notes: >
+  Combo validado con 8 ventanas walk-forward.
+  Exp#1 RVOL breakout gate: NO-GO (redundante con min_rvol Tier2).
+  Exp#2 RS percentile gate: NO-GO (redundante con PIT universe).
+  Exp#3 max_consolidation_range: NO-GO (15.0 optimo, 10.0 destruye perfil).
+  Exp#4 be_threshold_r: NO-GO (no_be mejor IS pero no robusto en WF).
+  Exp#5 Breadth gate: GO pendiente re-validacion IS 2022-2024.

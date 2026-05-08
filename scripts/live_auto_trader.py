@@ -26,6 +26,11 @@ from pathlib import Path
 import pandas as pd
 import yfinance as yf
 
+try:
+    import pytz
+except ImportError:
+    pytz = None
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -41,12 +46,45 @@ logger = logging.getLogger(__name__)
 
 # --- UTILS ---
 
-def load_snapshot(date: str) -> pd.DataFrame:
-    path = PROJECT_ROOT / "outputs" / "paper_finviz" / date / "snapshot.json"
+def today_ny() -> str:
+    """Retorna fecha actual en formato YYYY-MM-DD usando timezone de NY."""
+    if pytz:
+        tz = pytz.timezone("America/New_York")
+        return datetime.now(tz).strftime("%Y-%m-%d")
+    return datetime.now().strftime("%Y-%m-%d")
+
+def load_live_signals(date: str) -> pd.DataFrame:
+    """Lee señales confirmadas desde combined.csv con validación robusta."""
+    path = PROJECT_ROOT / "outputs" / "live_signals" / date / "combined.csv"
     if not path.exists():
         return pd.DataFrame()
-    data = json.loads(path.read_text())
-    return pd.DataFrame(data.get("signals", []))
+    
+    try:
+        df = pd.read_csv(path)
+        if df.empty:
+            return pd.DataFrame()
+            
+        required = ["ticker", "entry_price", "source_universe", "decision_source"]
+        missing = [col for col in required if col not in df.columns]
+        if missing:
+            logger.warning(f"Combined.csv incompleto. Faltan columnas: {missing}")
+            return pd.DataFrame()
+        return df
+    except Exception as e:
+        logger.error(f"Error leyendo {path}: {e}")
+        return pd.DataFrame()
+
+def load_config():
+    """Carga configuración de producción para parámetros de riesgo."""
+    path = PROJECT_ROOT / "config" / "production_config.json"
+    if not path.exists():
+        logger.warning(f"Config no encontrada en {path}, usando defaults.")
+        return {}
+    try:
+        return json.loads(path.read_text())
+    except Exception as e:
+        logger.error(f"Error parsing config: {e}")
+        return {}
 
 def load_csv(path: Path) -> pd.DataFrame:
     if not path.exists() or path.stat().st_size == 0:
@@ -69,13 +107,38 @@ def log_action(ledger_name: str, date: str, action: str, ticker: str, price: flo
 # --- EXECUTION ---
 
 def auto_approve_signals(date: str):
-    """FLOW AUTO: Auto-aprueba señales si no existen en el ledger AUTO."""
-    signals_df = load_snapshot(date)
+    """FLOW AUTO: Auto-aprueba señales confirmadas por finviz_live_promoter."""
+    signals_df = load_live_signals(date)
     if signals_df.empty:
         return
 
-    signals_df = signals_df.sort_values("position_size", ascending=False).drop_duplicates("ticker")
+    # Filtrar solo señales de finviz_live_promoter
+    mask = (signals_df.get("source_universe") == "finviz") & \
+           (signals_df.get("decision_source") == "finviz_live_promoter")
     
+    signals_df = signals_df[mask].copy()
+    if signals_df.empty:
+        return
+
+    signals_df = signals_df.sort_values("entry_price", ascending=False).drop_duplicates("ticker")
+    
+    config = load_config()
+    risk_cfg = config.get("tier3_risk", {})
+    strat_cfg = config.get("tier1_strategy", {})
+    ui_cfg = config.get("ui_defaults", {})
+    
+    # Parámetros de Riesgo
+    capital = ui_cfg.get("initial_capital", 100000)
+    risk_fraction = risk_cfg.get("risk_fraction", 0.02878)
+    max_pos_pct = risk_cfg.get("max_position_pct", 0.25)
+    max_stop_hard = risk_cfg.get("max_stop_pct_hard", 0.08)
+    
+    tp1_r_mult = strat_cfg.get("tp1_r", 1.25)
+    tp2_r_mult = strat_cfg.get("tp2_r", 3.0)
+
+    risk_dollars = capital * risk_fraction
+    max_pos_val = capital * max_pos_pct
+
     path = AUTO_LEDGER_ROOT / date / "positions.csv"
     positions_df = load_csv(path)
     existing = set(positions_df["ticker"].tolist()) if not positions_df.empty else set()
@@ -87,26 +150,60 @@ def auto_approve_signals(date: str):
             continue
             
         entry = float(row.get("entry_price", 0) or 0)
-        size = float(row.get("position_size", 0) or 0)
-        if entry <= 0 or size <= 0:
+        if entry <= 0:
+            logger.warning(f"Skipping {ticker}: Invalid entry price {entry}")
             continue
+            
+        # Stop Loss logic
+        stop_source = "signal"
+        stop = float(row.get("stop_loss", row.get("stop_price", 0)) or 0)
+        if stop <= 0:
+            stop = entry * (1 - max_stop_hard)
+            stop_source = "fallback_hard"
+        
+        risk_per_share = entry - stop
+        if risk_per_share <= 0:
+            logger.warning(f"Skipping {ticker}: Invalid risk per share (Entry: {entry}, Stop: {stop})")
+            continue
+            
+        # Sizing (min entre riesgo y exposición máxima)
+        qty_risk = risk_dollars / risk_per_share
+        qty_cap = max_pos_val / entry
+        qty = int(min(qty_risk, qty_cap))
+        
+        if qty <= 0:
+            logger.warning(f"Skipping {ticker}: Calculated Qty is 0 for {ticker}")
+            continue
+
+        # TPs
+        tp1 = float(row.get("tp1_price", 0) or 0)
+        if tp1 <= 0:
+            tp1 = entry + (tp1_r_mult * risk_per_share)
+            
+        tp2 = float(row.get("tp2_price", 0) or 0)
+        if tp2 <= 0:
+            tp2 = entry + (tp2_r_mult * risk_per_share)
             
         new_rows.append({
             "position_id": f"pos_auto_{ticker}_{date}",
             "ticker": ticker,
             "status": "open",
             "entry_price": entry,
-            "stop_price": float(row.get("stop_loss", row.get("stop_price", 0)) or 0),
-            "tp1_price": float(row.get("tp1_price", 0) or 0),
-            "tp2_price": float(row.get("tp2_price", 0) or 0),
-            "qty": size,
-            "qty_remaining": size,
+            "stop_price": stop,
+            "tp1_price": tp1,
+            "tp2_price": tp2,
+            "qty": qty,
+            "qty_remaining": qty,
             "tp1_hit": False,
             "tp2_hit": False,
             "realized_pnl": 0.0,
-            "exited": False
+            "exited": False,
+            "risk_fraction": risk_fraction,
+            "risk_dollars": risk_dollars,
+            "risk_per_share": risk_per_share,
+            "stop_source": stop_source
         })
-        log_action("AUTO", date, "ENTER", ticker, entry, "Auto-approve from snapshot")
+        log_action("AUTO", date, "ENTER", ticker, entry, f"from live_signals ({stop_source} stop)")
 
     if new_rows:
         df = pd.DataFrame(new_rows)
@@ -205,9 +302,11 @@ def main():
     parser.add_argument("--interval", type=int, default=1)
     args = parser.parse_args()
 
-    date = args.date or datetime.now().strftime("%Y-%m-%d")
+    date = args.date or today_ny()
     
     logger.info(f"--- LIVE AUTO-TRADER START ({date}) ---")
+    if not pytz:
+        logger.warning("pytz no instalado. Usando fecha local del sistema.")
 
     while True:
         try:

@@ -593,6 +593,7 @@ class AdvancedVectorBTEngine:
         max_sma50_atr_extension: float = 2.0,  # Max ATR extension from SMA50
         # NEW: Trailing Stop parameters
         use_trailing_stop: bool = True,  # ENABLED: Move to breakeven after TP1 hit
+        be_threshold_r: float = 1.0,  # R required to move stop to breakeven
         be_trailing_threshold: float = 1.5,  # Move stop to BE when +1.5R (after TP1)
         # NEW: ATR-based Stop System
         use_atr_stop: bool = False,  # Use ATR-based stops instead of fixed %
@@ -605,6 +606,9 @@ class AdvancedVectorBTEngine:
         vcp_atr_short: int = 10,  # short ATR period for contraction check (5-15)
         vcp_atr_long: int = 30,  # long ATR period for baseline (20-40)
         vcp_atr_ratio: float = 0.85,  # max atr_short/atr_long threshold (0.6-0.95)
+        contraction_zone: Optional[
+            Dict[str, Optional[float]]
+        ] = None,  # breakout-only ATR ratio zone filter
         # VCP enhanced criteria (Minervini-style -- progressions + volume)
         vcp_volume_dry_periods: int = 5,  # bars to measure vol dry-up in last contraction (3-10)
         vcp_depth_max_pct: float = 15.0,  # max % depth of last contraction (8-20)
@@ -640,6 +644,7 @@ class AdvancedVectorBTEngine:
         **kwargs,
     ):
         self.universe = universe
+        self.raw_universe = list(universe)
         self.start_date = pd.to_datetime(start_date)
         self.end_date = pd.to_datetime(end_date) if end_date else pd.Timestamp.now()
         self.initial_capital = initial_capital
@@ -724,6 +729,7 @@ class AdvancedVectorBTEngine:
 
         # Trailing stop parameters
         self.use_trailing_stop = use_trailing_stop
+        self.be_threshold_r = be_threshold_r
         self.be_trailing_threshold = be_trailing_threshold
 
         # ATR-based Stop System
@@ -737,6 +743,7 @@ class AdvancedVectorBTEngine:
         self.vcp_atr_short = vcp_atr_short
         self.vcp_atr_long = vcp_atr_long
         self.vcp_atr_ratio = vcp_atr_ratio
+        self.contraction_zone = contraction_zone
         self.vcp_volume_dry_periods = vcp_volume_dry_periods
         self.vcp_depth_max_pct = vcp_depth_max_pct
         self.vcp_pivot_dist_max_pct = vcp_pivot_dist_max_pct
@@ -1291,8 +1298,9 @@ class AdvancedVectorBTEngine:
         # ============================================
         if self.min_rs_percentile_breakout is not None:
             import sqlite3 as _sqlite3
+            from pathlib import Path
 
-            _db_path = PROJECT_ROOT / "data" / "ticker_cache.db"
+            _db_path = Path(__file__).resolve().parents[2] / "data" / "ticker_cache.db"
             logger.info(
                 f"📊 Loading RS matrix for breakout gate "
                 f"(threshold={self.min_rs_percentile_breakout})..."
@@ -1337,6 +1345,51 @@ class AdvancedVectorBTEngine:
             except Exception as _rs_err:
                 logger.error(f"❌ Failed to load RS matrix: {_rs_err} — gate will be SKIPPED")
         # ============================================
+
+        # ============================================
+        # ATR CONTRACTION ZONE: breakout-only quality filter
+        # ============================================
+        if self.contraction_zone is not None:
+            atr_short = self.contraction_zone.get("atr_short", 5)
+            atr_long = self.contraction_zone.get("atr_long", 20)
+            logger.info(
+                "📉 Loading ATR contraction matrix for breakout gate "
+                f"(atr_short={atr_short}, atr_long={atr_long}, "
+                f"ratio_min={self.contraction_zone.get('ratio_min')}, "
+                f"ratio_max={self.contraction_zone.get('ratio_max')})..."
+            )
+
+            prev_close = self.close.shift(1)
+            if isinstance(self.close, pd.DataFrame):
+                tr = pd.DataFrame(
+                    {
+                        col: pd.concat(
+                            [
+                                self.high[col] - self.low[col],
+                                (self.high[col] - prev_close[col]).abs(),
+                                (self.low[col] - prev_close[col]).abs(),
+                            ],
+                            axis=1,
+                        ).max(axis=1)
+                        for col in self.close.columns
+                    },
+                    index=self.close.index,
+                )
+            else:
+                tr = pd.concat(
+                    [
+                        self.high - self.low,
+                        (self.high - prev_close).abs(),
+                        (self.low - prev_close).abs(),
+                    ],
+                    axis=1,
+                ).max(axis=1)
+
+            atr_s = tr.rolling(atr_short).mean()
+            atr_l = tr.rolling(atr_long).mean().replace(0, np.nan)
+            self.atr_ratio_matrix = (atr_s / atr_l).astype(np.float32)
+        else:
+            self.atr_ratio_matrix = None
 
         # Initialize precomputed metrics from cache
         sma20_data = {}
@@ -1993,7 +2046,7 @@ class AdvancedVectorBTEngine:
             logger.info(f"   💰 Numba Core usando DYNAMIC RISK: {risk_pct_per_trade * 100:.2f}%")
 
         max_exposure_pct = self.max_exposure_pct  # Ej: 0.25 (25%)
-        be_threshold_r = 1.0  # Mover a BE al 1R (si trailing stop activo)
+        be_threshold_r = self.be_threshold_r  # Parametrizable desde el constructor
 
         # NUEVO: Parámetros de salida parcial (optimizables)
         tp1_pct = getattr(self, "tp1_pct", 0.5)  # Default 50%
@@ -2628,6 +2681,9 @@ class AdvancedVectorBTEngine:
     def _build_breadth_mask(self, entries: pd.DataFrame) -> pd.DataFrame:
         """Builds a market breadth gate aligned to the entries index."""
         import sqlite3
+        from pathlib import Path
+
+        project_root = Path(__file__).resolve().parents[2]
 
         if not getattr(self, "use_breadth_filter", False):
             return pd.DataFrame(True, index=entries.index, columns=entries.columns)
@@ -2638,7 +2694,7 @@ class AdvancedVectorBTEngine:
         fetch_end = entries.index[-1].strftime("%Y-%m-%d")
 
         try:
-            db_path = PROJECT_ROOT / "data" / "ticker_cache.db"
+            db_path = project_root / "data" / "ticker_cache.db"
             conn = sqlite3.connect(str(db_path))
             df = pd.read_sql_query(
                 "SELECT ticker, date, close, high, low FROM ohlcv_cache WHERE ticker IN (%s) AND date BETWEEN ? AND ? ORDER BY ticker, date"
@@ -2657,6 +2713,14 @@ class AdvancedVectorBTEngine:
             df = df.sort_values(["ticker", "date"]).drop_duplicates(
                 subset=["ticker", "date"], keep="last"
             )
+
+            if df["ticker"].nunique() < max(1, len(tickers) // 2):
+                logger.warning(
+                    "Breadth data covers only %s/%s tickers for this run",
+                    df["ticker"].nunique(),
+                    len(tickers),
+                )
+
             close_pivot = df.pivot(index="date", columns="ticker", values="close").reindex(
                 entries.index
             )
@@ -2684,14 +2748,52 @@ class AdvancedVectorBTEngine:
                 gate = ratio >= self.breadth_filter_threshold
                 self.breadth_metric_series = ratio
 
+            self.breadth_stats = {
+                "mode": self.breadth_filter_mode,
+                "threshold": float(self.breadth_filter_threshold),
+                "min": float(ratio.min()),
+                "mean": float(ratio.mean()),
+                "median": float(ratio.median()),
+                "max": float(ratio.max()),
+                "days_passing": int(gate.sum()),
+                "total_days": int(gate.shape[0]),
+                "pct_days_passing": float(gate.mean()),
+            }
+
+            entries_per_day = entries.sum(axis=1)
+            blocked_days = ~gate.reindex(entries.index).fillna(False)
+            blocked_day_count = int(blocked_days.sum())
+            entries_on_blocked_days = int(entries_per_day[blocked_days].sum())
+            self.breadth_stats["blocked_days"] = blocked_day_count
+            self.breadth_stats["entries_on_blocked_days"] = entries_on_blocked_days
+
+            logger.info(
+                "   🌎 Breadth stats: min=%.3f mean=%.3f median=%.3f max=%.3f threshold=%.2f",
+                float(ratio.min()),
+                float(ratio.mean()),
+                float(ratio.median()),
+                float(ratio.max()),
+                float(self.breadth_filter_threshold),
+            )
+            logger.info(
+                "   🌎 Breadth days passing gate: %s/%s",
+                int(gate.sum()),
+                int(gate.shape[0]),
+            )
+            logger.info(
+                "   🌎 Breadth blocked days: %s | entries on blocked days: %s",
+                blocked_day_count,
+                entries_on_blocked_days,
+            )
+
             gate = gate.reindex(entries.index).fillna(False)
             mask = pd.DataFrame(False, index=entries.index, columns=entries.columns)
             mask.loc[:, :] = np.asarray(gate.values)[:, None]
             return mask
 
         except Exception as e:
-            logger.error(f"Error computing breadth mask: {e}")
-            return pd.DataFrame(True, index=entries.index, columns=entries.columns)
+            logger.exception("Error computing breadth mask")
+            return pd.DataFrame(False, index=entries.index, columns=entries.columns)
 
     def run_backtest(self) -> Dict:
         """Execute backtest with partial exits"""
@@ -2732,6 +2834,7 @@ class AdvancedVectorBTEngine:
             and not self.require_positive_rs
             and not self.use_rs_percentile
             and not self.use_sma50_atr_filter
+            and self.contraction_zone is None
         ) or self.mode == "convergence"
 
         if is_baseline_mode:
@@ -2852,6 +2955,17 @@ class AdvancedVectorBTEngine:
                 consolidation = (self.consolidation_days >= self.min_consolidation_days) & (
                     self.consolidation_range <= self.max_consolidation_range
                 )
+                if self.atr_ratio_matrix is not None and self.contraction_zone is not None:
+                    zone_mask = pd.DataFrame(
+                        True, index=self.close.index, columns=self.close.columns
+                    )
+                    ratio_min = self.contraction_zone.get("ratio_min")
+                    ratio_max = self.contraction_zone.get("ratio_max")
+                    if ratio_min is not None:
+                        zone_mask &= self.atr_ratio_matrix >= ratio_min
+                    if ratio_max is not None:
+                        zone_mask &= self.atr_ratio_matrix <= ratio_max
+                    breakout_signal = breakout_signal & zone_mask
                 entries = base_entry & consolidation & breakout_signal
                 logger.info("   Using BREAKOUT signal (close > 20d high)")
 

@@ -95,14 +95,25 @@ def run_engine(
         breadth_filter_mode=breadth_mode or "sma20",
         breadth_filter_threshold=breadth_threshold,
     )
-    return engine.run_backtest()
+    results = engine.run_backtest()
+    breadth_stats = getattr(engine, "breadth_stats", None)
+    if isinstance(breadth_stats, dict):
+        results["breadth_stats"] = breadth_stats
+    return results
 
 
 def run_config(
-    name: str, use_sector_filter: bool, breadth_mode=None, breadth_threshold=0.0
+    name: str,
+    use_sector_filter: bool,
+    breadth_mode=None,
+    breadth_threshold=0.0,
+    is_start: str = IS_START,
+    is_end: str = IS_END,
+    oos_start: str = OOS_START,
+    oos_end: str = OOS_END,
 ) -> dict:
-    results_is = run_engine(IS_START, IS_END, use_sector_filter, breadth_mode, breadth_threshold)
-    results_oos = run_engine(OOS_START, OOS_END, use_sector_filter, breadth_mode, breadth_threshold)
+    results_is = run_engine(is_start, is_end, use_sector_filter, breadth_mode, breadth_threshold)
+    results_oos = run_engine(oos_start, oos_end, use_sector_filter, breadth_mode, breadth_threshold)
     return {
         "name": name,
         "use_sector_filter": use_sector_filter,
@@ -110,23 +121,60 @@ def run_config(
         "breadth_threshold": breadth_threshold,
         "is": asdict(summarize_results(results_is)),
         "oos": asdict(summarize_results(results_oos)),
+        "is_breadth_stats": results_is.get("breadth_stats"),
+        "oos_breadth_stats": results_oos.get("breadth_stats"),
     }
 
 
-def make_report_mode_a() -> dict:
+def make_report_mode_a(
+    is_start: str = IS_START,
+    is_end: str = IS_END,
+    oos_start: str = OOS_START,
+    oos_end: str = OOS_END,
+) -> dict:
     rows = []
-    rows.append(run_config("S0_Baseline", False, None, 0.0))
-    rows.append(run_config("S1_SectorOnly", True, None, 0.0))
-    rows.append(run_config("B1_BreadthSolo_040", False, "sma20", 0.40))
-    rows.append(run_config("B1_BreadthSolo_045", False, "sma20", 0.45))
-    rows.append(run_config("B1_BreadthSolo_050", False, "sma20", 0.50))
-    rows.append(run_config("B1_BreadthSolo_055", False, "sma20", 0.55))
-    rows.append(run_config("B1_BreadthSolo_060", False, "sma20", 0.60))
-    rows.append(run_config("B2_BreadthPlusSector_040", True, "sma20", 0.40))
-    rows.append(run_config("B2_BreadthPlusSector_045", True, "sma20", 0.45))
-    rows.append(run_config("B2_BreadthPlusSector_050", True, "sma20", 0.50))
-    rows.append(run_config("B2_BreadthPlusSector_055", True, "sma20", 0.55))
-    rows.append(run_config("B2_BreadthPlusSector_060", True, "sma20", 0.60))
+    rows.append(run_config("S0_Baseline", False, None, 0.0, is_start, is_end, oos_start, oos_end))
+    rows.append(run_config("S1_SectorOnly", True, None, 0.0, is_start, is_end, oos_start, oos_end))
+    rows.append(
+        run_config("B1_BreadthSolo_040", False, "sma20", 0.40, is_start, is_end, oos_start, oos_end)
+    )
+    rows.append(
+        run_config("B1_BreadthSolo_045", False, "sma20", 0.45, is_start, is_end, oos_start, oos_end)
+    )
+    rows.append(
+        run_config("B1_BreadthSolo_050", False, "sma20", 0.50, is_start, is_end, oos_start, oos_end)
+    )
+    rows.append(
+        run_config("B1_BreadthSolo_055", False, "sma20", 0.55, is_start, is_end, oos_start, oos_end)
+    )
+    rows.append(
+        run_config("B1_BreadthSolo_060", False, "sma20", 0.60, is_start, is_end, oos_start, oos_end)
+    )
+    rows.append(
+        run_config(
+            "B2_BreadthPlusSector_040", True, "sma20", 0.40, is_start, is_end, oos_start, oos_end
+        )
+    )
+    rows.append(
+        run_config(
+            "B2_BreadthPlusSector_045", True, "sma20", 0.45, is_start, is_end, oos_start, oos_end
+        )
+    )
+    rows.append(
+        run_config(
+            "B2_BreadthPlusSector_050", True, "sma20", 0.50, is_start, is_end, oos_start, oos_end
+        )
+    )
+    rows.append(
+        run_config(
+            "B2_BreadthPlusSector_055", True, "sma20", 0.55, is_start, is_end, oos_start, oos_end
+        )
+    )
+    rows.append(
+        run_config(
+            "B2_BreadthPlusSector_060", True, "sma20", 0.60, is_start, is_end, oos_start, oos_end
+        )
+    )
     return {
         "experiment": "breadth_market_wide_gate",
         "hypothesis": "Agregar breadth binario mejora Sharpe OOS sin empeorar el riesgo",
@@ -192,7 +240,14 @@ def build_config_registry(mode: str) -> dict:
     }
 
 
-def run_selected_configs(mode: str, selected_configs: list[str] | None) -> list[dict]:
+def run_selected_configs(
+    mode: str,
+    selected_configs: list[str] | None,
+    is_start: str = IS_START,
+    is_end: str = IS_END,
+    oos_start: str = OOS_START,
+    oos_end: str = OOS_END,
+) -> list[dict]:
     registry = build_config_registry(mode)
     keys = selected_configs or list(registry.keys())
     rows = []
@@ -202,7 +257,18 @@ def run_selected_configs(mode: str, selected_configs: list[str] | None) -> list[
             continue
         name, use_sector_filter, breadth_mode, breadth_threshold = registry[key]
         try:
-            rows.append(run_config(name, use_sector_filter, breadth_mode, breadth_threshold))
+            rows.append(
+                run_config(
+                    name,
+                    use_sector_filter,
+                    breadth_mode,
+                    breadth_threshold,
+                    is_start,
+                    is_end,
+                    oos_start,
+                    oos_end,
+                )
+            )
         except Exception as exc:
             rows.append({"config": key, "name": name, "error": str(exc)})
     return rows
@@ -212,6 +278,10 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=["a", "b"], default="a")
     parser.add_argument("--configs", nargs="+", default=None)
+    parser.add_argument("--is-start", default=IS_START)
+    parser.add_argument("--is-end", default=IS_END)
+    parser.add_argument("--oos-start", default=OOS_START)
+    parser.add_argument("--oos-end", default=OOS_END)
     args = parser.parse_args()
 
     if args.mode == "b":
@@ -247,11 +317,15 @@ def main() -> None:
             "results": [],
             "timestamp": datetime.now().isoformat(),
         }
-        payload["results"] = run_selected_configs("b", args.configs)
+        payload["results"] = run_selected_configs(
+            "b", args.configs, args.is_start, args.is_end, args.oos_start, args.oos_end
+        )
     else:
-        payload = make_report_mode_a()
+        payload = make_report_mode_a(args.is_start, args.is_end, args.oos_start, args.oos_end)
         if args.configs:
-            payload["results"] = run_selected_configs("a", args.configs)
+            payload["results"] = run_selected_configs(
+                "a", args.configs, args.is_start, args.is_end, args.oos_start, args.oos_end
+            )
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
