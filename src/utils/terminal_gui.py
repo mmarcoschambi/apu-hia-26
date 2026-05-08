@@ -11,6 +11,7 @@ from rich import box
 from src.utils.sector_rotation import SectorRotationAnalyzer
 
 from src.utils.data_quality import calculate_data_quality
+from src.utils.gamma_scraper import fetch_gamma_data
 
 console = Console()
 
@@ -372,6 +373,20 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> str:
     signals = snapshot.get("signals", [])
     watchlist_detail = snapshot.get("watchlist_detail", {})
 
+    # Intentar obtener datos de Gamma/DarkPools
+    gamma_data = fetch_gamma_data()
+    gamma_str = ""
+    if gamma_data:
+        dix = gamma_data['dix']
+        gex = gamma_data['gex'] / 1e9 # Convertir a Billones para legibilidad
+        dix_status = "🔥" if dix > 0.45 else "❄️"
+        gex_status = "✅" if gex > 0 else "⚠️"
+        gamma_str = (
+            f"\n💎 <b>MARKET ALPHA (Gamma/DIX)</b>\n"
+            f"• DIX: <code>{dix:.1%}</code> {dix_status} (Dark Pool Buy %)\n"
+            f"• GEX: <code>${gex:.1f}B</code> {gex_status} (Gamma Exposure)\n"
+        )
+
     sector_names = {
         "XLK": "Tecnología", "XLY": "Consumo discrecional", "XLRE": "Real Estate",
         "XLC": "Comunicaciones", "XLI": "Industriales", "XLF": "Financieras",
@@ -385,6 +400,9 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> str:
         f"• Universe: <code>{snapshot.get('universe_size', 0)}</code>",
         f"• Signals: <code>{len(signals)}</code>",
     ]
+
+    if gamma_str:
+        lines.append(gamma_str)
 
     hot_sectors = _build_hot_sectors(date, top_n=5)
     if hot_sectors:
