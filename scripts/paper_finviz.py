@@ -108,10 +108,11 @@ def pre_warm_cache(universe: list[str], date_str: str):
     def _fetch(t):
         try:
             cache.get_ohlcv(t, start, date_str)
+            time.sleep(0.5) # Pequeño respiro para el CPU/Red
         except:
             pass
 
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=3) as executor:
         executor.map(_fetch, to_update)
     logger.info("    [Pre-warm] Cache actualizado.")
 
