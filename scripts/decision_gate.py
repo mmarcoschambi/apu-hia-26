@@ -127,7 +127,15 @@ def evaluate_combo(combo_name):
     if cost_data:
         breakeven = cost_data.get("breakeven_bps", 0)
         assessment = cost_data.get("assessment", "?")
-        result["checks"]["cost_ok"] = breakeven >= GATE["min_cost_breakeven"]
+        sanity_issues = cost_data.get("sanity_issues", [])
+        
+        # Si hay sanity issues, degradamos el assessment
+        if sanity_issues:
+            assessment = f"{assessment} (ANOMALIA)"
+            for issue in sanity_issues:
+                result["warnings"].append(f"Costos: {issue}")
+        
+        result["checks"]["cost_ok"] = breakeven >= GATE["min_cost_breakeven"] and not sanity_issues
         result["cost_summary"] = {"breakeven_bps": breakeven, "assessment": assessment}
         if breakeven < 10:
             result["warnings"].append(f"Edge fragil — breakeven {breakeven}bps (necesita broker muy barato)")

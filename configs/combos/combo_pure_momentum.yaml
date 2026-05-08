@@ -40,4 +40,4 @@ notes: >
   Exp#2 RS percentile gate: NO-GO (redundante con PIT universe).
   Exp#3 max_consolidation_range: NO-GO (15.0 optimo, 10.0 destruye perfil).
   Exp#4 be_threshold_r: NO-GO (no_be mejor IS pero no robusto en WF).
-  Exp#5 Breadth gate: GO pendiente re-validacion IS 2022-2024.
+  Exp#5b Breadth gate: NO-GO (Sharpe medio OOS = -0.086 no cruza cero, bug de diseño en WF original).
