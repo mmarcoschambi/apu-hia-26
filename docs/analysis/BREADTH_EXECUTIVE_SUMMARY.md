@@ -4,7 +4,7 @@
 Validate a binary market breadth gate on the PIT universe and determine whether it improves OOS Sharpe without worsening drawdown materially.
 
 ## Final Verdict
-PROMISING, NOT PRODUCTION-READY.
+NO-GO.
 
 The breadth gate was technically broken at first due to an undefined `PROJECT_ROOT` reference in `_build_breadth_mask()`. After fixing the path resolution, the gate became active and materially filtered entries.
 
@@ -109,20 +109,17 @@ For the PIT universe, `% close > SMA20` was not saturated:
 - Breadth is not a no-op on the PIT universe.
 - It blocks real signal days: `51` to `199` blocked entries depending on threshold.
 - It improves OOS Sharpe vs baseline by a wide margin in the tested sweep.
-- Best credible balance observed in the long split:
-  - `0.45` for the cleanest PF and strongest OOS Sharpe among the non-inflated candidates
-  - `0.50` for lower OOS DD but PF inflation risk remains
-  - `0.55` is not the preferred candidate because IS is negative and PF is inflated
+- In the walk-forward validation, the edge did not survive robustly.
+- The apparent static-split edge was not production-grade.
 
 ## Caveats
 - Profit Factor inflation is present in `0.40` and `0.55`.
-- `0.45` is the most credible candidate in the long split because PF is sane (`1.86`) and OOS Sharpe is strong (`1.12`).
-- `0.55` is not production-grade because IS Sharpe is negative (`-0.325`) and PF is inflated.
-- The long split is better than the short split, but the final approval still needs fold-by-fold walk-forward.
-- The candidate naming in the JSON is the source of truth: `B1_BreadthSolo_045` means threshold `0.45`, not `0.55`.
+- The walk-forward folds showed the same OOS window repeated, so the original WF implementation was not a clean rolling OOS test.
+- The resulting fold outputs did not support production deployment.
+- The candidate naming in the JSON remains the source of truth: `B1_BreadthSolo_045` means threshold `0.45`.
 
 ## Recommendation
-Run fold-by-fold walk-forward next. If that confirms stability, integrate `use_breadth_filter` into core market context logic next, with `0.45` as the default candidate and `0.50` as the lower-risk alternate.
+Close breadth as `NO-GO` for production. Move the research focus to regime handling and the active `combo_pullback_entry` workflow.
 
 ## Relevant Files
 - `src/backtest/vectorbt_engine_advanced.py`

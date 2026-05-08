@@ -34,7 +34,7 @@ Adding a binary market breadth gate improves OOS Sharpe without worsening risk.
 
 ## Validation Status
 - Technical validation: PASS after fixing `_build_breadth_mask()` path resolution.
-- Production validation: PENDING fold-by-fold walk-forward.
+- Production validation: NO-GO after walk-forward review.
 
 ## Scope
 - Stage 1: Hypothesis A, `% universe above SMA20`
@@ -44,4 +44,4 @@ Adding a binary market breadth gate improves OOS Sharpe without worsening risk.
 - Detailed results and final verdict are documented in `docs/analysis/BREADTH_EXECUTIVE_SUMMARY.md`.
 
 ## Current Readout
-- Promising, but not production-ready until walk-forward stability is confirmed.
+- Breadth is closed as a production gate; focus shifts to regime handling and the active pullback workflow.
