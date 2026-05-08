@@ -476,12 +476,23 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> str:
 
         if nearest_warn:
             lines.append("\n📡 <b>DATA INCOMPLETE RADAR</b>")
+            quality_map = {
+                "rvol_1.0_default": "RVOL premarket no confiable",
+                "adr_0": "ADR faltante",
+                "zero_dollar_vol": "Dollar volume faltante",
+                "missing_avg_volume_20d": "sin baseline volumen 20d",
+                "dist_sma20_zero_suspect": "SMA20 suspect (0.0)"
+            }
             for ticker, data in nearest_warn[:3]:
-                motivo = ", ".join(data.get('reasons', [])[:2]) or "Incompleto"
+                q_reasons = data.get('data_quality_reasons', [])
+                if q_reasons:
+                    motivo = ", ".join([quality_map.get(r, r) for r in q_reasons[:2]])
+                else:
+                    motivo = ", ".join(data.get('reasons', [])[:2]) or "Incompleto"
+                
                 lines.append(f"• <b>{ticker}</b> (RS {data.get('rs_pct', 0):.0f}) | {motivo}")
             lines.append("<i>Nota: Vigila OK+Warn; solo promueve con Breakout+RVOL live</i>")
 
-    lines.append("\n⚠️ <b>RECORDATORIO:</b> Rotar TELEGRAM_BOT_TOKEN si fue expuesto.")
     return "\n".join(lines)
 
 

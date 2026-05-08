@@ -17,7 +17,9 @@ def fetch_gamma_data():
     }
     
     try:
-        response = requests.get(csv_url, headers=headers, timeout=15)
+        response = requests.get(csv_url, headers=headers, timeout=10)
+        if response.status_code == 404:
+            return None # Fuente no disponible hoy todavia
         response.raise_for_status()
         
         df = pd.read_csv(io.StringIO(response.text))
