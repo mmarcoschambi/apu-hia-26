@@ -1,4 +1,4 @@
-"""
+﻿"""
 Advanced VectorBT Engine with Partial Exits
 --------------------------------------------
 Implements Triad Protocol with 3-phase exit system:
@@ -557,6 +557,10 @@ class AdvancedVectorBTEngine:
         use_sector_etf_filter: bool = False,  # OFF por default - Ablation stage 2
         sector_etf_sma_period: int = 20,
         sector_etf_dist_threshold: float = 0.0,  # NEW: Margin above SMA20 (e.g. 0.02 = 2%)
+        # NEW: Cohort Momentum (Experimento Rotación)
+        use_cohort_momentum_filter: bool = False,
+        min_cohort_score_delta: float = 0.0,
+        min_cohort_rank: Optional[int] = None,
         use_breadth_filter: bool = False,
         breadth_filter_mode: str = "sma20",
         breadth_filter_threshold: float = 0.50,
@@ -600,7 +604,7 @@ class AdvancedVectorBTEngine:
         atr_stop_multiplier: float = 1.5,  # ATR multiplier for initial stop (1.5-2.0)
         atr_trailing_multiplier: float = 2.5,  # ATR multiplier for trailing (2.0-3.0)
         # NEW: Signal type for convergence with THOR
-        signal_type: str = "breakout",  # breakout | vcp | (future: pocket_pivot | flat_base)
+        signal_type: str = "breakout",  # breakout | vcp | pocket_pivot | flat_base | htf
         # VCP-specific parameters (Optuna-optimizable when signal_type="vcp")
         vcp_pivot_window: int = 15,  # bars to look back for pivot high (10-25)
         vcp_atr_short: int = 10,  # short ATR period for contraction check (5-15)
@@ -620,6 +624,13 @@ class AdvancedVectorBTEngine:
         # Flat Base params
         fb_min_weeks: int = 5,  # minimum weeks of consolidation (4-8)
         fb_max_range: float = 7.0,  # max % range allowed in the base (3-10)
+        # HTF-specific parameters
+        htf_pole_ret: float = 0.50,        # Retorno mínimo del asta (50%)
+        htf_pole_days: int = 60,           # Ventana del asta en días
+        htf_flag_correction: float = 0.12, # Corrección máxima de la flag (12%)
+        htf_vol_ratio: float = 0.75,       # Vol flag < ratio * vol asta
+        htf_breakout_days: int = 20,       # Ventana para el máximo de la flag
+        htf_min_trend_intensity: float = 0.0,  # Filter (MA13/MA65 * 100)
         # NEW: Operation Mode
         mode: str = "production",  # 'production' (Pct Risk) or 'convergence' (Fixed $ Risk like THOR)
         # NEW: Entry Quality Score weights (optimizable)
@@ -709,6 +720,9 @@ class AdvancedVectorBTEngine:
         self.use_sector_etf_filter = use_sector_etf_filter
         self.sector_etf_sma_period = sector_etf_sma_period
         self.sector_etf_dist_threshold = sector_etf_dist_threshold
+        self.use_cohort_momentum_filter = use_cohort_momentum_filter
+        self.min_cohort_score_delta = min_cohort_score_delta
+        self.min_cohort_rank = min_cohort_rank
         self.use_breadth_filter = use_breadth_filter
         self.breadth_filter_mode = breadth_filter_mode
         self.breadth_filter_threshold = breadth_filter_threshold
@@ -754,6 +768,13 @@ class AdvancedVectorBTEngine:
         # Flat Base
         self.fb_min_weeks = fb_min_weeks
         self.fb_max_range = fb_max_range
+        # HTF
+        self.htf_pole_ret = htf_pole_ret
+        self.htf_pole_days = htf_pole_days
+        self.htf_flag_correction = htf_flag_correction
+        self.htf_vol_ratio = htf_vol_ratio
+        self.htf_breakout_days = htf_breakout_days
+        self.htf_min_trend_intensity = htf_min_trend_intensity
 
         # Entry Quality Score weights
         self.score_vwap_weight = score_vwap_weight
@@ -2678,6 +2699,86 @@ class AdvancedVectorBTEngine:
             logger.error(f"Error computing sector ETF mask: {e}")
             return pd.DataFrame(True, index=entries.index, columns=entries.columns)
 
+    def _build_cohort_momentum_mask(self, entries: pd.DataFrame) -> pd.DataFrame:
+        """
+        Builds a mask based on sector cohort momentum (score_delta_5d).
+        Reads from 'sector_cohort' table in the DB.
+        """
+        import sqlite3
+        from pathlib import Path
+
+        if not getattr(self, "use_cohort_momentum_filter", False):
+            return pd.DataFrame(True, index=entries.index, columns=entries.columns)
+
+        # 1. Get ticker to sector mapping
+        if not hasattr(self, "ticker_to_etf_map") or not self.ticker_to_etf_map:
+            # We use a dummy entries matrix to trigger map building if not already done
+            dummy_entries = pd.DataFrame(
+                False, index=entries.index, columns=entries.columns
+            )
+            self._build_sector_etf_mask(dummy_entries)
+
+        ticker_to_etf = self.ticker_to_etf_map
+
+        # 2. Load cohort data from DB
+        try:
+            db_path = Path("data/ticker_cache.db")
+            if not db_path.exists():
+                logger.warning(f"Database not found at {db_path} for cohort filter")
+                return pd.DataFrame(True, index=entries.index, columns=entries.columns)
+
+            conn = sqlite3.connect(db_path)
+
+            start_date = entries.index[0].strftime("%Y-%m-%d")
+            end_date = entries.index[-1].strftime("%Y-%m-%d")
+
+            query = """
+            SELECT date, sector_etf, score_delta_5d, rank_today
+            FROM sector_cohort
+            WHERE date BETWEEN ? AND ?
+            """
+            df_cohort = pd.read_sql_query(query, conn, params=(start_date, end_date))
+            conn.close()
+
+            if df_cohort.empty:
+                logger.warning("No sector cohort data found for the requested period.")
+                return pd.DataFrame(True, index=entries.index, columns=entries.columns)
+
+            df_cohort["date"] = pd.to_datetime(df_cohort["date"])
+
+            # Pivot to have dates as index and sectors as columns
+            delta_matrix = df_cohort.pivot(index="date", columns="sector_etf", values="score_delta_5d")
+            rank_matrix = df_cohort.pivot(index="date", columns="sector_etf", values="rank_today")
+
+            # Align with entries index
+            delta_matrix = delta_matrix.reindex(entries.index).ffill()
+            rank_matrix = rank_matrix.reindex(entries.index).ffill()
+
+            # 3. Apply criteria
+            mask = pd.DataFrame(True, index=entries.index, columns=entries.columns)
+
+            for ticker in entries.columns:
+                etf = ticker_to_etf.get(ticker)
+                if etf and etf in delta_matrix.columns:
+                    # Score Delta Filter (Hypothesis: positive momentum = leader group)
+                    ticker_mask = delta_matrix[etf] >= self.min_cohort_score_delta
+
+                    # Rank Filter (Optional: Hypothesys: only top N sectors)
+                    if self.min_cohort_rank is not None:
+                        ticker_mask &= rank_matrix[etf] <= self.min_cohort_rank
+
+                    mask[ticker] = ticker_mask
+
+            logger.info(
+                f"   🧭 Cohort Momentum filter: {mask.sum().sum()} passing cells "
+                f"(delta >= {self.min_cohort_score_delta}, rank <= {self.min_cohort_rank if self.min_cohort_rank else 'ANY'})"
+            )
+            return mask.fillna(True)
+
+        except Exception as e:
+            logger.error(f"Error building cohort momentum mask: {e}")
+            return pd.DataFrame(True, index=entries.index, columns=entries.columns)
+
     def _build_breadth_mask(self, entries: pd.DataFrame) -> pd.DataFrame:
         """Builds a market breadth gate aligned to the entries index."""
         import sqlite3
@@ -2922,6 +3023,12 @@ class AdvancedVectorBTEngine:
             # are handled by the Adaptive Filter Engine to avoid double-filtering
             base_entry = self.close > safe_sma20
 
+            # Add Stage 2 filter (SMA50/200) if available in trend_aligned
+            if hasattr(self, "trend_aligned") and not self.trend_aligned.empty:
+                if (self.trend_aligned != 0).any().any():
+                    base_entry = base_entry & (self.trend_aligned.astype(bool))
+                    logger.info("   🛡️  Base entry includes Stage 2 filter (Close > SMA50 > SMA200)")
+
             # RS Calculation for watchlist
             rs_short_lb = getattr(self, "rs_short_lookback_days", 20)
             rs_20d_raw = self.close.ffill().pct_change(rs_short_lb, fill_method=None)
@@ -3150,6 +3257,62 @@ class AdvancedVectorBTEngine:
                     f"   Flat Base: min_weeks={getattr(self, 'fb_min_weeks', 5)} max_range={fb_max_rng}%"
                     f" tight={int(is_tight.sum().sum())} flat={int(is_flat.sum().sum())}"
                     f" breakout={int(fb_breakout.sum().sum())} -> entries={int(entries.sum().sum())}"
+                )
+
+            elif self.signal_type == "htf":
+                # ─────────────────────────────────────────────────────────────
+                # HIGH TIGHT FLAG (Qullamaggie / Minervini)
+                # Criterios:
+                #  1. POLO: stock subió >= htf_pole_ret en htf_pole_days días
+                #  2. POLO QUALITY: trend_intensity filter (no recuperaciones value)
+                #  3. FLAG: corrección desde máximo < htf_flag_max_correction%
+                #  4. VOLUMEN: contracción de volumen durante la flag (< htf_vol_ratio)
+                #  5. BREAKOUT: rompe máximo de los últimos htf_flag_breakout_days días
+                # ─────────────────────────────────────────────────────────────
+                pole_ret = getattr(self, "htf_pole_ret", 0.50)  # 50%
+                pole_days = getattr(self, "htf_pole_days", 60)
+                flag_corr = getattr(self, "htf_flag_correction", 0.12)  # 12%
+                vol_ratio = getattr(self, "htf_vol_ratio", 0.75)
+                bo_days = getattr(self, "htf_breakout_days", 20)
+                min_ti = getattr(self, "htf_min_trend_intensity", 0.0)
+
+                # 1. POLO
+                ret_pole = (self.close / self.close.shift(pole_days) - 1).fillna(0)
+                pole_mask = ret_pole >= pole_ret
+
+                # 2. POLO QUALITY: Trend Intensity (MA13/MA65 * 100)
+                ma13 = self.close.rolling(13).mean()
+                ma65 = self.close.rolling(65).mean()
+                trend_intensity = (ma13 / ma65.replace(0, np.nan)) * 100
+                ti_mask = trend_intensity.fillna(0) >= min_ti
+
+                # 3. FLAG: correccion ajustada desde el maximo ANTERIOR al dia actual
+                # Usar high para el maximo real de la consolidacion (no close)
+                # shift(1) para excluir el dia actual del calculo de la flag
+                # => flag_high: maximo de high en bo_days dias anteriores
+                flag_high = self.high.rolling(bo_days).max().shift(1)
+                close_prev = self.close.shift(1)  # precio del dia anterior al BO
+                correction = (flag_high - close_prev) / flag_high.replace(0, np.nan)
+                flag_mask = (correction.fillna(1.0) < flag_corr) & (correction.fillna(1.0) >= 0)
+                # NOTE: close_prev ensures flag is measured the day BEFORE breakout
+
+                # 4. VOLUMEN: media 20d de la flag < ratio * media 20d del polo
+                vol_flag = self.volume.rolling(20).mean()
+                vol_pole = self.volume.rolling(20).mean().shift(pole_days // 2)
+                vol_mask = vol_flag < vol_ratio * vol_pole.fillna(vol_flag)
+
+                # 5. BREAKOUT: close supera el maximo de high de los ultimos bo_days
+                # flag_high ya tiene shift(1) => no lookback bias
+                bo_mask = self.close > flag_high
+
+                entries = base_entry & pole_mask & ti_mask & flag_mask & vol_mask & bo_mask
+                logger.info(
+                    f"   HTF: pole={pole_ret:.0%}/{pole_days}d TI>={min_ti} "
+                    f"flag_corr={flag_corr:.0%} vol_ratio={vol_ratio:.2f} "
+                    f"pole={int(pole_mask.sum().sum())} TI={int(ti_mask.sum().sum())} "
+                    f"flag={int(flag_mask.sum().sum())} "
+                    f"bo={int(bo_mask.sum().sum())} "
+                    f"-> entries={int(entries.sum().sum())}"
                 )
 
             else:
@@ -3991,6 +4154,17 @@ class AdvancedVectorBTEngine:
             entries = entries & sector_etf_mask
             entries_after = entries.sum().sum()
             logger.info(f"   ❌ Bloqueados por Sector ETF: {entries_before - entries_after}")
+            logger.info(f"   ✅ Entries finales: {entries_after}")
+
+        if getattr(self, "use_cohort_momentum_filter", False):
+            logger.info(
+                f"🧭 Aplicando filtro de Cohort Momentum (min_delta={self.min_cohort_score_delta})..."
+            )
+            entries_before = entries.sum().sum()
+            cohort_mask = self._build_cohort_momentum_mask(entries)
+            entries = entries & cohort_mask
+            entries_after = entries.sum().sum()
+            logger.info(f"   ❌ Bloqueados por Cohort Momentum: {entries_before - entries_after}")
             logger.info(f"   ✅ Entries finales: {entries_after}")
 
         if getattr(self, "use_breadth_filter", False):
