@@ -1,5 +1,5 @@
 ﻿name: combo_pure_momentum
-status: GO
+status: PAPER_TRADING_ACTIVE  # Etapa 6 inicio: 2026-05-09
 pbo: 0.09  # Probability of overfitting (bajo = bueno)
 wf_sharpe_mean: 1.72
 wf_sharpe_min: 1.55

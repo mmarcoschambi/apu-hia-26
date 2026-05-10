@@ -117,6 +117,199 @@ def pre_warm_cache(universe: list[str], date_str: str):
     logger.info("    [Pre-warm] Cache actualizado.")
 
 
+def _nearest_candidates_from_snapshot(snapshot: dict, limit: int = 5) -> list[tuple[str, dict]]:
+    """Replica el criterio visual de NEAREST TO SIGNAL para poder comparar dias."""
+    items = []
+    for ticker, detail in snapshot.get("watchlist_detail", {}).items():
+        status, _ = shared_calculate_quality(detail)
+        if status != "ok":
+            continue
+        items.append((ticker, detail))
+    return sorted(items, key=lambda x: x[1].get("proximity_score", 0), reverse=True)[:limit]
+
+
+def _find_previous_snapshot(trade_date: str) -> tuple[str | None, dict | None]:
+    candidates = []
+    for path in OUT_DIR.glob("*/snapshot.json"):
+        day = path.parent.name
+        if day >= trade_date:
+            continue
+        try:
+            candidates.append((day, path))
+        except Exception:
+            continue
+
+    for day, path in sorted(candidates, reverse=True):
+        try:
+            return day, json.loads(path.read_text())
+        except Exception as e:
+            logger.warning(f"    [Flow] No se pudo leer snapshot previo {path}: {e}")
+    return None, None
+
+
+def _pct_change(curr, prev):
+    try:
+        curr_f = float(curr)
+        prev_f = float(prev)
+        if prev_f == 0:
+            return None
+        return round(((curr_f / prev_f) - 1.0) * 100, 2)
+    except Exception:
+        return None
+
+
+def _build_nearest_flow(trade_date: str, current_snapshot: dict, limit: int = 5) -> dict:
+    """Compara el top nearest previo contra el radar actual."""
+    prev_date, previous_snapshot = _find_previous_snapshot(trade_date)
+    if not previous_snapshot:
+        return {}
+
+    previous_nearest = _nearest_candidates_from_snapshot(previous_snapshot, limit=limit)
+    current_watchlist = current_snapshot.get("watchlist_detail", {})
+    
+    # Rankings completos para calcular drift exacto
+    current_nearest_all = _nearest_candidates_from_snapshot(current_snapshot, limit=100)
+    current_rank_map = {t: i for i, (t, _) in enumerate(current_nearest_all)}
+    
+    prev_nearest_all = _nearest_candidates_from_snapshot(previous_snapshot, limit=100)
+    prev_rank_map = {t: i for i, (t, _) in enumerate(prev_nearest_all)}
+    
+    signal_tickers = {s.get("ticker") for s in current_snapshot.get("signals", [])}
+
+    rows = []
+    for ticker, prev in previous_nearest:
+        curr = current_watchlist.get(ticker)
+        if ticker in signal_tickers:
+            state = "SIGNAL"
+            current_reason = "Confirmo signal"
+            current_waiting = "OK"
+        elif curr:
+            curr_quality, _ = shared_calculate_quality(curr)
+            if curr_quality == "bad":
+                state = "DATA_BAD"
+            elif ticker in current_rank_map and current_rank_map[ticker] < limit:
+                state = "STILL_NEAR"
+            else:
+                state = "DROPPED"
+            current_reason = curr.get("primary_reason") or ", ".join(curr.get("reasons", [])[:2]) or "OK"
+            current_waiting = curr.get("waiting_for", "OK")
+        else:
+            state = "OUT_OF_RADAR"
+            current_reason = "Salio del universo/watchlist Finviz"
+            current_waiting = "N/A"
+
+        row = {
+            "ticker": ticker,
+            "state": state,
+            "previous_proximity": prev.get("proximity_score"),
+            "current_proximity": curr.get("proximity_score") if curr else None,
+            "proximity_delta": (
+                round(float(curr.get("proximity_score", 0)) - float(prev.get("proximity_score", 0)), 2)
+                if curr
+                else None
+            ),
+            "rank_drift": (
+                (prev_rank_map[ticker] - current_rank_map[ticker])
+                if ticker in current_rank_map and ticker in prev_rank_map
+                else "NEW" if ticker in current_rank_map else "OUT"
+            ),
+            "previous_price": prev.get("price"),
+            "current_price": curr.get("price") if curr else None,
+            "price_delta_pct": _pct_change(curr.get("price") if curr else None, prev.get("price")),
+            "previous_breakout_gap_pct": prev.get("breakout_gap_pct"),
+            "current_breakout_gap_pct": curr.get("breakout_gap_pct") if curr else None,
+            "previous_dist_sma20_pct": prev.get("dist_sma20_pct"),
+            "current_dist_sma20_pct": curr.get("dist_sma20_pct") if curr else None,
+            "previous_rvol": prev.get("rvol"),
+            "current_rvol": curr.get("rvol") if curr else None,
+            "previous_waiting_for": prev.get("waiting_for", "OK"),
+            "current_waiting_for": current_waiting,
+            "previous_reason": prev.get("primary_reason") or ", ".join(prev.get("reasons", [])[:2]) or "OK",
+            "current_reason": current_reason,
+            "current_rank": current_rank_map.get(ticker, 999) + 1,
+            "previous_rank": prev_rank_map.get(ticker, 999) + 1,
+        }
+        rows.append(row)
+
+    # 3. Añadir los que son NUEVOS en el top actual (que no estaban en el anterior)
+    current_nearest = _nearest_candidates_from_snapshot(current_snapshot, limit=limit)
+    prev_top_tickers = {t for t, _ in previous_nearest}
+    for ticker, curr in current_nearest:
+        if ticker in prev_top_tickers:
+            continue
+        
+        row = {
+            "ticker": ticker,
+            "state": "NEW_IN_TOP",
+            "previous_proximity": None,
+            "current_proximity": curr.get("proximity_score"),
+            "proximity_delta": None,
+            "rank_drift": "NEW",
+            "previous_price": None,
+            "current_price": curr.get("price"),
+            "price_delta_pct": None,
+            "previous_breakout_gap_pct": None,
+            "current_breakout_gap_pct": curr.get("breakout_gap_pct"),
+            "previous_dist_sma20_pct": None,
+            "current_dist_sma20_pct": curr.get("dist_sma20_pct"),
+            "previous_rvol": None,
+            "current_rvol": curr.get("rvol"),
+            "previous_waiting_for": "N/A",
+            "current_waiting_for": curr.get("waiting_for", "OK"),
+            "previous_reason": "N/A",
+            "current_reason": curr.get("primary_reason") or ", ".join(curr.get("reasons", [])[:2]) or "OK",
+            "current_rank": current_rank_map.get(ticker, 999) + 1,
+            "previous_rank": prev_rank_map.get(ticker) + 1 if ticker in prev_rank_map else "-",
+        }
+        rows.append(row)
+
+    return {
+        "previous_date": prev_date,
+        "current_date": trade_date,
+        "rows": rows,
+    }
+
+
+def _build_sector_flow(trade_date: str, current_hot_sectors: list) -> dict:
+    """Compara la fuerza sectorial actual con el snapshot previo para detectar rotacion."""
+    prev_date, previous_snapshot = _find_previous_snapshot(trade_date)
+    if not previous_snapshot:
+        return {}
+
+    prev_hot = previous_snapshot.get("hot_sectors", [])
+    if not prev_hot:
+        return {}
+
+    prev_map = {s['sector_etf']: s for s in prev_hot}
+    rows = []
+    for curr in current_hot_sectors:
+        etf = curr['sector_etf']
+        prev = prev_map.get(etf)
+        
+        drift = 0
+        if prev:
+            drift = prev.get('rank', 99) - curr.get('rank', 99)
+            rs_change = (curr.get('rs', 0) or 0) - (prev.get('rs', 0) or 0)
+        else:
+            rs_change = 0
+
+        rows.append({
+            "sector_etf": etf,
+            "current_rank": curr.get('rank'),
+            "previous_rank": prev.get('rank') if prev else None,
+            "rank_drift": drift,
+            "current_rs": curr.get('rs'),
+            "previous_rs": prev.get('rs') if prev else None,
+            "rs_drift": rs_change,
+            "tradeable": curr.get('tradeable')
+        })
+
+    return {
+        "previous_date": prev_date,
+        "rows": rows
+    }
+
+
 # ── RS FINVIZ MODE ──────────────────────────────────────────────────────────
 RS_FINVIZ_MIN_PCT_DEFAULT = 60.0
 
@@ -283,10 +476,20 @@ def scan_signals(
                 s100 = float(sma100.iloc[-1])
                 s200 = float(sma200.iloc[-1])
 
+                # Calcular RVOL directamente desde series raw para evitar
+                # el default 1.0 cuando avg_volume_20 no esta precalculado en DB.
                 rvol = 1.0
-                if (hasattr(engine_obj, "rvol") and engine_obj.rvol is not None 
-                    and ticker in engine_obj.rvol.columns):
-                    rvol = float(engine_obj.rvol[ticker].iloc[-1])
+                try:
+                    avg_vol_20 = vol_series.rolling(20, min_periods=5).mean().shift(1)
+                    avg_last = float(avg_vol_20.iloc[-1])
+                    vol_today = float(vol_series.iloc[-1])
+                    if avg_last > 500 and vol_today > 0:
+                        rvol = round(vol_today / avg_last, 2)
+                except Exception:
+                    # Fallback al atributo precalculado del engine
+                    if (hasattr(engine_obj, "rvol") and engine_obj.rvol is not None
+                            and ticker in engine_obj.rvol.columns):
+                        rvol = float(engine_obj.rvol[ticker].iloc[-1])
 
                 adr = 0.0
                 if (hasattr(engine_obj, "adr_pct") and engine_obj.adr_pct is not None 
@@ -438,13 +641,13 @@ def scan_signals(
         engine.cleanup()
 
 
-def run_pre(date_str, drift_override, rs_min_pct=RS_FINVIZ_MIN_PCT_DEFAULT, top_n=5, hq_n=5):
+def run_pre(trade_date, drift_override, rs_min_pct=RS_FINVIZ_MIN_PCT_DEFAULT, top_n=5, hq_n=5):
     logger.info("=" * 60)
-    logger.info("PAPER FINVIZ - PRE-MARKET")
+    logger.info(f"PAPER FINVIZ - PRE-MARKET | Trade Date: {trade_date}")
     logger.info("=" * 60)
     
-    latest_db_date = _get_latest_ohlcv_date(DB_PATH)
-    if latest_db_date: date_str = latest_db_date
+    data_as_of = _get_latest_ohlcv_date(DB_PATH) or trade_date
+    logger.info(f"    [Date] Data as of: {data_as_of}")
     
     ctx = get_market_context_live(require_spy_above_sma200=True, db_path=DB_PATH)
     regime = apply_regime_override(ctx, "none")
@@ -461,13 +664,13 @@ def run_pre(date_str, drift_override, rs_min_pct=RS_FINVIZ_MIN_PCT_DEFAULT, top_
         except: pass
 
     if not finviz_result.ok: return None
-    pre_warm_cache(universe, date_str)
+    pre_warm_cache(universe, data_as_of)
 
     signals, watchlist_scores, watchlist_details, audit_data = [], {}, {}, []
 
     if reg_ok and universe:
         for combo_name in ACTIVE_COMBOS:
-            res = scan_signals(combo_name, universe, date_str, rs_min_pct=rs_min_pct)
+            res = scan_signals(combo_name, universe, data_as_of, rs_min_pct=rs_min_pct)
             signals.extend(res["signals"])
             for t, score in res.get("watchlist", {}).items():
                 if t not in watchlist_scores or score > watchlist_scores[t]: watchlist_scores[t] = score
@@ -488,13 +691,29 @@ def run_pre(date_str, drift_override, rs_min_pct=RS_FINVIZ_MIN_PCT_DEFAULT, top_
         detail["data_quality_reasons"] = q_reasons
         detail["is_promotable"] = q_status == "ok"
 
-    day_dir = OUT_DIR / date_str
+    # 5. Obtener Hot Sectors para guardarlos en el snapshot
+    from src.utils.terminal_gui import _build_hot_sectors
+    hot_sectors = _build_hot_sectors(data_as_of, top_n=11) # Guardamos todos los sectores para analisis
+
+    day_dir = OUT_DIR / trade_date
     day_dir.mkdir(parents=True, exist_ok=True)
     snap = {
-        "date": date_str, "source": "finviz", "universe_size": len(universe),
-        "regime_ok": reg_ok, "signals": signals, "signals_count": len(signals),
-        "watchlist_detail": watchlist_details, "generated_at": datetime.now().isoformat(),
+        "date": trade_date, 
+        "data_as_of": data_as_of,
+        "source": "finviz", 
+        "universe_size": len(universe),
+        "regime_ok": reg_ok, 
+        "signals": signals, 
+        "signals_count": len(signals),
+        "watchlist_detail": watchlist_details,
+        "hot_sectors": hot_sectors,
+        "generated_at": datetime.now().isoformat(),
     }
+    
+    # 6. Calcular Flows (Nearest y Sector) con limite extendido para trazabilidad
+    snap["nearest_flow"] = _build_nearest_flow(trade_date, snap, limit=30)
+    snap["sector_flow"] = _build_sector_flow(trade_date, hot_sectors)
+    
     with open(day_dir / "snapshot.json", "w") as f: json.dump(snap, f, indent=2)
     
     print_terminal_brief(snap, top_n=top_n, hq_n=hq_n)
