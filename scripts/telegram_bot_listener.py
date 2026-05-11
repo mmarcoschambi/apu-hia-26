@@ -48,7 +48,9 @@ STATE_DIR.mkdir(parents=True, exist_ok=True)
 EVENTS_DIR.mkdir(parents=True, exist_ok=True)
 
 REFRESH_BUTTONS = {
-    "market": [[{"text": "🔄 Refresh", "callback_data": "refresh:market"}]],
+    "market": [
+        [{"text": "🔄 Refresh", "callback_data": "refresh:market"}, {"text": "⚡ Regen All", "callback_data": "regenerate:market"}]
+    ],
     "signals": [[{"text": "🔄 Refresh", "callback_data": "refresh:signals"}]],
     "watchlist": [[{"text": "🔄 Refresh", "callback_data": "refresh:watchlist"}]],
     "portfolio": [[{"text": "🔄 Refresh", "callback_data": "refresh:portfolio"}]],
