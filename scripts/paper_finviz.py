@@ -96,7 +96,7 @@ def pre_warm_cache(universe: list[str], date_str: str):
 
         last_ts = pd.to_datetime(last_dates[t])
         days_diff = (as_of - last_ts).days
-        if days_diff > 3:
+        if days_diff >= 1:
             to_update.append(t)
 
     if not to_update:
@@ -646,13 +646,6 @@ def run_pre(trade_date, drift_override, rs_min_pct=RS_FINVIZ_MIN_PCT_DEFAULT, to
     logger.info(f"PAPER FINVIZ - PRE-MARKET | Trade Date: {trade_date}")
     logger.info("=" * 60)
     
-    data_as_of = _get_latest_ohlcv_date(DB_PATH) or trade_date
-    logger.info(f"    [Date] Data as of: {data_as_of}")
-    
-    ctx = get_market_context_live(require_spy_above_sma200=True, db_path=DB_PATH)
-    regime = apply_regime_override(ctx, "none")
-    reg_ok = regime.get("effective_regime_ok", False)
-    
     finviz_result = fetch_finviz_universe(FINVIZ_CFG)
     universe = finviz_result.tickers if finviz_result.ok else []
     
@@ -664,7 +657,17 @@ def run_pre(trade_date, drift_override, rs_min_pct=RS_FINVIZ_MIN_PCT_DEFAULT, to
         except: pass
 
     if not finviz_result.ok: return None
-    pre_warm_cache(universe, data_as_of)
+    
+    # Pre-warm with trade_date first to fetch latest available data
+    pre_warm_cache(universe, trade_date)
+
+    # Now get the latest date from DB
+    data_as_of = _get_latest_ohlcv_date(DB_PATH) or trade_date
+    logger.info(f"    [Date] Data as of: {data_as_of}")
+    
+    ctx = get_market_context_live(require_spy_above_sma200=True, db_path=DB_PATH)
+    regime = apply_regime_override(ctx, "none")
+    reg_ok = regime.get("effective_regime_ok", False)
 
     signals, watchlist_scores, watchlist_details, audit_data = [], {}, {}, []
 
