@@ -1,4 +1,5 @@
 import json
+import html
 from pathlib import Path
 import pandas as pd
 from rich.console import Console
@@ -273,8 +274,11 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
         if nearest_ok:
             console.print("\n[bold cyan]🎯 NEAREST TO SIGNAL[/bold cyan]")
             near = Table(box=box.SIMPLE_HEAD, title_justify="left")
+            near.add_column("#", justify="right", style="dim")
             near.add_column("Ticker", style="bold yellow")
             near.add_column("Estado")
+            near.add_column("Trend", justify="center")
+            near.add_column("Prev R", justify="center", style="dim")
             near.add_column("RS", justify="right")
             near.add_column("Break lvl", justify="right")
             near.add_column("Dist SMA20", justify="right")
@@ -282,12 +286,32 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
             near.add_column("Waiting")
             near.add_column("Prox", justify="right")
 
-            for ticker, data in nearest_ok:
+            # Mapa de flujo para inyectar en la tabla principal
+            nearest_flow = snapshot.get("nearest_flow") or {}
+            flow_data = {r.get("ticker"): r for r in nearest_flow.get("rows", [])}
+
+            for idx, (ticker, data) in enumerate(nearest_ok, 1):
                 prox = float(data.get("proximity_score", 0))
                 prox_style = "green" if prox >= 80 else "yellow" if prox >= 50 else "red"
+                
+                # Obtener info de flujo si existe
+                f_row = flow_data.get(ticker, {})
+                drift = f_row.get("rank_drift", 0)
+                if drift == "NEW": trend = "🆕"
+                else:
+                    try:
+                        dv = int(drift)
+                        trend = "⬆️" if dv > 0 else "⬇️" if dv < 0 else "➡️"
+                    except: trend = "➡️"
+                
+                prev_rank = str(f_row.get("previous_rank", "-"))
+
                 near.add_row(
+                    str(idx),
                     ticker,
                     _estado(data),
+                    trend,
+                    prev_rank,
                     f"{data.get('rs_pct', data.get('score', 0)):.1f}",
                     _fmt_num(data.get("breakout_level")),
                     _fmt_num(data.get("dist_sma20_pct"), "%"),
@@ -298,22 +322,137 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
             console.print(near)
 
         if nearest_warn:
-            console.print("\n[bold yellow]📡 DATA INCOMPLETE RADAR (VIGILANCIA)[/bold yellow]")
+            console.print("\n[bold yellow]📡 DATA INCOMPLETE RADAR (VIGILANCIA - REVISAR MANAL)[/bold yellow]")
             near_w = Table(box=box.SIMPLE_HEAD, title_justify="left", border_style="dim")
+            near_w.add_column("#", justify="right", style="dim")
             near_w.add_column("Ticker", style="bold dim yellow")
             near_w.add_column("Estado")
             near_w.add_column("RS", justify="right")
             near_w.add_column("Prox", justify="right")
 
-            for ticker, data in nearest_warn:
+            for idx, (ticker, data) in enumerate(nearest_warn, 1):
                 prox = float(data.get("proximity_score", 0))
                 near_w.add_row(
+                    str(idx),
                     ticker,
                     _estado(data),
                     f"{data.get('rs_pct', data.get('score', 0)):.1f}",
                     f"{prox:.0f}",
                 )
             console.print(near_w)
+
+        nearest_flow = snapshot.get("nearest_flow") or {}
+        flow_rows = nearest_flow.get("rows") or []
+        if flow_rows:
+            prev_date = nearest_flow.get("previous_date", "previo")
+            console.print(f"\n[bold cyan]🔁 NEAREST FLOW ({prev_date} → {date})[/bold cyan]")
+            flow = Table(box=box.SIMPLE_HEAD, title_justify="left")
+            flow.add_column("Ticker", style="bold yellow")
+            flow.add_column("Estado")
+            flow.add_column("Prox", justify="right")
+            flow.add_column("Px %", justify="right")
+            flow.add_column("Break gap")
+            flow.add_column("Dist SMA20")
+            flow.add_column("RVOL")
+            flow.add_column("Hoy espera")
+            flow.add_column("Fallo")
+
+            state_map = {
+                "SIGNAL": "[green]Signal[/green]",
+                "STILL_NEAR": "[green]Sigue top[/green]",
+                "DROPPED": "[yellow]Cayo[/yellow]",
+                "DATA_BAD": "[yellow]Data mala[/yellow]",
+                "OUT_OF_RADAR": "[red]Fuera radar[/red]",
+            }
+
+            def _fmt_delta(value, suffix=""):
+                if value is None:
+                    return "N/A"
+                try:
+                    value_f = float(value)
+                    sign = "+" if value_f > 0 else ""
+                    return f"{sign}{value_f:.2f}{suffix}"
+                except Exception:
+                    return "N/A"
+
+            for row in flow_rows:
+                state_txt = state_map.get(row.get("state"), str(row.get("state", "-")))
+                
+                # Indicador de tendencia basado en drift de ranking
+                drift = row.get("rank_drift", 0)
+                if drift == "NEW":
+                    trend = "🆕"
+                elif drift == "OUT":
+                    trend = "❌"
+                else:
+                    try:
+                        drift_val = int(drift)
+                        if drift_val > 0:
+                            trend = f"⬆️{drift_val:+} "
+                        elif drift_val < 0:
+                            trend = f"⬇️{drift_val:+} "
+                        else:
+                            trend = "➡️  "
+                    except:
+                        trend = "➡️  "
+                
+                ticker_txt = f"{trend}{row.get('ticker', '?')} (R{row.get('previous_rank', '-')})"
+                
+                prox_txt = (
+                    f"{_fmt_num(row.get('previous_proximity'))}"
+                    f"→{_fmt_num(row.get('current_proximity'))}"
+                )
+                gap_txt = (
+                    f"{_fmt_delta(row.get('previous_breakout_gap_pct'), '%')}"
+                    f"→{_fmt_delta(row.get('current_breakout_gap_pct'), '%')}"
+                )
+                dist_txt = (
+                    f"{_fmt_delta(row.get('previous_dist_sma20_pct'), '%')}"
+                    f"→{_fmt_delta(row.get('current_dist_sma20_pct'), '%')}"
+                )
+                rvol_txt = (
+                    f"{_fmt_num(row.get('previous_rvol'))}"
+                    f"→{_fmt_num(row.get('current_rvol'))}"
+                )
+                flow.add_row(
+                    ticker_txt,
+                    state_txt,
+                    prox_txt,
+                    _fmt_delta(row.get("price_delta_pct"), "%"),
+                    gap_txt,
+                    dist_txt,
+                    rvol_txt,
+                    str(row.get("current_waiting_for", "N/A")),
+                    str(row.get("current_reason", "N/A")),
+                )
+
+            console.print(flow)
+
+        sector_flow = snapshot.get("sector_flow") or {}
+        sf_rows = sector_flow.get("rows") or []
+        if sf_rows:
+            console.print("\n[bold cyan]🏛️ SECTOR MONEY FLOW (DINERO INSTITUCIONAL)[/bold cyan]")
+            sf = Table(box=box.SIMPLE_HEAD, title_justify="left")
+            sf.add_column("ETF", style="bold yellow")
+            sf.add_column("Tendencia", justify="center")
+            sf.add_column("Rank", justify="center")
+            sf.add_column("RS Flow", justify="right")
+            sf.add_column("Estado")
+
+            for row in sf_rows:
+                drift = row.get("rank_drift", 0)
+                trend = "🔥 ⬆️" if drift > 0 else "❄️ ⬇️" if drift < 0 else "➡️"
+                rs_drift = row.get("rs_drift", 0)
+                rs_txt = f"{rs_drift:+.2%}" if rs_drift != 0 else "="
+                
+                sf.add_row(
+                    row["sector_etf"],
+                    trend,
+                    f"{row.get('previous_rank') or '-'}→{row.get('current_rank') or '-'}",
+                    rs_txt,
+                    "✅ Tradeable" if row.get("tradeable") else "⚠️ Blocked"
+                )
+            console.print(sf)
 
         high_quality = []
         for t, d in watchlist_detail.items():
@@ -366,12 +505,19 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
     console.print("\n" + "─" * console.width + "\n", style="dim")
 
 
-def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> str:
-    """Construye un brief operativo para Telegram con formato visual 'tipo GUI'."""
+def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple[str, list]:
+    """Construye un brief operativo para Telegram con formato visual 'tipo GUI' y botones inline."""
     date = snapshot.get("date", "n/a")
+    data_as_of = snapshot.get("data_as_of")
     regime_ok = snapshot.get("regime_ok", False)
     signals = snapshot.get("signals", [])
     watchlist_detail = snapshot.get("watchlist_detail", {})
+
+    date_esc = html.escape(str(date))
+    header_date = f"🚀 <b>MOMENTUM V2 | {date_esc}</b>"
+    if data_as_of and data_as_of != date:
+        data_as_of_esc = html.escape(str(data_as_of))
+        header_date += f" (Data: {data_as_of_esc})"
 
     # Intentar obtener datos de Gamma/DarkPools
     gamma_data = fetch_gamma_data()
@@ -395,7 +541,7 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> str:
     }
 
     lines = [
-        f"🚀 <b>MOMENTUM V2 | {date}</b>",
+        header_date,
         f"• Regime: <b>{'PASS' if regime_ok else 'BLOCKED'}</b>",
         f"• Universe: <code>{snapshot.get('universe_size', 0)}</code>",
         f"• Signals: <code>{len(signals)}</code>",
@@ -409,7 +555,7 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> str:
         lines.append("\n🔥 <b>HOT SECTORS</b>")
         for row in hot_sectors:
             etf = row['sector_etf']
-            name = sector_names.get(etf, "")
+            name = html.escape(sector_names.get(etf, ""))
             lines.append(
                 f"• <b>{etf} {name}</b> | RS {row.get('rs', 0):.1%} | S1 {'✓' if row.get('tradeable') else '✗'}"
             )
@@ -420,8 +566,9 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> str:
         except: return default
 
     def _get_tv_link(ticker):
+        ticker_esc = html.escape(str(ticker))
         # Usar link de símbolos para que TradingView resuelva el exchange (NASDAQ/NYSE) automáticamente
-        return f'<a href="https://www.tradingview.com/symbols/{ticker}/">TradingView</a>'
+        return f'<a href="https://www.tradingview.com/symbols/{ticker_esc}/">TradingView</a>'
 
     def _estado_simple(data):
         if data.get("_display_status") == "warn":
@@ -443,6 +590,8 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> str:
             except: pass
         return "🔧 Setup incompleto"
 
+    buttons = []
+    
     if watchlist_detail:
         nearest_ok = []
         nearest_warn = []
@@ -453,26 +602,69 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> str:
             if status == "warn": nearest_warn.append((ticker, data))
             else: nearest_ok.append((ticker, data))
 
+        # Mapa de flujo para inyectar tendencias en el reporte principal
+        nearest_flow = snapshot.get("nearest_flow") or {}
+        flow_data = {r.get("ticker"): r for r in nearest_flow.get("rows", [])}
+
         nearest_ok = sorted(nearest_ok, key=lambda x: x[1].get("proximity_score", 0), reverse=True)[:top_n]
         if nearest_ok:
             lines.append("\n🎯 <b>NEAREST TO SIGNAL</b>")
-            for ticker, data in nearest_ok:
+            for idx, (ticker, data) in enumerate(nearest_ok, 1):
+                ticker_esc = html.escape(str(ticker))
                 rs = data.get('rs_pct', data.get('score', 0))
                 prox = data.get('proximity_score', 0)
-                brk = _fmt_val(data.get('breakout_level'))
+                brk = data.get('breakout_level', 0)
                 rvol = _fmt_val(data.get('rvol'))
                 dist = _fmt_val(data.get('dist_sma20_pct'), "%")
-                falta = data.get('primary_reason') or (", ".join(data.get('reasons', [])[:2]) or "OK")
-                trigger = data.get('waiting_for', 'OK')
+                
+                # Estimación de Niveles (Aprox)
+                # Si no hay stop definido, usamos un 5% genérico para el brief
+                entry = float(brk) if brk else data.get('price', 0)
+                sl_approx = entry * 0.95
+                tp1_approx = entry + (entry - sl_approx) * 1.25
+                
+                # Obtener info de flujo (Tendencia)
+                f_row = flow_data.get(ticker, {})
+                drift = f_row.get("rank_drift", 0)
+                if drift == "NEW": trend = "🆕 "
+                else:
+                    try:
+                        dv = int(drift)
+                        trend = "⬆️ " if dv > 0 else "⬇️ " if dv < 0 else "➡️ "
+                    except: trend = "➡️ "
+                
+                prev_rank = f_row.get("previous_rank", "-")
+                
+                # Escapar campos de texto que vienen de diagnostico
+                raw_falta = data.get('primary_reason') or (", ".join(data.get('reasons', [])[:2]) or "OK")
+                falta = html.escape(str(raw_falta))
+                trigger = html.escape(str(data.get('waiting_for', 'OK')))
                 
                 lines.append(
-                    f"• <b>{ticker}</b> | RS {rs:.0f} | P {prox:.0f}\n"
+                    f"• {idx}. {trend}<code>{ticker_esc}</code> (Prev R{prev_rank})\n"
+                    f"  RS: <b>{rs:.0f}</b> | Proximidad: <b>{prox:.0f}</b>\n"
                     f"  Chart: {_get_tv_link(ticker)}\n"
-                    f"  Estado: {_estado_simple(data)}\n"
-                    f"  Break: {brk} | RVOL {rvol} | Dist: {dist}\n"
+                    f"  Estado: {html.escape(_estado_simple(data))}\n"
+                    f"  Break: <code>{entry:.2f}</code> | RVOL: {rvol}\n"
+                    f"  🛡️ SL aprox: <code>{sl_approx:.2f}</code> (-5%)\n"
+                    f"  🎯 TP1 aprox: <code>{tp1_approx:.2f}</code> (1.25R)\n"
                     f"  Falta: {falta}\n"
                     f"  Live trigger: <code>{trigger}</code>\n"
                 )
+                
+                # Añadir botón para este ticker
+                if len(buttons) < 5:  # Límite de Telegram para una fila, pero lo haremos en filas separadas
+                    pass # Telegram API limits inline keyboards, we will add them in pairs below
+
+            # Crear el teclado inline en filas de 2
+            row = []
+            for ticker, _ in nearest_ok[:6]: # Max 6 botones para no saturar
+                row.append({"text": f"🔎 {ticker}", "callback_data": f"detail:{ticker}"})
+                if len(row) == 2:
+                    buttons.append(row)
+                    row = []
+            if row:
+                buttons.append(row)
 
         if nearest_warn:
             lines.append("\n📡 <b>DATA INCOMPLETE RADAR</b>")
@@ -484,16 +676,89 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> str:
                 "dist_sma20_zero_suspect": "SMA20 suspect (0.0)"
             }
             for ticker, data in nearest_warn[:3]:
+                ticker_esc = html.escape(str(ticker))
                 q_reasons = data.get('data_quality_reasons', [])
                 if q_reasons:
                     motivo = ", ".join([quality_map.get(r, r) for r in q_reasons[:2]])
                 else:
                     motivo = ", ".join(data.get('reasons', [])[:2]) or "Incompleto"
                 
-                lines.append(f"• <b>{ticker}</b> (RS {data.get('rs_pct', 0):.0f}) | {motivo}")
+                motivo = html.escape(str(motivo))
+                lines.append(f"• <b>{ticker_esc}</b> (RS {data.get('rs_pct', 0):.0f}) | {motivo}")
             lines.append("<i>Nota: Vigila OK+Warn; solo promueve con Breakout+RVOL live</i>")
 
-    return "\n".join(lines)
+        sector_flow = snapshot.get("sector_flow") or {}
+        sf_rows = sector_flow.get("rows") or []
+        if sf_rows:
+            lines.append("\n🏛️ <b>SECTOR MONEY FLOW</b>")
+            for row in sf_rows[:5]: # Mostrar los top 5 sectores con flujo
+                etf = row['sector_etf']
+                name = html.escape(sector_names.get(etf, ""))
+                drift = row.get("rank_drift", 0)
+                trend = "🔥 ⬆️" if drift > 0 else "❄️ ⬇️" if drift < 0 else "➡️"
+                rs_drift = row.get("rs_drift", 0)
+                rs_txt = f"{rs_drift:+.2%}" if rs_drift != 0 else "="
+                lines.append(f"• <b>{etf} {name}</b> | {trend} | RS {rs_txt}")
+
+        nearest_flow = snapshot.get("nearest_flow") or {}
+        flow_rows = nearest_flow.get("rows") or []
+        if flow_rows:
+            prev_date = html.escape(str(nearest_flow.get("previous_date", "previo")))
+            lines.append(f"\n🔁 <b>NEAREST FLOW {prev_date} → {date_esc}</b>")
+            state_map = {
+                "SIGNAL": "Signal",
+                "STILL_NEAR": "Sigue top",
+                "DROPPED": "Cayo",
+                "DATA_BAD": "Data mala",
+                "OUT_OF_RADAR": "Fuera radar",
+            }
+
+            def _fmt_delta(v, suffix=""):
+                if v is None:
+                    return "N/A"
+                try:
+                    v = float(v)
+                    sign = "+" if v > 0 else ""
+                    return f"{sign}{v:.2f}{suffix}"
+                except Exception:
+                    return "N/A"
+
+            for row in flow_rows[:top_n]:
+                ticker = row.get("ticker", "?")
+                ticker_esc = html.escape(str(ticker))
+                state = html.escape(state_map.get(row.get("state"), str(row.get("state", "-"))))
+                
+                drift = row.get("rank_drift", 0)
+                if drift == "NEW": trend = "🆕 "
+                elif drift == "OUT": trend = "❌ "
+                else:
+                    try:
+                        dv = int(drift)
+                        trend = f"⬆️{dv:+} " if dv > 0 else f"⬇️{dv:+} " if dv < 0 else "➡️ "
+                    except: trend = "➡️ "
+                
+                prev_rank = row.get("previous_rank", "-")
+                reason = html.escape(str(row.get("current_reason", "N/A")))
+                waiting = html.escape(str(row.get("current_waiting_for", "N/A")))
+                prox_prev = _fmt_val(row.get("previous_proximity"))
+                prox_curr = _fmt_val(row.get("current_proximity"))
+                px = _fmt_delta(row.get("price_delta_pct"), "%")
+                gap = _fmt_delta(row.get("current_breakout_gap_pct"), "%")
+                dist = _fmt_delta(row.get("current_dist_sma20_pct"), "%")
+                
+                lines.append(
+                    f"• {trend}<b>{ticker_esc}</b> (Prev R{prev_rank}) | {state} | Px {px}\n"
+                    f"  Prox {prox_prev}→{prox_curr} | Gap break: {gap}\n"
+                    f"  Espera: <code>{waiting}</code> | Falla: {reason}"
+                )
+
+    # Añadir siempre el botón de refresh al final
+    buttons.append([
+        {"text": "🔄 Refresh", "callback_data": "refresh:market"},
+        {"text": "⚡ Regen All", "callback_data": "regenerate:market"}
+    ])
+
+    return "\n".join(lines), buttons
 
 
 if __name__ == "__main__":

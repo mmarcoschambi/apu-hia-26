@@ -288,6 +288,17 @@ def _handle_callback(update: dict) -> None:
     action, _, payload = data.partition(":")
     state = load_state()
 
+    if action == "regenerate":
+        import subprocess
+        target = payload or "market"
+        answer_callback(callback_id, f"Regenerating {target} data... (approx 30s)")
+        
+        if target == "market":
+            subprocess.Popen([sys.executable, "scripts/finviz_monitor.py"])
+        
+        _log_action(chat_id, user_id, "regenerate", {"target": target}, status="applied")
+        return
+
     if action == "refresh":
         target = payload or "market"
         if target == "position":
