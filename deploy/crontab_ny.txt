@@ -5,7 +5,7 @@
 CRON_TZ=America/New_York
 
 # 1. Premarket brief: 08:30 NY (L-V)
-30 8 * * 1-5 /home/xxmalcomandaxx/swing-momentum-v1/run_vps_job.sh scripts/finviz_monitor.py >> /home/xxmalcomandaxx/swing-momentum-v1/logs/cron_finviz_monitor.log 2>&1
+30 8 * * 1-5 /home/marcos/trade/momentum-v2/run_vps_job.sh scripts/finviz_monitor.py >> /home/marcos/trade/momentum-v2/logs/cron_finviz_monitor.log 2>&1
 
 # 2. Start live promoter: 09:29 NY (L-V)
 29 9 * * 1-5 /usr/bin/systemctl start finviz-live-promoter.service
@@ -14,4 +14,4 @@ CRON_TZ=America/New_York
 01 16 * * 1-5 /usr/bin/systemctl stop finviz-live-promoter.service
 
 # 4. Post-market status: 16:15 NY (L-V)
-15 16 * * 1-5 /home/xxmalcomandaxx/swing-momentum-v1/run_vps_job.sh scripts/send_signal_alerts.py --telegram >> /home/xxmalcomandaxx/swing-momentum-v1/logs/cron_post_market.log 2>&1
+15 16 * * 1-5 /home/marcos/trade/momentum-v2/run_vps_job.sh scripts/send_signal_alerts.py --telegram >> /home/marcos/trade/momentum-v2/logs/cron_post_market.log 2>&1

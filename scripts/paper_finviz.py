@@ -421,6 +421,101 @@ def build_engine_kwargs(
     return base
 
 
+def _get_htf_candidate(ticker: str) -> int:
+    """Fallback logic to get HTF status from candidate_state."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        row = conn.execute(
+            "SELECT htf_candidate FROM candidate_state WHERE ticker=? ORDER BY date DESC LIMIT 1",
+            (ticker,)
+        ).fetchone()
+        conn.close()
+        return int(row[0]) if row else 0
+    except:
+        return 0
+
+
+def _enrich_watchlist_detail(engine, raw_detail: dict, fallback_detail: dict) -> dict:
+    enriched = {}
+    raw_detail = raw_detail or {}
+    fallback_detail = fallback_detail or {}
+    tickers = set(raw_detail) | set(fallback_detail)
+
+    for ticker in tickers:
+        detail = dict(raw_detail.get(ticker) or {})
+        fallback = fallback_detail.get(ticker) or {}
+
+        for key, value in fallback.items():
+            if key not in detail or detail.get(key) in (None, ""):
+                detail[key] = value
+
+        if not detail.get("sector_etf"):
+            detail["sector_etf"] = SECTOR_MAP.get(ticker)
+        if "max_dist_sma20" not in detail or detail.get("max_dist_sma20") is None:
+            detail["max_dist_sma20"] = float(getattr(engine, "max_dist_sma20", 6.77))
+        if "htf_candidate" not in detail:
+            detail["htf_candidate"] = _get_htf_candidate(ticker)
+
+        enriched[ticker] = detail
+
+    return enriched
+
+
+def calculate_breadth_from_engine(engine, date_str):
+    try:
+        close = engine.close
+        if close is None or close.empty: return {}
+        
+        # Advance/Decline
+        if len(close) < 2: return {}
+        chg = close.iloc[-1] / close.iloc[-2] - 1
+        advances = int((chg > 0).sum())
+        declines = int((chg < 0).sum())
+        
+        # New Highs/Lows (252 bars)
+        lookback = min(len(close)-1, 252)
+        high_252 = close.rolling(lookback, min_periods=lookback//2).max().shift(1).iloc[-1]
+        low_252 = close.rolling(lookback, min_periods=lookback//2).min().shift(1).iloc[-1]
+        
+        curr_price = close.iloc[-1]
+        new_highs = int((curr_price >= high_252).sum())
+        new_lows = int((curr_price <= low_252).sum())
+        
+        # VIX
+        ctx = get_market_context_live(db_path=DB_PATH, as_of=date_str)
+        vix = ctx.get("vix")
+        
+        # Verdict logic
+        nh_nl_ratio = new_highs / (new_lows if new_lows > 0 else 1)
+        ad_ratio = advances / (declines if declines > 0 else 1)
+        
+        green_score = 0
+        if vix and vix < 20: green_score += 1
+        if nh_nl_ratio > 1.5: green_score += 1
+        if ad_ratio > 1.2: green_score += 1
+        
+        red_score = 0
+        if vix and vix > 30: red_score += 1
+        if nh_nl_ratio < 0.7: red_score += 1
+        if ad_ratio < 0.8: red_score += 1
+        
+        verdict = "GREEN" if green_score >= 2 else "CAUTION" if red_score >= 1 else "NEUTRAL"
+        
+        return {
+            "vix": vix,
+            "new_highs": new_highs,
+            "new_lows": new_lows,
+            "advances": advances,
+            "declines": declines,
+            "verdict": verdict,
+            "nh_nl_ratio": round(nh_nl_ratio, 2),
+            "ad_ratio": round(ad_ratio, 2)
+        }
+    except Exception as e:
+        logger.error(f"Error calculating breadth: {e}")
+        return {}
+
+
 def scan_signals(
     combo_name,
     universe,
@@ -519,22 +614,54 @@ def scan_signals(
                 sector_etf = None
                 sector_etf_dist = None
                 sector_etf_ok = True
+                
+                # Intentar obtener sector desde el mapa manual si el engine falla
                 if hasattr(engine_obj, "ticker_to_etf_map") and engine_obj.ticker_to_etf_map:
                     sector_etf = engine_obj.ticker_to_etf_map.get(ticker)
+                
+                if not sector_etf:
+                    sector_etf = SECTOR_MAP.get(ticker)
+
                 if (sector_etf and hasattr(engine_obj, "etf_dist_matrix") 
                     and engine_obj.etf_dist_matrix is not None):
                     if sector_etf in engine_obj.etf_dist_matrix.columns:
                         sector_etf_dist = float(engine_obj.etf_dist_matrix[sector_etf].iloc[-1])
                         sector_etf_ok = sector_etf_dist > 0.0
 
+                max_dist_sma20 = float(getattr(engine_obj, "max_dist_sma20", 6.77))
                 reasons = []
                 if not breakout: reasons.append("Falta breakout")
                 if not ma_stack: reasons.append("MA stack roto")
                 if not sector_etf_ok: reasons.append("Sector ETF bloqueado")
                 if rvol < float(getattr(engine_obj, "min_rvol", 1.1)): reasons.append("RVOL bajo")
-                if abs(dist_sma20) > float(getattr(engine_obj, "max_dist_sma20", 6.77)): reasons.append("Extendido de SMA20")
+                if abs(dist_sma20) > max_dist_sma20: reasons.append("Extendido de SMA20")
 
                 reasons = sorted(reasons, key=lambda r: reason_priority.get(r, 99))
+                min_rvol = float(getattr(engine_obj, "min_rvol", 1.1))
+                waiting_for = "OK"
+                if not breakout:
+                    waiting_for = f"Breakout > {prev_high_20:.2f}"
+                elif not sector_etf_ok:
+                    waiting_for = f"{sector_etf} > SMA20" if sector_etf else "Sector ETF > SMA20"
+                elif not ma_stack:
+                    waiting_for = "MA stack"
+                elif rvol < min_rvol:
+                    waiting_for = f"RVOL >= {min_rvol:.2f}"
+                elif abs(dist_sma20) > max_dist_sma20:
+                    waiting_for = f"Dist SMA20 <= {max_dist_sma20:.2f}%"
+
+                proximity_score = 100.0
+                if not breakout:
+                    proximity_score -= 40.0
+                if not ma_stack:
+                    proximity_score -= 30.0
+                if not sector_etf_ok:
+                    proximity_score -= 15.0
+                if rvol < 1.0:
+                    proximity_score -= 10.0
+                if abs(dist_sma20) > max_dist_sma20:
+                    proximity_score -= min(20.0, (abs(dist_sma20) - max_dist_sma20) * 2.5)
+                proximity_score = max(0.0, min(100.0, proximity_score))
 
                 detail[ticker] = {
                     "score": score,
@@ -551,13 +678,17 @@ def scan_signals(
                     "adr": round(adr, 2),
                     "dollar_volume_m": round(dvol / 1e6, 2),
                     "dist_sma20_pct": round(dist_sma20, 2),
+                    "max_dist_sma20": max_dist_sma20,
                     "breakout": breakout,
                     "ma_stack": ma_stack,
                     "sector_etf": sector_etf,
                     "sector_etf_dist": None if sector_etf_dist is None else round(sector_etf_dist * 100, 2),
                     "sector_etf_ok": sector_etf_ok,
+                    "waiting_for": waiting_for,
+                    "proximity_score": round(proximity_score, 2),
                     "primary_reason": reasons[0] if reasons else "OK",
                     "reasons": reasons,
+                    "htf_candidate": _get_htf_candidate(ticker),
                 }
             except Exception as e:
                 detail[ticker] = {"score": score, "reasons": [f"No se pudo calcular diagnóstico: {e}"]}
@@ -629,23 +760,28 @@ def scan_signals(
                     "rs_mode": "spy_fallback", "source": "backtest_trade",
                 })
 
+        fallback_detail = _build_watchlist_detail(
+            engine, result.get("eligible_watchlist", {}), signals
+        )
+
         return {
             "signals": signals,
             "watchlist": result.get("eligible_watchlist", {}),
-            "watchlist_detail": result.get("watchlist_detail", {}),
+            "watchlist_detail": _enrich_watchlist_detail(
+                engine,
+                result.get("watchlist_detail", {}),
+                fallback_detail,
+            ),
+            "breadth": calculate_breadth_from_engine(engine, date_str)
         }
     except Exception as e:
         logger.error(f"Scan error ({combo_name}): {e}", exc_info=True)
-        return {"signals": [], "watchlist": [], "watchlist_detail": {}}
+        return {"signals": [], "watchlist": [], "watchlist_detail": {}, "breadth": {}}
     finally:
         engine.cleanup()
 
 
 def run_pre(trade_date, drift_override, rs_min_pct=RS_FINVIZ_MIN_PCT_DEFAULT, top_n=5, hq_n=5):
-    logger.info("=" * 60)
-    logger.info(f"PAPER FINVIZ - PRE-MARKET | Trade Date: {trade_date}")
-    logger.info("=" * 60)
-    
     finviz_result = fetch_finviz_universe(FINVIZ_CFG)
     universe = finviz_result.tickers if finviz_result.ok else []
     
@@ -656,25 +792,36 @@ def run_pre(trade_date, drift_override, rs_min_pct=RS_FINVIZ_MIN_PCT_DEFAULT, to
             universe = [t for t in universe if t not in rejected]
         except: pass
 
-    if not finviz_result.ok: return None
+    if not finviz_result.ok: 
+        logger.error("    [Universe] Fallo fetch de Finviz. Abortando.")
+        return None
     
-    # Pre-warm with trade_date first to fetch latest available data
+    # 1. Pre-warm with trade_date first to fetch latest available data
     pre_warm_cache(universe, trade_date)
 
-    # Now get the latest date from DB
+    # 2. Now get the latest date from DB
     data_as_of = _get_latest_ohlcv_date(DB_PATH) or trade_date
-    logger.info(f"    [Date] Data as of: {data_as_of}")
     
-    ctx = get_market_context_live(require_spy_above_sma200=True, db_path=DB_PATH)
+    logger.info("=" * 60)
+    logger.info(f"PAPER FINVIZ | Trade: {trade_date} | Data: {data_as_of}")
+    logger.info("=" * 60)
+
+    if data_as_of < trade_date:
+        logger.warning(f"    [Date] WARNING: data_as_of ({data_as_of}) es anterior a trade_date ({trade_date}). yfinance podria no tener datos de hoy todavia.")
+    
+    # 3. Market Context con as_of
+    ctx = get_market_context_live(require_spy_above_sma200=True, db_path=DB_PATH, as_of=data_as_of)
     regime = apply_regime_override(ctx, "none")
     reg_ok = regime.get("effective_regime_ok", False)
 
-    signals, watchlist_scores, watchlist_details, audit_data = [], {}, {}, []
+    signals, watchlist_scores, watchlist_details, first_breadth = [], {}, {}, None
 
+    # 4. Scan Signals
     if reg_ok and universe:
         for combo_name in ACTIVE_COMBOS:
             res = scan_signals(combo_name, universe, data_as_of, rs_min_pct=rs_min_pct)
             signals.extend(res["signals"])
+            if first_breadth is None: first_breadth = res.get("breadth")
             for t, score in res.get("watchlist", {}).items():
                 if t not in watchlist_scores or score > watchlist_scores[t]: watchlist_scores[t] = score
             for t, detail in res.get("watchlist_detail", {}).items():
@@ -687,16 +834,16 @@ def run_pre(trade_date, drift_override, rs_min_pct=RS_FINVIZ_MIN_PCT_DEFAULT, to
             if t not in seen or s.get("position_size", 0) > seen[t].get("position_size", 0): seen[t] = s
         signals = list(seen.values())
 
-    # 4. Enriquecer con Calidad de Datos
+    # 5. Enriquecer con Calidad de Datos
     for ticker, detail in watchlist_details.items():
         q_status, q_reasons = shared_calculate_quality(detail)
         detail["data_quality_status"] = q_status
         detail["data_quality_reasons"] = q_reasons
         detail["is_promotable"] = q_status == "ok"
 
-    # 5. Obtener Hot Sectors para guardarlos en el snapshot
+    # 6. Obtener Hot Sectors
     from src.utils.terminal_gui import _build_hot_sectors
-    hot_sectors = _build_hot_sectors(data_as_of, top_n=11) # Guardamos todos los sectores para analisis
+    hot_sectors = _build_hot_sectors(data_as_of, top_n=11) 
 
     day_dir = OUT_DIR / trade_date
     day_dir.mkdir(parents=True, exist_ok=True)
@@ -710,14 +857,17 @@ def run_pre(trade_date, drift_override, rs_min_pct=RS_FINVIZ_MIN_PCT_DEFAULT, to
         "signals_count": len(signals),
         "watchlist_detail": watchlist_details,
         "hot_sectors": hot_sectors,
+        "breadth": first_breadth,
         "generated_at": datetime.now().isoformat(),
     }
     
-    # 6. Calcular Flows (Nearest y Sector) con limite extendido para trazabilidad
+    # 7. Calcular Flows (Nearest y Sector)
     snap["nearest_flow"] = _build_nearest_flow(trade_date, snap, limit=30)
     snap["sector_flow"] = _build_sector_flow(trade_date, hot_sectors)
     
-    with open(day_dir / "snapshot.json", "w") as f: json.dump(snap, f, indent=2)
+    # 8. Guardar y Mostrar
+    with open(day_dir / "snapshot.json", "w") as f: 
+        json.dump(snap, f, indent=2)
     
     print_terminal_brief(snap, top_n=top_n, hq_n=hq_n)
     return snap
