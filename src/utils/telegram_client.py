@@ -45,6 +45,11 @@ def telegram_send(
                     },
                 )
                 if r.status_code != 200:
+                    try:
+                        err_msg = r.json().get("description", "Unknown error")
+                    except:
+                        err_msg = r.text
+                    print(f"[Telegram] Error {r.status_code}: {err_msg}")
                     success = False
         except Exception:
             success = False
@@ -79,8 +84,15 @@ def send_message_with_buttons(
                     "disable_web_page_preview": True,
                 },
             )
+            if r.status_code != 200:
+                try:
+                    err_msg = r.json().get("description", "Unknown error")
+                except:
+                    err_msg = r.text
+                print(f"[Telegram] Error {r.status_code} in send_message_with_buttons: {err_msg}")
             return r.status_code == 200
-    except Exception:
+    except Exception as e:
+        print(f"[Telegram] Exception in send_message_with_buttons: {e}")
         return False
 
 

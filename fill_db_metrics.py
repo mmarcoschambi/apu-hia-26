@@ -34,6 +34,8 @@ def calculate_metrics(df):
     # 2. SMAs
     df['sma20'] = df['close'].rolling(window=20).mean()
     df['sma50'] = df['close'].rolling(window=50).mean()
+    df['sma100'] = df['close'].rolling(window=100).mean()
+    df['sma200'] = df['close'].rolling(window=200).mean()
     
     # 3. ADR % (20 days)
     # ADR = (High - Low) / Low
@@ -51,16 +53,26 @@ def main():
     print(f"🔌 Conectando a {db_path}...")
     conn = sqlite3.connect(db_path, timeout=30.0)
     
+    # --- MIGRACIÓN AUTOMÁTICA ---
+    cursor = conn.execute("PRAGMA table_info(ohlcv_cache)")
+    existing_cols = [row[1] for row in cursor.fetchall()]
+    for col in ["sma20", "sma50", "sma100", "sma200", "adr_pct_20"]:
+        if col not in existing_cols:
+            print(f"🔧 Migrando: Añadiendo columna {col}...")
+            conn.execute(f"ALTER TABLE ohlcv_cache ADD COLUMN {col} REAL")
+    conn.commit()
+    # ----------------------------
+
     # Optimización de escritura
     conn.execute('PRAGMA journal_mode=WAL')
     conn.execute('PRAGMA synchronous=NORMAL')
 
-    # Obtener tickers que tienen datos pero les faltan métricas (ej. sma50 es null)
+    # Obtener tickers que tienen datos pero les faltan métricas (ej. sma200 es null)
     print("🔍 Buscando tickers con métricas incompletas...")
     cursor = conn.execute("""
         SELECT DISTINCT ticker 
         FROM ohlcv_cache 
-        WHERE sma50 IS NULL OR adr_pct_20 IS NULL
+        WHERE sma200 IS NULL OR adr_pct_20 IS NULL
     """)
     tickers_to_update = [row[0] for row in cursor.fetchall()]
     
@@ -82,24 +94,24 @@ def main():
                 params=(ticker,)
             )
             
-            if df.empty or len(df) < 50: # Need at least 50 days for SMA50
+            if df.empty or len(df) < 20: # Need at least some days
                 continue
                 
             # Calcular
             df = calculate_metrics(df)
             
             # Preparar datos para update masivo
-            # Usamos executemany para velocidad, pero SQLite UPDATE no es tan directo en batch como INSERT.
-            # Haremos un loop rápido con transacciones.
-            
             updates = []
             for _, row in df.iterrows():
-                if pd.notna(row['sma50']): # Solo actualizar si tenemos cálculo válido
+                # Actualizar si tenemos al menos SMA20 (el más básico)
+                if pd.notna(row['sma20']): 
                     updates.append((
                         row['dollar_volume'],
                         row['rolling_dollar_vol_20'],
                         row['sma20'],
                         row['sma50'],
+                        row['sma100'],
+                        row['sma200'],
                         row['adr_pct_20'],
                         ticker,
                         row['date']
@@ -112,6 +124,8 @@ def main():
                         rolling_dollar_vol_20 = ?,
                         sma20 = ?,
                         sma50 = ?,
+                        sma100 = ?,
+                        sma200 = ?,
                         adr_pct_20 = ?
                     WHERE ticker = ? AND date = ?
                 """, updates)

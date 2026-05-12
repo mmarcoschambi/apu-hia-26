@@ -87,18 +87,35 @@ def load_demo_context(date: str | None = None) -> tuple[str | None, dict[str, An
     }
 
 
-def build_market_message(date: str | None = None) -> str:
-    resolved, snapshot = load_monitor_snapshot(date)
+def load_monitor_brief(date: str | None = None) -> tuple[str | None, dict[str, Any] | None]:
+    resolved = resolve_monitor_date(date)
+    if not resolved:
+        return None, None
+    payload = _load_json(MONITOR_ROOT / resolved / "premarket_brief.json")
+    return resolved, payload
+
+
+def build_market_message(date: str | None = None) -> tuple[str, list]:
+    resolved, brief_data = load_monitor_brief(date)
     state = load_state()
+
+    if resolved and brief_data and "brief" in brief_data:
+        # Si existe el brief enriquecido (generado por finviz_monitor), lo usamos
+        brief_text = brief_data["brief"]
+        buttons = brief_data.get("buttons", [])
+        return brief_text, buttons
+
+    # Fallback al mensaje corto si no hay brief
+    resolved, snapshot = load_monitor_snapshot(date)
     if not resolved or not snapshot:
-        return "⚠️ <b>MARKET</b>\nNo monitor data available yet."
+        return "⚠️ <b>MARKET</b>\nNo monitor data available yet.", []
 
     warnings = snapshot.get("finviz_warnings") or []
     signals = snapshot.get("signals") or []
     top = signals[:5]
-    
+
     status_icon = "🟢" if snapshot.get('regime_ok') else "🔴"
-    
+
     lines = [
         f"🌐 <b>MARKET OVERVIEW | {resolved}</b>",
         f"<i>Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</i>\n",
@@ -123,8 +140,7 @@ def build_market_message(date: str | None = None) -> str:
             stop = float(signal.get('stop_loss', signal.get('stop_price', 0)) or 0)
             lines.append(f"{ticker:<7} {combo:<12} {entry:<8.2f} {stop:.2f}")
         lines.append("</pre>")
-    return "\n".join(lines)
-
+    return "\n".join(lines), []
 
 def build_watchlist_message(date: str | None = None, limit: int = 10) -> str:
     resolved, signals = load_prealerts(date)

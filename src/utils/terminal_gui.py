@@ -512,12 +512,40 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
     regime_ok = snapshot.get("regime_ok", False)
     signals = snapshot.get("signals", [])
     watchlist_detail = snapshot.get("watchlist_detail", {})
+    breadth = snapshot.get("breadth", {})
 
     date_esc = html.escape(str(date))
     header_date = f"🚀 <b>MOMENTUM V2 | {date_esc}</b>"
     if data_as_of and data_as_of != date:
         data_as_of_esc = html.escape(str(data_as_of))
         header_date += f" (Data: {data_as_of_esc})"
+
+    # 1. Breadth Health Section
+    breadth_lines = []
+    if breadth:
+        vix = breadth.get("vix")
+        vix_status = "🟢" if (vix and vix < 20) else "🟡" if (vix and vix < 30) else "🔴"
+        
+        nh = breadth.get("new_highs", 0)
+        nl = breadth.get("new_lows", 0)
+        nh_nl_ratio = nh / (nl if nl > 0 else 1)
+        nh_status = "🟢" if nh_nl_ratio > 1.5 else "🟡" if nh_nl_ratio > 0.7 else "🔴"
+        
+        adv = breadth.get("advances", 0)
+        dec = breadth.get("declines", 0)
+        ad_ratio = adv / (dec if dec > 0 else 1)
+        ad_status = "🟢" if ad_ratio > 1.2 else "🟡" if ad_ratio > 0.8 else "🔴"
+        
+        verdict = breadth.get("verdict", "NEUTRAL")
+        v_emoji = "✅ GREEN" if verdict == "GREEN" else "⚠️ CAUTION" if verdict == "CAUTION" else "⚖️ NEUTRAL"
+
+        breadth_lines = [
+            f"\n📊 <b>BREADTH HEALTH: {v_emoji}</b>",
+            f"• VIX: <code>{vix if vix else 'N/A'}</code> {vix_status}",
+            f"• NH/NL: <code>{nh}/{nl}</code> {nh_status} | A/D: <code>{adv}/{dec}</code> {ad_status}",
+        ]
+        pc = breadth.get("put_call")
+        if pc: breadth_lines[-1] += f" | P/C: <code>{pc:.2f}</code>"
 
     # Intentar obtener datos de Gamma/DarkPools
     gamma_data = fetch_gamma_data()
@@ -546,15 +574,20 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
         f"• Universe: <code>{snapshot.get('universe_size', 0)}</code>",
         f"• Signals: <code>{len(signals)}</code>",
     ]
+    
+    if breadth_lines:
+        lines.extend(breadth_lines)
 
     if gamma_str:
         lines.append(gamma_str)
 
     hot_sectors = _build_hot_sectors(date, top_n=5)
+    hot_sector_order = {}
     if hot_sectors:
         lines.append("\n🔥 <b>HOT SECTORS</b>")
-        for row in hot_sectors:
+        for idx, row in enumerate(hot_sectors):
             etf = row['sector_etf']
+            hot_sector_order[etf] = idx
             name = html.escape(sector_names.get(etf, ""))
             lines.append(
                 f"• <b>{etf} {name}</b> | RS {row.get('rs', 0):.1%} | S1 {'✓' if row.get('tradeable') else '✗'}"
@@ -567,27 +600,32 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
 
     def _get_tv_link(ticker):
         ticker_esc = html.escape(str(ticker))
-        # Usar link de símbolos para que TradingView resuelva el exchange (NASDAQ/NYSE) automáticamente
         return f'<a href="https://www.tradingview.com/symbols/{ticker_esc}/">TradingView</a>'
 
     def _estado_simple(data):
         if data.get("_display_status") == "warn":
             return "⚠ Data incompleta"
         
+        waiting = data.get("waiting_for", "OK")
+        reason = data.get("primary_reason", "OK")
+        breakout = data.get("breakout", False)
+        rvol = data.get("rvol")
+        dist = data.get("dist_sma20_pct")
+        
         max_dist = 6.77
         try: max_dist = float(data.get("max_dist_sma20", max_dist))
         except: pass
 
-        if not data.get("breakout") and data.get("ma_stack") and data.get("sector_etf_ok", True):
-            rvol = data.get("rvol")
-            dist = data.get("dist_sma20_pct")
-            if (rvol is None or float(rvol) >= 1.0) and (dist is None or abs(float(dist)) <= max_dist):
-                return "⏳ Breakout"
-        if data.get("breakout") and data.get("dist_sma20_pct") is not None:
-            try:
-                if abs(float(data.get("dist_sma20_pct"))) > max_dist:
-                    return "📉 Consolidar"
-            except: pass
+        # Lógica mejorada según plan
+        if waiting == "OK" and reason == "OK":
+            return "✅ Trigger listo"
+        if reason == "Extendido de SMA20" or (dist is not None and abs(float(dist)) > max_dist):
+            return "📉 Consolidar"
+        if reason == "Falta breakout" or not breakout:
+            return "⏳ Esperar breakout"
+        if reason == "RVOL bajo" or (rvol is not None and float(rvol) < 1.0):
+            return "📡 Esperar volumen"
+        
         return "🔧 Setup incompleto"
 
     buttons = []
@@ -606,59 +644,71 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
         nearest_flow = snapshot.get("nearest_flow") or {}
         flow_data = {r.get("ticker"): r for r in nearest_flow.get("rows", [])}
 
-        nearest_ok = sorted(nearest_ok, key=lambda x: x[1].get("proximity_score", 0), reverse=True)[:top_n]
+        nearest_ok = sorted(nearest_ok, key=lambda x: x[1].get("proximity_score", 0), reverse=True)
         if nearest_ok:
-            lines.append("\n🎯 <b>NEAREST TO SIGNAL</b>")
-            for idx, (ticker, data) in enumerate(nearest_ok, 1):
-                ticker_esc = html.escape(str(ticker))
-                rs = data.get('rs_pct', data.get('score', 0))
-                prox = data.get('proximity_score', 0)
-                brk = data.get('breakout_level', 0)
-                rvol = _fmt_val(data.get('rvol'))
-                dist = _fmt_val(data.get('dist_sma20_pct'), "%")
-                
-                # Estimación de Niveles (Aprox)
-                # Si no hay stop definido, usamos un 5% genérico para el brief
-                entry = float(brk) if brk else data.get('price', 0)
-                sl_approx = entry * 0.95
-                tp1_approx = entry + (entry - sl_approx) * 1.25
-                
-                # Obtener info de flujo (Tendencia)
-                f_row = flow_data.get(ticker, {})
-                drift = f_row.get("rank_drift", 0)
-                if drift == "NEW": trend = "🆕 "
-                else:
-                    try:
-                        dv = int(drift)
-                        trend = "⬆️ " if dv > 0 else "⬇️ " if dv < 0 else "➡️ "
-                    except: trend = "➡️ "
-                
-                prev_rank = f_row.get("previous_rank", "-")
-                
-                # Escapar campos de texto que vienen de diagnostico
-                raw_falta = data.get('primary_reason') or (", ".join(data.get('reasons', [])[:2]) or "OK")
-                falta = html.escape(str(raw_falta))
-                trigger = html.escape(str(data.get('waiting_for', 'OK')))
-                
-                lines.append(
-                    f"• {idx}. {trend}<code>{ticker_esc}</code> (Prev R{prev_rank})\n"
-                    f"  RS: <b>{rs:.0f}</b> | Proximidad: <b>{prox:.0f}</b>\n"
-                    f"  Chart: {_get_tv_link(ticker)}\n"
-                    f"  Estado: {html.escape(_estado_simple(data))}\n"
-                    f"  Break: <code>{entry:.2f}</code> | RVOL: {rvol}\n"
-                    f"  🛡️ SL aprox: <code>{sl_approx:.2f}</code> (-5%)\n"
-                    f"  🎯 TP1 aprox: <code>{tp1_approx:.2f}</code> (1.25R)\n"
-                    f"  Falta: {falta}\n"
-                    f"  Live trigger: <code>{trigger}</code>\n"
-                )
-                
-                # Añadir botón para este ticker
-                if len(buttons) < 5:  # Límite de Telegram para una fila, pero lo haremos en filas separadas
-                    pass # Telegram API limits inline keyboards, we will add them in pairs below
+            lines.append("\n🎯 <b>SECTORES CON CANDIDATOS</b>")
+            
+            # Agrupar por sector
+            by_sector = {}
+            for t, d in nearest_ok[:top_n*2]: # Cogemos un margen mayor para agrupar
+                sec = d.get("sector_etf", "OTHER")
+                if sec not in by_sector: by_sector[sec] = []
+                by_sector[sec].append((t, d))
+            
+            def _sector_sort_key(sec):
+                best_prox = max((d.get("proximity_score", 0) for _, d in by_sector.get(sec, [])), default=0)
+                return (hot_sector_order.get(sec, 99), -best_prox, sec)
 
-            # Crear el teclado inline en filas de 2
+            total_shown = 0
+            for sec in sorted(by_sector.keys(), key=_sector_sort_key):
+                if total_shown >= top_n: break
+                sec_name = sector_names.get(sec, sec)
+                lines.append(f"<b>[{sec} {sec_name}]</b>")
+                
+                for ticker, data in by_sector[sec]:
+                    if total_shown >= top_n: break
+                    total_shown += 1
+                    
+                    ticker_esc = html.escape(str(ticker))
+                    rs = data.get('rs_pct', data.get('score', 0))
+                    prox = data.get('proximity_score', 0)
+                    brk = data.get('breakout_level', 0)
+                    rvol = _fmt_val(data.get('rvol'))
+                    dist_val = data.get('dist_sma20_pct', 0)
+                    dist = _fmt_val(dist_val, "%")
+                    max_dist = _fmt_val(data.get("max_dist_sma20", 6.77), "%")
+                    
+                    htf_badge = " 🔥 HTF" if data.get("htf_candidate") else ""
+                    
+                    entry = float(brk) if brk else data.get('price', 0)
+                    sl_approx = entry * 0.95
+                    tp1_approx = entry + (entry - sl_approx) * 1.25
+                    
+                    f_row = flow_data.get(ticker, {})
+                    drift = f_row.get("rank_drift", 0)
+                    if drift == "NEW": trend = "🆕 "
+                    else:
+                        try:
+                            dv = int(drift)
+                            trend = "⬆️ " if dv > 0 else "⬇️ " if dv < 0 else "➡️ "
+                        except: trend = "➡️ "
+                    
+                    raw_falta = data.get('primary_reason') or (", ".join(data.get('reasons', [])[:2]) or "OK")
+                    falta = html.escape(str(raw_falta))
+                    trigger = html.escape(str(data.get('waiting_for', 'OK')))
+                    
+                    lines.append(
+                        f"• {trend}<code>{ticker_esc}</code>{htf_badge}\n"
+                        f"  RS: <b>{rs:.0f}</b> | Prox: <b>{prox:.0f}</b> | {_get_tv_link(ticker)}\n"
+                        f"  Estado: <b>{html.escape(_estado_simple(data))}</b>\n"
+                        f"  Dist SMA20: {dist} / max {max_dist}\n"
+                        f"  RVOL: {rvol} | Break: <code>{entry:.2f}</code>\n"
+                        f"  Falta: {falta} | Live: <code>{trigger}</code>\n"
+                    )
+
+            # Crear el teclado inline
             row = []
-            for ticker, _ in nearest_ok[:6]: # Max 6 botones para no saturar
+            for ticker, _ in nearest_ok[:6]:
                 row.append({"text": f"🔎 {ticker}", "callback_data": f"detail:{ticker}"})
                 if len(row) == 2:
                     buttons.append(row)
@@ -677,6 +727,7 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
             }
             for ticker, data in nearest_warn[:3]:
                 ticker_esc = html.escape(str(ticker))
+                sec = data.get("sector_etf", "?")
                 q_reasons = data.get('data_quality_reasons', [])
                 if q_reasons:
                     motivo = ", ".join([quality_map.get(r, r) for r in q_reasons[:2]])
@@ -684,14 +735,56 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
                     motivo = ", ".join(data.get('reasons', [])[:2]) or "Incompleto"
                 
                 motivo = html.escape(str(motivo))
-                lines.append(f"• <b>{ticker_esc}</b> (RS {data.get('rs_pct', 0):.0f}) | {motivo}")
-            lines.append("<i>Nota: Vigila OK+Warn; solo promueve con Breakout+RVOL live</i>")
+                lines.append(f"• <b>{ticker_esc}</b> ({sec}) | RS {data.get('rs_pct', 0):.0f} | {motivo}")
+
+        # 2. ALERTA TOP Section
+        if nearest_ok:
+            grouped_all = {}
+            for ticker, data in nearest_ok:
+                grouped_all.setdefault(data.get("sector_etf", "OTHER"), []).append((ticker, data))
+
+            top_sec = sorted(grouped_all.keys(), key=lambda sec: (
+                hot_sector_order.get(sec, 99),
+                -max((d.get("proximity_score", 0) for _, d in grouped_all.get(sec, [])), default=0),
+                sec,
+            ))[0]
+            top_sector_candidates = sorted(
+                grouped_all[top_sec], key=lambda x: x[1].get("proximity_score", 0), reverse=True
+            )
+            top_names = " / ".join(t for t, _ in top_sector_candidates[:3])
+            blocker_counts = {}
+            for _, data in top_sector_candidates:
+                blocker = data.get("primary_reason") or "OK"
+                blocker_counts[blocker] = blocker_counts.get(blocker, 0) + 1
+            blocker = max(blocker_counts, key=blocker_counts.get)
+            action = (
+                f"Esperar {top_sector_candidates[0][1].get('waiting_for', 'trigger live')}"
+                if blocker != "OK" else "Monitorear Breakout live + RVOL"
+            )
+            lines.append(
+                f"\n🚨 <b>ALERTA TOP: Sector {top_sec}</b>\n"
+                f"Candidatos: <code>{html.escape(top_names)}</code>\n"
+                f"Blocker: <b>{html.escape(str(blocker))}</b>\n"
+                f"Acción: <b>{html.escape(str(action))}</b>"
+            )
+
+            ready_candidates = [
+                (t, d) for t, d in nearest_ok
+                if d.get("sector_etf", "OTHER") != top_sec and _estado_simple(d) == "✅ Trigger listo"
+            ]
+            if ready_candidates:
+                ready_ticker, ready_data = ready_candidates[0]
+                ready_sec = ready_data.get("sector_etf", "OTHER")
+                lines.append(
+                    f"\nSingular: <code>{html.escape(str(ready_ticker))}</code> ({html.escape(str(ready_sec))}) "
+                    f"con trigger OK; validar sector antes de perseguir."
+                )
 
         sector_flow = snapshot.get("sector_flow") or {}
         sf_rows = sector_flow.get("rows") or []
         if sf_rows:
             lines.append("\n🏛️ <b>SECTOR MONEY FLOW</b>")
-            for row in sf_rows[:5]: # Mostrar los top 5 sectores con flujo
+            for row in sf_rows[:5]:
                 etf = row['sector_etf']
                 name = html.escape(sector_names.get(etf, ""))
                 drift = row.get("rank_drift", 0)
@@ -706,28 +799,14 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
             prev_date = html.escape(str(nearest_flow.get("previous_date", "previo")))
             lines.append(f"\n🔁 <b>NEAREST FLOW {prev_date} → {date_esc}</b>")
             state_map = {
-                "SIGNAL": "Signal",
-                "STILL_NEAR": "Sigue top",
-                "DROPPED": "Cayo",
-                "DATA_BAD": "Data mala",
-                "OUT_OF_RADAR": "Fuera radar",
+                "SIGNAL": "Signal", "STILL_NEAR": "Sigue top", "DROPPED": "Cayo",
+                "DATA_BAD": "Data mala", "OUT_OF_RADAR": "Fuera radar",
             }
-
-            def _fmt_delta(v, suffix=""):
-                if v is None:
-                    return "N/A"
-                try:
-                    v = float(v)
-                    sign = "+" if v > 0 else ""
-                    return f"{sign}{v:.2f}{suffix}"
-                except Exception:
-                    return "N/A"
 
             for row in flow_rows[:top_n]:
                 ticker = row.get("ticker", "?")
                 ticker_esc = html.escape(str(ticker))
                 state = html.escape(state_map.get(row.get("state"), str(row.get("state", "-"))))
-                
                 drift = row.get("rank_drift", 0)
                 if drift == "NEW": trend = "🆕 "
                 elif drift == "OUT": trend = "❌ "
@@ -738,21 +817,12 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
                     except: trend = "➡️ "
                 
                 prev_rank = row.get("previous_rank", "-")
-                reason = html.escape(str(row.get("current_reason", "N/A")))
                 waiting = html.escape(str(row.get("current_waiting_for", "N/A")))
-                prox_prev = _fmt_val(row.get("previous_proximity"))
-                prox_curr = _fmt_val(row.get("current_proximity"))
-                px = _fmt_delta(row.get("price_delta_pct"), "%")
-                gap = _fmt_delta(row.get("current_breakout_gap_pct"), "%")
-                dist = _fmt_delta(row.get("current_dist_sma20_pct"), "%")
+                px = row.get("price_delta_pct", "N/A")
                 
-                lines.append(
-                    f"• {trend}<b>{ticker_esc}</b> (Prev R{prev_rank}) | {state} | Px {px}\n"
-                    f"  Prox {prox_prev}→{prox_curr} | Gap break: {gap}\n"
-                    f"  Espera: <code>{waiting}</code> | Falla: {reason}"
-                )
+                lines.append(f"• {trend}<b>{ticker_esc}</b> (Prev R{prev_rank}) | {state} | Wait: <code>{waiting}</code>")
 
-    # Añadir siempre el botón de refresh al final
+    # Botones finales
     buttons.append([
         {"text": "🔄 Refresh", "callback_data": "refresh:market"},
         {"text": "⚡ Regen All", "callback_data": "regenerate:market"}

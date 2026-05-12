@@ -11,7 +11,7 @@ def fetch_gamma_data():
     Scrapes DIX and GEX data from Squeezemetrics CSV.
     Returns a dict with latest values and status.
     """
-    csv_url = "https://squeezemetrics.com/monitor/download/dix.csv"
+    csv_url = "https://squeezemetrics.com/monitor/static/DIX.csv"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }

@@ -114,9 +114,10 @@ def _command_args(text: str) -> tuple[str, str]:
 
 def _send_view(chat_id: str, view: str, arg: str = "", interactive: bool = False) -> None:
     if view == "market":
+        msg_text, msg_buttons = build_market_message(arg or None)
         send_message_with_buttons(
-            build_market_message(arg or None),
-            buttons=REFRESH_BUTTONS["market"],
+            msg_text,
+            buttons=msg_buttons if msg_buttons else REFRESH_BUTTONS["market"],
             chat_id=chat_id,
         )
         return
@@ -255,9 +256,10 @@ def _handle_message(update: dict) -> None:
             )
             return
         if command == "market":
+            msg_text, msg_buttons = build_market_message(arg or None)
             send_message_with_buttons(
-                build_market_message(arg or None),
-                buttons=REFRESH_BUTTONS["market"],
+                msg_text,
+                buttons=msg_buttons if msg_buttons else REFRESH_BUTTONS["market"],
                 chat_id=chat_id,
             )
             return

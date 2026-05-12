@@ -18,6 +18,9 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from scripts.paper_finviz import run_pre
 from src.utils.telegram_client import send_message_with_buttons
 from src.utils.terminal_gui import build_telegram_brief, print_terminal_brief
+from scripts.generate_radar_rotation import get_radar_data, format_radar_text
+from src.data.candidate_tracker import CandidateTracker
+from src.data.sector_cohort import SectorCohortManager
 
 OUT_DIR = PROJECT_ROOT / "outputs" / "telegram_monitor"
 
@@ -30,61 +33,16 @@ def _save(date: str, name: str, payload: dict) -> Path:
     return path
 
 
-def build_brief(snapshot: dict) -> str:
-    signals = snapshot.get("signals", [])
-    regime_ok = snapshot.get("regime_ok", False)
-    date = snapshot.get("date", "n/a")
-
-    lines = [
-        f"🚀 <b>SIGNAL ALERTS | {date}</b>",
-        f"📊 <b>Stats:</b>",
-        f"• Regime: <b>{'OK' if regime_ok else 'BLOCKED'}</b>",
-        f"• Universe: <code>{snapshot.get('universe_size', 0)}</code>",
-        f"• Signals: <code>{len(signals)}</code>",
-        f"• Pages OK: <code>{snapshot.get('finviz_pages_ok', 0)}</code>",
-    ]
-
-    if signals:
-        lines.append("\n🔥 <b>TOP CANDIDATES:</b>")
-        # Mostrar los top 5 señales con detalles
-        for s in signals[:5]:
-            ticker = s.get("ticker", "?")
-            price = s.get("entry_price", 0)
-            score = s.get("score", 0)
-            rvol = s.get("rvol", 1.0)
-            dv = s.get("dollar_volume_m", 0)
-
-            lines.append(
-                f"⭐ <b>{ticker}</b> (Score: {score:.1f})\n"
-                f"   Price: ${price:.2f} | RVOL: {rvol:.1f}x | DV: {int(dv)}M"
-            )
-
-        lines.append("\n📋 <b>SIGNAL TABLE:</b>")
-        lines.append("<code>Ticker   Score  Price   RVOL</code>")
-        lines.append("<code>------- ------ -------- ----</code>")
-        for s in signals[:10]:
-            ticker = s.get("ticker", "?")[:7].ljust(7)
-            score = f"{s.get('score', 0):.1f}".center(6)
-            price = f"{s.get('entry_price', 0):.2f}".rjust(8)
-            rvol = f"{s.get('rvol', 1.0):.1f}".rjust(4)
-            lines.append(f"<code>{ticker} {score} {price} {rvol}</code>")
-    else:
-        lines.append("\nNo confirmed signals today.")
-
-    watchlist_scored = snapshot.get("watchlist_scored", {})
-    if watchlist_scored:
-        sig_tickers = {s.get("ticker") for s in signals}
-        watchlist = [(t, score) for t, score in watchlist_scored.items() if t not in sig_tickers]
-        watchlist.sort(key=lambda x: x[1], reverse=True)
-
-        if watchlist:
-            lines.append("\n🔭 <b>WATCHLIST (Top RS):</b>")
-            formatted = [f"{t}:{int(score)}" for t, score in watchlist[:10]]
-            lines.append(f"<code>{', '.join(formatted)}</code>")
-            if len(watchlist) > 10:
-                lines.append(f"<i>...and {len(watchlist) - 10} more</i>")
-
-    return "\n".join(lines)
+def refresh_cohort_data(date: str) -> None:
+    """Populates candidate_state and sector_cohort for the given date."""
+    try:
+        tracker = CandidateTracker()
+        tracker.populate_day(date)
+        
+        manager = SectorCohortManager()
+        manager.calculate_day(date)
+    except Exception as e:
+        print(f"⚠️ Error refreshing cohort data: {e}")
 
 
 def build_prealerts(snapshot: dict) -> dict:
@@ -101,7 +59,10 @@ def build_prealerts(snapshot: dict) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Finviz monitor")
     parser.add_argument("--date", default=None)
+    parser.add_argument("--cohort-mode", choices=["off", "shadow", "active"], default="shadow")
+    parser.add_argument("--skip-cohort-refresh", action="store_true")
     args = parser.parse_args()
+    
     date = args.date or datetime.now().strftime("%Y-%m-%d")
 
     snapshot = run_pre(date, drift_override=100.0)
@@ -110,11 +71,91 @@ def main() -> None:
         _save(date, "market_status.json", payload)
         return
 
-    brief = build_telegram_brief(snapshot)
+    # 🧭 RADAR ROTATION / COHORT MOMENTUM
+    radar_payload = {}
+    radar_text = ""
+    effective_date = date # Use the date we are processing
+    
+    if args.cohort_mode != "off":
+        if not args.skip_cohort_refresh:
+            refresh_cohort_data(effective_date)
+        
+        radar_payload = get_radar_data(effective_date)
+        if radar_payload:
+            radar_text = format_radar_text(radar_payload)
+            _save(date, "radar_rotation.json", radar_payload)
+            
+            # ── Cohort Priority Ranking ──────────────────────────────────────────────
+            # Edge validado (sandbox): +0.62% en 10d (p=0.024)
+            # Sectores donde aplica: XLE, XLI, XLV, XLY, XLF, XLRE
+            # Sectores donde NO aplica: XLK, XLC (growth/tech invierten el efecto)
+            COHORT_POSITIVE_SECTORS = {"XLE","XLI","XLV","XLY","XLF","XLRE","XLB","XLU"}
+            COHORT_NEGATIVE_SECTORS = {"XLK","XLC","XLP"}  # no penalizar, no priorizar
+
+            signals = snapshot.get("signals", [])
+            blocked_tickers = []     # sectores con delta < 0 en sectores ciclicos
+            boosted_tickers = []     # sectores con delta > 0 en sectores ciclicos
+
+            sector_deltas = {s["sector_etf"]: s["score_delta_5d"] for s in radar_payload.get("sectors", [])}
+
+            from src.utils.sector_rotation import SECTOR_MAP
+            tracker = CandidateTracker()
+
+            for s in signals:
+                ticker = s.get("ticker")
+                etf = SECTOR_MAP.get(ticker)
+                if not etf:
+                    try:
+                        conn = tracker.get_connection()
+                        res = conn.execute(
+                            "SELECT sector_etf FROM candidate_state WHERE ticker=? ORDER BY date DESC LIMIT 1",
+                            (ticker,)).fetchone()
+                        conn.close()
+                        if res: etf = res[0]
+                    except Exception:
+                        pass
+
+                if etf:
+                    delta = sector_deltas.get(etf, 0)
+                    s["sector_etf"]   = etf
+                    s["cohort_delta"] = round(delta, 2)
+                    if etf in COHORT_POSITIVE_SECTORS:
+                        if delta < 0:
+                            blocked_tickers.append(f"{ticker} ({etf} {delta:+.1f})")
+                            s["cohort_priority"] = "LOW"
+                        elif delta > 2:
+                            boosted_tickers.append(f"{ticker} ({etf} {delta:+.1f})")
+                            s["cohort_priority"] = "HIGH"
+                        else:
+                            s["cohort_priority"] = "NEUTRAL"
+                    else:
+                        s["cohort_priority"] = "NEUTRAL"  # growth: no ajustar
+
+            # Reordenar señales: HIGH primero, luego NEUTRAL, LOW al final
+            priority_order = {"HIGH": 0, "NEUTRAL": 1, "LOW": 2}
+            signals.sort(key=lambda x: priority_order.get(x.get("cohort_priority","NEUTRAL"), 1))
+            snapshot["signals"] = signals
+
+            if boosted_tickers:
+                radar_text += f"\n\n🚀 *COHORT BOOST (sector acelerando)*\n{', '.join(boosted_tickers)}"
+            if blocked_tickers:
+                radar_text += f"\n\n🛡️ *SHADOW BLOCKS (sector frenando)*\n{', '.join(blocked_tickers)}"
+            radar_payload["shadow_blocked"] = blocked_tickers
+            radar_payload["cohort_boosted"] = boosted_tickers
+
+    brief, buttons = build_telegram_brief(snapshot)
+    
+    # Append Radar Rotation to Telegram brief
+    if radar_text:
+        brief += "\n" + "-"*30 + "\n" + radar_text
+
     prealerts = build_prealerts(snapshot)
+    
+    # Update market_status with radar info
+    snapshot["radar_rotation_shadow"] = radar_payload
 
     _save(date, "market_status.json", snapshot)
-    _save(date, "premarket_brief.json", {"date": date, "brief": brief})
+    _save(date, "premarket_brief.json", {"date": date, "brief": brief, "buttons": buttons})
     _save(date, "prealerts.json", prealerts)
     _save(
         date,
@@ -131,7 +172,7 @@ def main() -> None:
     if monitor_chat_id:
         send_message_with_buttons(
             brief,
-            buttons=[[{"text": "Refresh", "callback_data": "refresh:market"}]],
+            buttons=buttons,
             chat_id=monitor_chat_id,
         )
 
