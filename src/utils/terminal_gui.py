@@ -523,29 +523,39 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
     # 1. Breadth Health Section
     breadth_lines = []
     if breadth:
+        data_status = breadth.get("data_status", "OK")
         vix = breadth.get("vix")
         vix_status = "🟢" if (vix and vix < 20) else "🟡" if (vix and vix < 30) else "🔴"
         
-        nh = breadth.get("new_highs", 0)
-        nl = breadth.get("new_lows", 0)
-        nh_nl_ratio = nh / (nl if nl > 0 else 1)
-        nh_status = "🟢" if nh_nl_ratio > 1.5 else "🟡" if nh_nl_ratio > 0.7 else "🔴"
-        
-        adv = breadth.get("advances", 0)
-        dec = breadth.get("declines", 0)
-        ad_ratio = adv / (dec if dec > 0 else 1)
-        ad_status = "🟢" if ad_ratio > 1.2 else "🟡" if ad_ratio > 0.8 else "🔴"
-        
-        verdict = breadth.get("verdict", "NEUTRAL")
-        v_emoji = "✅ GREEN" if verdict == "GREEN" else "⚠️ CAUTION" if verdict == "CAUTION" else "⚖️ NEUTRAL"
+        if data_status == "STALE" or breadth.get("sample_size", 0) == 0:
+            breadth_lines = [
+                f"\n📊 <b>BREADTH HEALTH: ⚪ N/A</b>",
+                f"• VIX: <code>{vix if vix else 'N/A'}</code> {vix_status}",
+                f"• Status: <code>DATA STALE (0/0)</code> ⚠️",
+            ]
+        else:
+            nh = breadth.get("new_highs", 0)
+            nl = breadth.get("new_lows", 0)
+            nh_nl_ratio = nh / (nl if nl > 0 else 1)
+            nh_status = "🟢" if nh_nl_ratio > 1.5 else "🟡" if nh_nl_ratio > 0.7 else "🔴"
+            
+            adv = breadth.get("advances", 0)
+            dec = breadth.get("declines", 0)
+            ad_ratio = adv / (dec if dec > 0 else 1)
+            ad_status = "🟢" if ad_ratio > 1.2 else "🟡" if ad_ratio > 0.8 else "🔴"
+            
+            verdict = breadth.get("verdict", "NEUTRAL")
+            v_emoji = "✅ GREEN" if verdict == "GREEN" else "⚠️ CAUTION" if verdict == "CAUTION" else "⚖️ NEUTRAL"
+            sample = breadth.get("sample_size", 0)
 
-        breadth_lines = [
-            f"\n📊 <b>BREADTH HEALTH: {v_emoji}</b>",
-            f"• VIX: <code>{vix if vix else 'N/A'}</code> {vix_status}",
-            f"• NH/NL: <code>{nh}/{nl}</code> {nh_status} | A/D: <code>{adv}/{dec}</code> {ad_status}",
-        ]
-        pc = breadth.get("put_call")
-        if pc: breadth_lines[-1] += f" | P/C: <code>{pc:.2f}</code>"
+            breadth_lines = [
+                f"\n📊 <b>BREADTH HEALTH: {v_emoji}</b>",
+                f"• VIX: <code>{vix if vix else 'N/A'}</code> {vix_status}",
+                f"• NH/NL: <code>{nh}/{nl}</code> {nh_status} | A/D: <code>{adv}/{dec}</code> {ad_status}",
+                f"• Sample: <code>{sample} tickers</code>",
+            ]
+            pc = breadth.get("put_call")
+            if pc: breadth_lines[-1] += f" | P/C: <code>{pc:.2f}</code>"
 
     # Intentar obtener datos de Gamma/DarkPools
     gamma_data = fetch_gamma_data()
@@ -645,12 +655,13 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
         flow_data = {r.get("ticker"): r for r in nearest_flow.get("rows", [])}
 
         nearest_ok = sorted(nearest_ok, key=lambda x: x[1].get("proximity_score", 0), reverse=True)
+        rendered_tickers = []
         if nearest_ok:
             lines.append("\n🎯 <b>SECTORES CON CANDIDATOS</b>")
             
             # Agrupar por sector
             by_sector = {}
-            for t, d in nearest_ok[:top_n*2]: # Cogemos un margen mayor para agrupar
+            for t, d in nearest_ok: # Cogemos todos para agrupar, limitamos al renderizar
                 sec = d.get("sector_etf", "OTHER")
                 if sec not in by_sector: by_sector[sec] = []
                 by_sector[sec].append((t, d))
@@ -665,9 +676,10 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
                 sec_name = sector_names.get(sec, sec)
                 lines.append(f"<b>[{sec} {sec_name}]</b>")
                 
-                for ticker, data in by_sector[sec]:
+                for ticker, data in sorted(by_sector[sec], key=lambda x: x[1].get("proximity_score", 0), reverse=True):
                     if total_shown >= top_n: break
                     total_shown += 1
+                    rendered_tickers.append(ticker)
                     
                     ticker_esc = html.escape(str(ticker))
                     rs = data.get('rs_pct', data.get('score', 0))
@@ -693,8 +705,14 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
                             trend = "⬆️ " if dv > 0 else "⬇️ " if dv < 0 else "➡️ "
                         except: trend = "➡️ "
                     
-                    raw_falta = data.get('primary_reason') or (", ".join(data.get('reasons', [])[:2]) or "OK")
-                    falta = html.escape(str(raw_falta))
+                    # Bloqueos combinados
+                    reasons = data.get('reasons', [])
+                    if not reasons:
+                        falta = "OK"
+                    else:
+                        falta = ", ".join(reasons[:2])
+                    
+                    falta = html.escape(str(falta))
                     trigger = html.escape(str(data.get('waiting_for', 'OK')))
                     
                     lines.append(
@@ -703,12 +721,12 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
                         f"  Estado: <b>{html.escape(_estado_simple(data))}</b>\n"
                         f"  Dist SMA20: {dist} / max {max_dist}\n"
                         f"  RVOL: {rvol} | Break: <code>{entry:.2f}</code>\n"
-                        f"  Falta: {falta} | Live: <code>{trigger}</code>\n"
+                        f"  Bloqueos: {falta} | Live: <code>{trigger}</code>\n"
                     )
 
             # Crear el teclado inline
             row = []
-            for ticker, _ in nearest_ok[:6]:
+            for ticker in rendered_tickers[:6]:
                 row.append({"text": f"🔎 {ticker}", "callback_data": f"detail:{ticker}"})
                 if len(row) == 2:
                     buttons.append(row)
@@ -737,61 +755,72 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
                 motivo = html.escape(str(motivo))
                 lines.append(f"• <b>{ticker_esc}</b> ({sec}) | RS {data.get('rs_pct', 0):.0f} | {motivo}")
 
-        # 2. ALERTA TOP Section
-        if nearest_ok:
-            grouped_all = {}
-            for ticker, data in nearest_ok:
-                grouped_all.setdefault(data.get("sector_etf", "OTHER"), []).append((ticker, data))
+        # 2. ALERTA TOP Section (basada solo en lo renderizado)
+        if rendered_tickers:
+            rendered_data = [(t, watchlist_detail[t]) for t in rendered_tickers]
+            grouped_rendered = {}
+            for t, d in rendered_data:
+                grouped_rendered.setdefault(d.get("sector_etf", "OTHER"), []).append((t, d))
 
-            top_sec = sorted(grouped_all.keys(), key=lambda sec: (
+            top_sec = sorted(grouped_rendered.keys(), key=lambda sec: (
                 hot_sector_order.get(sec, 99),
-                -max((d.get("proximity_score", 0) for _, d in grouped_all.get(sec, [])), default=0),
+                -max((d.get("proximity_score", 0) for _, d in grouped_rendered.get(sec, [])), default=0),
                 sec,
             ))[0]
             top_sector_candidates = sorted(
-                grouped_all[top_sec], key=lambda x: x[1].get("proximity_score", 0), reverse=True
+                grouped_rendered[top_sec], key=lambda x: x[1].get("proximity_score", 0), reverse=True
             )
             top_names = " / ".join(t for t, _ in top_sector_candidates[:3])
+            
+            # Blocker predominante
             blocker_counts = {}
             for _, data in top_sector_candidates:
                 blocker = data.get("primary_reason") or "OK"
                 blocker_counts[blocker] = blocker_counts.get(blocker, 0) + 1
-            blocker = max(blocker_counts, key=blocker_counts.get)
+            main_blocker = max(blocker_counts, key=blocker_counts.get)
+            
             action = (
                 f"Esperar {top_sector_candidates[0][1].get('waiting_for', 'trigger live')}"
-                if blocker != "OK" else "Monitorear Breakout live + RVOL"
+                if main_blocker != "OK" else "Monitorear Breakout live + RVOL"
             )
             lines.append(
                 f"\n🚨 <b>ALERTA TOP: Sector {top_sec}</b>\n"
                 f"Candidatos: <code>{html.escape(top_names)}</code>\n"
-                f"Blocker: <b>{html.escape(str(blocker))}</b>\n"
+                f"Blocker: <b>{html.escape(str(main_blocker))}</b>\n"
                 f"Acción: <b>{html.escape(str(action))}</b>"
             )
-
-            ready_candidates = [
-                (t, d) for t, d in nearest_ok
-                if d.get("sector_etf", "OTHER") != top_sec and _estado_simple(d) == "✅ Trigger listo"
-            ]
-            if ready_candidates:
-                ready_ticker, ready_data = ready_candidates[0]
-                ready_sec = ready_data.get("sector_etf", "OTHER")
-                lines.append(
-                    f"\nSingular: <code>{html.escape(str(ready_ticker))}</code> ({html.escape(str(ready_sec))}) "
-                    f"con trigger OK; validar sector antes de perseguir."
-                )
 
         sector_flow = snapshot.get("sector_flow") or {}
         sf_rows = sector_flow.get("rows") or []
         if sf_rows:
             lines.append("\n🏛️ <b>SECTOR MONEY FLOW</b>")
+            flow_secs = []
             for row in sf_rows[:5]:
                 etf = row['sector_etf']
+                flow_secs.append(etf)
                 name = html.escape(sector_names.get(etf, ""))
                 drift = row.get("rank_drift", 0)
                 trend = "🔥 ⬆️" if drift > 0 else "❄️ ⬇️" if drift < 0 else "➡️"
                 rs_drift = row.get("rs_drift", 0)
                 rs_txt = f"{rs_drift:+.2%}" if rs_drift != 0 else "="
                 lines.append(f"• <b>{etf} {name}</b> | {trend} | RS {rs_txt}")
+            
+            # Bloque compacto: CANDIDATOS GENERALES POR FLOW
+            all_detail = watchlist_detail
+            gen_lines = []
+            for etf in flow_secs:
+                sec_candidates = [
+                    t for t, d in all_detail.items() 
+                    if d.get("sector_etf") == etf and t not in rendered_tickers
+                    and d.get("_display_status") == "ok"
+                ]
+                if sec_candidates:
+                    top_gen = sorted(sec_candidates, key=lambda t: all_detail[t].get("proximity_score", 0), reverse=True)[:3]
+                    gen_lines.append(f"• {etf}: " + ", ".join(f"<code>{t}</code>" for t in top_gen))
+            
+            if gen_lines:
+                lines.append("\n🔭 <b>CANDIDATOS GENERALES POR FLOW</b>")
+                lines.extend(gen_lines)
 
         nearest_flow = snapshot.get("nearest_flow") or {}
         flow_rows = nearest_flow.get("rows") or []

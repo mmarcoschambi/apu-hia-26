@@ -439,7 +439,19 @@ def _enrich_watchlist_detail(engine, raw_detail: dict, fallback_detail: dict) ->
     enriched = {}
     raw_detail = raw_detail or {}
     fallback_detail = fallback_detail or {}
-    tickers = set(raw_detail) | set(fallback_detail)
+    tickers = list(set(raw_detail) | set(fallback_detail))
+
+    # Lookup robusto de sectores desde DB si faltan
+    db_sectors = {}
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        placeholders = ",".join(["?"] * len(tickers))
+        query = f"SELECT ticker, sector_etf FROM candidate_state WHERE ticker IN ({placeholders}) ORDER BY date DESC"
+        rows = conn.execute(query, tickers).fetchall()
+        for t, s in rows:
+            if t not in db_sectors: db_sectors[t] = s
+        conn.close()
+    except: pass
 
     for ticker in tickers:
         detail = dict(raw_detail.get(ticker) or {})
@@ -449,8 +461,13 @@ def _enrich_watchlist_detail(engine, raw_detail: dict, fallback_detail: dict) ->
             if key not in detail or detail.get(key) in (None, ""):
                 detail[key] = value
 
-        if not detail.get("sector_etf"):
-            detail["sector_etf"] = SECTOR_MAP.get(ticker)
+        # Cadena de fallback sectorial
+        sec = detail.get("sector_etf")
+        if not sec: sec = db_sectors.get(ticker)
+        if not sec: sec = SECTOR_MAP.get(ticker)
+        
+        detail["sector_etf"] = sec or "OTHER"
+        
         if "max_dist_sma20" not in detail or detail.get("max_dist_sma20") is None:
             detail["max_dist_sma20"] = float(getattr(engine, "max_dist_sma20", 6.77))
         if "htf_candidate" not in detail:
@@ -466,24 +483,38 @@ def calculate_breadth_from_engine(engine, date_str):
         close = engine.close
         if close is None or close.empty: return {}
         
-        # Advance/Decline
-        if len(close) < 2: return {}
-        chg = close.iloc[-1] / close.iloc[-2] - 1
+        # Validar tickers con datos frescos (ultimas 2 velas no nulas)
+        valid_mask = close.iloc[-2:].notna().all()
+        valid_close = close.loc[:, valid_mask]
+        sample_size = int(valid_mask.sum())
+        
+        if sample_size == 0:
+            ctx = get_market_context_live(db_path=DB_PATH, as_of=date_str)
+            return {
+                "vix": round(ctx.get("vix"), 2) if ctx.get("vix") else None,
+                "sample_size": 0,
+                "data_status": "STALE",
+                "verdict": "N/A"
+            }
+
+        # Advance/Decline sobre validos
+        chg = valid_close.iloc[-1] / valid_close.iloc[-2] - 1
         advances = int((chg > 0).sum())
         declines = int((chg < 0).sum())
         
         # New Highs/Lows (252 bars)
-        lookback = min(len(close)-1, 252)
-        high_252 = close.rolling(lookback, min_periods=lookback//2).max().shift(1).iloc[-1]
-        low_252 = close.rolling(lookback, min_periods=lookback//2).min().shift(1).iloc[-1]
+        lookback = min(len(valid_close)-1, 252)
+        high_252 = valid_close.rolling(lookback, min_periods=lookback//2).max().shift(1).iloc[-1]
+        low_252 = valid_close.rolling(lookback, min_periods=lookback//2).min().shift(1).iloc[-1]
         
-        curr_price = close.iloc[-1]
+        curr_price = valid_close.iloc[-1]
         new_highs = int((curr_price >= high_252).sum())
         new_lows = int((curr_price <= low_252).sum())
         
         # VIX
         ctx = get_market_context_live(db_path=DB_PATH, as_of=date_str)
         vix = ctx.get("vix")
+        if vix: vix = round(float(vix), 2)
         
         # Verdict logic
         nh_nl_ratio = new_highs / (new_lows if new_lows > 0 else 1)
@@ -509,7 +540,9 @@ def calculate_breadth_from_engine(engine, date_str):
             "declines": declines,
             "verdict": verdict,
             "nh_nl_ratio": round(nh_nl_ratio, 2),
-            "ad_ratio": round(ad_ratio, 2)
+            "ad_ratio": round(ad_ratio, 2),
+            "sample_size": sample_size,
+            "data_status": "OK" if sample_size > len(close.columns) * 0.5 else "LOW_SAMPLE"
         }
     except Exception as e:
         logger.error(f"Error calculating breadth: {e}")
