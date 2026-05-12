@@ -148,7 +148,8 @@ def build_watchlist_message(date: str | None = None, limit: int = 10) -> str:
         return "⚠️ <b>WATCHLIST</b>\nNo prealerts available yet."
         
     lines = [
-        f"📋 <b>WATCHLIST | {resolved}</b>", 
+        f"🧭 <b>MANUAL REVIEW | WATCHLIST | {resolved}</b>", 
+        f"<i>(NO AUTO ENTRY - Validate Radar first)</i>\n",
         f"<i>Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</i>\n",
         f"🔍 Candidates: <code>{len(signals)}</code>"
     ]
@@ -176,7 +177,8 @@ def build_monitor_signals_message(date: str | None = None, limit: int = 5) -> st
         return "⚠️ <b>SIGNALS</b>\nNo monitor signals available yet."
         
     lines = [
-        f"🛰 <b>MONITOR SIGNALS | {resolved}</b>", 
+        f"🧭 <b>MANUAL REVIEW | MONITOR SIGNALS | {resolved}</b>", 
+        f"<i>(NO AUTO ENTRY - Validate Radar first)</i>\n",
         f"<i>Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</i>\n",
         f"📡 Candidates: <code>{len(signals)}</code>"
     ]

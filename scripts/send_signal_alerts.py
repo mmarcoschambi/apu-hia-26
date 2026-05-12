@@ -194,12 +194,15 @@ def build_alert_text(
     return "\n".join(lines)
 
 
+from src.utils.sector_rotation import get_ticker_sector_mapping
+
 def build_telegram_html(
     df: pd.DataFrame,
     date: str,
     min_score: float = 0.0,
     top_n: int = 0,
     summary_only: bool = False,
+    show_disclaimer: bool = True,
 ) -> str:
     """
     Genera un mensaje formateado en HTML para Telegram, más visual que el texto plano.
@@ -209,14 +212,22 @@ def build_telegram_html(
     # Header
     title = f"🚀 <b>SIGNAL ALERTS | {date}</b>"
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    header = f"{title}\n<i>Generated: {timestamp}</i>\n"
+    disclaimer = ""
+    if show_disclaimer:
+        disclaimer = "\n⚠️ <b>MANUAL REVIEW:</b> <i>Raw finviz_live candidates; validar Radar Sectorizado + Live Trigger antes de operar.</i>\n"
+    
+    header = f"{title}\n<i>Generated: {timestamp}</i>\n{disclaimer}"
 
     if df.empty:
         return f"{header}\n⚠️ <b>No signals match criteria</b>"
 
-    df_filtered = df[df["entry_score"] >= min_score]
+    df_filtered = df[df["entry_score"] >= min_score].copy()
     if df_filtered.empty:
         return f"{header}\n⚠️ <b>No signals above score {min_score}</b>"
+
+    # Resolve sectors
+    tickers = df_filtered["ticker"].unique().tolist()
+    sector_map = get_ticker_sector_mapping(tickers)
 
     # Market Regime (usando el primer registro como referencia del SPY)
     spy_above = df_filtered.iloc[0].get("spy_above_sma200", None)
@@ -254,18 +265,50 @@ def build_telegram_html(
     if summary_only:
         return header + stats + agents_summary
 
+    # Helper para Dollar Volume Fallback
+    def _get_dv(row):
+        dv = row.get("dollar_vol_M")
+        if dv is None or dv == 0:
+            dv = row.get("dollar_volume_m")
+        if dv is None or dv == 0:
+            # Fallback calculation: price * avg_volume_20d / 1e6
+            price = row.get("entry_price", 0)
+            avg_vol = row.get("avg_volume_20d", 0)
+            dv = (price * avg_vol) / 1e6
+        return dv or 0
+
+    # Helper para Precio Sospechoso
+    def _is_suspicious(row):
+        price = row.get("entry_price", 0)
+        close = row.get("close", 0)
+        if close > 0:
+            diff = abs(price - close) / close
+            if diff > 0.15: # > 15% diff vs close
+                return True
+        return False
+
     # Top Candidates (con emojis y negritas)
     high_score = df_filtered[df_filtered["entry_score"] >= 0.7].head(5)
     top_candidates = ""
     if not high_score.empty:
         top_candidates = "\n🔥 <b>TOP CANDIDATES:</b>\n"
         for _, row in high_score.iterrows():
-            price = row.get("entry_price", 0)
             ticker = row["ticker"]
+            price = row.get("entry_price", 0)
+            price_flag = " ⚠️" if _is_suspicious(row) else ""
+            sec = sector_map.get(ticker, "OTHER")
+            dv = _get_dv(row)
+            
+            # Estado y Blockers
+            waiting = row.get("waiting_for", "OK")
+            blocker = row.get("primary_reason", "")
+            if not blocker and waiting != "OK":
+                blocker = waiting
+            
             top_candidates += (
-                f"⭐ <b>{ticker}</b> (Score: {row['entry_score']:.3f})\n"
-                f"   Price: ${price:.2f} | RVOL: {row.get('rvol', 0):.1f}x | "
-                f"DV: {row.get('dollar_vol_M', 0):.0f}M\n"
+                f"⭐ <b>{ticker}</b> ({sec}) | Score: {row['entry_score']:.3f}{price_flag}\n"
+                f"   Price: ${price:.2f} | Dist20: {row.get('dist_sma20', 0):.1f}% | DV: {dv:.0f}M\n"
+                f"   Status: <b>{waiting}</b> | Blocker: <i>{blocker}</i>\n"
             )
 
     # Signal Table (Monospaced para alineación)
@@ -276,15 +319,18 @@ def build_telegram_html(
 
     table_header = "\n📋 <b>SIGNAL TABLE:</b>\n"
     table_content = "<pre>"
-    table_content += f"{'Ticker':<7} {'Score':<6} {'Price':<8} {'RVOL':<4}\n"
-    table_content += f"{'-' * 7} {'-' * 6} {'-' * 8} {'-' * 4}\n"
+    table_content += f"{'Ticker':<7} {'Score':<6} {'Price':<8} {'Dist20':<7} {'DV':<4}\n"
+    table_content += f"{'-' * 7} {'-' * 6} {'-' * 8} {'-' * 7} {'-' * 4}\n"
 
     for _, row in df_show.iterrows():
+        ticker = row["ticker"]
+        dv = _get_dv(row)
         table_content += (
-            f"{row['ticker']:<7} "
+            f"{ticker:<7} "
             f"{row['entry_score']:<6.3f} "
             f"{row.get('entry_price', 0):<8.2f} "
-            f"{row.get('rvol', 0):<4.1f}\n"
+            f"{row.get('dist_sma20', 0):<7.1f} "
+            f"{dv:<4.0f}\n"
         )
     table_content += "</pre>"
 
@@ -303,6 +349,7 @@ def build_telegram_html(
         + table_content
         + footer
     )
+
 
 
 def export_md(df: pd.DataFrame, date: str, output_dir: Path) -> Path:
@@ -501,6 +548,7 @@ def main():
                     min_score=args.auto_threshold,
                     top_n=3,
                     summary_only=False,
+                    show_disclaimer=False,
                 )
                 auto_html = auto_html.replace(
                     "🚀 <b>SIGNAL ALERTS |", "🚀 <b>PRE-MARKET AUTO |"

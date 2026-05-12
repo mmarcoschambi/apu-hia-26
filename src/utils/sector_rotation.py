@@ -40,6 +40,7 @@ SECTOR_MAP = {
     'NET': 'XLK', 'PLTR': 'XLK', 'MSTR': 'XLK', 'STX': 'XLK', 'WDC': 'XLK',
     'ASML': 'XLK', 'TSM': 'XLK', 'ARM': 'XLK', 'FSLR': 'XLK', 'ENPH': 'XLK',
     'ON': 'XLK', 'NXPI': 'XLK', 'MCHP': 'XLK', 'MPWR': 'XLK', 'SMCI': 'XLK',
+    'CRWD': 'XLK', 'ENTG': 'XLK', 'QBTS': 'XLK', 'ADI': 'XLK',
 
     # Financials
     'JPM': 'XLF', 'BAC': 'XLF', 'WFC': 'XLF', 'GS': 'XLF', 'MS': 'XLF',
@@ -51,7 +52,7 @@ SECTOR_MAP = {
     'MRK': 'XLV', 'TMO': 'XLV', 'ABT': 'XLV', 'DHR': 'XLV', 'CVS': 'XLV',
     'ISRG': 'XLV', 'VRTX': 'XLV', 'REGN': 'XLV', 'NVO': 'XLV', 'ZTS': 'XLV',
     'AMGN': 'XLV', 'GILD': 'XLV', 'BMY': 'XLV', 'SYK': 'XLV', 'BSX': 'XLV',
-    'VKTX': 'XLV', 'TVTX': 'XLV', 'LWLG': 'XLV',
+    'VKTX': 'XLV', 'TVTX': 'XLV', 'LWLG': 'XLV', 'BIIB': 'XLV', 'CI': 'XLV',
 
     # Consumer Discretionary (Growth)
     'AMZN': 'XLY', 'HD': 'XLY', 'NKE': 'XLY', 'MCD': 'XLY', 'SBUX': 'XLY',
@@ -71,7 +72,7 @@ SECTOR_MAP = {
     # Industrials
     'BA': 'XLI', 'CAT': 'XLI', 'GE': 'XLI', 'HON': 'XLI', 'UPS': 'XLI',
     'UNP': 'XLI', 'DE': 'XLI', 'MMM': 'XLI', 'LMT': 'XLI', 'RTX': 'XLI',
-    'PWR': 'XLI', 'ETN': 'XLI', 'VRT': 'XLI',
+    'PWR': 'XLI', 'ETN': 'XLI', 'VRT': 'XLI', 'BE': 'XLI',
 
     # Consumer Staples
     'PG': 'XLP', 'KO': 'XLP', 'PEP': 'XLP', 'WMT': 'XLP', 'COST': 'XLP',
@@ -80,26 +81,30 @@ SECTOR_MAP = {
     # Materials
     'LIN': 'XLB', 'APD': 'XLB', 'ECL': 'XLB', 'DD': 'XLB', 'NEM': 'XLB',
     'FCX': 'XLB', 'NUE': 'XLB', 'SHW': 'XLB', 'VALE': 'XLB', 'AA': 'XLB',
+    'AU': 'XLB',
 
     # Utilities
     'NEE': 'XLU', 'DUK': 'XLU', 'SO': 'XLU', 'D': 'XLU', 'AEP': 'XLU',
     'VST': 'XLU', 'CEG': 'XLU', 'PEG': 'XLU',
 
     # Real Estate
-    'PLD': 'XLRE', 'AMT': 'XLRE', 'CCI': 'XLRE', 'EQIX': 'XLRE', 'PSA': 'XLRE'
+    'PLD': 'XLRE', 'AMT': 'XLRE', 'CCI': 'XLRE', 'EQIX': 'XLRE', 'PSA': 'XLRE',
+    'ADI': 'XLK'
 }
 SECTOR_ETFS = ['XLK', 'XLF', 'XLV', 'XLE', 'XLY', 'XLP', 'XLI', 'XLB', 'XLRE', 'XLU', 'XLC']
 
 SECTOR_TO_ETF = {
-    'Technology': 'XLK', 'Information Technology': 'XLK',
-    'Financial': 'XLF', 'Financial Services': 'XLF', 'Financials': 'XLF',
-    'Energy': 'XLE', 'Healthcare': 'XLV', 'Health Care': 'XLV',
-    'Industrial': 'XLI', 'Industrials': 'XLI',
-    'Consumer Discretionary': 'XLY', 'Consumer Cyclical': 'XLY',
-    'Consumer Staples': 'XLP', 'Consumer Defensive': 'XLP',
-    'Materials': 'XLB', 'Basic Materials': 'XLB',
-    'Real Estate': 'XLRE', 'Utilities': 'XLU',
-    'Communication Services': 'XLC', 'Services': 'XLY', 'Communication': 'XLC'
+    'Technology': 'XLK', 'Information Technology': 'XLK', 'Software': 'XLK', 'Semiconductors': 'XLK',
+    'Financial': 'XLF', 'Financial Services': 'XLF', 'Financials': 'XLF', 'Banks': 'XLF', 'Capital Markets': 'XLF',
+    'Energy': 'XLE', 'Oil & Gas': 'XLE', 'Energy Equipment': 'XLE',
+    'Healthcare': 'XLV', 'Health Care': 'XLV', 'Biotechnology': 'XLV', 'Pharmaceuticals': 'XLV',
+    'Industrial': 'XLI', 'Industrials': 'XLI', 'Aerospace': 'XLI', 'Machinery': 'XLI',
+    'Consumer Discretionary': 'XLY', 'Consumer Cyclical': 'XLY', 'Retailing': 'XLY', 'Automobiles': 'XLY',
+    'Consumer Staples': 'XLP', 'Consumer Defensive': 'XLP', 'Beverages': 'XLP', 'Food Products': 'XLP',
+    'Materials': 'XLB', 'Basic Materials': 'XLB', 'Chemicals': 'XLB', 'Mining': 'XLB',
+    'Real Estate': 'XLRE', 'Real Estate Investment Trusts': 'XLRE',
+    'Utilities': 'XLU', 'Electric Utilities': 'XLU',
+    'Communication Services': 'XLC', 'Services': 'XLY', 'Communication': 'XLC', 'Entertainment': 'XLC'
 }
 
 def get_ticker_sector_mapping(tickers: List[str]) -> Dict[str, str]:

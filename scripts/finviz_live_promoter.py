@@ -85,6 +85,8 @@ def fetch_live_data(tickers: list[str]) -> pd.DataFrame:
         return pd.DataFrame()
 
 
+from src.utils.sector_rotation import get_ticker_sector_mapping
+
 def promote_candidates(
     date: str, 
     min_rvol: float = 1.5, 
@@ -101,6 +103,9 @@ def promote_candidates(
     watchlist = snapshot.get("watchlist_detail", {})
     if not watchlist:
         return
+
+    # Resolve sectors for all tickers in watchlist
+    sector_map = get_ticker_sector_mapping(list(watchlist.keys()))
 
     # 1. Filtrar candidatos elegibles para monitoreo (OK + WARN)
     candidates = []
@@ -175,6 +180,23 @@ def promote_candidates(
             logger.info(f"🚀 PROMOVIENDO {ticker}: Price={price:.2f} (Break={breakout_lvl}), RVOL={live_rvol:.1f} [{status}]")
             stats["promoted"] += 1
             
+            # Metadata extra para el reporte enriquecido
+            sec = sector_map.get(ticker, "OTHER")
+            dv = (price * (avg_vol_20d or 0)) / 1e6
+            dist_sma20 = detail.get("dist_sma20_pct", 0)
+            waiting = detail.get("waiting_for", "OK")
+            blocker = detail.get("primary_reason", "")
+            if not blocker and waiting != "OK":
+                blocker = waiting
+            
+            # Alerta de precio sospechoso
+            snapshot_price = detail.get("price", 0)
+            price_flag = ""
+            if snapshot_price > 0:
+                diff = abs(price - snapshot_price) / snapshot_price
+                if diff > 0.15: # > 15% diff
+                    price_flag = " ⚠️"
+
             signal = {
                 "ticker": ticker,
                 "agent_name": detail.get("combo", "finviz_live"),
@@ -186,16 +208,23 @@ def promote_candidates(
                 "signal_date": date,
                 "source_universe": "finviz",
                 "decision_source": "finviz_live_promoter",
-                "data_quality_status": status
+                "data_quality_status": status,
+                "sector_etf": sec,
+                "dollar_vol_M": dv,
+                "dist_sma20": dist_sma20,
+                "waiting_for": waiting,
+                "primary_reason": blocker
             }
             new_signals.append(signal)
             
             if send_telegram:
                 msg = (
-                    f"🚀 <b>FINVIZ ALERT: {ticker}</b>\n"
-                    f"Price: ${price:.2f} (Breakout: ${breakout_lvl:.2f})\n"
-                    f"Live RVOL: {live_rvol:.1f}x (fraction: {session_fraction:.2f})\n"
-                    f"Quality: {status.upper()}"
+                    f"🧭 <b>MANUAL REVIEW: {ticker}</b> ({sec})\n"
+                    f"<i>(NO AUTO ENTRY - Validate Radar first)</i>\n\n"
+                    f"Price: <b>${price:.2f}</b>{price_flag} (Break: ${breakout_lvl:.2f})\n"
+                    f"Live RVOL: <b>{live_rvol:.1f}x</b> | Dist20: {dist_sma20:.1f}%\n"
+                    f"DV: {dv:.0f}M | Quality: {status.upper()}\n"
+                    f"Status: <b>{waiting}</b> | Blocker: <i>{blocker}</i>"
                 )
                 shared_telegram_send(msg)
 

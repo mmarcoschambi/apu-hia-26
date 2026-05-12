@@ -46,6 +46,9 @@ class Tier2Metrics:
     rs_ret: Optional[float] = None
     rs_percentile: Optional[float] = None
     sector_etf_dist: Optional[float] = None  # NEW: Distancia del ETF sectorial a su SMA20
+    theme_dist: Optional[float] = None      # NEW: Distancia del tema a su SMA20
+    theme_vs_sector: Optional[float] = None # NEW: Distancia relativa Tema vs Sector ETF
+    theme_rank_pct: Optional[float] = None  # NEW: Percentil del tema dentro del universo temático
     close: float = 0.0
     spy_above_sma50: bool = True
     spy_above_sma200: bool = True
@@ -62,6 +65,9 @@ class Tier2Metrics:
             "rs_ret": self.rs_ret,
             "rs_percentile": self.rs_percentile,
             "sector_etf_dist": self.sector_etf_dist,
+            "theme_dist": self.theme_dist,
+            "theme_vs_sector": self.theme_vs_sector,
+            "theme_rank_pct": self.theme_rank_pct,
             "close": self.close,
             "spy_above_sma50": self.spy_above_sma50,
             "spy_above_sma200": self.spy_above_sma200,
@@ -83,6 +89,7 @@ class SignalDecision:
     screener_reason: str = ""
     signal_type: str = "breakout"
     cost_model: dict = field(default_factory=dict)
+    target_hold_days: int = 20  # NEW: Plan horizon (Fase 1.2)
 
     # Canonical Execution fields
     stop_price: Optional[float] = None
@@ -118,6 +125,7 @@ class SignalDecision:
             "signal_type": self.signal_type,
             "cost_model": self.cost_model,
             "tier2_metrics": self.tier2_metrics.to_dict(),
+            "target_hold_days": self.target_hold_days,
             "stop_price": self.stop_price,
             "tp1_price": self.tp1_price,
             "tp2_price": self.tp2_price,
@@ -145,6 +153,7 @@ class SignalDecision:
             signal_type=d.get("signal_type", "breakout"),
             cost_model=d.get("cost_model", {}),
             tier2_metrics=t2m,
+            target_hold_days=d.get("target_hold_days", 20),
             stop_price=d.get("stop_price"),
             tp1_price=d.get("tp1_price"),
             tp2_price=d.get("tp2_price"),
@@ -288,7 +297,11 @@ def compute_tier2_metrics(
     )
 
 
-def apply_tier2_filters(metrics: Tier2Metrics, t2_cfg: dict) -> tuple[bool, str]:
+def apply_tier2_filters(
+    metrics: Tier2Metrics, 
+    t2_cfg: dict, 
+    target_hold_days: int = 20
+) -> tuple[bool, str]:
     """Evalúa métricas contra umbrales Tier2. Mismo en live y backtest."""
     if metrics.rvol < t2_cfg.get("min_rvol", 0):
         return (
@@ -349,6 +362,47 @@ def apply_tier2_filters(metrics: Tier2Metrics, t2_cfg: dict) -> tuple[bool, str]
         if dist <= threshold:
             return False, f"tier2_fail:sector_etf:dist:{dist:.4f}<={threshold:.4f}"
 
+    # --- THEMATIC GROUP FILTER (NEW) ---
+    if t2_cfg.get("use_theme_group_filter", False):
+        mode = t2_cfg.get("theme_filter_mode", "above_sma20")
+        
+        # PHASE 1.2: Divergence filter only applies to long-term horizons (>= 10 days)
+        if mode == "divergence" and target_hold_days < 10:
+            # Skip filter for short-term setups (transparent pass)
+            pass
+        else:
+            if mode == "above_sma20":
+                dist = metrics.theme_dist
+                threshold = float(t2_cfg.get("theme_dist_threshold", 0.0))
+                if dist is None:
+                    return False, "tier2_fail:theme_group:data_missing"
+                if dist <= threshold:
+                    return False, f"tier2_fail:theme_group:dist:{dist:.4f}<={threshold:.4f}"
+                    
+            elif mode == "vs_sector":
+                vs_sector = metrics.theme_vs_sector
+                if vs_sector is None:
+                    return False, "tier2_fail:theme_group_vs_sector:data_missing"
+                if vs_sector <= 0:
+                    return False, "tier2_fail:theme_group_vs_sector:underperforming"
+                    
+            elif mode == "rank_pct":
+                rank_pct = metrics.theme_rank_pct
+                threshold = float(t2_cfg.get("theme_rank_threshold", 70.0))
+                if rank_pct is None:
+                    return False, "tier2_fail:theme_group_rank:data_missing"
+                if rank_pct < threshold:
+                    return False, f"tier2_fail:theme_group_rank:{rank_pct:.1f}<{threshold:.1f}"
+            
+            elif mode == "divergence":
+                # Theme OK, Sector NOT OK (Variant E validated)
+                dist = metrics.theme_dist
+                sector_dist = metrics.sector_etf_dist
+                if dist is None or sector_dist is None:
+                    return False, "tier2_fail:theme_divergence:data_missing"
+                if not (dist > 0 and sector_dist <= 0):
+                    return False, "tier2_fail:theme_divergence:no_divergence"
+
     return True, "passed"
 
 
@@ -362,6 +416,10 @@ def evaluate_ticker(
     rs_percentile: Optional[float] = None,
     scan_date: Optional[str] = None,
     sector_etf_dist: Optional[float] = None,  # NEW
+    theme_dist: Optional[float] = None,       # NEW
+    theme_vs_sector: Optional[float] = None,  # NEW
+    theme_rank_pct: Optional[float] = None,   # NEW
+    target_hold_days: Optional[int] = None,   # NEW (Fase 1.2)
 ) -> SignalDecision:
     """
     Evaluación canónica de un ticker contra un combo.
@@ -446,6 +504,13 @@ def evaluate_ticker(
 
     metrics = compute_tier2_metrics(df, spy_df)
     metrics.sector_etf_dist = sector_etf_dist  # NEW
+    metrics.theme_dist = theme_dist            # NEW
+    metrics.theme_vs_sector = theme_vs_sector  # NEW
+    metrics.theme_rank_pct = theme_rank_pct    # NEW
+
+    # Horizon lookup (Fase 1.2)
+    if target_hold_days is None:
+        target_hold_days = combo_cfg.get("tier1_strategy", {}).get("target_hold_days", 20)
 
     # Intentar obtener RS Percentile si no se proporcionó uno
     if rs_percentile is not None:
@@ -482,7 +547,7 @@ def evaluate_ticker(
             logger.debug(f"Breakout RS lookup error {ticker}: {e}")
 
     if not skip_tier2:
-        tier2_ok, tier2_reason = apply_tier2_filters(metrics, t2_cfg)
+        tier2_ok, tier2_reason = apply_tier2_filters(metrics, t2_cfg, target_hold_days)
         if not tier2_ok:
             return SignalDecision(
                 ticker=ticker,
@@ -493,6 +558,7 @@ def evaluate_ticker(
                 screener_reason=screener_reason,
                 tier2_metrics=metrics,
                 signal_type=pattern_cfg.get("signal_type", "breakout"),
+                target_hold_days=target_hold_days,
             )
 
     entry_score = round(screener_score / 100.0, 3)
@@ -521,6 +587,7 @@ def evaluate_ticker(
         screener_reason=screener_reason,
         signal_type=pattern_cfg.get("signal_type", "breakout"),
         cost_model=cost_model,
+        target_hold_days=target_hold_days,
         stop_price=risk["stop_price"],
         tp1_price=risk["tp1_price"],
         tp2_price=risk["tp2_price"],

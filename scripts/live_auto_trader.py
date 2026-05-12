@@ -106,8 +106,24 @@ def log_action(ledger_name: str, date: str, action: str, ticker: str, price: flo
 
 # --- EXECUTION ---
 
+def is_auto_enabled() -> bool:
+    """Check if auto-trading is explicitly enabled via environment or config."""
+    # 1. Check environment
+    env_val = os.getenv("LIVE_AUTO_TRADER_ENABLED", "0").lower()
+    if env_val in ("1", "true", "yes"):
+        return True
+        
+    # 2. Check config file
+    config = load_config()
+    cfg_val = str(config.get("LIVE_AUTO_TRADER_ENABLED", "0")).lower()
+    return cfg_val in ("1", "true", "yes")
+
 def auto_approve_signals(date: str):
     """FLOW AUTO: Auto-aprueba señales confirmadas por finviz_live_promoter."""
+    if not is_auto_enabled():
+        logger.info("Auto-trading is DISABLED (LIVE_AUTO_TRADER_ENABLED != 1). Skipping signal approval.")
+        return
+
     signals_df = load_live_signals(date)
     if signals_df.empty:
         return
@@ -295,11 +311,49 @@ def manage_ledger(ledger_name: str, date: str):
     if updated:
         save_csv(path, df)
 
+from src.utils.telegram_client import telegram_send as shared_telegram_send
+
+def send_portfolio_summary(date: str):
+    """Envía un resumen del portafolio automático a Telegram."""
+    if not is_auto_enabled():
+        return
+        
+    path = AUTO_LEDGER_ROOT / date / "positions.csv"
+    df = load_csv(path)
+    if df.empty:
+        return
+        
+    open_mask = (df["status"] == "open") & (~df.get("exited", False))
+    open_pos = df[open_mask]
+    
+    msg = f"🤖 <b>AUTO PAPER PORTFOLIO | {date}</b>\n"
+    if open_pos.empty:
+        msg += "<i>No hay posiciones abiertas.</i>"
+    else:
+        msg += f"📦 Posiciones activas: <b>{len(open_pos)}</b>\n\n"
+        tickers = open_pos["ticker"].tolist()
+        prices = fetch_prices(tickers)
+        
+        for _, row in open_pos.iterrows():
+            t = row["ticker"]
+            entry = row["entry_price"]
+            last = prices.get(t, {}).get("last", entry)
+            pnl_pct = (last / entry - 1) * 100
+            pnl_emoji = "🟢" if pnl_pct >= 0 else "🔴"
+            
+            msg += (
+                f"• <b>{t}</b>: ${last:.2f} ({pnl_emoji} {pnl_pct:+.2f}%)\n"
+                f"  Entry: ${entry:.2f} | SL: ${row['stop_price']:.2f}\n"
+            )
+            
+    shared_telegram_send(msg)
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--date", default=None)
     parser.add_argument("--monitor", action="store_true")
     parser.add_argument("--interval", type=int, default=1)
+    parser.add_argument("--telegram", action="store_true", help="Enviar resumen de portafolio")
     args = parser.parse_args()
 
     date = args.date or today_ny()
@@ -307,6 +361,9 @@ def main():
     logger.info(f"--- LIVE AUTO-TRADER START ({date}) ---")
     if not pytz:
         logger.warning("pytz no instalado. Usando fecha local del sistema.")
+
+    last_summary_time = 0
+    summary_interval = 60 * 60 # 1 hora por defecto para el resumen
 
     while True:
         try:
@@ -316,6 +373,11 @@ def main():
             
             # 2. Gestión del Flujo Manual (Demo Telegram)
             manage_ledger("DEMO", date)
+            
+            # 3. Resumen Periódico
+            if args.telegram and (time.time() - last_summary_time > summary_interval):
+                send_portfolio_summary(date)
+                last_summary_time = time.time()
             
         except Exception as e:
             logger.error(f"Loop error: {e}")

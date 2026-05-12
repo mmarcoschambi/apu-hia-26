@@ -441,8 +441,9 @@ def _enrich_watchlist_detail(engine, raw_detail: dict, fallback_detail: dict) ->
     fallback_detail = fallback_detail or {}
     tickers = list(set(raw_detail) | set(fallback_detail))
 
-    # Lookup robusto de sectores desde DB si faltan
+    # Lookup robusto de sectores y temas desde DB/Taxonomy
     db_sectors = {}
+    from src.data.theme_taxonomy import THEME_MAP
     try:
         conn = sqlite3.connect(DB_PATH)
         placeholders = ",".join(["?"] * len(tickers))
@@ -467,6 +468,7 @@ def _enrich_watchlist_detail(engine, raw_detail: dict, fallback_detail: dict) ->
         if not sec: sec = SECTOR_MAP.get(ticker)
         
         detail["sector_etf"] = sec or "OTHER"
+        detail["themes"] = THEME_MAP.get(ticker, [])
         
         if "max_dist_sma20" not in detail or detail.get("max_dist_sma20") is None:
             detail["max_dist_sma20"] = float(getattr(engine, "max_dist_sma20", 6.77))
