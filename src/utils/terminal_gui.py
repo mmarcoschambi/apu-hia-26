@@ -16,6 +16,13 @@ from src.utils.gamma_scraper import fetch_gamma_data
 
 console = Console()
 
+SECTOR_NAMES = {
+    "XLK": "Tecnología", "XLY": "Consumo discrecional", "XLRE": "Real Estate",
+    "XLC": "Comunicaciones", "XLI": "Industriales", "XLF": "Financieras",
+    "XLE": "Energía", "XLV": "Salud", "XLP": "Consumo defensivo",
+    "XLU": "Utilities", "XLB": "Materiales"
+}
+
 
 def _build_hot_sectors(date_str: str, top_n: int = 5):
     try:
@@ -311,7 +318,7 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
                 rs_txt = f" | RS {hs_info.get('rs', 0):.1%}" if 'rs' in hs_info else ""
                 s1_txt = " | S1 ✓" if hs_info.get('tradeable') else " | S1 ✗" if 'tradeable' in hs_info else ""
                 
-                console.print(f"\n[bold yellow]── [ {sec} {sector_names.get(sec, '')}{rs_txt}{s1_txt} ] ────────────────────────────────[/bold yellow]")
+                console.print(f"\n[bold yellow]── [ {sec} {SECTOR_NAMES.get(sec, '')}{rs_txt}{s1_txt} ] ────────────────────────────────[/bold yellow]")
 
                 near = Table(box=box.SIMPLE_HEAD, title_justify="left")
                 near.add_column("#", justify="right", style="dim")
@@ -610,13 +617,6 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
             f"• GEX: <code>${gex:.1f}B</code> {gex_status} (Gamma Exposure)\n"
         )
 
-    sector_names = {
-        "XLK": "Tecnología", "XLY": "Consumo discrecional", "XLRE": "Real Estate",
-        "XLC": "Comunicaciones", "XLI": "Industriales", "XLF": "Financieras",
-        "XLE": "Energía", "XLV": "Salud", "XLP": "Consumo defensivo",
-        "XLU": "Utilities", "XLB": "Materiales"
-    }
-
     lines = [
         header_date,
         f"• Regime: <b>{'PASS' if regime_ok else 'BLOCKED'}</b>",
@@ -637,7 +637,7 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
         for idx, row in enumerate(hot_sectors):
             etf = row['sector_etf']
             hot_sector_order[etf] = idx
-            name = html.escape(sector_names.get(etf, ""))
+            name = html.escape(SECTOR_NAMES.get(etf, ""))
             lines.append(
                 f"• <b>{etf} {name}</b> | RS {row.get('rs', 0):.1%} | S1 {'✓' if row.get('tradeable') else '✗'}"
             )
@@ -738,7 +738,7 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
                 
                 # Header del Sector con metadata de RS/Flow
                 # Intentar encontrar datos del sector en hot_sectors o sector_flow
-                sec_name = sector_names.get(sec, sec)
+                sec_name = SECTOR_NAMES.get(sec, sec)
                 
                 # Buscar RS del sector en hot_sectors
                 sec_rs_txt = ""
@@ -899,7 +899,7 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
             for row in sf_rows[:5]:
                 etf = row['sector_etf']
                 flow_secs.append(etf)
-                name = html.escape(sector_names.get(etf, ""))
+                name = html.escape(SECTOR_NAMES.get(etf, ""))
                 drift = row.get("rank_drift", 0)
                 trend = "🔥 ⬆️" if drift > 0 else "❄️ ⬇️" if drift < 0 else "➡️"
                 rs_drift = row.get("rs_drift", 0)

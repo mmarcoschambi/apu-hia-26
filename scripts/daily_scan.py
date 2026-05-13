@@ -190,27 +190,32 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
             logger.error(f"Error fetching market data: {e}. Filters might fail.")
 
     # 3. Construir universos
-    logger.info(f"Building Local PIT universe (limit={max_tickers})...")
-    universe_start = (today - timedelta(days=730)).strftime("%Y-%m-%d")
-    snap_local = build_universe_for_fold(
-        DB_PATH, date_str, universe_start, max_tickers=max_tickers
-    )
-    tickers_local = set(snap_local.tickers)
-    logger.info(f"Local Universe: {len(tickers_local)} tickers selected.")
+    db_exists = DB_PATH.exists()
+    tickers_local = set()
+    if db_exists:
+        logger.info(f"Building Local PIT universe (limit={max_tickers})...")
+        universe_start = (today - timedelta(days=730)).strftime("%Y-%m-%d")
+        snap_local = build_universe_for_fold(
+            DB_PATH, date_str, universe_start, max_tickers=max_tickers
+        )
+        tickers_local = set(snap_local.tickers)
+        logger.info(f"Local Universe: {len(tickers_local)} tickers selected.")
+    else:
+        logger.warning(f"Database NOT FOUND at {DB_PATH}. Running in VPS mode.")
 
-    # 3b. Finviz Universe (Observation Only) - Fase 3.5
+    # 3b. Finviz Universe
     tickers_finviz = set()
-    if master_cfg.get("universe_source", {}).get("enabled", False):
+    u_source_cfg = master_cfg.get("universe_source", {})
+    if u_source_cfg.get("enabled", False) or not db_exists:
         try:
             from src.data.finviz_universe_provider import FinvizUniverseProvider
-            # Usar filtros del config para el scrapeo live
-            f_cfg = master_cfg["universe_source"]["finviz"]
+            # Usar filtros del config para el scrapeo live (o default si no hay)
+            f_cfg = u_source_cfg.get("finviz", {"filters": "sh_avgvol_over500,sh_price_over2"})
             provider = FinvizUniverseProvider(f_cfg)
-            # En modo observación intentamos obtener la lista actual de Finviz
             tickers_finviz = set(provider.get_universe())
-            logger.info(f"Finviz Universe (Observation): {len(tickers_finviz)} tickers.")
+            logger.info(f"Finviz Universe: {len(tickers_finviz)} tickers fetched.")
         except Exception as e:
-            logger.warning(f"Failed to load Finviz universe for observation: {e}")
+            logger.warning(f"Failed to load Finviz universe: {e}")
 
     # Combinar para escaneo único
     all_scan_tickers = sorted(list(tickers_local | tickers_finviz))

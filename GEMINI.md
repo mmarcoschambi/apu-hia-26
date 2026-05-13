@@ -27,3 +27,9 @@ This project implements a high-conviction momentum trading system based on growt
 - **Primary Universe**: Local PIT (ADV Top 200).
 - **Secondary Universe**: Finviz Live (Observation only in `rejection_audit.csv`).
 - **Monitoring**: Check `outputs/live_signals/YYYY-MM-DD/rejection_audit.csv` for allowed/blocked signals and drift.
+
+## Environment Separation (Laboratory vs VPS)
+The system is **Auto-Aware** of its environment:
+- **Laboratory (Local)**: If `data/ticker_cache.db` exists, it runs in **Hybrid Mode**. It uses the PIT universe for primary decisions (Fase 3) and Finviz for observation.
+- **Torre de Control (VPS)**: Since the DB is excluded via `deploy_vps.sh`, the scanner automatically promotes **Finviz Live** to be the primary decision source. This allows for 24/7 autonomous monitoring without the heavy DB.
+- **Sync**: Use `./deploy_vps.sh` to push logic and taxonomy updates to the VPS.
