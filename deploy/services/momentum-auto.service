@@ -1,0 +1,18 @@
+[Unit]
+Description=Momentum V2 - Live Auto-Trader
+After=network.target
+
+[Service]
+User=xxmalcomandaxx
+Group=xxmalcomandaxx
+WorkingDirectory=/home/xxmalcomandaxx/swing-momentum-v1
+EnvironmentFile=/home/xxmalcomandaxx/swing-momentum-v1/.env
+# Guardrail: LIVE_AUTO_TRADER_ENABLED must be 1 in .env for new positions
+ExecStart=/home/xxmalcomandaxx/swing-momentum-v1/.venv/bin/python scripts/live_auto_trader.py --monitor --interval 1 --telegram
+Restart=always
+RestartSec=10
+StandardOutput=append:/home/xxmalcomandaxx/swing-momentum-v1/logs/live/auto_trader.log
+StandardError=append:/home/xxmalcomandaxx/swing-momentum-v1/logs/live/auto_trader.log
+
+[Install]
+WantedBy=multi-user.target
