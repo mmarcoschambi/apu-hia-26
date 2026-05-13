@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
+import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -188,14 +189,32 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
         except Exception as e:
             logger.error(f"Error fetching market data: {e}. Filters might fail.")
 
-    # 3. Construir universo idéntico al WF
-    logger.info(f"Building universe (limit={max_tickers})...")
+    # 3. Construir universos
+    logger.info(f"Building Local PIT universe (limit={max_tickers})...")
     universe_start = (today - timedelta(days=730)).strftime("%Y-%m-%d")
-    snap = build_universe_for_fold(
+    snap_local = build_universe_for_fold(
         DB_PATH, date_str, universe_start, max_tickers=max_tickers
     )
-    tickers = snap.tickers
-    logger.info(f"Universe: {len(tickers)} tickers selected.")
+    tickers_local = set(snap_local.tickers)
+    logger.info(f"Local Universe: {len(tickers_local)} tickers selected.")
+
+    # 3b. Finviz Universe (Observation Only) - Fase 3.5
+    tickers_finviz = set()
+    if master_cfg.get("universe_source", {}).get("enabled", False):
+        try:
+            from src.data.finviz_universe_provider import FinvizUniverseProvider
+            # Usar filtros del config para el scrapeo live
+            f_cfg = master_cfg["universe_source"]["finviz"]
+            provider = FinvizUniverseProvider(f_cfg)
+            # En modo observación intentamos obtener la lista actual de Finviz
+            tickers_finviz = set(provider.get_universe())
+            logger.info(f"Finviz Universe (Observation): {len(tickers_finviz)} tickers.")
+        except Exception as e:
+            logger.warning(f"Failed to load Finviz universe for observation: {e}")
+
+    # Combinar para escaneo único
+    all_scan_tickers = sorted(list(tickers_local | tickers_finviz))
+    logger.info(f"Combined Scan Universe: {len(all_scan_tickers)} unique tickers.")
 
     # 4. Cargar SPY para régimen de mercado (SMA200 real)
     logger.info("Checking Market Regime (SMA200)...")
@@ -242,9 +261,13 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
     rejection_audit = []
     logger.info(f"Scanning {len(tickers)} tickers with A+B modes...")
 
-    for ticker in tickers:
+    for ticker in all_scan_tickers:
         df = pd.DataFrame()
         try:
+            # Ticker source info
+            in_local = ticker in tickers_local
+            in_finviz = ticker in tickers_finviz
+            
             # Lookback de seguridad para medias móviles
             df_start = (today - timedelta(days=300)).strftime("%Y-%m-%d")
             df = load_ohlcv(ticker, df_start, date_str)
@@ -326,6 +349,8 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
                 )
                 rejection_audit.append({
                     "ticker": ticker,
+                    "in_local": in_local,
+                    "in_finviz": in_finviz,
                     "mode": with_theme.mode,
                     "sector_etf": etf_symbol,
                     "best_theme": t_m.get("best_theme"),
@@ -338,7 +363,11 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
                     "target_hold_days": with_theme.target_hold_days
                 })
 
-            # Mergear señales
+            # Mergear señales (Solo señales del universo LOCAL pasan al combined.csv para decisión en Fase 3)
+            # Finviz queda como observación puramente en rejection_audit.csv
+            if not in_local:
+                continue
+
             merged = merge_ab_signals(
                 [da] if da.passed else [], [db] if db.passed else []
             )

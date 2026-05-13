@@ -4409,6 +4409,9 @@ class AdvancedVectorBTEngine:
                 entries, atr, avwap, signal_types, n_chunks
             )
 
+        self.equity_curve = equity_curve
+        self.trades_df = trades_df
+
         # 🛡️ SAFETY CHECK: Verificar si hay resultados antes de calcular métricas
         if len(equity_curve) == 0:
             logger.error("❌ CRITICAL: Empty equity curve - simulation failed completely")
