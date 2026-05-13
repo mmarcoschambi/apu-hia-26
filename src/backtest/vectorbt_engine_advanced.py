@@ -106,6 +106,13 @@ def prepare_numba_arrays(engine, release_dataframes: bool = False) -> Dict:
         if hasattr(engine, "avg_volume_20") and engine.avg_volume_20 is not None
         else np.ones_like(arrays["close"])
     )
+    
+    # EXP-010: ADR 14 array
+    arrays["adr14"] = (
+        engine.adr_pct_14.fillna(0).values.astype(np.float32)
+        if hasattr(engine, "adr_pct_14") and engine.adr_pct_14 is not None
+        else np.zeros_like(arrays["close"])
+    )
 
     # EMA arrays for exits
     # OPTIMIZATION: Use float32
@@ -810,6 +817,15 @@ class AdvancedVectorBTEngine:
         self.slippage_rate = slippage_rate
         self.screener_cache_manager = None
 
+        # --- EXP-010 Parameters ---
+        self.stop_mode = kwargs.get("stop_mode", 0)  # 0: fixed_pct, 1: adr_pct, 2: atr, 3: adr_floor, 4: adr_reject
+        self.adr_stop_fraction = kwargs.get("adr_stop_fraction", 0.5)
+        self.adr_stop_floor_pct = kwargs.get("adr_stop_floor_pct", 0.0)
+        self.reject_stop_below_pct = kwargs.get("reject_stop_below_pct", 0.0)
+        self.sizing_mode = kwargs.get("sizing_mode", 0)  # 0: fixed_risk, 1: adaptive_target_exposure
+        self.max_position_pct = kwargs.get("max_position_pct", 0.25)
+        self.adr_pct_14 = None  # Loaded in load_data
+
         # Filter thresholds
         self.max_dist_sma20 = max_dist_sma20
         # RVOL filters
@@ -1416,6 +1432,7 @@ class AdvancedVectorBTEngine:
         sma20_data = {}
         sma50_data = {}
         adr_pct_data = {}
+        adr_pct_14_data = {}
 
         # Check how many tickers have precomputed data
         cache_available_count = 0
@@ -1428,6 +1445,12 @@ class AdvancedVectorBTEngine:
                 sma50_data[t] = df["sma50"]
             if "adr_pct_20" in df.columns and not df["adr_pct_20"].isna().all():
                 adr_pct_data[t] = df["adr_pct_20"]
+            
+            # Load ADR 14 for EXP-010
+            if "adr_pct_14" in df.columns and not df["adr_pct_14"].isna().all():
+                adr_pct_14_data[t] = df["adr_pct_14"]
+            elif "adr_14" in df.columns and not df["adr_14"].isna().all():
+                adr_pct_14_data[t] = df["adr_14"]
 
         # Build SMAs from precomputed data
         self.sma_20 = (
@@ -1445,17 +1468,23 @@ class AdvancedVectorBTEngine:
             if adr_pct_data
             else pd.DataFrame(0, index=self.close.index, columns=self.close.columns)
         )
+        self.adr_pct_14 = (
+            pd.DataFrame(adr_pct_14_data)
+            if adr_pct_14_data
+            else pd.DataFrame(0, index=self.close.index, columns=self.close.columns)
+        )
 
         # DEDUP + ALIGNMENT FIX: dedup primero, luego reindex al close.index limpio.
         # sma_20/sma_50/adr_pct pueden heredar fechas duplicadas de tickers con
         # datos sucios en la DB; reindex() explota si el source tiene duplicados.
-        for _attr in ("sma_20", "sma_50", "adr_pct"):
+        for _attr in ("sma_20", "sma_50", "adr_pct", "adr_pct_14"):
             _df = getattr(self, _attr)
-            if _df.index.duplicated().any():
+            if _df is not None and _df.index.duplicated().any():
                 setattr(self, _attr, _df[~_df.index.duplicated(keep="last")])
         self.sma_20 = self.sma_20.reindex(index=self.close.index, columns=self.close.columns)
         self.sma_50 = self.sma_50.reindex(index=self.close.index, columns=self.close.columns)
         self.adr_pct = self.adr_pct.reindex(index=self.close.index, columns=self.close.columns)
+        self.adr_pct_14 = self.adr_pct_14.reindex(index=self.close.index, columns=self.close.columns)
 
         # Log cache utilization
         if cache_available_count > 0:
@@ -1474,11 +1503,12 @@ class AdvancedVectorBTEngine:
         for t, df in all_data.items():
             # ADR already loaded from cache if available, calculate if missing
             if t not in adr_pct_data:
-                if "adr_pct_14" in df.columns:
-                    self.adr_pct[t] = df["adr_pct_14"]
-                else:
-                    high_low_pct = ((df["High"] - df["Low"]) / df["Low"]) * 100
-                    self.adr_pct[t] = high_low_pct.rolling(20).mean()
+                high_low_pct = ((df["High"] - df["Low"]) / df["Low"]) * 100
+                self.adr_pct[t] = high_low_pct.rolling(20).mean()
+            
+            if t not in adr_pct_14_data:
+                high_low_pct = ((df["High"] - df["Low"]) / df["Low"]) * 100
+                self.adr_pct_14[t] = high_low_pct.rolling(14).mean()
 
             # 2. Avg Volume (20 days)
             if "avg_volume_20" in df.columns:
@@ -2133,6 +2163,14 @@ class AdvancedVectorBTEngine:
             atr_trailing_multiplier=self.atr_trailing_multiplier,
             fee_rate=self.fee_rate,
             slippage_rate=self.slippage_rate,
+            # --- EXP-010 ---
+            stop_mode=getattr(self, "stop_mode", 0),
+            adr_stop_fraction=getattr(self, "adr_stop_fraction", 0.5),
+            adr_stop_floor_pct=getattr(self, "adr_stop_floor_pct", 0.0),
+            reject_stop_below_pct=getattr(self, "reject_stop_below_pct", 0.0),
+            sizing_mode=getattr(self, "sizing_mode", 0),
+            max_position_pct=getattr(self, "max_position_pct", 0.25),
+            adr14_arr=numba_arrays.get("adr14"),
         )
 
         duration = (datetime.now() - start_time).total_seconds()
@@ -2176,7 +2214,7 @@ class AdvancedVectorBTEngine:
         equity_curve = pd.Series(equity_curve_arr, index=close.index)
 
         if len(trades_log) > 0:
-            # Columnas: [dia_salida, ticker_idx, tipo_salida, precio_salida, shares, pnl, dia_entrada, riesgo_inicial, rvol, adr, vol, entry_score, stop_loss, tp1_target, tp2_target]
+            # Columnas: [dia_salida, ticker_idx, tipo_salida, precio_salida, shares, pnl, dia_entrada, riesgo_inicial, rvol, adr, vol, entry_score, stop_loss, tp1_target, tp2_target, stop_mode, stop_dist_pct, sizing_mode, unused1, unused2]
             trades_df = pd.DataFrame(
                 trades_log,
                 columns=[
@@ -2195,6 +2233,11 @@ class AdvancedVectorBTEngine:
                     "stop_loss",
                     "tp1_target",
                     "tp2_target",
+                    "stop_mode",
+                    "stop_dist_pct",
+                    "sizing_mode",
+                    "unused_1",
+                    "unused_2",
                 ],
             )
 
@@ -2209,6 +2252,33 @@ class AdvancedVectorBTEngine:
             # Mapear códigos de salida
             exit_map = {0: "STOP", 1: "TP1", 2: "TP2", 3: "RUNNER"}
             trades_df["exit_phase"] = trades_df["exit_type_code"].map(exit_map)
+
+            # --- PHANTOM STOP DETECTION (EXP-010) ---
+            trades_df["is_phantom_stop"] = False
+            try:
+                # Filtrar solo salidas por STOP
+                stop_mask = (trades_df["exit_phase"] == "STOP")
+                if stop_mask.any():
+                    # Necesitamos los precios High para el look-ahead
+                    # Usamos los arrays que ya tenemos para eficiencia
+                    high_arr = numba_arrays.get("high")
+                    if high_arr is not None:
+                        for idx in trades_df[stop_mask].index:
+                            t_idx = int(trades_df.at[idx, "day_idx"])
+                            c_idx = int(trades_df.at[idx, "col_idx"])
+                            tp1_target = trades_df.at[idx, "tp1_target"]
+                            
+                            # Mirar 10 días adelante (excluyendo el día del stop)
+                            lookahead = 10
+                            start_f = t_idx + 1
+                            end_f = min(start_f + lookahead, high_arr.shape[0])
+                            
+                            if start_f < end_f:
+                                future_highs = high_arr[start_f:end_f, c_idx]
+                                if np.any(future_highs >= tp1_target):
+                                    trades_df.at[idx, "is_phantom_stop"] = True
+            except Exception as ph_err:
+                logger.warning(f"⚠️ Error in phantom stop detection: {ph_err}")
 
             # Asignar riesgo monetario para cálculo de R
             trades_df["monetary_risk"] = trades_df["initial_risk"]
@@ -2899,6 +2969,7 @@ class AdvancedVectorBTEngine:
     def run_backtest(self) -> Dict:
         """Execute backtest with partial exits"""
         logger.info("🎯 Starting advanced backtest with partial exits...")
+        self.trades_df = None
 
         # Load data (skip if already loaded -- avoids double load in optimize_3tier)
         if not hasattr(self, "close") or self.close is None or len(self.close.columns) == 0:

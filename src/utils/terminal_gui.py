@@ -80,7 +80,9 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
         ("Universe: ", "cyan"),
         (f"{snapshot.get('universe_size', 0)}\n", "white"),
         ("Signals: ", "cyan"),
-        (f"{len(signals)}", "white"),
+        (f"{len(signals)}\n\n", "white"),
+        ("⚠️  ", "yellow"),
+        ("MANUAL REVIEW - NO AUTO ENTRY", "bold yellow"),
     )
 
     console.print("\n")
@@ -243,6 +245,13 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
             nearest_warn, key=lambda x: x[1].get("proximity_score", 0), reverse=True
         )[:top_n]
 
+        # Resolve all sectors for efficiency
+        all_tickers = list(watchlist_detail.keys())
+        resolved_sectors = get_ticker_sector_mapping(all_tickers)
+
+        def _get_sec(ticker, data):
+            return data.get("sector_etf") or resolved_sectors.get(ticker) or "OTHER"
+
         def _estado(data):
             if data.get("_display_status") == "warn":
                 return "[yellow]⚠ Data incompleta[/yellow]"
@@ -272,54 +281,84 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
             return "🔧 Setup incompleto"
 
         if nearest_ok:
-            console.print("\n[bold cyan]🎯 NEAREST TO SIGNAL[/bold cyan]")
-            near = Table(box=box.SIMPLE_HEAD, title_justify="left")
-            near.add_column("#", justify="right", style="dim")
-            near.add_column("Ticker", style="bold yellow")
-            near.add_column("Estado")
-            near.add_column("Trend", justify="center")
-            near.add_column("Prev R", justify="center", style="dim")
-            near.add_column("RS", justify="right")
-            near.add_column("Break lvl", justify="right")
-            near.add_column("Dist SMA20", justify="right")
-            near.add_column("RVOL", justify="right")
-            near.add_column("Waiting")
-            near.add_column("Prox", justify="right")
+            console.print("\n[bold cyan]🎯 SECTORES CON CANDIDATOS (NEAREST TO SIGNAL)[/bold cyan]")
+            
+            # Agrupar por sector
+            by_sector = {}
+            for t, d in nearest_ok:
+                sec = _get_sec(t, d)
+                by_sector.setdefault(sec, []).append((t, d))
 
             # Mapa de flujo para inyectar en la tabla principal
             nearest_flow = snapshot.get("nearest_flow") or {}
             flow_data = {r.get("ticker"): r for r in nearest_flow.get("rows", [])}
 
-            for idx, (ticker, data) in enumerate(nearest_ok, 1):
-                prox = float(data.get("proximity_score", 0))
-                prox_style = "green" if prox >= 80 else "yellow" if prox >= 50 else "red"
-                
-                # Obtener info de flujo si existe
-                f_row = flow_data.get(ticker, {})
-                drift = f_row.get("rank_drift", 0)
-                if drift == "NEW": trend = "🆕"
-                else:
-                    try:
-                        dv = int(drift)
-                        trend = "⬆️" if dv > 0 else "⬇️" if dv < 0 else "➡️"
-                    except: trend = "➡️"
-                
-                prev_rank = str(f_row.get("previous_rank", "-"))
+            # Obtener orden de sectores hot para el sorting
+            hot_sector_order = {s['sector_etf']: i for i, s in enumerate(hot_sectors)} if hot_sectors else {}
+            hot_sector_map = {s['sector_etf']: s for s in hot_sectors} if hot_sectors else {}
 
-                near.add_row(
-                    str(idx),
-                    ticker,
-                    _estado(data),
-                    trend,
-                    prev_rank,
-                    f"{data.get('rs_pct', data.get('score', 0)):.1f}",
-                    _fmt_num(data.get("breakout_level")),
-                    _fmt_num(data.get("dist_sma20_pct"), "%"),
-                    _fmt_num(data.get("rvol")),
-                    str(data.get("waiting_for", "OK")),
-                    f"[{prox_style}]{prox:.0f}[/{prox_style}]",
-                )
-            console.print(near)
+            def _sector_sort_key(sec):
+                cands = by_sector.get(sec, [])
+                best_prox = max((d.get("proximity_score", 0) for _, d in cands), default=0)
+                return (hot_sector_order.get(sec, 99), -best_prox, sec)
+
+            # Ordenar sectores por importancia/fuerza
+            for sec in sorted(by_sector.keys(), key=_sector_sort_key):
+                sec_cands = by_sector[sec]
+                
+                # Metadata del sector para el header
+                hs_info = hot_sector_map.get(sec, {})
+                rs_txt = f" | RS {hs_info.get('rs', 0):.1%}" if 'rs' in hs_info else ""
+                s1_txt = " | S1 ✓" if hs_info.get('tradeable') else " | S1 ✗" if 'tradeable' in hs_info else ""
+                
+                console.print(f"\n[bold yellow]── [ {sec} {sector_names.get(sec, '')}{rs_txt}{s1_txt} ] ────────────────────────────────[/bold yellow]")
+
+                near = Table(box=box.SIMPLE_HEAD, title_justify="left")
+                near.add_column("#", justify="right", style="dim")
+                near.add_column("Ticker", style="bold yellow")
+                near.add_column("Estado")
+                near.add_column("Trend", justify="center")
+                near.add_column("Prev R", justify="center", style="dim")
+                near.add_column("RS", justify="right")
+                near.add_column("Break lvl", justify="right")
+                near.add_column("Dist SMA20", justify="right")
+                near.add_column("RVOL", justify="right")
+                near.add_column("Waiting")
+                near.add_column("Prox", justify="right")
+
+                # Ordenar candidatos dentro del sector por proximidad
+                sec_cands.sort(key=lambda x: x[1].get("proximity_score", 0), reverse=True)
+
+                for idx, (ticker, data) in enumerate(sec_cands, 1):
+                    prox = float(data.get("proximity_score", 0))
+                    prox_style = "green" if prox >= 80 else "yellow" if prox >= 50 else "red"
+                    
+                    # Obtener info de flujo si existe
+                    f_row = flow_data.get(ticker, {})
+                    drift = f_row.get("rank_drift", 0)
+                    if drift == "NEW": trend = "🆕"
+                    else:
+                        try:
+                            dv = int(drift)
+                            trend = "⬆️" if dv > 0 else "⬇️" if dv < 0 else "➡️"
+                        except: trend = "➡️"
+                    
+                    prev_rank = str(f_row.get("previous_rank", "-"))
+
+                    near.add_row(
+                        str(idx),
+                        ticker,
+                        _estado(data),
+                        trend,
+                        prev_rank,
+                        f"{data.get('rs_pct', data.get('score', 0)):.1f}",
+                        _fmt_num(data.get("breakout_level")),
+                        _fmt_num(data.get("dist_sma20_pct"), "%"),
+                        _fmt_num(data.get("rvol")),
+                        str(data.get("waiting_for", "OK")),
+                        f"[{prox_style}]{prox:.0f}[/{prox_style}]",
+                    )
+                console.print(near)
 
         if nearest_warn:
             console.print("\n[bold yellow]📡 DATA INCOMPLETE RADAR (VIGILANCIA - REVISAR MANAL)[/bold yellow]")

@@ -149,6 +149,62 @@ FEATURES: Dict[str, Dict[str, Any]] = {
     },
     
     # -------------------------------------------------------------------------
+    # EXP-010 DYNAMIC ADR STOP
+    # -------------------------------------------------------------------------
+    
+    'stop_mode': {
+        'default': 0, # 0: fixed_pct
+        'category': 'exits',
+        'description': 'Stop calculation mode (0:fixed, 1:adr, 2:atr, 3:adr_floor, 4:adr_reject)',
+        'status': 'experimental',
+        'type': 'int',
+        'ui': {
+            'label': '🛑 Stop Mode',
+            'help': 'Select stop calculation logic (baseline=0)',
+            'section': 'Exit Strategy'
+        }
+    },
+    
+    'adr_stop_fraction': {
+        'default': 0.5,
+        'category': 'exits',
+        'description': 'Fraction of ADR to use for stop (0.5 = 50% ADR)',
+        'status': 'experimental',
+        'type': 'float',
+        'ui': {
+            'label': '📏 ADR Stop Fraction',
+            'help': 'Multiplier for ADR-based stop',
+            'section': 'Exit Strategy'
+        }
+    },
+
+    'sizing_mode': {
+        'default': 0, # 0: fixed_risk
+        'category': 'risk',
+        'description': 'Position sizing mode (0:fixed_risk, 1:adaptive)',
+        'status': 'experimental',
+        'type': 'int',
+        'ui': {
+            'label': '💰 Sizing Mode',
+            'help': 'Position sizing logic',
+            'section': 'Risk Management'
+        }
+    },
+
+    'max_position_pct': {
+        'default': 0.25,
+        'category': 'risk',
+        'description': 'Maximum individual position size as % of equity',
+        'status': 'validated',
+        'type': 'float',
+        'ui': {
+            'label': '🛡️ Max Position %',
+            'help': 'Cap for individual trade size (default 25%)',
+            'section': 'Risk Management'
+        }
+    },
+    
+    # -------------------------------------------------------------------------
     # SECTOR ANALYSIS
     # -------------------------------------------------------------------------
     
