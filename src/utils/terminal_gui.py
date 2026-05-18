@@ -711,33 +711,6 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
         nearest_ok = sorted(nearest_ok, key=lambda x: x[1].get("proximity_score", 0), reverse=True)
         rendered_tickers = []
 
-        # 1. TOP GLOBAL (TOTAL RANKING) - Absolute leaders regardless of sector
-        if nearest_ok:
-            lines.append("\n🏆 <b>TOP GLOBAL (TOTAL RANKING)</b>")
-            for ticker, data in nearest_ok[:5]:
-                ticker_esc = html.escape(str(ticker))
-                rs = data.get('rs_pct', data.get('score', 0))
-                prox = data.get('proximity_score', 0)
-                sec = _get_sec(ticker, data)
-                lines.append(f"• <code>{ticker_esc}</code> ({sec}) | Prox: <b>{prox:.0f}</b> | RS: <b>{rs:.0f}</b>")
-
-        # 1.5 VARIANTE E (DIVERGENCIA TEMÁTICA)
-        variant_e_candidates = []
-        for ticker, data in nearest_ok:
-            # Variante E: Tema fuerte (Theme vs Sector > 2%) pero Sector débil (sector_etf_ok = False)
-            if not data.get("sector_etf_ok", True) and (data.get("theme_vs_sector") or 0) > 0.02:
-                variant_e_candidates.append((ticker, data))
-        
-        if variant_e_candidates:
-            lines.append("\n🛡️ <b>VARIANTE E (DIVERGENCIA TEMÁTICA)</b>")
-            lines.append("<i>Temas fuertes en sectores débiles (Plan E11)</i>")
-            for ticker, data in sorted(variant_e_candidates, key=lambda x: x[1].get("theme_vs_sector", 0), reverse=True)[:3]:
-                ticker_esc = html.escape(str(ticker))
-                rs_divergence = data.get("theme_vs_sector", 0)
-                sec = _get_sec(ticker, data)
-                theme = data.get("best_theme", "N/A")
-                lines.append(f"• <code>{ticker_esc}</code> ({theme}) | Div: <b>{rs_divergence:+.1%}</b> vs {sec}")
-
         if nearest_ok:
             lines.append("\n🎯 <b>SECTORES CON CANDIDATOS</b>")
 
@@ -823,6 +796,33 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
                         f"  RVOL: {rvol} | Break: <code>{entry:.2f}</code>\n"
                         f"  Bloqueos: {html.escape(str(falta))} | Live: <code>{trigger}</code>\n"
                     )
+
+        # 2. TOP GLOBAL (TOTAL RANKING) - Absolute leaders regardless of sector
+        if nearest_ok:
+            lines.append("\n🏆 <b>TOP GLOBAL (TOTAL RANKING)</b>")
+            for ticker, data in nearest_ok[:5]:
+                ticker_esc = html.escape(str(ticker))
+                rs = data.get('rs_pct', data.get('score', 0))
+                prox = data.get('proximity_score', 0)
+                sec = _get_sec(ticker, data)
+                lines.append(f"• <code>{ticker_esc}</code> ({sec}) | Prox: <b>{prox:.0f}</b> | RS: <b>{rs:.0f}</b>")
+
+        # 3. VARIANTE E (DIVERGENCIA TEMÁTICA)
+        variant_e_candidates = []
+        for ticker, data in nearest_ok:
+            # Variante E: Tema fuerte (Theme vs Sector > 2%) pero Sector débil (sector_etf_ok = False)
+            if not data.get("sector_etf_ok", True) and (data.get("theme_vs_sector") or 0) > 0.02:
+                variant_e_candidates.append((ticker, data))
+        
+        if variant_e_candidates:
+            lines.append("\n🛡️ <b>VARIANTE E (DIVERGENCIA TEMÁTICA)</b>")
+            lines.append("<i>Temas fuertes en sectores débiles (Plan E11)</i>")
+            for ticker, data in sorted(variant_e_candidates, key=lambda x: x[1].get("theme_vs_sector", 0), reverse=True)[:3]:
+                ticker_esc = html.escape(str(ticker))
+                rs_divergence = data.get("theme_vs_sector", 0)
+                sec = _get_sec(ticker, data)
+                theme = data.get("best_theme", "N/A")
+                lines.append(f"• <code>{ticker_esc}</code> ({theme}) | Div: <b>{rs_divergence:+.1%}</b> vs {sec}")
 
             # Crear el teclado inline
             row = []

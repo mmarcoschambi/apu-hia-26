@@ -19,6 +19,8 @@ from src.integration.combo_loader import load_combo_merged
 from src.integration.universe_builder import build_universe_for_fold
 from src.config.dynamic_config import load_production_config
 from src.utils.sector_rotation import SECTOR_MAP, SECTOR_ETFS
+from src.signals.thematic_logic import calculate_equal_weighted_index
+from src.data.theme_taxonomy import THEME_MAP, get_themes
 
 # Configuration
 DB_PATH = PROJECT_ROOT / "data" / "ticker_cache.db"
@@ -98,26 +100,24 @@ def calculate_backtest_metrics(trades_df, equity_curve_df):
         "total_trades": len(trades_df)
     }
 
-def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tickers: int, tag: str):
-    logger.info(f"🚀 CANONICAL BACKTEST (PARITY) | Range: {start_date} -> {end_date}")
+def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tickers: int, tag: str, use_variant_e: bool = False):
+    logger.info(f"🚀 BACKTEST (PARITY{' + VAR-E' if use_variant_e else ''}) | Range: {start_date} -> {end_date}")
     dates_str = get_trading_dates(start_date, end_date)
     if not dates_str: return
 
     # --- FASE 1: PRE-CARGA Y CONFIGURACIÓN ---
     logger.info("📦 Loading configs and pre-loading superset...")
     
-    # Load A/B combos
     cfg_a, _ = load_combo_merged("combo_pure_momentum")
     cfg_b, _ = load_combo_merged("combo_stage2_breakout")
     
-    # Apply master config overrides (if any)
-    master_cfg = load_production_config()
-    t2_master = master_cfg.get("tier2_filters", {})
-    for k, v in t2_master.items():
-        cfg_a.setdefault("tier2_filters", {})[k] = v
-        cfg_b.setdefault("tier2_filters", {})[k] = v
+    if use_variant_e:
+        for cfg in [cfg_a, cfg_b]:
+            cfg["tier2_filters"]["use_theme_group_filter"] = True
+            cfg["tier2_filters"]["theme_filter_mode"] = "divergence"
+            # CRITICAL: We need sector data for divergence, but we MUST NOT block if sector is weak!
+            cfg["tier2_filters"]["use_sector_etf_filter"] = False 
 
-    # Pre-calculate universes for all dates to get the superset
     logger.info("🔭 Building PIT universes for each date...")
     universe_by_date = {}
     superset_tickers = set()
@@ -127,13 +127,13 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
         universe_by_date[d_str] = snap.tickers
         superset_tickers.update(snap.tickers)
     
-    # Add SPY, VIX and Sector ETFs to superset
     superset_tickers.update(["SPY", "^VIX"])
     superset_tickers.update(SECTOR_ETFS)
+    if use_variant_e:
+        for t in THEME_MAP: superset_tickers.add(t)
     
     logger.info(f"Superset size: {len(superset_tickers)} tickers")
 
-    # Load ALL RS for RS lookups
     conn = sqlite3.connect(DB_PATH)
     rs_all = pd.read_sql(
         "SELECT date, ticker, rs_composite FROM daily_rs_rankings WHERE date >= ? AND date <= ? || ' 23:59:59'",
@@ -142,21 +142,49 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
     rs_all["date"] = pd.to_datetime(rs_all["date"], format="mixed").dt.normalize()
     rs_lookup = rs_all.set_index(["date", "ticker"])["rs_composite"].to_dict()
 
-    # Load OHLCV for superset
     lookback_start = (pd.to_datetime(start_date) - timedelta(days=400)).strftime("%Y-%m-%d")
     all_ohlcv = load_ohlcv_batch_memory(list(superset_tickers), lookback_start, end_date)
     
-    # Market Regime Pre-load
     spy_full = all_ohlcv.get("SPY", pd.DataFrame())
     vix_full = all_ohlcv.get("^VIX", pd.DataFrame())
     
-    # Sector ETFs Pre-load
     etf_dists_full = {}
     for etf in SECTOR_ETFS:
         if etf in all_ohlcv:
             df = all_ohlcv[etf]
             sma20 = df["close"].rolling(20).mean()
             etf_dists_full[etf] = ((df["close"] - sma20) / sma20).to_dict()
+
+    theme_metrics_full = {}
+    if use_variant_e:
+        logger.info("🧪 Pre-calculating Theme Indices for Variant E...")
+        # 1. Agrupar tickers por tema
+        theme_to_tickers = {}
+        for t, themes in THEME_MAP.items():
+            for theme in themes: theme_to_tickers.setdefault(theme, []).append(t)
+        
+        # 2. Calcular índices
+        market_data_closes = pd.DataFrame({t: df["close"] for t, df in all_ohlcv.items() if t in superset_tickers})
+        theme_indices = {}
+        for theme, members in theme_to_tickers.items():
+            idx = calculate_equal_weighted_index(market_data_closes, members)
+            if not idx.empty: theme_indices[theme] = idx
+        
+        df_themes = pd.DataFrame(theme_indices)
+        theme_sma20 = df_themes.rolling(20).mean()
+        theme_dists = ((df_themes - theme_sma20) / theme_sma20)
+        
+        for t in THEME_MAP:
+            t_themes = get_themes(t)
+            theme_metrics_full[t] = {}
+            for d in dates_str:
+                dt = pd.Timestamp(d)
+                best_dist = -999
+                for th in t_themes:
+                    if th in theme_dists.columns and dt in theme_dists.index:
+                        d_val = theme_dists.loc[dt, th]
+                        if d_val > best_dist: best_dist = d_val
+                if best_dist != -999: theme_metrics_full[t][dt] = best_dist
 
     conn.close()
 
@@ -167,7 +195,6 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
     for d_str in tqdm(dates_str, desc="Simulating"):
         curr_dt = pd.Timestamp(d_str)
         
-        # 1. Update Mark-to-Market
         total_equity = portfolio["cash"]
         for t, pos in portfolio["positions"].items():
             if t in all_ohlcv and curr_dt in all_ohlcv[t].index:
@@ -175,7 +202,6 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
             total_equity += pos["size"] * pos["last_close"]
         equity_curve.append({"date": d_str, "equity": total_equity})
 
-        # 2. Exits
         closed = []
         for t, pos in portfolio["positions"].items():
             if t not in all_ohlcv or curr_dt not in all_ohlcv[t].index: continue
@@ -183,16 +209,13 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
             pos["days_held"] += 1
             
             exit_px, reason = None, None
-            if r["open"] < pos["stop"]: 
-                exit_px, reason = r["open"], "STOP_GAP"
-            elif r["low"] < pos["stop"]: 
-                exit_px, reason = pos["stop"], "STOP"
+            if r["open"] < pos["stop"]: exit_px, reason = r["open"], "STOP_GAP"
+            elif r["low"] < pos["stop"]: exit_px, reason = pos["stop"], "STOP"
             
             if exit_px:
                 px = exit_px * (1 - SLIPPAGE_BPS/10000)
-                fee = px * pos["size"] * (FEE_BPS/10000)
-                portfolio["cash"] += (px * pos["size"] - fee)
-                pos["realized_pnl"] += (px - pos["entry_px"]) * pos["size"] - fee
+                portfolio["cash"] += (px * pos["size"] - (px * pos["size"] * FEE_BPS/10000))
+                pos["realized_pnl"] += (px - pos["entry_px"]) * pos["size"]
                 pos["exit_reasons"].append(reason)
                 closed.append(t)
                 continue
@@ -230,13 +253,11 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
                 "exit_phase": "+".join(p["exit_reasons"]), "entry_score": p["entry_score"]
             })
 
-        # 3. Entries
         for sig in pending_signals:
             t = sig.ticker
             if t not in all_ohlcv or curr_dt not in all_ohlcv[t].index: continue
             r = all_ohlcv[t].loc[curr_dt]
             sec = SECTOR_MAP.get(t, "UNKNOWN")
-            
             if len(portfolio["positions"]) < MAX_POSITIONS and t not in portfolio["positions"] and \
                portfolio["sector_count"].get(sec, 0) < MAX_PER_SECTOR:
                 entry_px = r["open"] * (1 + SLIPPAGE_BPS/10000)
@@ -246,9 +267,8 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
                     shares = int(risk_amt / price_risk)
                     if shares > 0:
                         cost = shares * entry_px
-                        fee = cost * (FEE_BPS/10000)
-                        if portfolio["cash"] >= (cost + fee):
-                            portfolio["cash"] -= (cost + fee)
+                        if portfolio["cash"] >= (cost * 1.0001):
+                            portfolio["cash"] -= (cost * 1.0001)
                             portfolio["sector_count"][sec] = portfolio["sector_count"].get(sec, 0) + 1
                             portfolio["positions"][t] = {
                                 "size": shares, "initial_size": shares, "entry_px": entry_px, "stop": sig.stop_price,
@@ -257,17 +277,14 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
                                 "entry_score": sig.entry_score, "last_close": entry_px
                             }
         
-        # 4. Scan
         spy_slice = spy_full[spy_full.index <= curr_dt].tail(400)
         vix_slice = vix_full[vix_full.index <= curr_dt].tail(1)
-        
         pending_signals = []
         if len(spy_slice) >= 200 and spy_slice.iloc[-1]["close"] > spy_slice["close"].rolling(200).mean().iloc[-1]:
             vix_ok = vix_slice["close"].iloc[0] < 35.0 if not vix_slice.empty else True
             if vix_ok:
                 day_universe = universe_by_date.get(d_str, [])
-                results_a = []
-                results_b = []
+                results_a, results_b = [], []
                 for ticker in day_universe:
                     if ticker not in all_ohlcv: continue
                     ticker_df = all_ohlcv[ticker][all_ohlcv[ticker].index <= curr_dt]
@@ -275,28 +292,21 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
                     rs_val = rs_lookup.get((curr_dt, ticker))
                     etf = SECTOR_MAP.get(ticker)
                     s_dist = etf_dists_full.get(etf, {}).get(curr_dt) if etf else None
+                    t_dist = theme_metrics_full.get(ticker, {}).get(curr_dt)
                     
-                    # Evaluate combo A
-                    res_a = evaluate_ticker(ticker, ticker_df, spy_slice, cfg_a, 
-                                          rs_percentile=rs_val, scan_date=d_str, 
-                                          sector_etf_dist=s_dist)
+                    res_a = evaluate_ticker(ticker, ticker_df, spy_slice, cfg_a, rs_percentile=rs_val, scan_date=d_str, 
+                                          sector_etf_dist=s_dist, theme_dist=t_dist)
                     if res_a.passed: results_a.append(res_a)
-                    
-                    # Evaluate combo B
-                    res_b = evaluate_ticker(ticker, ticker_df, spy_slice, cfg_b, 
-                                          rs_percentile=rs_val, scan_date=d_str, 
-                                          sector_etf_dist=s_dist)
+                    res_b = evaluate_ticker(ticker, ticker_df, spy_slice, cfg_b, rs_percentile=rs_val, scan_date=d_str, 
+                                          sector_etf_dist=s_dist, theme_dist=t_dist)
                     if res_b.passed: results_b.append(res_b)
-                
-                # Merge A/B signals
                 pending_signals = merge_ab_signals(results_a, results_b)
 
     df_trades, df_equity = pd.DataFrame(all_trades), pd.DataFrame(equity_curve)
-    df_trades.to_csv(OUTPUT_DIR / "complete_trades_clean.csv", index=False)
-    df_equity.rename(columns={"equity": "0"}).to_csv(OUTPUT_DIR / "equity_curve.csv", index=False)
-    
+    df_trades.to_csv(OUTPUT_DIR / f"{tag}_trades.csv", index=False)
+    df_equity.rename(columns={"equity": "0"}).to_csv(OUTPUT_DIR / f"{tag}_equity.csv", index=False)
     metrics = calculate_backtest_metrics(df_trades, df_equity)
-    with open(OUTPUT_DIR / "backtest_metrics.json", "w") as f: json.dump(metrics, f, indent=2)
+    with open(OUTPUT_DIR / f"{tag}_metrics.json", "w") as f: json.dump(metrics, f, indent=2)
     logger.info(f"✅ DONE | Return: {metrics.get('total_return')}% | MDD: {metrics.get('max_drawdown')}% | Trades: {len(df_trades)}")
 
 if __name__ == "__main__":
@@ -306,6 +316,7 @@ if __name__ == "__main__":
     parser.add_argument("--end", default="2024-12-31")
     parser.add_argument("--capital", type=float, default=100000)
     parser.add_argument("--universe-size", type=int, default=200)
-    parser.add_argument("--tag", default="gold_standard_parity")
+    parser.add_argument("--tag", default="gold_standard_variant_e")
+    parser.add_argument("--variant-e", action="store_true", help="Enable Thematic Divergence Filter")
     args = parser.parse_args()
-    run_backtest(args.start, args.end, args.capital, args.universe_size, args.tag)
+    run_backtest(args.start, args.end, args.capital, args.universe_size, args.tag, use_variant_e=args.variant_e)
