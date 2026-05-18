@@ -1,9 +1,9 @@
 {
-  "sharpe_ratio": 0.353,
-  "win_rate": 50.47,
-  "profit_factor": 1.1,
-  "max_drawdown": -24.79,
-  "annualized_return": 5.9,
-  "total_return": 12.12,
-  "total_trades": 107
+  "sharpe_ratio": 0.165,
+  "win_rate": 51.0,
+  "profit_factor": 1.06,
+  "max_drawdown": -16.07,
+  "annualized_return": 1.25,
+  "total_return": 2.5,
+  "total_trades": 100
 }

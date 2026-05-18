@@ -14,9 +14,10 @@ from tqdm import tqdm
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
-from src.signals.signal_engine import evaluate_ticker
+from src.signals.signal_engine import evaluate_ticker, merge_ab_signals
+from src.integration.combo_loader import load_combo_merged
+from src.integration.universe_builder import build_universe_for_fold
 from src.config.dynamic_config import load_production_config
-from src.scanner.universe_loader import load_scan_universe
 from src.utils.sector_rotation import SECTOR_MAP, SECTOR_ETFS
 
 # Configuration
@@ -97,56 +98,76 @@ def calculate_backtest_metrics(trades_df, equity_curve_df):
         "total_trades": len(trades_df)
     }
 
-def run_backtest(start_date: str, end_date: str, initial_capital: float, universe_size: int, tag: str):
-    logger.info(f"🚀 GOLD STANDARD BACKTEST (PIT) | Range: {start_date} -> {end_date}")
+def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tickers: int, tag: str):
+    logger.info(f"🚀 CANONICAL BACKTEST (PARITY) | Range: {start_date} -> {end_date}")
     dates_str = get_trading_dates(start_date, end_date)
     if not dates_str: return
 
-    # --- FASE 1: PRE-CARGA FIDELITY ---
-    logger.info("📦 Pre-loading Daily PIT Universes...")
-    conn = sqlite3.connect(DB_PATH)
+    # --- FASE 1: PRE-CARGA Y CONFIGURACIÓN ---
+    logger.info("📦 Loading configs and pre-loading superset...")
     
+    # Load A/B combos
+    cfg_a, _ = load_combo_merged("combo_pure_momentum")
+    cfg_b, _ = load_combo_merged("combo_stage2_breakout")
+    
+    # Apply master config overrides (if any)
+    master_cfg = load_production_config()
+    t2_master = master_cfg.get("tier2_filters", {})
+    for k, v in t2_master.items():
+        cfg_a.setdefault("tier2_filters", {})[k] = v
+        cfg_b.setdefault("tier2_filters", {})[k] = v
+
+    # Pre-calculate universes for all dates to get the superset
+    logger.info("🔭 Building PIT universes for each date...")
+    universe_by_date = {}
+    superset_tickers = set()
+    for d_str in tqdm(dates_str, desc="Universe Building"):
+        u_start = (pd.to_datetime(d_str) - timedelta(days=730)).strftime("%Y-%m-%d")
+        snap = build_universe_for_fold(DB_PATH, d_str, u_start, max_tickers=max_tickers)
+        universe_by_date[d_str] = snap.tickers
+        superset_tickers.update(snap.tickers)
+    
+    # Add SPY, VIX and Sector ETFs to superset
+    superset_tickers.update(["SPY", "^VIX"])
+    superset_tickers.update(SECTOR_ETFS)
+    
+    logger.info(f"Superset size: {len(superset_tickers)} tickers")
+
+    # Load ALL RS for RS lookups
+    conn = sqlite3.connect(DB_PATH)
     rs_all = pd.read_sql(
-        "SELECT date, ticker, rs_60d_pct, rs_composite FROM daily_rs_rankings WHERE date >= ? AND date <= ? || ' 23:59:59'",
+        "SELECT date, ticker, rs_composite FROM daily_rs_rankings WHERE date >= ? AND date <= ? || ' 23:59:59'",
         conn, params=(start_date, end_date)
     )
     rs_all["date"] = pd.to_datetime(rs_all["date"], format="mixed").dt.normalize()
-    
-    universe_daily = {}
-    for d, group in rs_all.groupby("date"):
-        universe_daily[d] = group.sort_values("rs_60d_pct", ascending=False).head(max(500, universe_size * 2))["ticker"].tolist()
-    
-    superset = sorted(list(set([t for univ in universe_daily.values() for t in univ])))
-    logger.info(f"Fidelity Superset size: {len(superset)} tickers")
-    
     rs_lookup = rs_all.set_index(["date", "ticker"])["rs_composite"].to_dict()
 
-    spy_full = pd.read_sql("SELECT date, open, high, low, close, volume FROM ohlcv_cache WHERE ticker='SPY' ORDER BY date", conn)
-    spy_full["date"] = pd.to_datetime(spy_full["date"], format="mixed").dt.normalize()
-    spy_full = spy_full.drop_duplicates(subset=["date"], keep="last").set_index("date")
+    # Load OHLCV for superset
+    lookback_start = (pd.to_datetime(start_date) - timedelta(days=400)).strftime("%Y-%m-%d")
+    all_ohlcv = load_ohlcv_batch_memory(list(superset_tickers), lookback_start, end_date)
     
-    vix_full = pd.read_sql("SELECT date, close FROM ohlcv_cache WHERE ticker='^VIX' ORDER BY date", conn)
-    vix_full["date"] = pd.to_datetime(vix_full["date"], format="mixed").dt.normalize()
-    vix_full = vix_full.drop_duplicates(subset=["date"], keep="last").set_index("date")
+    # Market Regime Pre-load
+    spy_full = all_ohlcv.get("SPY", pd.DataFrame())
+    vix_full = all_ohlcv.get("^VIX", pd.DataFrame())
     
-    etf_ohlcv = load_ohlcv_batch_memory(SECTOR_ETFS, (pd.to_datetime(start_date) - timedelta(days=100)).strftime("%Y-%m-%d"), end_date)
-    etf_dists = {} 
-    for etf, df in etf_ohlcv.items():
-        sma20 = df["close"].rolling(20).mean()
-        etf_dists[etf] = ((df["close"] - sma20) / sma20 * 100).to_dict()
+    # Sector ETFs Pre-load
+    etf_dists_full = {}
+    for etf in SECTOR_ETFS:
+        if etf in all_ohlcv:
+            df = all_ohlcv[etf]
+            sma20 = df["close"].rolling(20).mean()
+            etf_dists_full[etf] = ((df["close"] - sma20) / sma20).to_dict()
 
-    lookback_start = (pd.to_datetime(start_date) - timedelta(days=350)).strftime("%Y-%m-%d")
-    all_ohlcv = load_ohlcv_batch_memory(superset, lookback_start, end_date)
     conn.close()
 
-    # --- FASE 2: LOOP ---
+    # --- FASE 2: LOOP SIMULACIÓN ---
     portfolio = {"cash": initial_capital, "positions": {}, "sector_count": {}}
     all_trades, equity_curve, pending_signals = [], [], []
-    combo_cfg = load_production_config()
 
     for d_str in tqdm(dates_str, desc="Simulating"):
         curr_dt = pd.Timestamp(d_str)
         
+        # 1. Update Mark-to-Market
         total_equity = portfolio["cash"]
         for t, pos in portfolio["positions"].items():
             if t in all_ohlcv and curr_dt in all_ohlcv[t].index:
@@ -154,6 +175,7 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, univers
             total_equity += pos["size"] * pos["last_close"]
         equity_curve.append({"date": d_str, "equity": total_equity})
 
+        # 2. Exits
         closed = []
         for t, pos in portfolio["positions"].items():
             if t not in all_ohlcv or curr_dt not in all_ohlcv[t].index: continue
@@ -208,8 +230,9 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, univers
                 "exit_phase": "+".join(p["exit_reasons"]), "entry_score": p["entry_score"]
             })
 
+        # 3. Entries
         for sig in pending_signals:
-            t = sig["ticker"]
+            t = sig.ticker
             if t not in all_ohlcv or curr_dt not in all_ohlcv[t].index: continue
             r = all_ohlcv[t].loc[curr_dt]
             sec = SECTOR_MAP.get(t, "UNKNOWN")
@@ -218,7 +241,7 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, univers
                portfolio["sector_count"].get(sec, 0) < MAX_PER_SECTOR:
                 entry_px = r["open"] * (1 + SLIPPAGE_BPS/10000)
                 risk_amt = total_equity * RISK_PCT
-                price_risk = entry_px - sig["stop_price"]
+                price_risk = entry_px - sig.stop_price
                 if price_risk > 0:
                     shares = int(risk_amt / price_risk)
                     if shares > 0:
@@ -228,12 +251,13 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, univers
                             portfolio["cash"] -= (cost + fee)
                             portfolio["sector_count"][sec] = portfolio["sector_count"].get(sec, 0) + 1
                             portfolio["positions"][t] = {
-                                "size": shares, "initial_size": shares, "entry_px": entry_px, "stop": sig["stop_price"],
-                                "tp1": sig["tp1_price"], "tp2": sig["tp2_price"], "entry_date": d_str, "sector": sec,
+                                "size": shares, "initial_size": shares, "entry_px": entry_px, "stop": sig.stop_price,
+                                "tp1": sig.tp1_price, "tp2": sig.tp2_price, "entry_date": d_str, "sector": sec,
                                 "days_held": 0, "tp1_hit": False, "tp2_hit": False, "realized_pnl": 0, "exit_reasons": [],
-                                "entry_score": sig["entry_score"], "last_close": entry_px
+                                "entry_score": sig.entry_score, "last_close": entry_px
                             }
         
+        # 4. Scan
         spy_slice = spy_full[spy_full.index <= curr_dt].tail(400)
         vix_slice = vix_full[vix_full.index <= curr_dt].tail(1)
         
@@ -241,26 +265,33 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, univers
         if len(spy_slice) >= 200 and spy_slice.iloc[-1]["close"] > spy_slice["close"].rolling(200).mean().iloc[-1]:
             vix_ok = vix_slice["close"].iloc[0] < 35.0 if not vix_slice.empty else True
             if vix_ok:
-                day_universe = universe_daily.get(curr_dt, [])
+                day_universe = universe_by_date.get(d_str, [])
+                results_a = []
+                results_b = []
                 for ticker in day_universe:
                     if ticker not in all_ohlcv: continue
                     ticker_df = all_ohlcv[ticker][all_ohlcv[ticker].index <= curr_dt]
                     if len(ticker_df) < 65: continue
                     rs_val = rs_lookup.get((curr_dt, ticker))
                     etf = SECTOR_MAP.get(ticker)
-                    s_dist = etf_dists.get(etf, {}).get(curr_dt) if etf else None
-                    res = evaluate_ticker(ticker, ticker_df, spy_slice, combo_cfg, 
+                    s_dist = etf_dists_full.get(etf, {}).get(curr_dt) if etf else None
+                    
+                    # Evaluate combo A
+                    res_a = evaluate_ticker(ticker, ticker_df, spy_slice, cfg_a, 
                                           rs_percentile=rs_val, scan_date=d_str, 
                                           sector_etf_dist=s_dist)
-                    if res.passed:
-                        pending_signals.append({
-                            "ticker": res.ticker, "stop_price": res.stop_price, "tp1_price": res.tp1_price, 
-                            "tp2_price": res.tp2_price, "entry_score": res.entry_score
-                        })
-                pending_signals = sorted(pending_signals, key=lambda x: x["entry_score"], reverse=True)[:universe_size]
+                    if res_a.passed: results_a.append(res_a)
+                    
+                    # Evaluate combo B
+                    res_b = evaluate_ticker(ticker, ticker_df, spy_slice, cfg_b, 
+                                          rs_percentile=rs_val, scan_date=d_str, 
+                                          sector_etf_dist=s_dist)
+                    if res_b.passed: results_b.append(res_b)
+                
+                # Merge A/B signals
+                pending_signals = merge_ab_signals(results_a, results_b)
 
     df_trades, df_equity = pd.DataFrame(all_trades), pd.DataFrame(equity_curve)
-    # Save first to ensure data recovery
     df_trades.to_csv(OUTPUT_DIR / "complete_trades_clean.csv", index=False)
     df_equity.rename(columns={"equity": "0"}).to_csv(OUTPUT_DIR / "equity_curve.csv", index=False)
     
@@ -274,7 +305,7 @@ if __name__ == "__main__":
     parser.add_argument("--start", default="2023-01-01")
     parser.add_argument("--end", default="2024-12-31")
     parser.add_argument("--capital", type=float, default=100000)
-    parser.add_argument("--universe-size", type=int, default=100)
-    parser.add_argument("--tag", default="gold_standard_v2")
+    parser.add_argument("--universe-size", type=int, default=200)
+    parser.add_argument("--tag", default="gold_standard_parity")
     args = parser.parse_args()
     run_backtest(args.start, args.end, args.capital, args.universe_size, args.tag)

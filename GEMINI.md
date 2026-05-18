@@ -23,9 +23,15 @@ This project implements a high-conviction momentum trading system based on growt
 - **Validation**: Parallel observation (Local PIT vs Finviz Live) during paper trading.
 
 ## Phase 3: Paper Trading (Current)
-- **Primary Universe**: Local PIT (ADV Top 200).
+- **Primary Universe**: Local PIT (ADV Top 200 Dollar Volume).
 - **Secondary Universe**: Finviz Live (Observation only in `rejection_audit.csv`).
 - **Monitoring**: Check `outputs/live_signals/YYYY-MM-DD/rejection_audit.csv` for allowed/blocked signals and drift.
+
+## Critical Fixes (2026-05-18)
+- **Signal Engine**: Fixed ATR propagation bug (stops now use 2xATR correctly).
+- **Sizing**: Risk-per-trade now correctly read from `production_config.json` ($2,878).
+- **Backtest Parity**: Engine now implements full A/B combo merge and liquidity-based universe selection.
+- **Gold Standard Baseline**: +2.5% Return, -16.07% MDD, 100 trades (2Y PIT).
 
 ## Environment Separation (Laboratory vs VPS)
 The system is **Auto-Aware** of its environment:
