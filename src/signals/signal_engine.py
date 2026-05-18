@@ -298,6 +298,7 @@ def compute_tier2_metrics(
         close=float(close.iloc[-1]),
         spy_above_sma50=spy_above_sma50,
         spy_above_sma200=spy_above_sma200,
+        atr=atr,
     )
 
 
@@ -572,11 +573,12 @@ def evaluate_ticker(
     }
 
     # resolve canonical risk levels
+    t1_cfg = combo_cfg.get("tier1_strategy", {})
     risk = resolve_canonical_risk(
         entry_price=metrics.close,
         metrics=metrics,
         combo_cfg=combo_cfg,
-        risk_dollars=1000.0,  # Default per-trade risk
+        risk_dollars=float(t1_cfg.get("risk_dollars", 2878.0)),
     )
 
     return SignalDecision(
