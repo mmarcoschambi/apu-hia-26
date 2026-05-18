@@ -275,11 +275,13 @@ def simulate_run(
             "ticker": ticker,
             "agent": signal.get("agent_name", signal.get("strategy_id", "unknown")),
             "size": size,
+            "entry_date": str(entry_date.date()),
             "entry_price": round(fill_price, 4),
             "stop_price": round(stop_price, 4),
             "tp1_price": round(tp1_price, 4),
             "tp2_price": round(tp2_price, 4),
             "position_value": round(fill_price * size, 2),
+            "entry_score": entry_score,
             "unrealized_pnl": 0.0,
             "exited": False,
             "exit_reason": None,
@@ -328,7 +330,7 @@ def simulate_run(
         size_tp2 = int(size * tp2_pct)
         
         total_realized_pnl = 0.0
-        final_exit_reason = "EOD"
+        exit_reasons = []
         final_exit_date = holding_df.index[-1]
 
         for current_date, row in holding_df.iterrows():
@@ -343,6 +345,7 @@ def simulate_run(
                 total_realized_pnl += pnl
                 capital += exit_fill * remaining_size - exit_fee
                 
+                reason = "STOP" if current_stop < fill_price else "BREAKEVEN"
                 fills.append({
                     "fill_id": f"fill_{ticker}_stop_{date}_{current_date.date()}",
                     "order_id": f"ord_{ticker}_{date}",
@@ -352,10 +355,10 @@ def simulate_run(
                     "size": remaining_size,
                     "fee": exit_fee,
                     "timestamp": f"{current_date.date()} 16:00:00",
-                    "reason": "STOP" if current_stop < fill_price else "BREAKEVEN",
+                    "reason": reason,
                 })
                 remaining_size = 0
-                final_exit_reason = "STOP" if current_stop < fill_price else "BREAKEVEN"
+                exit_reasons.append(reason)
                 final_exit_date = current_date
                 break
             
@@ -381,6 +384,7 @@ def simulate_run(
                     "reason": "TP1",
                 })
                 remaining_size -= fill_sz
+                exit_reasons.append("TP1")
                 current_stop = fill_price # Breakeven tras TP1
             
             # TP2 Check
@@ -405,6 +409,7 @@ def simulate_run(
                     "reason": "TP2",
                 })
                 remaining_size -= fill_sz
+                exit_reasons.append("TP2")
 
         # Salida EOD si queda remanente
         if remaining_size > 0:
@@ -427,9 +432,9 @@ def simulate_run(
                 "reason": "EOD",
             })
             remaining_size = 0
-            final_exit_reason = "EOD"
+            exit_reasons.append("EOD")
             
-        pos_rec["exit_reason"] = final_exit_reason
+        pos_rec["exit_reason"] = "+".join(exit_reasons) if exit_reasons else "UNKNOWN"
         pos_rec["exit_price"] = None # Múltiples precios de salida
         pos_rec["exit_fee"] = None
         pos_rec["realized_pnl"] = round(total_realized_pnl, 2)
@@ -438,7 +443,7 @@ def simulate_run(
         pos_rec["remaining_size"] = remaining_size
 
         logger.info(
-            f"  CLOSE {ticker}  reason={final_exit_reason}  date={pos_rec['exit_date']}  "
+            f"  CLOSE {ticker}  reason={pos_rec['exit_reason']}  date={pos_rec['exit_date']}  "
             f"pnl=${total_realized_pnl:.2f}"
         )
 

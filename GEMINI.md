@@ -8,16 +8,15 @@ This project implements a high-conviction momentum trading system based on growt
 - **Tier 2 Filters**: Multi-layered validation including RS, ADR, Sector ETF, and Thematic Groups.
 - **Thematic Divergence**: Variant E (Theme OK, Sector NO) is the current high-conviction filter for swing setups (horizon >= 10 days).
 
-## Thematic Divergence Experiment (Completed 2026-05-12)
-- **Status**: GO (Validated in OOS with Delta Sharpe +0.452).
-- **Taxonomy**: Frozen at `v1.0-2026-05-12` (~100 tickers).
-- **Core Edge**: Captures capital rotation into strong niches during broad sector weakness.
-- **Key Caveats**:
-    - Sniper setup (30% retention).
-    - Requires horizon >= 10 days.
-    - 5d Sharpe is negative (needs time to unfold).
+## Thematic Divergence Verification (Plan E11 - In Progress)
+- **Status**: SHADOW MODE (Verification phase).
+- **Consolidation**: Canonical logic implemented in `src/signals/thematic_logic.py`.
+- **Target Rule**: `theme_above_sma20 AND NOT sector_etf_ok` (Variant E).
+- **Monitoring**: Active in Shadow Logger and Telegram Views (Theme RS).
+- **Gate GO/NO-GO**: Requires 15 real rounds with PF > 3.0 and WR > 55%.
+- **Documentation**: Detailed plan in `docs/analysis/THEMATIC_DIVERGENCE_VERIFICATION_E11.md`.
 
-## Development Workflow
+## Phase 3: Paper Trading (Current)
 - **Research**: Use `experiments/` for sandbox validation.
 - **Strategy**: Document IS/OOS metrics before core integration.
 - **Execution**: Feature-flag all new filters (`config/production_config.json`).

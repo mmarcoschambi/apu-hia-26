@@ -190,8 +190,9 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
         diag.add_column("MA Stack")
         diag.add_column("MA trig")
         diag.add_column("RVOL")
-        diag.add_column("Dist SMA20")
-        diag.add_column("Sector")
+        diag.add_column("Dist SMA20", justify="right")
+        diag.add_column("Sector", justify="center")
+        diag.add_column("Theme RS", justify="right")
         diag.add_column("Waiting")
         diag.add_column("Fails")
 
@@ -214,6 +215,9 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
             watchlist_detail.items(), key=lambda x: x[1].get("score", 0), reverse=True
         )[:15]:
             row_style = _style_for_row(data)
+            t_rs = data.get("theme_vs_sector")
+            t_rs_txt = f"{t_rs:+.1%}" if t_rs is not None else "N/A"
+            
             diag.add_row(
                 ticker,
                 f"[bold]{data.get('rs_pct', data.get('score', 0)):.1f}[/bold]",
@@ -224,6 +228,7 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
                 _fmt_num(data.get("rvol")),
                 _fmt_num(data.get("dist_sma20_pct"), "%"),
                 f"[green]✓[/green]" if data.get("sector_etf_ok", True) else "[red]✗[/red]",
+                t_rs_txt,
                 str(data.get("waiting_for", "OK")),
                 data.get("primary_reason") or (", ".join(data.get("reasons", [])[:3]) or "OK"),
                 style=row_style,

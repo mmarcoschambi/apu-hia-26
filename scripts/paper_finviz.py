@@ -28,7 +28,7 @@ from src.config.dynamic_config import load_production_config, flatten_config
 from src.utils.sector_rotation import SECTOR_MAP, SECTOR_ETFS
 from src.utils.terminal_gui import print_terminal_brief
 from src.utils.data_quality import calculate_data_quality as shared_calculate_quality
-
+from src.signals.thematic_logic import calculate_equal_weighted_index
 
 def get_etf_dists(date_str: str, sma_period: int = 20) -> dict:
     """Calcula las distancias a la SMA20 para todos los ETFs directamente, para asegurar metadatos en auditoria."""
@@ -454,6 +454,12 @@ def _enrich_watchlist_detail(engine, raw_detail: dict, fallback_detail: dict) ->
         conn.close()
     except: pass
 
+    # Cache for thematic indices to avoid redundant calculations
+    theme_index_cache = {}
+    
+    # Get current date from engine or trade date
+    as_of = engine.end_date if hasattr(engine, "end_date") else datetime.now().strftime("%Y-%m-%d")
+
     for ticker in tickers:
         detail = dict(raw_detail.get(ticker) or {})
         fallback = fallback_detail.get(ticker) or {}
@@ -468,7 +474,49 @@ def _enrich_watchlist_detail(engine, raw_detail: dict, fallback_detail: dict) ->
         if not sec: sec = SECTOR_MAP.get(ticker)
         
         detail["sector_etf"] = sec or "OTHER"
-        detail["themes"] = THEME_MAP.get(ticker, [])
+        themes = THEME_MAP.get(ticker, [])
+        detail["themes"] = themes
+        
+        # Calculate Theme RS if ticker has themes and a sector ETF
+        theme_vs_sector = None
+        best_theme_found = None
+        if themes and sec and sec != "OTHER":
+            try:
+                max_rs = -999.0
+                for theme_candidate in themes:
+                    if theme_candidate not in theme_index_cache:
+                        # Get all members
+                        members = [t for t, ths in THEME_MAP.items() if theme_candidate in ths]
+                        # Fetch price data for members + sector
+                        conn = sqlite3.connect(DB_PATH)
+                        all_req = members + [sec]
+                        placeholders = ",".join(["?"] * len(all_req))
+                        start_dt = (pd.Timestamp(as_of) - timedelta(days=60)).strftime("%Y-%m-%d")
+                        query = f"SELECT ticker, date, close FROM ohlcv_cache WHERE ticker IN ({placeholders}) AND date >= ? AND date <= ?"
+                        df_prices = pd.read_sql_query(query, conn, params=all_req + [start_dt, as_of])
+                        conn.close()
+                        
+                        if not df_prices.empty:
+                            pivot = df_prices.pivot(index="date", columns="ticker", values="close").sort_index()
+                            t_idx = calculate_equal_weighted_index(pivot, members)
+                            if not t_idx.empty:
+                                theme_index_cache[theme_candidate] = (t_idx, pivot[sec] if sec in pivot.columns else None)
+                    
+                    if theme_candidate in theme_index_cache:
+                        t_idx, s_prices = theme_index_cache[theme_candidate]
+                        if t_idx is not None and s_prices is not None and len(t_idx) >= 21 and len(s_prices) >= 21:
+                            t_ret = (t_idx.iloc[-1] / t_idx.iloc[-21]) - 1
+                            s_ret = (s_prices.iloc[-1] / s_prices.iloc[-21]) - 1
+                            cand_rs = t_ret - s_ret
+                            if cand_rs > max_rs:
+                                max_rs = cand_rs
+                                theme_vs_sector = cand_rs
+                                best_theme_found = theme_candidate
+            except Exception as e:
+                logger.debug(f"Error calculating Theme RS for {ticker}: {e}")
+
+        detail["theme_vs_sector"] = theme_vs_sector
+        detail["best_theme"] = best_theme_found or (themes[0] if themes else None)
         
         if "max_dist_sma20" not in detail or detail.get("max_dist_sma20") is None:
             detail["max_dist_sma20"] = float(getattr(engine, "max_dist_sma20", 6.77))

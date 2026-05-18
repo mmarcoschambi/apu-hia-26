@@ -243,6 +243,118 @@ FEATURES: Dict[str, Dict[str, Any]] = {
             }
         }
     },
+
+    # -------------------------------------------------------------------------
+    # E11: THEME GROUP DIVERGENCE FILTER
+    # -------------------------------------------------------------------------
+    # Experiment : experiments/theme_group_etf_correlation_sandbox.py
+    # Run date   : 2026-05-12
+    # Verdict    : GO — Variante E (Divergence: Theme OK, Sector NO)
+    #
+    # Mechanism  : Entra cuando el sector ETF esta frio (S1 x) PERO el tema
+    #              del ticker esta fuerte (theme_above_sma20 = True).
+    #              Captura rotaciones anticipadas dentro de sectores broad.
+    #
+    # OOS results (2025-07-01 -> 2026-03-31):
+    #   Best variant : E (Divergence)
+    #   Delta Sharpe : +0.452 vs Baseline 1 (Sector ETF)  <- threshold era +0.10
+    #   Win rate     : 59.4%  (threshold: > 55%)
+    #   Profit factor: 3.94   (threshold: > 3.0)
+    #   Avg return   : +11.5% (20d window)
+    #   OOS trades   : 2875
+    #
+    # Taxonomy   : 97 tickers * 32 temas * src/data/theme_taxonomy.py
+    #
+    # WARNING: Retiene ~20% de senales del baseline. Filtro muy selectivo.
+    #          NO activar en produccion sin completar shadow mode (15-20 rondas).
+    #
+    # Rollback triggers:
+    #   - Throughput < 15 senales/mes en 4 semanas consecutivas
+    #   - PF live < 3.0 sostenido
+    #   - WR live < 55% sostenido
+    # -------------------------------------------------------------------------
+
+    'use_theme_group_filter': {
+        'default': False,
+        'category': 'sector',
+        'description': 'E11: Theme divergence filter (sector cold, theme strong)',
+        'impact': '+0.452 Sharpe OOS vs Sector ETF baseline',
+        'status': 'shadow',        # shadow -> validated -> production
+        'type': 'boolean',
+        'experiment': {
+            'id': 'E11',
+            'file': 'experiments/theme_group_etf_correlation_sandbox.py',
+            'report': 'outputs/experiments/theme_group_experiment_report.json',
+            'run_date': '2026-05-12',
+            'verdict': 'GO',
+        },
+        'ui': {
+            'label': '🧩 Theme Divergence Filter (E11)',
+            'help': 'Filtra senales: sector frio + tema fuerte -> rotacion anticipada. Shadow mode only.',
+            'section': 'Sector Analysis'
+        },
+        'validation': {
+            'tested': True,
+            'sharpe_delta': 0.452,
+            'win_rate_oos': 59.4,
+            'profit_factor_oos': 3.94,
+            'trades_oos': 2875,
+            'verdict': 'SHADOW',       # proximo estado: ENABLE
+        },
+        'params': {
+            'theme_filter_mode': {
+                'default': 'E',
+                'choices': ['A', 'B', 'C', 'D', 'E'],
+                'type': 'str',
+                'description': (
+                    'Variante activa del filtro tematico. '
+                    'E=Divergence (tema OK, sector NO) -- ganadora OOS.'
+                )
+            },
+            'theme_filter_min_members': {
+                'default': 5,
+                'range': (2, 20),
+                'type': 'int',
+                'description': 'Minimo de tickers en el tema para que sea valido'
+            },
+            'theme_filter_min_pf': {
+                'default': 3.0,
+                'range': (1.5, 6.0),
+                'type': 'float',
+                'description': 'PF minimo en shadow para mantener el filtro activo'
+            },
+            'theme_filter_min_wr': {
+                'default': 55.0,
+                'range': (45.0, 70.0),
+                'type': 'float',
+                'description': 'Win rate minimo (%) en shadow para mantener el filtro activo'
+            },
+            'theme_filter_rs_lookback': {
+                'default': 20,
+                'range': (10, 60),
+                'type': 'int',
+                'description': 'Lookback en dias para calcular theme RS vs sector ETF'
+            },
+            'theme_filter_min_trades_per_month': {
+                'default': 15,
+                'range': (5, 50),
+                'type': 'int',
+                'description': 'Senales/mes minimas; por debajo -> trigger de rollback'
+            },
+            'theme_filter_rollback_weeks': {
+                'default': 4,
+                'range': (2, 8),
+                'type': 'int',
+                'description': 'Semanas consecutivas bajo el minimo antes de rollback automatico'
+            },
+            'theme_filter_max_throughput_drop': {
+                'default': 0.50,
+                'range': (0.20, 0.80),
+                'type': 'float',
+                'description': 'Fraccion maxima de senales retenidas (0.50 = acepta hasta 50% de drop)'
+            },
+        }
+    },
 }
 
 # =============================================================================
@@ -303,6 +415,13 @@ def get_ui_sections() -> Dict[str, List[str]]:
     
     return sections
 
+def get_shadow_features() -> Dict[str, Dict]:
+    """Get features currently in shadow/paper mode."""
+    return {
+        name: config for name, config in FEATURES.items()
+        if config.get('status') == 'shadow'
+    }
+
 # =============================================================================
 # USAGE EXAMPLES
 # =============================================================================
@@ -329,4 +448,10 @@ for section_name, feature_names in get_ui_sections().items():
         config = FEATURES[feature]
         ui = config['ui']
         st.checkbox(ui['label'], value=config['default'], help=ui['help'])
+
+# Example 4: Check what's in shadow mode
+from config.feature_flags import get_shadow_features
+
+shadow = get_shadow_features()
+# {'use_theme_group_filter': {...}}  <- E11 en paper mode
 """

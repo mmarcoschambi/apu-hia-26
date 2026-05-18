@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import sqlite3
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -8,10 +10,135 @@ from typing import Any
 import pandas as pd
 
 from src.paper.demo_portfolio import load_state
+from src.data.theme_taxonomy import THEME_MAP, get_themes
+from src.signals.thematic_logic import calculate_equal_weighted_index
+
+logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 MONITOR_ROOT = PROJECT_ROOT / "outputs" / "telegram_monitor"
 DEMO_ROOT = PROJECT_ROOT / "outputs" / "paper_demo_telegram" / "runs"
+
+GICS_TO_ETF = {
+    "Information Technology": "XLK",
+    "Financials": "XLF",
+    "Health Care": "XLV",
+    "Energy": "XLE",
+    "Consumer Discretionary": "XLY",
+    "Consumer Staples": "XLP",
+    "Industrials": "XLI",
+    "Materials": "XLB",
+    "Real Estate": "XLRE",
+    "Utilities": "XLU",
+    "Communication Services": "XLC",
+}
+
+ETF_TO_NAME = {
+    "XLK": "Tecnología",
+    "XLF": "Financiero",
+    "XLV": "Salud",
+    "XLE": "Energía",
+    "XLY": "Consumo Discr",
+    "XLP": "Consumo Básico",
+    "XLI": "Industrial",
+    "XLB": "Materiales",
+    "XLRE": "Inmobiliario",
+    "XLU": "Utilities",
+    "XLC": "Comunicaciones",
+    "SPY": "Market"
+}
+
+_TICKER_TO_ETF = None
+
+def _get_ticker_to_etf():
+    global _TICKER_TO_ETF
+    if _TICKER_TO_ETF is not None:
+        return _TICKER_TO_ETF
+    
+    csv_path = PROJECT_ROOT / "sp500" / "sp500" / "sp500.csv"
+    if not csv_path.exists():
+        _TICKER_TO_ETF = {}
+        return _TICKER_TO_ETF
+    
+    try:
+        df = pd.read_csv(csv_path)
+        ticker_to_gics = dict(zip(df["Symbol"], df["GICS Sector"]))
+        _TICKER_TO_ETF = {t: GICS_TO_ETF[s] for t, s in ticker_to_gics.items() if s in GICS_TO_ETF}
+    except Exception:
+        _TICKER_TO_ETF = {}
+    
+    return _TICKER_TO_ETF
+
+def _get_theme_rs_vs_etf(ticker: str, date: str, lookback: int = 20) -> float | None:
+    etf = _get_ticker_to_etf().get(ticker)
+    if not etf:
+        return None
+    
+    themes = get_themes(ticker)
+    if not themes:
+        return None
+    
+    # Get all members of themes the ticker belongs to
+    theme_members = set()
+    for theme in themes:
+        for t, th_list in THEME_MAP.items():
+            if theme in th_list:
+                theme_members.add(t)
+    
+    if not theme_members:
+        return None
+        
+    db_path = PROJECT_ROOT / "data" / "ticker_cache.db"
+    if not db_path.exists():
+        return None
+        
+    try:
+        conn = sqlite3.connect(db_path)
+        all_tickers = list(theme_members) + [etf]
+        placeholders = ",".join("?" * len(all_tickers))
+        
+        as_of_ts = pd.Timestamp(date)
+        start_ts = as_of_ts - pd.Timedelta(days=lookback + 30)
+        
+        query = f"""
+            SELECT ticker, date, close 
+            FROM ohlcv_cache 
+            WHERE ticker IN ({placeholders}) AND date >= ? AND date <= ?
+        """
+        df = pd.read_sql_query(query, conn, params=all_tickers + [start_ts.strftime('%Y-%m-%d'), date])
+        conn.close()
+        
+        if df.empty:
+            return None
+            
+        pivot = df.pivot(index="date", columns="ticker", values="close").sort_index()
+        member_cols = [c for c in pivot.columns if c in theme_members]
+        if not member_cols:
+            return None
+            
+        theme_index = calculate_equal_weighted_index(pivot, member_cols)
+        if theme_index.empty:
+            return None
+            
+        if etf not in pivot.columns:
+            return None
+        e_prices = pivot[etf].dropna()
+        
+        common_dates = theme_index.dropna().index.intersection(e_prices.index)
+        if len(common_dates) < 2:
+            return None
+            
+        end_idx = common_dates[-1]
+        start_dt_idx = max(0, len(common_dates) - lookback - 1)
+        start_idx = common_dates[start_dt_idx]
+        
+        t_ret = (theme_index.loc[end_idx] / theme_index.loc[start_idx]) - 1
+        e_ret = (e_prices.loc[end_idx] / e_prices.loc[start_idx]) - 1
+        
+        return t_ret - e_ret
+    except Exception as e:
+        logger.error(f"Error in _get_theme_rs_vs_etf for {ticker}: {e}")
+        return None
 
 
 def _dated_dirs(base: Path) -> list[Path]:
@@ -142,61 +269,119 @@ def build_market_message(date: str | None = None) -> tuple[str, list]:
         lines.append("</pre>")
     return "\n".join(lines), []
 
-def build_watchlist_message(date: str | None = None, limit: int = 10) -> str:
+def _get_sector_status(etf: str, date: str) -> tuple[bool, float] | None:
+    db_path = PROJECT_ROOT / "data" / "ticker_cache.db"
+    if not db_path.exists():
+        return None
+    try:
+        conn = sqlite3.connect(db_path)
+        query = "SELECT close FROM ohlcv_cache WHERE ticker = ? AND date <= ? ORDER BY date DESC LIMIT 40"
+        df = pd.read_sql_query(query, conn, params=(etf, date))
+        conn.close()
+        if len(df) < 20:
+            return None
+        # Must sort ASC for rolling() to work correctly
+        df = df.sort_values("date")
+        sma = df['close'].rolling(20).mean().iloc[-1]
+        curr = df['close'].iloc[-1]
+        return curr > sma, (curr / sma) - 1
+    except Exception:
+        return None
+
+
+def _build_grouped_signals_lines(signals: list, date: str, limit: int = 15) -> list[str]:
+    ticker_to_etf = _get_ticker_to_etf()
+    groups: dict[str, list[dict]] = {}
+    no_etf = []
+    
+    for s in signals:
+        ticker = s.get('ticker')
+        etf = ticker_to_etf.get(ticker)
+        if etf:
+            if etf not in groups:
+                groups[etf] = []
+            groups[etf].append(s)
+        else:
+            no_etf.append(s)
+            
+    lines = []
+    # Sort groups by ETF name
+    for etf in sorted(groups.keys()):
+        sector_name = ETF_TO_NAME.get(etf, etf)
+        
+        # Sector status
+        s_status = _get_sector_status(etf, date)
+        s_icon = ""
+        s_dist_text = ""
+        if s_status is not None:
+            ok, dist = s_status
+            s_icon = " 🟢" if ok else " 🔴"
+            s_dist_text = f" ({dist:+.1%})"
+            
+        lines.append(f"<b>{etf} — {sector_name}</b>{s_icon}{s_dist_text}")
+        
+        for s in groups[etf][:limit]:
+            ticker = s['ticker']
+            themes = get_themes(ticker)
+            theme_str = f"Temas: {', '.join(themes)}" if themes else "(no theme)"
+            rs_val = s.get('rs_rating', s.get('rs_20d', '??'))
+            
+            theme_rs = _get_theme_rs_vs_etf(ticker, date)
+            rs_icon = ""
+            rs_text = ""
+            if theme_rs is not None:
+                # Theme RS is vs Sector ETF
+                rs_icon = " ✅" if theme_rs > 0 else " ⚠️"
+                rs_text = f" | RS vs Sector: {theme_rs:+.1%}"
+                
+            lines.append(f"  <code>{ticker:<5}</code> RS:{rs_val} | {theme_str}{rs_text}{rs_icon}")
+        lines.append("")
+        
+    if no_etf:
+        lines.append("<b>Sin sector mapeado</b>")
+        for s in no_etf[:limit]:
+            ticker = s['ticker']
+            themes = get_themes(ticker)
+            theme_str = f"Temas: {', '.join(themes)}" if themes else "(no theme)"
+            lines.append(f"  <code>{ticker:<5}</code> {theme_str}")
+            
+    return lines
+
+def build_watchlist_message(date: str | None = None, limit: int = 15) -> str:
     resolved, signals = load_prealerts(date)
     if not resolved:
         return "⚠️ <b>WATCHLIST</b>\nNo prealerts available yet."
         
     lines = [
-        f"🧭 <b>MANUAL REVIEW | WATCHLIST | {resolved}</b>", 
-        f"<i>(NO AUTO ENTRY - Validate Radar first)</i>\n",
-        f"<i>Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</i>\n",
-        f"🔍 Candidates: <code>{len(signals)}</code>"
+        f"🧭 <b>WATCHLIST | {resolved}</b>", 
+        f"<i>(Manual Review - Grouped by Sector)</i>\n",
+        f"🔍 Candidates: <code>{len(signals)}</code>\n"
     ]
     
     if not signals:
-        lines.append("\nNo watchlist candidates yet.")
+        lines.append("No watchlist candidates yet.")
         return "\n".join(lines)
         
-    lines.append("\n<pre>")
-    lines.append(f"{'Ticker':<7} {'Combo':<12} {'Entry':<8} {'Stop'}")
-    lines.append(f"{'-'*7} {'-'*12} {'-'*8} {'-'*6}")
-    for signal in signals[:limit]:
-        ticker = signal.get('ticker', '?')
-        combo = signal.get('combo', signal.get('combo_name', 'n/a'))[:12]
-        entry = float(signal.get('entry_price', 0) or 0)
-        stop = float(signal.get('stop_loss', signal.get('stop_price', 0)) or 0)
-        lines.append(f"{ticker:<7} {combo:<12} {entry:<8.2f} {stop:.2f}")
-    lines.append("</pre>")
+    lines.extend(_build_grouped_signals_lines(signals, resolved, limit))
     return "\n".join(lines)
 
 
-def build_monitor_signals_message(date: str | None = None, limit: int = 5) -> str:
+def build_monitor_signals_message(date: str | None = None, limit: int = 10) -> str:
     resolved, signals = load_prealerts(date)
     if not resolved:
         return "⚠️ <b>SIGNALS</b>\nNo monitor signals available yet."
         
     lines = [
-        f"🧭 <b>MANUAL REVIEW | MONITOR SIGNALS | {resolved}</b>", 
-        f"<i>(NO AUTO ENTRY - Validate Radar first)</i>\n",
-        f"<i>Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</i>\n",
-        f"📡 Candidates: <code>{len(signals)}</code>"
+        f"🧭 <b>MONITOR SIGNALS | {resolved}</b>", 
+        f"<i>(Observation Mode - Grouped by Sector)</i>\n",
+        f"📡 Candidates: <code>{len(signals)}</code>\n"
     ]
     
     if not signals:
-        lines.append("\nNo monitor candidates available.")
+        lines.append("No monitor candidates available.")
         return "\n".join(lines)
         
-    lines.append("\n<pre>")
-    lines.append(f"{'Ticker':<7} {'Combo':<12} {'Entry':<8} {'Stop'}")
-    lines.append(f"{'-'*7} {'-'*12} {'-'*8} {'-'*6}")
-    for signal in signals[:limit]:
-        ticker = signal.get('ticker', '?')
-        combo = signal.get('combo', signal.get('combo_name', 'n/a'))[:12]
-        entry = float(signal.get('entry_price', 0) or 0)
-        stop = float(signal.get('stop_loss', signal.get('stop_price', 0)) or 0)
-        lines.append(f"{ticker:<7} {combo:<12} {entry:<8.2f} {stop:.2f}")
-    lines.append("</pre>")
+    lines.extend(_build_grouped_signals_lines(signals, resolved, limit))
     return "\n".join(lines)
 
 
@@ -392,3 +577,4 @@ def build_position_cards(date: str | None = None, limit: int = 5) -> list[dict[s
             }
         )
     return cards
+

@@ -30,6 +30,7 @@ from src.integration.combo_loader import load_combo_merged
 from src.integration.universe_builder import build_universe_for_fold
 from src.config.dynamic_config import load_production_config
 from src.utils.sector_rotation import SECTOR_MAP, SECTOR_ETFS
+from src.signals.thematic_logic import calculate_equal_weighted_index
 
 logging.basicConfig(
     level=logging.INFO,
@@ -128,20 +129,9 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
                 
                 theme_indices = {}
                 for theme, members in theme_to_tickers.items():
-                    avail = [m for m in members if m in market_data.columns]
-                    if len(avail) < 2: continue
-                    
-                    # Equal-weighted: average of returns
-                    m_rets = market_data[avail].pct_change()
-                    # Min 5 members or all if < 5 total
-                    min_m = min(5, len(avail))
-                    valid = market_data[avail].notna().sum(axis=1) >= min_m
-                    
-                    t_rets = m_rets.mean(axis=1)
-                    t_rets[~valid] = np.nan
-                    t_idx = (1 + t_rets.fillna(0)).cumprod()
-                    t_idx[t_rets.isna()] = np.nan
-                    theme_indices[theme] = t_idx
+                    t_idx = calculate_equal_weighted_index(market_data, members, min_members=None)
+                    if not t_idx.empty:
+                        theme_indices[theme] = t_idx
                 
                 df_themes = pd.DataFrame(theme_indices)
                 theme_sma20 = df_themes.rolling(20).mean()
@@ -176,11 +166,12 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
                                 best_theme_vs_sector = vs_sector
                                 best_theme = theme
                                 
-                            theme_metrics_map[ticker] = {
-                                "theme_dist": t_dist,
-                                "theme_vs_sector": vs_sector,
-                                "theme_rank_pct": 0.0 # simplified rank for live
-                            }
+                                theme_metrics_map[ticker] = {
+                                    "theme_dist": t_dist,
+                                    "theme_vs_sector": vs_sector,
+                                    "theme_rank_pct": 0.0, # simplified rank for live
+                                    "best_theme": theme
+                                }
                             metrics_found = True
                         except:
                             continue
@@ -429,6 +420,16 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
                 s_dict["close"] = round(sig.tier2_metrics.close, 4)
                 s_dict["spy_above_sma50"] = sig.tier2_metrics.spy_above_sma50
                 s_dict["spy_above_sma200"] = sig.tier2_metrics.spy_above_sma200
+                s_dict["theme_dist"] = (
+                    round(sig.tier2_metrics.theme_dist, 4)
+                    if sig.tier2_metrics.theme_dist is not None
+                    else None
+                )
+                s_dict["theme_vs_sector"] = (
+                    round(sig.tier2_metrics.theme_vs_sector, 4)
+                    if sig.tier2_metrics.theme_vs_sector is not None
+                    else None
+                )
 
                 all_signals.append(s_dict)
                 logger.info(

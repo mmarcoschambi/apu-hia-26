@@ -263,10 +263,14 @@ def compute_tier2_metrics(
         try:
             period = min(rs_lookback, len(df) - 1, len(spy_df) - 1)
             if period > 10:
-                ticker_ret = float(close.iloc[-1] / close.iloc[-period - 1] - 1)
-                spy_close = spy_df["close"] if "close" in spy_df.columns else spy_df["Close"]
-                spy_ret = float(spy_close.iloc[-1] / spy_close.iloc[-period - 1] - 1)
-                rs_ret = ticker_ret - spy_ret
+                denom = float(close.iloc[-period - 1])
+                if denom > 0:
+                    ticker_ret = float(close.iloc[-1] / denom - 1)
+                    spy_close = spy_df["close"] if "close" in spy_df.columns else spy_df["Close"]
+                    spy_ret = float(spy_close.iloc[-1] / spy_close.iloc[-period - 1] - 1)
+                    rs_ret = ticker_ret - spy_ret
+                else:
+                    rs_ret = 0.0
         except Exception:
             pass
 

@@ -1116,6 +1116,84 @@ def _render_ab_comparison(live_run: dict, historical_run: dict) -> None:
             st.info("No exposure data for A/B breakdown.")
 
 
+def _load_canonical_backtest_results():
+    base = Path("outputs/backtests")
+    trades_path = base / "complete_trades_clean.csv"
+    equity_path = base / "equity_curve.csv"
+    metrics_path = base / "backtest_metrics.json"
+    
+    trades = pd.read_csv(trades_path) if trades_path.exists() else pd.DataFrame()
+    equity = pd.read_csv(equity_path) if equity_path.exists() else pd.DataFrame()
+    metrics = {}
+    if metrics_path.exists():
+        try:
+            with open(metrics_path, "r") as f:
+                metrics = json.load(f)
+        except Exception:
+            metrics = {}
+    return trades, equity, metrics
+
+
+def _render_canonical_portfolio_tab():
+    trades, equity, metrics = _load_canonical_backtest_results()
+    
+    if trades.empty:
+        st.info("No hay resultados de backtest canónico. Ejecuta uno desde el sidebar (⚡ Run Scripts).")
+        return
+
+    st.subheader("Canonical Backtest Summary (Plan B)")
+    st.caption("Estrategia: Portfolio Manager con límites sectoriales y riesgo fijo (2.8%)")
+
+    # Metrics Row
+    _render_kpi_row([
+        ("Total Return", f"{metrics.get('total_return', 0)}%", None),
+        ("Max Drawdown", f"{metrics.get('max_drawdown', 0)}%", None),
+        ("Sharpe Ratio", f"{metrics.get('sharpe_ratio', 0)}", None),
+        ("Profit Factor", f"{metrics.get('profit_factor', 0)}", None),
+        ("Win Rate", f"{metrics.get('win_rate', 0)}%", None),
+        ("Total Trades", f"{metrics.get('total_trades', 0)}", None),
+    ])
+
+    # Equity Curve
+    if not equity.empty:
+        st.markdown("---")
+        st.subheader("Equity Curve (Mark-to-Market)")
+        # Sort by date just in case
+        equity["date"] = pd.to_datetime(equity["date"])
+        equity = equity.sort_values("date")
+        
+        fig = px.line(equity, x="date", y="0", title="Portfolio Equity Over Time",
+                      labels={"0": "Equity ($)", "date": "Date"},
+                      color_discrete_sequence=["#00ffa3"])
+        fig.update_layout(template="plotly_dark", height=450, hovermode="x unified")
+        st.plotly_chart(fig, use_container_width=True)
+
+    # Monthly performance table (if available in trades)
+    if not trades.empty and "entry_date" in trades.columns:
+        st.markdown("---")
+        st.subheader("Monthly Attribution")
+        trades["month"] = pd.to_datetime(trades["entry_date"]).dt.strftime("%Y-%m")
+        monthly = trades.groupby("month").agg(
+            trades=("symbol", "count"),
+            pnl=("pnl", "sum"),
+            win_rate=("pnl", lambda x: (x > 0).mean() * 100)
+        ).reset_index().sort_values("month", ascending=False)
+        
+        st.dataframe(monthly.style.background_gradient(subset=["pnl"], cmap="RdYlGn"),
+                     use_container_width=True, hide_index=True)
+
+    # Trades Table
+    st.markdown("---")
+    st.subheader("Completed Trades (Enriched)")
+    visible_cols = [c for c in [
+        "symbol", "entry_date", "exit_date", "entry_price", "exit_price", 
+        "pnl", "return_pct", "exit_phase", "monetary_risk", "entry_score"
+    ] if c in trades.columns]
+    
+    st.dataframe(trades[visible_cols].sort_values("entry_date", ascending=False), 
+                 use_container_width=True, hide_index=True)
+
+
 def _render_dashboard_v2(
     mode: str, system_view: str, selected_combo_run: str | None, selected_agent: str
 ) -> None:
@@ -1132,13 +1210,14 @@ def _render_dashboard_v2(
     _render_warnings(combo_run.get("warnings", []), "combo scanner")
     _render_warnings(universe_run.get("warnings", []), "stable universe")
 
-    overview_tab, health_tab, pipeline_tab, universe_tab, research_tab, legacy_tab = st.tabs(
+    overview_tab, health_tab, pipeline_tab, universe_tab, research_tab, canonical_tab, legacy_tab = st.tabs(
         [
             "Overview",
             "Market Health",
             "Live Pipeline",
             "Universe + Combos",
             "Research / Historical",
+            "Canonical Portfolio",
             "Legacy",
         ]
     )
@@ -1224,6 +1303,9 @@ def _render_dashboard_v2(
             _render_edge_panel(historical_run, system_view)
         with hist_exec_tab:
             _render_execution_table(historical_run, system_view)
+
+    with canonical_tab:
+        _render_canonical_portfolio_tab()
 
     with legacy_tab:
         st.info(
@@ -2079,6 +2161,22 @@ with st.sidebar:
                         f"{_base}/scripts/run_combo_scanner.py",
                         "--universe-source",
                         "stable",
+                    ],
+                    _base,
+                )
+
+            if st.button("📈 Run Canonical Backtest (2Y)", use_container_width=True, key="btn_canonical_bt"):
+                st.caption("Runs full 2023-2024 backtest with Portfolio Manager logic (~1-2 min).")
+                _run_script_streaming(
+                    "backtest_via_signal_engine.py",
+                    [
+                        "python3",
+                        f"{_base}/scripts/backtest_via_signal_engine.py",
+                        "--start", "2023-01-01",
+                        "--end", "2024-12-31",
+                        "--capital", "100000",
+                        "--universe-size", "200",
+                        "--tag", "dashboard_run"
                     ],
                     _base,
                 )
