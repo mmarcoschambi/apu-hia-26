@@ -21,6 +21,8 @@ from src.config.dynamic_config import load_production_config
 from src.utils.sector_rotation import SECTOR_MAP, SECTOR_ETFS
 from src.signals.thematic_logic import calculate_equal_weighted_index
 from src.data.theme_taxonomy import THEME_MAP, get_themes
+from src.utils.market_health import calculate_health_score_pit
+from config.feature_flags import get_active_mode
 
 # Configuration
 DB_PATH = PROJECT_ROOT / "data" / "ticker_cache.db"
@@ -30,7 +32,7 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 # Constants
 MAX_POSITIONS = 6
 MAX_PER_SECTOR = 2
-RISK_PCT = 0.028  # 2.8% of total equity
+RISK_PCT_BASE = 0.02878  # 2.878% base risk
 HOLDING_DAYS_LIMIT = 10
 FEE_BPS = 1.0 # 1 bps
 SLIPPAGE_BPS = 5.0 # 5 bps
@@ -195,13 +197,31 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
     for d_str in tqdm(dates_str, desc="Simulating"):
         curr_dt = pd.Timestamp(d_str)
         
+        # 0. Market Context & Mode Selection
+        spy_slice_full = spy_full[spy_full.index <= curr_dt]
+        vix_slice_full = vix_full[vix_full.index <= curr_dt].tail(5)
+        health = calculate_health_score_pit(spy_slice_full, vix_slice_full)
+        active_mode = get_active_mode(health)
+        
+        # Update configs based on mode
+        cfg_a["tier2_filters"]["use_theme_group_filter"] = active_mode["use_theme_group_filter"]
+        cfg_b["tier2_filters"]["use_theme_group_filter"] = active_mode["use_theme_group_filter"]
+        # If mode is Attack, we ensure sector filter is active (Baseline logic)
+        # If mode is Defense, we ensure sector filter is OFF (Variant E logic)
+        cfg_a["tier2_filters"]["use_sector_etf_filter"] = not active_mode["use_theme_group_filter"]
+        cfg_b["tier2_filters"]["use_sector_etf_filter"] = not active_mode["use_theme_group_filter"]
+        
+        effective_risk_pct = RISK_PCT_BASE * active_mode["risk_multiplier"]
+
+        # 1. Update Mark-to-Market
         total_equity = portfolio["cash"]
         for t, pos in portfolio["positions"].items():
             if t in all_ohlcv and curr_dt in all_ohlcv[t].index:
                 pos["last_close"] = all_ohlcv[t].loc[curr_dt, "close"]
             total_equity += pos["size"] * pos["last_close"]
-        equity_curve.append({"date": d_str, "equity": total_equity})
+        equity_curve.append({"date": d_str, "equity": total_equity, "health": health, "mode": active_mode["mode"]})
 
+        # 2. Exits (Priority: GapDown > Stop > TP1 > TP2 > EOD)
         closed = []
         for t, pos in portfolio["positions"].items():
             if t not in all_ohlcv or curr_dt not in all_ohlcv[t].index: continue
@@ -209,13 +229,16 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
             pos["days_held"] += 1
             
             exit_px, reason = None, None
-            if r["open"] < pos["stop"]: exit_px, reason = r["open"], "STOP_GAP"
-            elif r["low"] < pos["stop"]: exit_px, reason = pos["stop"], "STOP"
+            if r["open"] < pos["stop"]: 
+                exit_px, reason = r["open"], "STOP_GAP"
+            elif r["low"] < pos["stop"]: 
+                exit_px, reason = pos["stop"], "STOP"
             
             if exit_px:
                 px = exit_px * (1 - SLIPPAGE_BPS/10000)
-                portfolio["cash"] += (px * pos["size"] - (px * pos["size"] * FEE_BPS/10000))
-                pos["realized_pnl"] += (px - pos["entry_px"]) * pos["size"]
+                fee = px * pos["size"] * (FEE_BPS/10000)
+                portfolio["cash"] += (px * pos["size"] - fee)
+                pos["realized_pnl"] += (px - pos["entry_px"]) * pos["size"] - fee
                 pos["exit_reasons"].append(reason)
                 closed.append(t)
                 continue
@@ -250,9 +273,11 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
                 "symbol": t, "entry_date": p["entry_date"], "exit_date": d_str, "entry_price": p["entry_px"],
                 "exit_price": p["last_close"], "pnl": p["realized_pnl"], 
                 "return_pct": (p["realized_pnl"] / (p["entry_px"] * p["initial_size"])) * 100 if (p["entry_px"] * p["initial_size"]) > 0 else 0,
-                "exit_phase": "+".join(p["exit_reasons"]), "entry_score": p["entry_score"]
+                "exit_phase": "+".join(p["exit_reasons"]), "entry_score": p["entry_score"],
+                "health_at_entry": p["health_at_entry"]
             })
 
+        # 3. Entries
         for sig in pending_signals:
             t = sig.ticker
             if t not in all_ohlcv or curr_dt not in all_ohlcv[t].index: continue
@@ -261,7 +286,7 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
             if len(portfolio["positions"]) < MAX_POSITIONS and t not in portfolio["positions"] and \
                portfolio["sector_count"].get(sec, 0) < MAX_PER_SECTOR:
                 entry_px = r["open"] * (1 + SLIPPAGE_BPS/10000)
-                risk_amt = total_equity * RISK_PCT
+                risk_amt = total_equity * effective_risk_pct
                 price_risk = entry_px - sig.stop_price
                 if price_risk > 0:
                     shares = int(risk_amt / price_risk)
@@ -274,12 +299,15 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
                                 "size": shares, "initial_size": shares, "entry_px": entry_px, "stop": sig.stop_price,
                                 "tp1": sig.tp1_price, "tp2": sig.tp2_price, "entry_date": d_str, "sector": sec,
                                 "days_held": 0, "tp1_hit": False, "tp2_hit": False, "realized_pnl": 0, "exit_reasons": [],
-                                "entry_score": sig.entry_score, "last_close": entry_px
+                                "entry_score": sig.entry_score, "last_close": entry_px,
+                                "health_at_entry": health
                             }
         
+        # 4. Scan
         spy_slice = spy_full[spy_full.index <= curr_dt].tail(400)
         vix_slice = vix_full[vix_full.index <= curr_dt].tail(1)
         pending_signals = []
+        # Basic regime filter remains: SPY > SMA200 and VIX < 35
         if len(spy_slice) >= 200 and spy_slice.iloc[-1]["close"] > spy_slice["close"].rolling(200).mean().iloc[-1]:
             vix_ok = vix_slice["close"].iloc[0] < 35.0 if not vix_slice.empty else True
             if vix_ok:

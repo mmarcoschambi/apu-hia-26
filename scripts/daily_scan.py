@@ -31,6 +31,8 @@ from src.integration.universe_builder import build_universe_for_fold
 from src.config.dynamic_config import load_production_config
 from src.utils.sector_rotation import SECTOR_MAP, SECTOR_ETFS
 from src.signals.thematic_logic import calculate_equal_weighted_index
+from src.utils.market_health import calculate_health_score_pit
+from config.feature_flags import get_active_mode
 
 logging.basicConfig(
     level=logging.INFO,
@@ -213,14 +215,36 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
     logger.info(f"Combined Scan Universe: {len(all_scan_tickers)} unique tickers.")
 
     # 4. Cargar SPY para régimen de mercado (SMA200 real)
-    logger.info("Checking Market Regime (SMA200)...")
+    logger.info("Checking Market Regime & Health Score...")
     spy_start = (today - timedelta(days=400)).strftime("%Y-%m-%d")
     spy_df = load_ohlcv("SPY", spy_start, date_str)
+    
+    # NEW: Market Health & Mode Selection
+    vix_start = (today - timedelta(days=10)).strftime("%Y-%m-%d")
+    vix_df = load_ohlcv("^VIX", vix_start, date_str)
+    health = calculate_health_score_pit(spy_df, vix_df)
+    active_mode = get_active_mode(health)
+    
+    logger.info(f"MARKET HEALTH: {health}/7 | ACTIVE MODE: {active_mode['mode']}")
 
     # 5. Cargar configuraciones de combos
     logger.info("Loading combo configurations...")
     cfg_a, _ = load_combo_merged("combo_pure_momentum")
     cfg_b, _ = load_combo_merged("combo_stage2_breakout")
+
+    # Dynamic Mode Application
+    cfg_a["tier2_filters"]["use_theme_group_filter"] = active_mode["use_theme_group_filter"]
+    cfg_b["tier2_filters"]["use_theme_group_filter"] = active_mode["use_theme_group_filter"]
+    cfg_a["tier2_filters"]["use_sector_etf_filter"] = not active_mode["use_theme_group_filter"]
+    cfg_b["tier2_filters"]["use_sector_etf_filter"] = not active_mode["use_theme_group_filter"]
+    
+    # Effective Risk Calculation
+    base_risk = float(master_cfg.get("tier1_strategy", {}).get("risk_dollars", 2878.0))
+    effective_risk = base_risk * active_mode["risk_multiplier"]
+    cfg_a["tier1_strategy"]["risk_dollars"] = effective_risk
+    cfg_b["tier1_strategy"]["risk_dollars"] = effective_risk
+    
+    logger.info(f"Effective Risk per Trade: ${effective_risk:.2f} ({active_mode['risk_multiplier']*100:.0f}%)")
 
     # Aplicar Overrides: Master Config gana, luego VALIDATED_OVERRIDES como fallback/legacy
     VALIDATED_OVERRIDES = {
@@ -255,7 +279,7 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
     # 6. Scan
     all_signals = []
     rejection_audit = []
-    logger.info(f"Scanning {len(tickers)} tickers with A+B modes...")
+    logger.info(f"Scanning {len(all_scan_tickers)} tickers with A+B modes...")
 
     for ticker in all_scan_tickers:
         df = pd.DataFrame()

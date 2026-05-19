@@ -423,6 +423,36 @@ def get_shadow_features() -> Dict[str, Dict]:
     }
 
 # =============================================================================
+# DYNAMIC MODE LOGIC (Attack/Defense)
+# =============================================================================
+
+def get_active_mode(health_score: int) -> dict:
+    """
+    Retorna los feature flags correctos según el health del mercado.
+    Ataque (health >= 6): Línea Base A+B, sin filtro temático.
+    Defensa (health < 6): Variante E activa, filtro temático ON.
+    """
+    if health_score >= 6:
+        return {
+            "mode": "ATTACK",
+            "use_theme_group_filter": False,   # Modo Ataque
+            "risk_multiplier": 1.0,
+        }
+    elif health_score >= 4:
+        return {
+            "mode": "DEFENSE_PARTIAL",
+            "use_theme_group_filter": True,    # Modo Defensa parcial
+            "risk_multiplier": 0.75,           # Reducción de riesgo
+        }
+    else:
+        return {
+            "mode": "DEFENSE_TOTAL",
+            "use_theme_group_filter": True,    # Modo Defensa total
+            "risk_multiplier": 0.35,           # Gran reducción de riesgo
+        }
+
+
+# =============================================================================
 # USAGE EXAMPLES
 # =============================================================================
 
