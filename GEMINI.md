@@ -27,11 +27,15 @@ This project implements a high-conviction momentum trading system based on growt
 - **Secondary Universe**: Finviz Live (Observation only in `rejection_audit.csv`).
 - **Monitoring**: Check `outputs/live_signals/YYYY-MM-DD/rejection_audit.csv` for allowed/blocked signals and drift.
 
-## Critical Fixes (2026-05-18)
-- **Signal Engine**: Fixed ATR propagation bug (stops now use 2xATR correctly).
-- **Sizing**: Risk-per-trade now correctly read from `production_config.json` ($2,878).
-- **Backtest Parity**: Engine now implements full A/B combo merge and liquidity-based universe selection.
-- **Gold Standard Baseline**: +2.5% Return, -16.07% MDD, 100 trades (2Y PIT).
+## Verified System State (2026-05-18)
+- **Fixed Production Bugs**: Corrected ATR propagation (stops now use 2xATR correctly) and dynamic sizing ($2,878 risk-per-trade read from config). Live paper trading is now accurate.
+- **Canonical Backtest Engine**: `scripts/backtest_via_signal_engine.py` is now the single source of truth for simulation. Implements full A/B merge, PIT universe (ADV20), and real Portfolio Manager (6 positions, 2/sector).
+- **Gold Standard Baseline**: +2.5% Return, -16.1% MDD, 0.45 Sharpe (2023-2024 PIT).
+- **Variant E (Shadow)**: Validated via OOS in 2021-22 (-3.1% vs -19.4% Base) and 2019-20 (identifying opportunity cost in broad bull runs). Currently in Shadow Mode.
+
+## Pending Roadmap
+- **Dynamic Switch (Ataque/Defensa)**: Blocked until historical `health_score` is pre-calculated in DB.
+- **Variant E Promotion**: Blocked until Shadow Mode accumulates ~30-40 real signals.
 
 ## Environment Separation (Laboratory vs VPS)
 The system is **Auto-Aware** of its environment:
