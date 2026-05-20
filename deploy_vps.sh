@@ -4,7 +4,7 @@
 # Excluye la base de datos local pesada (Laboratory machine).
 
 # Configuración por defecto
-REMOTE_HOST="xxmalcomandaxx@104.198.34.159"
+REMOTE_HOST="xxmalcomandaxx@trading-vps.us-central1-f.paper-trading-server"
 REMOTE_DIR="/home/xxmalcomandaxx/swing-momentum-v1"
 
 # Parsear argumentos

@@ -532,13 +532,13 @@ def calculate_breadth_from_engine(engine, date_str):
     try:
         close = engine.close
         if close is None or close.empty: return {}
-        
-        # Validar tickers con datos frescos (ultimas 2 velas no nulas)
-        valid_mask = close.iloc[-2:].notna().all()
-        valid_close = close.loc[:, valid_mask]
-        sample_size = int(valid_mask.sum())
-        
-        if sample_size == 0:
+
+        # FIX: A las 08:30 NY (premarket) yfinance no tiene el cierre de HOY todavía.
+        # close.iloc[-1] es NaN para todos los tickers → sample_size = 0 → STALE.
+        # Solución: encontrar las últimas 2 filas que SÍ tienen datos reales,
+        # ignorando cualquier fila final que sea todo-NaN (la vela de hoy intraday).
+        close_filled = close.dropna(how="all")   # elimina filas donde TODOS son NaN
+        if len(close_filled) < 2:
             ctx = get_market_context_live(db_path=DB_PATH, as_of=date_str)
             return {
                 "vix": round(ctx.get("vix"), 2) if ctx.get("vix") else None,
@@ -547,41 +547,61 @@ def calculate_breadth_from_engine(engine, date_str):
                 "verdict": "N/A"
             }
 
+        # Tickers con al menos las últimas 2 velas válidas (sobre el close ya filtrado)
+        valid_mask = close_filled.iloc[-2:].notna().all()
+        valid_close = close_filled.loc[:, valid_mask]
+        sample_size = int(valid_mask.sum())
+        total_tickers = len(close.columns)
+
+        # Umbral mínimo: necesitamos al menos 10% del universo para que sea significativo
+        MIN_SAMPLE_RATIO = 0.10
+        if sample_size == 0 or sample_size < total_tickers * MIN_SAMPLE_RATIO:
+            ctx = get_market_context_live(db_path=DB_PATH, as_of=date_str)
+            return {
+                "vix": round(ctx.get("vix"), 2) if ctx.get("vix") else None,
+                "sample_size": sample_size,
+                "data_status": "STALE",
+                "verdict": "N/A"
+            }
+
+        logger.info(f"    [Breadth] Usando {sample_size}/{total_tickers} tickers válidos "
+                    f"(última vela: {close_filled.index[-1]})")
+
         # Advance/Decline sobre validos
         chg = valid_close.iloc[-1] / valid_close.iloc[-2] - 1
         advances = int((chg > 0).sum())
         declines = int((chg < 0).sum())
-        
+
         # New Highs/Lows (252 bars)
         lookback = min(len(valid_close)-1, 252)
         high_252 = valid_close.rolling(lookback, min_periods=lookback//2).max().shift(1).iloc[-1]
         low_252 = valid_close.rolling(lookback, min_periods=lookback//2).min().shift(1).iloc[-1]
-        
+
         curr_price = valid_close.iloc[-1]
         new_highs = int((curr_price >= high_252).sum())
         new_lows = int((curr_price <= low_252).sum())
-        
+
         # VIX
         ctx = get_market_context_live(db_path=DB_PATH, as_of=date_str)
         vix = ctx.get("vix")
         if vix: vix = round(float(vix), 2)
-        
+
         # Verdict logic
         nh_nl_ratio = new_highs / (new_lows if new_lows > 0 else 1)
         ad_ratio = advances / (declines if declines > 0 else 1)
-        
+
         green_score = 0
         if vix and vix < 20: green_score += 1
         if nh_nl_ratio > 1.5: green_score += 1
         if ad_ratio > 1.2: green_score += 1
-        
+
         red_score = 0
         if vix and vix > 30: red_score += 1
         if nh_nl_ratio < 0.7: red_score += 1
         if ad_ratio < 0.8: red_score += 1
-        
+
         verdict = "GREEN" if green_score >= 2 else "CAUTION" if red_score >= 1 else "NEUTRAL"
-        
+
         return {
             "vix": vix,
             "new_highs": new_highs,
@@ -592,7 +612,7 @@ def calculate_breadth_from_engine(engine, date_str):
             "nh_nl_ratio": round(nh_nl_ratio, 2),
             "ad_ratio": round(ad_ratio, 2),
             "sample_size": sample_size,
-            "data_status": "OK" if sample_size > len(close.columns) * 0.5 else "LOW_SAMPLE"
+            "data_status": "OK" if sample_size > total_tickers * 0.5 else "LOW_SAMPLE"
         }
     except Exception as e:
         logger.error(f"Error calculating breadth: {e}")

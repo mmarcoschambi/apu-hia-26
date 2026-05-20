@@ -61,8 +61,10 @@ def fetch_live_data(tickers: list[str]) -> pd.DataFrame:
     if not tickers:
         return pd.DataFrame()
     
+    import requests
+    session = requests.Session()
     try:
-        data = yf.download(tickers, period="1d", interval="1m", progress=False, group_by="ticker")
+        data = yf.download(tickers, period="1d", interval="1m", progress=False, group_by="ticker", session=session)
         results = []
         for ticker in tickers:
             try:
@@ -83,6 +85,8 @@ def fetch_live_data(tickers: list[str]) -> pd.DataFrame:
     except Exception as e:
         logger.error(f"Error fetching live data: {e}")
         return pd.DataFrame()
+    finally:
+        session.close()
 
 
 from src.utils.sector_rotation import get_ticker_sector_mapping
@@ -255,11 +259,10 @@ def main():
     parser.add_argument("--telegram", action="store_true", help="Enviar alertas")
     args = parser.parse_args()
 
-    date = args.date or datetime.now().strftime("%Y-%m-%d")
-
     while True:
         try:
-            promote_candidates(date, min_rvol=args.rvol, send_telegram=args.telegram)
+            current_date = args.date or datetime.now().strftime("%Y-%m-%d")
+            promote_candidates(current_date, min_rvol=args.rvol, send_telegram=args.telegram)
         except Exception as e:
             logger.error(f"Error: {e}")
         if not args.monitor:

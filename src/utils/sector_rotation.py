@@ -123,6 +123,7 @@ def get_ticker_sector_mapping(tickers: List[str]) -> Dict[str, str]:
     from pathlib import Path
     db_path = Path("data/ticker_cache.db")
     if db_path.exists():
+        conn = None
         try:
             conn = sqlite3.connect(db_path)
             placeholders = ','.join(['?'] * len(remaining))
@@ -133,7 +134,9 @@ def get_ticker_sector_mapping(tickers: List[str]) -> Dict[str, str]:
                 etf = SECTOR_TO_ETF.get(sec)
                 if etf: mapping[t] = etf
         except: pass
-        finally: conn.close()
+        finally: 
+            if conn:
+                conn.close()
         
     return mapping
 

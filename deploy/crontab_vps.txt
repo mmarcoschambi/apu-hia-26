@@ -1,0 +1,34 @@
+# =============================================================================
+# CRONTAB VPS  -  Versión actualizada con limpieza semanal
+# Zona: America/New_York  (el VPS corre en us-central1 → misma zona NYSE)
+#
+# INSTALACIÓN EN EL VPS:
+#   ssh xxmalcomandaxx@trading-vps.us-central1-f.paper-trading-server
+#   crontab -e
+#   (reemplazar contenido con lo de abajo)
+# =============================================================================
+
+CRON_TZ=America/New_York
+
+# ── LUNES A VIERNES: Operación Normal ────────────────────────────────────────
+
+# 1. Brief premarket: 08:30 NY (L-V)
+30 8 * * 1-5 /home/xxmalcomandaxx/swing-momentum-v1/run_vps_job.sh scripts/finviz_monitor.py >> /home/xxmalcomandaxx/swing-momentum-v1/logs/cron_finviz_monitor.log 2>&1
+
+# 2. Iniciar live promoter: 09:29 NY (L-V)
+29 9 * * 1-5 /usr/bin/systemctl start finviz-live-promoter.service
+
+# 3. Detener live promoter: 16:01 NY (L-V)
+01 16 * * 1-5 /usr/bin/systemctl stop finviz-live-promoter.service
+
+# 4. Resumen post-market + Telegram: 16:15 NY (L-V)
+15 16 * * 1-5 /home/xxmalcomandaxx/swing-momentum-v1/run_vps_job.sh scripts/send_signal_alerts.py --telegram >> /home/xxmalcomandaxx/swing-momentum-v1/logs/cron_post_market.log 2>&1
+
+# ── VIERNES: Compresión semanal de outputs viejos ────────────────────────────
+# 17:00 NY del viernes: comprimir + archivar la semana antes del sync del lab.
+# Guarda un .tar.gz semanal en outputs/backups/ y luego limpia los sueltos.
+0 17 * * 5 /home/xxmalcomandaxx/swing-momentum-v1/deploy/weekly_archive_vps.sh >> /home/xxmalcomandaxx/swing-momentum-v1/logs/cron_weekly_archive.log 2>&1
+
+# ── SÁBADO: Limpieza de logs viejos (>30 días) ───────────────────────────────
+# Evita que los logs de cron crezcan indefinidamente en el disco del VPS.
+0 6 * * 6 find /home/xxmalcomandaxx/swing-momentum-v1/logs -name "*.log" -mtime +30 -delete >> /home/xxmalcomandaxx/swing-momentum-v1/logs/cron_cleanup.log 2>&1
