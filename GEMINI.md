@@ -41,4 +41,6 @@ This project implements a high-conviction momentum trading system based on growt
 The system is **Auto-Aware** of its environment:
 - **Laboratory (Local)**: If `data/ticker_cache.db` exists, it runs in **Hybrid Mode**. It uses the PIT universe for primary decisions (Fase 3) and Finviz for observation.
 - **Torre de Control (VPS)**: Since the DB is excluded via `deploy_vps.sh`, the scanner automatically promotes **Finviz Live** to be the primary decision source. This allows for 24/7 autonomous monitoring without the heavy DB.
-- **Sync**: Use `./deploy_vps.sh` to push logic and taxonomy updates to the VPS.
+- **Deploy to VPS**: Use `./deploy_vps.sh` to push logic, taxonomy updates, and crontabs to the VPS.
+- **Data Sync from VPS**: Use `./sync_from_vps.sh` on the local machine (WSL2) to pull `outputs/` down for research without inflating GCP snapshot costs.
+- **VPS Automated Archive**: The VPS runs `deploy/weekly_archive_vps.sh` every Friday to compress old logs and JSONs before the local machine syncs them, maintaining disk hygiene.
