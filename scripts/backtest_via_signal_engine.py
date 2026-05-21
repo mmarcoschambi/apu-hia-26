@@ -21,30 +21,6 @@ from src.config.dynamic_config import load_production_config
 from src.utils.sector_rotation import SECTOR_MAP, SECTOR_ETFS
 from src.signals.thematic_logic import calculate_equal_weighted_index
 from src.data.theme_taxonomy import THEME_MAP, get_themes
-from config.feature_flags import get_active_mode
-
-def get_health_score_for_date(date_str: str, health_lookup: dict) -> tuple[int, str]:
-    """Lee el health_score pre-calculado. Sin fallback on-the-fly."""
-    row = health_lookup.get(date_str)
-    if row is None:
-        return 3, "DEFENSE_PARTIAL"  # fallback explÃ­cito y logeado
-    return row["health_score"], row["regime_mode"]
-
-def calc_atr(ticker_df: pd.DataFrame, period: int = 14) -> float:
-    """ATR simple sobre las Ãºltimas N velas disponibles (E13)."""
-    if len(ticker_df) < period + 1:
-        return ticker_df["close"].iloc[-1] * 0.02  # fallback: 2% del precio
-    # Usamos tail para asegurarnos de tener solo lo necesario
-    df_slice = ticker_df.tail(period + 1)
-    high = df_slice["high"]
-    low  = df_slice["low"]
-    close_prev = df_slice["close"].shift(1)
-    tr = pd.concat([
-        high - low,
-        (high - close_prev).abs(),
-        (low  - close_prev).abs()
-    ], axis=1).max(axis=1)
-    return tr.iloc[1:].mean()
 
 # Configuration
 DB_PATH = PROJECT_ROOT / "data" / "ticker_cache.db"
@@ -54,7 +30,7 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 # Constants
 MAX_POSITIONS = 6
 MAX_PER_SECTOR = 2
-RISK_PCT_BASE = 0.02878  # 2.878% base risk
+RISK_PCT = 0.028  # 2.8% of total equity
 HOLDING_DAYS_LIMIT = 10
 FEE_BPS = 1.0 # 1 bps
 SLIPPAGE_BPS = 5.0 # 5 bps
@@ -125,12 +101,12 @@ def calculate_backtest_metrics(trades_df, equity_curve_df):
     }
 
 def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tickers: int, tag: str, use_variant_e: bool = False):
-    logger.info(f"ðŸš€ BACKTEST (PARITY{' + VAR-E' if use_variant_e else ''}) | Range: {start_date} -> {end_date}")
+    logger.info(f"🚀 BACKTEST (PARITY{' + VAR-E' if use_variant_e else ''}) | Range: {start_date} -> {end_date}")
     dates_str = get_trading_dates(start_date, end_date)
     if not dates_str: return
 
-    # --- FASE 1: PRE-CARGA Y CONFIGURACIÃ“N ---
-    logger.info("ðŸ“¦ Loading configs and pre-loading superset...")
+    # --- FASE 1: PRE-CARGA Y CONFIGURACIÓN ---
+    logger.info("📦 Loading configs and pre-loading superset...")
     
     cfg_a, _ = load_combo_merged("combo_pure_momentum")
     cfg_b, _ = load_combo_merged("combo_stage2_breakout")
@@ -142,7 +118,7 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
             # CRITICAL: We need sector data for divergence, but we MUST NOT block if sector is weak!
             cfg["tier2_filters"]["use_sector_etf_filter"] = False 
 
-    logger.info("ðŸ”­ Building PIT universes for each date...")
+    logger.info("🔭 Building PIT universes for each date...")
     universe_by_date = {}
     superset_tickers = set()
     for d_str in tqdm(dates_str, desc="Universe Building"):
@@ -169,12 +145,6 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
     lookback_start = (pd.to_datetime(start_date) - timedelta(days=400)).strftime("%Y-%m-%d")
     all_ohlcv = load_ohlcv_batch_memory(list(superset_tickers), lookback_start, end_date)
     
-    # Load health scores
-    conn = sqlite3.connect(DB_PATH)
-    health_scores_df = pd.read_sql("SELECT date, health_score, regime_mode FROM daily_health_scores", conn)
-    health_lookup = health_scores_df.set_index("date")[["health_score", "regime_mode"]].to_dict('index')
-    conn.close()
-
     spy_full = all_ohlcv.get("SPY", pd.DataFrame())
     vix_full = all_ohlcv.get("^VIX", pd.DataFrame())
     
@@ -187,13 +157,13 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
 
     theme_metrics_full = {}
     if use_variant_e:
-        logger.info("ðŸ§ª Pre-calculating Theme Indices for Variant E...")
+        logger.info("🧪 Pre-calculating Theme Indices for Variant E...")
         # 1. Agrupar tickers por tema
         theme_to_tickers = {}
         for t, themes in THEME_MAP.items():
             for theme in themes: theme_to_tickers.setdefault(theme, []).append(t)
         
-        # 2. Calcular Ã­ndices
+        # 2. Calcular índices
         market_data_closes = pd.DataFrame({t: df["close"] for t, df in all_ohlcv.items() if t in superset_tickers})
         theme_indices = {}
         for theme, members in theme_to_tickers.items():
@@ -218,31 +188,20 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
 
     conn.close()
 
-    # --- FASE 2: LOOP SIMULACIÃ“N ---
+    # --- FASE 2: LOOP SIMULACIÓN ---
     portfolio = {"cash": initial_capital, "positions": {}, "sector_count": {}}
     all_trades, equity_curve, pending_signals = [], [], []
 
     for d_str in tqdm(dates_str, desc="Simulating"):
         curr_dt = pd.Timestamp(d_str)
         
-        # 0. Market Context & Mode Selection
-        health, regime_mode = get_health_score_for_date(d_str, health_lookup)
-        active_mode = get_active_mode(health)
-        
-        # E12 dynamic switch DISABLED — Gold Standard filters fixed permanently
-        # use_theme_group_filter = True, use_sector_etf_filter = False (set at init, never overridden)
-        
-        effective_risk_pct = RISK_PCT_BASE  # E12 risk_multiplier DISABLED — Gold Standard fixed sizing
-
-        # 1. Update Mark-to-Market
         total_equity = portfolio["cash"]
         for t, pos in portfolio["positions"].items():
             if t in all_ohlcv and curr_dt in all_ohlcv[t].index:
                 pos["last_close"] = all_ohlcv[t].loc[curr_dt, "close"]
             total_equity += pos["size"] * pos["last_close"]
-        equity_curve.append({"date": d_str, "equity": total_equity, "health": health, "mode": active_mode["mode"]})
+        equity_curve.append({"date": d_str, "equity": total_equity})
 
-        # 2. Exits (Priority: GapDown > Stop > TP1 > TP2 > EOD)
         closed = []
         for t, pos in portfolio["positions"].items():
             if t not in all_ohlcv or curr_dt not in all_ohlcv[t].index: continue
@@ -250,16 +209,13 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
             pos["days_held"] += 1
             
             exit_px, reason = None, None
-            if r["open"] < pos["stop"]: 
-                exit_px, reason = r["open"], "STOP_GAP"
-            elif r["low"] < pos["stop"]: 
-                exit_px, reason = pos["stop"], "STOP"
+            if r["open"] < pos["stop"]: exit_px, reason = r["open"], "STOP_GAP"
+            elif r["low"] < pos["stop"]: exit_px, reason = pos["stop"], "STOP"
             
             if exit_px:
                 px = exit_px * (1 - SLIPPAGE_BPS/10000)
-                fee = px * pos["size"] * (FEE_BPS/10000)
-                portfolio["cash"] += (px * pos["size"] - fee)
-                pos["realized_pnl"] += (px - pos["entry_px"]) * pos["size"] - fee
+                portfolio["cash"] += (px * pos["size"] - (px * pos["size"] * FEE_BPS/10000))
+                pos["realized_pnl"] += (px - pos["entry_px"]) * pos["size"]
                 pos["exit_reasons"].append(reason)
                 closed.append(t)
                 continue
@@ -294,11 +250,9 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
                 "symbol": t, "entry_date": p["entry_date"], "exit_date": d_str, "entry_price": p["entry_px"],
                 "exit_price": p["last_close"], "pnl": p["realized_pnl"], 
                 "return_pct": (p["realized_pnl"] / (p["entry_px"] * p["initial_size"])) * 100 if (p["entry_px"] * p["initial_size"]) > 0 else 0,
-                "exit_phase": "+".join(p["exit_reasons"]), "entry_score": p["entry_score"],
-                "health_at_entry": p["health_at_entry"]
+                "exit_phase": "+".join(p["exit_reasons"]), "entry_score": p["entry_score"]
             })
 
-        # 3. Entries
         for sig in pending_signals:
             t = sig.ticker
             if t not in all_ohlcv or curr_dt not in all_ohlcv[t].index: continue
@@ -307,7 +261,7 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
             if len(portfolio["positions"]) < MAX_POSITIONS and t not in portfolio["positions"] and \
                portfolio["sector_count"].get(sec, 0) < MAX_PER_SECTOR:
                 entry_px = r["open"] * (1 + SLIPPAGE_BPS/10000)
-                risk_amt = total_equity * effective_risk_pct
+                risk_amt = total_equity * RISK_PCT
                 price_risk = entry_px - sig.stop_price
                 if price_risk > 0:
                     shares = int(risk_amt / price_risk)
@@ -320,15 +274,12 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
                                 "size": shares, "initial_size": shares, "entry_px": entry_px, "stop": sig.stop_price,
                                 "tp1": sig.tp1_price, "tp2": sig.tp2_price, "entry_date": d_str, "sector": sec,
                                 "days_held": 0, "tp1_hit": False, "tp2_hit": False, "realized_pnl": 0, "exit_reasons": [],
-                                "entry_score": sig.entry_score, "last_close": entry_px,
-                                "health_at_entry": health
+                                "entry_score": sig.entry_score, "last_close": entry_px
                             }
         
-        # 4. Scan
         spy_slice = spy_full[spy_full.index <= curr_dt].tail(400)
         vix_slice = vix_full[vix_full.index <= curr_dt].tail(1)
         pending_signals = []
-        # Basic regime filter remains: SPY > SMA200 and VIX < 35
         if len(spy_slice) >= 200 and spy_slice.iloc[-1]["close"] > spy_slice["close"].rolling(200).mean().iloc[-1]:
             vix_ok = vix_slice["close"].iloc[0] < 35.0 if not vix_slice.empty else True
             if vix_ok:
@@ -356,7 +307,7 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
     df_equity.rename(columns={"equity": "0"}).to_csv(OUTPUT_DIR / f"{tag}_equity.csv", index=False)
     metrics = calculate_backtest_metrics(df_trades, df_equity)
     with open(OUTPUT_DIR / f"{tag}_metrics.json", "w") as f: json.dump(metrics, f, indent=2)
-    logger.info(f"âœ… DONE | Return: {metrics.get('total_return')}% | MDD: {metrics.get('max_drawdown')}% | Trades: {len(df_trades)}")
+    logger.info(f"✅ DONE | Return: {metrics.get('total_return')}% | MDD: {metrics.get('max_drawdown')}% | Trades: {len(df_trades)}")
 
 if __name__ == "__main__":
     import argparse
