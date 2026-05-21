@@ -1,0 +1,485 @@
+// ============================================================================
+// BUGATTI MOMENTUM SYSTEM — TradingView Indicator
+// Réplica del Signal Engine (combo_pure_momentum) del sistema Finviz/Telegram
+// 
+// Lógica canónica portada de:
+//   - src/signals/signal_engine.py (evaluate_ticker, apply_tier2_filters)
+//   - src/screeners/qullamaggie_momentum.py (MA Stack, RS, Trend Intensity)
+//   - src/screeners/minervini_trend.py (Stage 2 — 7 criterios)
+//   - config/production_config.json (umbrales S4 Optuna Trial 380)
+//
+// Pine Script v6 | overlay + dashboard table + alerts
+// ============================================================================
+
+//@version=6
+indicator("Bugatti Momentum System", "Bugatti 🏎️", overlay = true, max_labels_count = 50, max_lines_count = 20)
+
+// ====================== 1. INPUTS ======================
+
+// --- Sector & Context ---
+group_ctx = "Context & Regime"
+spy_symbol      = input.symbol("SPY", "SPY Symbol", group = group_ctx)
+sector_etf_sym  = input.symbol("AMEX:XLK", "Sector ETF", group = group_ctx, tooltip = "Select the sector ETF for this ticker.\nXLK=Tech, XLF=Financials, XLV=Health, XLE=Energy,\nXLY=Consumer Disc, XLP=Consumer Staples, XLI=Industrials,\nXLB=Materials, XLRE=Real Estate, XLU=Utilities, XLC=Comm Svcs")
+use_sector_filter = input.bool(true, "Enable Sector ETF Filter", group = group_ctx, tooltip = "Requires sector ETF price > SMA20. Disable for tickers without a clear sector mapping.")
+require_spy_sma50 = input.bool(true, "Require SPY > SMA50", group = group_ctx)
+
+// --- Screener: Qullamaggie ---
+group_scr = "Screener (Qullamaggie)"
+min_rs_pct_input     = input.float(58.01, "RS Mínimo (%)", minval = 0, maxval = 100, step = 1.0, group = group_scr, tooltip = "Production default: 58.01 (Trial 380).\nFórmula: 50 + (ticker_ret - spy_ret) × 500, clamp [0,100]")
+min_trend_int_input  = input.float(108.0, "Trend Intensity Mínimo", minval = 100, maxval = 150, step = 0.5, group = group_scr, tooltip = "(SMA13 / SMA65) × 100. Default: 108")
+ma_tol_input         = input.float(0.002, "MA Stack Tolerancia", minval = 0, maxval = 0.05, step = 0.001, group = group_scr, tooltip = "0.2% tolerance for MA stack ordering")
+rs_lookback_input    = input.int(60, "RS Lookback (días)", minval = 10, maxval = 252, group = group_scr)
+
+// --- Tier 2 Filters (Production Config Trial 380) ---
+group_t2 = "Tier 2 Filters"
+min_rvol_input       = input.float(1.10, "RVOL Mínimo", minval = 0, step = 0.01, group = group_t2, tooltip = "Production: 1.1048")
+min_adr_input        = input.float(1.87, "ADR% Mínimo", minval = 0, step = 0.01, group = group_t2, tooltip = "Production: 1.8714")
+max_dist20_input     = input.float(6.77, "Max Dist SMA20 (%)", minval = 0, step = 0.1, group = group_t2, tooltip = "Production: 6.768. Rejects if too extended above SMA20.")
+min_vol_input        = input.float(100000, "Vol Mínimo", minval = 0, group = group_t2)
+min_dvol_m_input     = input.float(20.0, "Dollar Vol Mín ($M)", minval = 0, step = 1, group = group_t2, tooltip = "Production: $20M")
+
+// --- Risk Management ---
+group_risk = "Risk Management"
+risk_dollars_input   = input.float(2878.0, "Risk per Trade ($)", minval = 100, step = 100, group = group_risk, tooltip = "$100k × 2.878% = $2,878 (Trial 380)")
+tp1_r_input          = input.float(1.25, "TP1 R-Multiple", minval = 0.5, maxval = 5, step = 0.25, group = group_risk)
+tp2_r_input          = input.float(3.0, "TP2 R-Multiple", minval = 1, maxval = 10, step = 0.5, group = group_risk)
+tp1_pct_input        = input.float(33.0, "TP1 Exit %", minval = 0, maxval = 100, step = 1, group = group_risk, tooltip = "33% at TP1, 33% at TP2, 34% runner")
+tp2_pct_input        = input.float(33.0, "TP2 Exit %", minval = 0, maxval = 100, step = 1, group = group_risk)
+
+// --- Visual Settings ---
+group_vis = "Visual"
+show_ma_lines        = input.bool(true, "Show MA Lines", group = group_vis)
+show_breakout_line   = input.bool(true, "Show Breakout Level", group = group_vis)
+show_risk_levels     = input.bool(true, "Show Stop / TP Levels", group = group_vis, tooltip = "Draws Stop, TP1, TP2 lines when signal is active")
+show_minervini       = input.bool(true, "Show Minervini Stage 2", group = group_vis)
+show_bg_stack        = input.bool(true, "Show MA Stack Background", group = group_vis)
+show_dashboard       = input.bool(true, "Show Dashboard Table", group = group_vis)
+
+// --- Table Appearance ---
+group_tbl = "Dashboard Appearance"
+tbl_pos_input = input.string("Right Top", "Table Position", options = ["Left Top", "Left Bottom", "Right Top", "Right Bottom", "Center Top", "Center Bottom"], group = group_tbl)
+tbl_size_input = input.string("Small", "Table Size", options = ["Tiny", "Small", "Normal", "Large"], group = group_tbl)
+
+
+// ====================== 2. DATA REQUESTS ======================
+
+// SPY — for regime check and RS calculation
+[spy_c, spy_sma50_val, spy_sma200_val] = request.security(spy_symbol, timeframe.period, [close, ta.sma(close, 50), ta.sma(close, 200)], ignore_invalid_symbol = true)
+
+// Sector ETF — for sector filter
+[etf_c, etf_sma20_val] = request.security(sector_etf_sym, timeframe.period, [close, ta.sma(close, 20)], ignore_invalid_symbol = true)
+
+
+// ====================== 3. CORE CALCULATIONS ======================
+
+// --- Moving Averages ---
+ema_10  = ta.ema(close, 10)
+sma_13  = ta.sma(close, 13)
+sma_20  = ta.sma(close, 20)
+sma_50  = ta.sma(close, 50)
+sma_65  = ta.sma(close, 65)
+sma_100 = ta.sma(close, 100)
+sma_150 = ta.sma(close, 150)
+sma_200 = ta.sma(close, 200)
+
+// --- ATR (14-period, canonical) ---
+atr_14 = ta.atr(14)
+
+// --- RVOL (Volume / AvgVol20) ---
+avg_vol_20 = ta.sma(volume, 20)
+rvol_val = avg_vol_20 > 0 and not na(avg_vol_20) ? volume / avg_vol_20 : 0.0
+
+// --- ADR% ((High-Low)/Close × 100, rolling 20) ---
+daily_range = close > 0 ? ((high - low) / close) * 100.0 : 0.0
+adr_val = ta.sma(daily_range, 20)
+
+// --- Distance from SMA20 (%) ---
+dist_sma20_val = sma_20 > 0 and not na(sma_20) ? ((close - sma_20) / sma_20) * 100.0 : 0.0
+
+// --- Dollar Volume (avg 20d, in $) ---
+dollar_vol_raw = close * volume
+avg_dvol = ta.sma(dollar_vol_raw, 20)
+
+// --- RS vs SPY (Qullamaggie Fallback Formula) ---
+// Same as _calc_rs_vs_spy: 50 + (ticker_ret_60d - spy_ret_60d) × 500, clamped [0,100]
+ticker_ret_n = bar_index >= rs_lookback_input and close[rs_lookback_input] > 0 ? (close / close[rs_lookback_input] - 1.0) : na
+spy_ret_n = not na(spy_c) and bar_index >= rs_lookback_input and not na(spy_c[rs_lookback_input]) and spy_c[rs_lookback_input] > 0 ? (spy_c / spy_c[rs_lookback_input] - 1.0) : na
+
+rs_relative = not na(ticker_ret_n) and not na(spy_ret_n) ? ticker_ret_n - spy_ret_n : na
+rs_pct = not na(rs_relative) ? math.max(0.0, math.min(100.0, 50.0 + rs_relative * 500.0)) : na
+
+// --- Trend Intensity ((SMA13 / SMA65) × 100) ---
+trend_int = not na(sma_65) and sma_65 > 0 ? (sma_13 / sma_65) * 100.0 : na
+
+// --- Breakout Level (highest high of prev 20 bars, excluding today) ---
+breakout_lvl = ta.highest(high, 20)[1]
+is_breakout = not na(breakout_lvl) and close > breakout_lvl
+
+// --- Consolidation Days (inside Bollinger Bands 2σ, last 20 bars) ---
+bb_std_val = ta.stdev(close, 20)
+bb_up = sma_20 + 2 * bb_std_val
+bb_dn = sma_20 - 2 * bb_std_val
+inside_bb = close >= bb_dn and close <= bb_up
+consol_days = int(ta.sum(inside_bb ? 1.0 : 0.0, 20))
+
+
+// ====================== 4. SCREENER: QULLAMAGGIE (Mode A) ======================
+
+// Criterion 1: RS (SPY fallback percentile)
+rs_ok = not na(rs_pct) and rs_pct >= min_rs_pct_input
+
+// Criterion 2: MA Stack (Price ≥ EMA10 ≥ SMA20 ≥ SMA50 ≥ SMA100 ≥ SMA200)
+tol = ma_tol_input
+ma_stack_ok = not na(ema_10) and not na(sma_200) and
+              close >= ema_10 * (1 - tol) and
+              ema_10 >= sma_20 * (1 - tol) and
+              sma_20 >= sma_50 * (1 - tol) and
+              sma_50 >= sma_100 * (1 - tol) and
+              sma_100 >= sma_200 * (1 - tol)
+
+// Criterion 3: Trend Intensity
+ti_ok = not na(trend_int) and trend_int >= min_trend_int_input
+
+// Screener pass (all 3 must pass)
+screener_ok = rs_ok and ma_stack_ok and ti_ok
+
+// Qullamaggie Score (0-100)
+passing_n = (rs_ok ? 1.0 : 0.0) + (ma_stack_ok ? 1.0 : 0.0) + (ti_ok ? 1.0 : 0.0)
+qulla_score = not na(rs_pct) and not na(trend_int) ? math.max(0.0, math.min(100.0, nz(rs_pct) * 0.5 + (nz(trend_int) - 100.0) * 2.0 * 0.3 + passing_n / 3.0 * 20.0)) : 0.0
+
+
+// ====================== 5. SCREENER: MINERVINI STAGE 2 (Mode B) ======================
+
+// 52-week high/low (252 trading days)
+high_52w = ta.highest(close, 252)
+low_52w  = ta.lowest(close, 252)
+
+// 7 criteria
+m_c1 = close > sma_150 and close > sma_200                        // Price > SMA150 & SMA200
+m_c2 = sma_150 > sma_200                                          // SMA150 > SMA200
+m_c3 = not na(sma_200[22]) and sma_200 > sma_200[22]              // SMA200 uptrend (22d)
+m_c4 = sma_50 > sma_150 and sma_150 > sma_200                     // SMA50 > SMA150 > SMA200
+m_c5 = close > sma_50                                              // Price > SMA50
+m_c6 = high_52w > 0 and close >= high_52w * 0.75                  // Within 25% of 52wk high
+m_c7 = low_52w > 0 and close >= low_52w * 1.30                    // At least 30% above 52wk low
+
+minervini_n = (m_c1 ? 1 : 0) + (m_c2 ? 1 : 0) + (m_c3 ? 1 : 0) + (m_c4 ? 1 : 0) + (m_c5 ? 1 : 0) + (m_c6 ? 1 : 0) + (m_c7 ? 1 : 0)
+minervini_ok = minervini_n == 7
+
+
+// ====================== 6. TIER 2 FILTERS ======================
+
+rvol_ok     = rvol_val >= min_rvol_input
+adr_ok      = not na(adr_val) and adr_val >= min_adr_input
+dist20_ok   = dist_sma20_val <= max_dist20_input    // signal_engine.py L321: rejects if > max (too extended up)
+vol_ok      = volume >= min_vol_input
+dvol_ok     = not na(avg_dvol) and (avg_dvol / 1e6) >= min_dvol_m_input
+
+// Market Regime
+spy_regime_ok = not na(spy_c) and not na(spy_sma50_val) and spy_c > spy_sma50_val
+spy_sma200_ok = not na(spy_c) and not na(spy_sma200_val) and spy_c > spy_sma200_val
+regime_ok = require_spy_sma50 ? spy_regime_ok : true
+
+// Sector ETF Filter: ETF must be above its SMA20
+etf_dist = not na(etf_c) and not na(etf_sma20_val) and etf_sma20_val > 0 ? (etf_c / etf_sma20_val) - 1.0 : na
+sector_ok = use_sector_filter ? (not na(etf_dist) and etf_dist > 0.0) : true
+
+// Tier 2 composite
+tier2_ok = rvol_ok and adr_ok and dist20_ok and vol_ok and dvol_ok
+
+
+// ====================== 7. COMPOSITE SIGNAL ======================
+
+signal_long = screener_ok and tier2_ok and is_breakout and regime_ok and sector_ok
+
+// First bar where signal fires
+signal_new = signal_long and not signal_long[1]
+
+// Determine block reason (first failing filter)
+block_reason = not ma_stack_ok ? "MA Stack roto" :
+               not na(rs_pct) and not rs_ok ? "RS bajo (" + str.tostring(rs_pct, "#.#") + ")" :
+               na(rs_pct) ? "RS sin datos" :
+               not ti_ok ? "Trend bajo (" + str.tostring(trend_int, "#.#") + ")" :
+               not is_breakout ? "Sin breakout" :
+               not regime_ok ? "SPY < SMA50" :
+               not sector_ok ? "Sector débil" :
+               not rvol_ok ? "RVOL bajo (" + str.tostring(rvol_val, "#.##") + ")" :
+               not adr_ok ? "ADR bajo (" + str.tostring(adr_val, "#.#") + ")" :
+               not dist20_ok ? "Extendido (" + str.tostring(dist_sma20_val, "#.#") + "%)" :
+               not vol_ok ? "Vol bajo" :
+               not dvol_ok ? "DolVol bajo" : ""
+
+
+// ====================== 8. RISK MANAGEMENT ======================
+// Canonical logic from resolve_canonical_risk() in signal_engine.py
+
+// Stop distance: 2 × ATR(14)
+stop_dist_raw = not na(atr_14) ? 2.0 * atr_14 : na
+
+// Fallback: 7% if ATR unavailable or inconsistent
+stop_dist_fb = na(stop_dist_raw) or stop_dist_raw <= 0 or stop_dist_raw >= close ? close * 0.07 : stop_dist_raw
+
+// Cap: max 12%
+max_stop_d = close * 0.12
+stop_dist_cap = stop_dist_fb > max_stop_d ? max_stop_d : stop_dist_fb
+
+// Floor: 0.5%
+stop_dist = math.max(stop_dist_cap, close * 0.005)
+
+stop_px  = close - stop_dist
+tp1_px   = close + stop_dist * tp1_r_input
+tp2_px   = close + stop_dist * tp2_r_input
+shares_n = stop_dist > 0 ? math.floor(risk_dollars_input / stop_dist) : 0
+
+// --- Signal Zone (persists until stop or TP2 hit) ---
+var bool   in_signal   = false
+var float  sig_entry   = na
+var float  sig_stop    = na
+var float  sig_tp1     = na
+var float  sig_tp2     = na
+var int    sig_shares  = 0
+var string sig_ticker  = ""
+
+if signal_new
+    in_signal  := true
+    sig_entry  := close
+    sig_stop   := stop_px
+    sig_tp1    := tp1_px
+    sig_tp2    := tp2_px
+    sig_shares := shares_n
+    sig_ticker := syminfo.ticker
+
+// Exit signal zone on stop or TP2
+if in_signal
+    if close < sig_stop
+        in_signal := false
+    if close > sig_tp2
+        in_signal := false
+
+
+// ====================== 9. PLOTS ======================
+
+// --- Moving Average Lines ---
+p_ema10  = plot(show_ma_lines ? ema_10  : na, "EMA 10",  color = color.new(#FFD700, 20), linewidth = 1)
+p_sma20  = plot(show_ma_lines ? sma_20  : na, "SMA 20",  color = color.new(#00BCD4, 20), linewidth = 1)
+p_sma50  = plot(show_ma_lines ? sma_50  : na, "SMA 50",  color = color.new(#4CAF50, 15), linewidth = 2)
+p_sma100 = plot(show_ma_lines ? sma_100 : na, "SMA 100", color = color.new(#FF9800, 30), linewidth = 1)
+p_sma200 = plot(show_ma_lines ? sma_200 : na, "SMA 200", color = color.new(#F44336, 15), linewidth = 2)
+
+// --- Breakout Level (step line) ---
+plot(show_breakout_line ? breakout_lvl : na, "Breakout Level", color = color.new(#9C27B0, 50), style = plot.style_stepline_diamond, linewidth = 1)
+
+// --- Risk Levels (only while signal zone active) ---
+p_stop = plot(show_risk_levels and in_signal ? sig_stop : na, "Stop (2×ATR)", color = color.new(#FF5252, 10), style = plot.style_linebr, linewidth = 2)
+p_entry = plot(show_risk_levels and in_signal ? sig_entry : na, "Entry", color = color.new(#FFFFFF, 60), style = plot.style_linebr, linewidth = 1)
+p_tp1  = plot(show_risk_levels and in_signal ? sig_tp1  : na, "TP1",  color = color.new(#69F0AE, 20), style = plot.style_linebr, linewidth = 1)
+p_tp2  = plot(show_risk_levels and in_signal ? sig_tp2  : na, "TP2",  color = color.new(#00C853, 20), style = plot.style_linebr, linewidth = 1)
+
+// Risk/reward fill zones
+fill(p_stop, p_entry, color = in_signal ? color.new(#FF5252, 92) : na, title = "Risk Zone")
+fill(p_entry, p_tp1,  color = in_signal ? color.new(#69F0AE, 92) : na, title = "TP1 Zone")
+fill(p_tp1, p_tp2,    color = in_signal ? color.new(#00C853, 94) : na, title = "TP2 Zone")
+
+// --- Signal Markers ---
+plotshape(signal_new, "⚡ Signal LONG", shape.triangleup, location.belowbar, color = color.new(#00E676, 0), size = size.normal)
+plotshape(signal_new, "Signal Label", shape.labelup, location.belowbar, color = color.new(#00C853, 0), text = "BUY", textcolor = color.white, size = size.tiny, offset = 0)
+
+// --- MA Stack Background ---
+bgcolor(show_bg_stack and ma_stack_ok ? color.new(#4CAF50, 96) : na, title = "MA Stack OK")
+
+
+// ====================== 10. DASHBOARD TABLE ======================
+
+// Helper: clean ticker prefix
+f_clean(t) =>
+    arr = str.split(t, ":")
+    raw = array.size(arr) > 1 ? array.get(arr, array.size(arr) - 1) : t
+    s1 = str.replace_all(raw, '"', '')
+    s2 = str.replace_all(s1, '}', '')
+    str.replace_all(s2, '{', '')
+
+if barstate.islast and show_dashboard
+    // Table dimensions
+    tbl_rows = show_minervini ? 19 : 18
+    tbl_cols = 2
+
+    // Position
+    tbl_pos = switch tbl_pos_input
+        "Left Top"      => position.top_left
+        "Left Bottom"   => position.bottom_left
+        "Right Top"     => position.top_right
+        "Right Bottom"  => position.bottom_right
+        "Center Top"    => position.top_center
+        "Center Bottom" => position.bottom_center
+        => position.top_right
+
+    txt_sz = switch tbl_size_input
+        "Tiny"   => size.tiny
+        "Small"  => size.small
+        "Large"  => size.large
+        => size.normal
+
+    // Colors
+    c_bg      = color.rgb(13, 17, 23)
+    c_bg_hdr  = color.rgb(22, 33, 62)
+    c_bg_sec  = color.rgb(18, 24, 38)
+    c_txt     = color.rgb(200, 200, 210)
+    c_lbl     = color.rgb(255, 204, 128)    // amber gold
+    c_pass    = color.rgb(0, 230, 118)      // green
+    c_fail    = color.rgb(255, 82, 82)      // red
+    c_warn    = color.rgb(255, 183, 77)     // orange
+    c_sig_bg  = color.rgb(0, 105, 58)       // deep green
+    c_blk_bg  = color.rgb(120, 20, 20)      // dark red
+
+    var table tbl = na
+    if na(tbl)
+        tbl := table.new(tbl_pos, tbl_cols, tbl_rows, bgcolor = c_bg, border_width = 1, border_color = color.rgb(40, 50, 70))
+
+    r = 0
+
+    // --- Header ---
+    table.cell(tbl, 0, r, "🏎️ BUGATTI", text_color = c_lbl, bgcolor = c_bg_hdr, text_halign = text.align_left, text_size = txt_sz)
+    table.cell(tbl, 1, r, f_clean(syminfo.tickerid), text_color = color.white, bgcolor = c_bg_hdr, text_halign = text.align_right, text_size = txt_sz)
+    r += 1
+
+    // --- Section: Screener ---
+    table.cell(tbl, 0, r, "── Screener ──", text_color = c_lbl, bgcolor = c_bg_sec, text_halign = text.align_left, text_size = txt_sz)
+    table.cell(tbl, 1, r, screener_ok ? "PASS ✅" : "FAIL ❌", text_color = screener_ok ? c_pass : c_fail, bgcolor = c_bg_sec, text_halign = text.align_right, text_size = txt_sz)
+    r += 1
+
+    // MA Stack
+    table.cell(tbl, 0, r, "MA Stack", text_color = c_txt, bgcolor = c_bg, text_halign = text.align_left, text_size = txt_sz)
+    table.cell(tbl, 1, r, ma_stack_ok ? "✅ Aligned" : "❌ Broken", text_color = ma_stack_ok ? c_pass : c_fail, bgcolor = c_bg, text_halign = text.align_right, text_size = txt_sz)
+    r += 1
+
+    // RS
+    rs_display = not na(rs_pct) ? str.tostring(rs_pct, "#.#") + "%" : "—"
+    rs_color = rs_ok ? c_pass : not na(rs_pct) ? c_fail : c_txt
+    table.cell(tbl, 0, r, "RS (" + str.tostring(rs_lookback_input) + "d)", text_color = c_txt, bgcolor = c_bg, text_halign = text.align_left, text_size = txt_sz)
+    table.cell(tbl, 1, r, rs_display + (rs_ok ? " ✅" : " ❌"), text_color = rs_color, bgcolor = c_bg, text_halign = text.align_right, text_size = txt_sz)
+    r += 1
+
+    // Trend Intensity
+    ti_display = not na(trend_int) ? str.tostring(trend_int, "#.#") : "—"
+    ti_color = ti_ok ? c_pass : not na(trend_int) ? c_fail : c_txt
+    table.cell(tbl, 0, r, "Trend Int.", text_color = c_txt, bgcolor = c_bg, text_halign = text.align_left, text_size = txt_sz)
+    table.cell(tbl, 1, r, ti_display + (ti_ok ? " ✅" : " ❌"), text_color = ti_color, bgcolor = c_bg, text_halign = text.align_right, text_size = txt_sz)
+    r += 1
+
+    // --- Section: Tier 2 ---
+    table.cell(tbl, 0, r, "── Tier 2 ──", text_color = c_lbl, bgcolor = c_bg_sec, text_halign = text.align_left, text_size = txt_sz)
+    table.cell(tbl, 1, r, tier2_ok ? "PASS ✅" : "FAIL ❌", text_color = tier2_ok ? c_pass : c_fail, bgcolor = c_bg_sec, text_halign = text.align_right, text_size = txt_sz)
+    r += 1
+
+    // RVOL
+    table.cell(tbl, 0, r, "RVOL", text_color = c_txt, bgcolor = c_bg, text_halign = text.align_left, text_size = txt_sz)
+    table.cell(tbl, 1, r, str.tostring(rvol_val, "#.##") + "x" + (rvol_ok ? " ✅" : " ❌"), text_color = rvol_ok ? c_pass : c_fail, bgcolor = c_bg, text_halign = text.align_right, text_size = txt_sz)
+    r += 1
+
+    // ADR%
+    adr_display = not na(adr_val) ? str.tostring(adr_val, "#.#") + "%" : "—"
+    table.cell(tbl, 0, r, "ADR%", text_color = c_txt, bgcolor = c_bg, text_halign = text.align_left, text_size = txt_sz)
+    table.cell(tbl, 1, r, adr_display + (adr_ok ? " ✅" : " ❌"), text_color = adr_ok ? c_pass : c_fail, bgcolor = c_bg, text_halign = text.align_right, text_size = txt_sz)
+    r += 1
+
+    // Dist SMA20
+    table.cell(tbl, 0, r, "Dist SMA20", text_color = c_txt, bgcolor = c_bg, text_halign = text.align_left, text_size = txt_sz)
+    table.cell(tbl, 1, r, str.tostring(dist_sma20_val, "#.#") + "%" + (dist20_ok ? " ✅" : " ❌"), text_color = dist20_ok ? c_pass : c_fail, bgcolor = c_bg, text_halign = text.align_right, text_size = txt_sz)
+    r += 1
+
+    // Dollar Vol
+    dvol_display = not na(avg_dvol) ? str.tostring(avg_dvol / 1e6, "#.#") + "M" : "—"
+    table.cell(tbl, 0, r, "DolVol", text_color = c_txt, bgcolor = c_bg, text_halign = text.align_left, text_size = txt_sz)
+    table.cell(tbl, 1, r, dvol_display + (dvol_ok ? " ✅" : " ❌"), text_color = dvol_ok ? c_pass : c_fail, bgcolor = c_bg, text_halign = text.align_right, text_size = txt_sz)
+    r += 1
+
+    // --- Section: Context ---
+    table.cell(tbl, 0, r, "── Context ──", text_color = c_lbl, bgcolor = c_bg_sec, text_halign = text.align_left, text_size = txt_sz)
+    table.cell(tbl, 1, r, "", bgcolor = c_bg_sec, text_size = txt_sz)
+    r += 1
+
+    // Breakout
+    bo_txt = is_breakout ? "✅ > " + str.tostring(breakout_lvl, "#.##") : "❌ need " + str.tostring(breakout_lvl, "#.##")
+    table.cell(tbl, 0, r, "Breakout", text_color = c_txt, bgcolor = c_bg, text_halign = text.align_left, text_size = txt_sz)
+    table.cell(tbl, 1, r, bo_txt, text_color = is_breakout ? c_pass : c_fail, bgcolor = c_bg, text_halign = text.align_right, text_size = txt_sz)
+    r += 1
+
+    // SPY Regime
+    spy_txt = spy_regime_ok ? "✅ SPY>50" : "❌ SPY<50"
+    spy_extra = spy_sma200_ok ? " | >200" : " | <200"
+    table.cell(tbl, 0, r, "SPY Regime", text_color = c_txt, bgcolor = c_bg, text_halign = text.align_left, text_size = txt_sz)
+    table.cell(tbl, 1, r, spy_txt + spy_extra, text_color = spy_regime_ok ? c_pass : c_fail, bgcolor = c_bg, text_halign = text.align_right, text_size = txt_sz)
+    r += 1
+
+    // Sector ETF
+    if use_sector_filter
+        etf_name = f_clean(sector_etf_sym)
+        etf_dist_pct = not na(etf_dist) ? str.tostring(etf_dist * 100, "#.#") + "%" : "—"
+        sec_txt = sector_ok ? "✅ " + etf_name + " (" + etf_dist_pct + ")" : "❌ " + etf_name + " (" + etf_dist_pct + ")"
+        table.cell(tbl, 0, r, "Sector ETF", text_color = c_txt, bgcolor = c_bg, text_halign = text.align_left, text_size = txt_sz)
+        table.cell(tbl, 1, r, sec_txt, text_color = sector_ok ? c_pass : c_fail, bgcolor = c_bg, text_halign = text.align_right, text_size = txt_sz)
+    else
+        table.cell(tbl, 0, r, "Sector ETF", text_color = c_txt, bgcolor = c_bg, text_halign = text.align_left, text_size = txt_sz)
+        table.cell(tbl, 1, r, "DISABLED", text_color = c_warn, bgcolor = c_bg, text_halign = text.align_right, text_size = txt_sz)
+    r += 1
+
+    // Minervini Stage 2
+    if show_minervini
+        table.cell(tbl, 0, r, "Stage 2", text_color = c_txt, bgcolor = c_bg, text_halign = text.align_left, text_size = txt_sz)
+        table.cell(tbl, 1, r, str.tostring(minervini_n) + "/7" + (minervini_ok ? " ✅" : ""), text_color = minervini_ok ? c_pass : minervini_n >= 5 ? c_warn : c_fail, bgcolor = c_bg, text_halign = text.align_right, text_size = txt_sz)
+        r += 1
+
+    // --- Section: Risk ---
+    table.cell(tbl, 0, r, "── Risk ──", text_color = c_lbl, bgcolor = c_bg_sec, text_halign = text.align_left, text_size = txt_sz)
+    table.cell(tbl, 1, r, "2×ATR = " + str.tostring(stop_dist, "#.##"), text_color = c_txt, bgcolor = c_bg_sec, text_halign = text.align_right, text_size = txt_sz)
+    r += 1
+
+    // Stop / TP1 / TP2
+    table.cell(tbl, 0, r, "Stop", text_color = c_txt, bgcolor = c_bg, text_halign = text.align_left, text_size = txt_sz)
+    table.cell(tbl, 1, r, "$" + str.tostring(stop_px, "#.##"), text_color = c_fail, bgcolor = c_bg, text_halign = text.align_right, text_size = txt_sz)
+    r += 1
+
+    table.cell(tbl, 0, r, "TP1 (" + str.tostring(tp1_r_input, "#.##") + "R)", text_color = c_txt, bgcolor = c_bg, text_halign = text.align_left, text_size = txt_sz)
+    table.cell(tbl, 1, r, "$" + str.tostring(tp1_px, "#.##"), text_color = c_pass, bgcolor = c_bg, text_halign = text.align_right, text_size = txt_sz)
+    r += 1
+
+    table.cell(tbl, 0, r, "TP2 (" + str.tostring(tp2_r_input, "#.#") + "R)", text_color = c_txt, bgcolor = c_bg, text_halign = text.align_left, text_size = txt_sz)
+    table.cell(tbl, 1, r, "$" + str.tostring(tp2_px, "#.##"), text_color = c_pass, bgcolor = c_bg, text_halign = text.align_right, text_size = txt_sz)
+    r += 1
+
+    // Shares
+    table.cell(tbl, 0, r, "Shares", text_color = c_txt, bgcolor = c_bg, text_halign = text.align_left, text_size = txt_sz)
+    table.cell(tbl, 1, r, str.tostring(shares_n) + " ($" + str.tostring(risk_dollars_input, "#") + ")", text_color = c_txt, bgcolor = c_bg, text_halign = text.align_right, text_size = txt_sz)
+    r += 1
+
+    // --- SIGNAL ROW ---
+    if signal_long
+        table.cell(tbl, 0, r, "⚡ SIGNAL", text_color = color.white, bgcolor = c_sig_bg, text_halign = text.align_left, text_size = txt_sz)
+        table.cell(tbl, 1, r, "LONG | " + str.tostring(qulla_score, "#.#"), text_color = color.white, bgcolor = c_sig_bg, text_halign = text.align_right, text_size = txt_sz)
+    else
+        table.cell(tbl, 0, r, "❌ BLOCKED", text_color = c_lbl, bgcolor = c_blk_bg, text_halign = text.align_left, text_size = txt_sz)
+        table.cell(tbl, 1, r, block_reason, text_color = c_fail, bgcolor = c_blk_bg, text_halign = text.align_right, text_size = txt_sz)
+
+
+// ====================== 11. ALERTS ======================
+
+// Static alert conditions (for TradingView alert dialog)
+alertcondition(signal_new, "🏎️ Bugatti Signal LONG", "BUGATTI SIGNAL: {{ticker}} fired at {{close}} on {{time}}")
+alertcondition(is_breakout and not is_breakout[1], "📈 Breakout Detected", "BREAKOUT: {{ticker}} above 20-day high at {{close}}")
+alertcondition(ma_stack_ok and not ma_stack_ok[1], "✅ MA Stack Restored", "MA STACK restored on {{ticker}}")
+alertcondition(not ma_stack_ok and ma_stack_ok[1], "❌ MA Stack Broken", "MA STACK broken on {{ticker}}")
+
+// Dynamic alert with full signal details
+if signal_new
+    alert_msg = "🏎️ BUGATTI SIGNAL: " + syminfo.ticker +
+         "\n📍 Entry: $" + str.tostring(close, "#.##") +
+         "\n🛑 Stop: $" + str.tostring(stop_px, "#.##") + " (2×ATR)" +
+         "\n🎯 TP1: $" + str.tostring(tp1_px, "#.##") + " (" + str.tostring(tp1_r_input, "#.##") + "R)" +
+         "\n🎯 TP2: $" + str.tostring(tp2_px, "#.##") + " (" + str.tostring(tp2_r_input, "#.#") + "R)" +
+         "\n📊 Shares: " + str.tostring(shares_n) + " | Risk: $" + str.tostring(risk_dollars_input, "#") +
+         "\n📈 Score: " + str.tostring(qulla_score, "#.#") +
+         " | RVOL: " + str.tostring(rvol_val, "#.##") +
+         " | RS: " + str.tostring(rs_pct, "#.#") + "%" +
+         "\n🏷️ Stage2: " + str.tostring(minervini_n) + "/7" +
+         " | Sector: " + f_clean(sector_etf_sym)
+    alert(alert_msg, alert.freq_once_per_bar_close)
