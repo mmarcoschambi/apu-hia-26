@@ -21,8 +21,30 @@ from src.config.dynamic_config import load_production_config
 from src.utils.sector_rotation import SECTOR_MAP, SECTOR_ETFS
 from src.signals.thematic_logic import calculate_equal_weighted_index
 from src.data.theme_taxonomy import THEME_MAP, get_themes
-from src.utils.market_health import calculate_health_score_pit
 from config.feature_flags import get_active_mode
+
+def get_health_score_for_date(date_str: str, health_lookup: dict) -> tuple[int, str]:
+    """Lee el health_score pre-calculado. Sin fallback on-the-fly."""
+    row = health_lookup.get(date_str)
+    if row is None:
+        return 3, "DEFENSE_PARTIAL"  # fallback explÃ­cito y logeado
+    return row["health_score"], row["regime_mode"]
+
+def calc_atr(ticker_df: pd.DataFrame, period: int = 14) -> float:
+    """ATR simple sobre las Ãºltimas N velas disponibles (E13)."""
+    if len(ticker_df) < period + 1:
+        return ticker_df["close"].iloc[-1] * 0.02  # fallback: 2% del precio
+    # Usamos tail para asegurarnos de tener solo lo necesario
+    df_slice = ticker_df.tail(period + 1)
+    high = df_slice["high"]
+    low  = df_slice["low"]
+    close_prev = df_slice["close"].shift(1)
+    tr = pd.concat([
+        high - low,
+        (high - close_prev).abs(),
+        (low  - close_prev).abs()
+    ], axis=1).max(axis=1)
+    return tr.iloc[1:].mean()
 
 # Configuration
 DB_PATH = PROJECT_ROOT / "data" / "ticker_cache.db"
@@ -103,12 +125,12 @@ def calculate_backtest_metrics(trades_df, equity_curve_df):
     }
 
 def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tickers: int, tag: str, use_variant_e: bool = False):
-    logger.info(f"🚀 BACKTEST (PARITY{' + VAR-E' if use_variant_e else ''}) | Range: {start_date} -> {end_date}")
+    logger.info(f"ðŸš€ BACKTEST (PARITY{' + VAR-E' if use_variant_e else ''}) | Range: {start_date} -> {end_date}")
     dates_str = get_trading_dates(start_date, end_date)
     if not dates_str: return
 
-    # --- FASE 1: PRE-CARGA Y CONFIGURACIÓN ---
-    logger.info("📦 Loading configs and pre-loading superset...")
+    # --- FASE 1: PRE-CARGA Y CONFIGURACIÃ“N ---
+    logger.info("ðŸ“¦ Loading configs and pre-loading superset...")
     
     cfg_a, _ = load_combo_merged("combo_pure_momentum")
     cfg_b, _ = load_combo_merged("combo_stage2_breakout")
@@ -120,7 +142,7 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
             # CRITICAL: We need sector data for divergence, but we MUST NOT block if sector is weak!
             cfg["tier2_filters"]["use_sector_etf_filter"] = False 
 
-    logger.info("🔭 Building PIT universes for each date...")
+    logger.info("ðŸ”­ Building PIT universes for each date...")
     universe_by_date = {}
     superset_tickers = set()
     for d_str in tqdm(dates_str, desc="Universe Building"):
@@ -147,6 +169,12 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
     lookback_start = (pd.to_datetime(start_date) - timedelta(days=400)).strftime("%Y-%m-%d")
     all_ohlcv = load_ohlcv_batch_memory(list(superset_tickers), lookback_start, end_date)
     
+    # Load health scores
+    conn = sqlite3.connect(DB_PATH)
+    health_scores_df = pd.read_sql("SELECT date, health_score, regime_mode FROM daily_health_scores", conn)
+    health_lookup = health_scores_df.set_index("date")[["health_score", "regime_mode"]].to_dict('index')
+    conn.close()
+
     spy_full = all_ohlcv.get("SPY", pd.DataFrame())
     vix_full = all_ohlcv.get("^VIX", pd.DataFrame())
     
@@ -159,13 +187,13 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
 
     theme_metrics_full = {}
     if use_variant_e:
-        logger.info("🧪 Pre-calculating Theme Indices for Variant E...")
+        logger.info("ðŸ§ª Pre-calculating Theme Indices for Variant E...")
         # 1. Agrupar tickers por tema
         theme_to_tickers = {}
         for t, themes in THEME_MAP.items():
             for theme in themes: theme_to_tickers.setdefault(theme, []).append(t)
         
-        # 2. Calcular índices
+        # 2. Calcular Ã­ndices
         market_data_closes = pd.DataFrame({t: df["close"] for t, df in all_ohlcv.items() if t in superset_tickers})
         theme_indices = {}
         for theme, members in theme_to_tickers.items():
@@ -190,7 +218,7 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
 
     conn.close()
 
-    # --- FASE 2: LOOP SIMULACIÓN ---
+    # --- FASE 2: LOOP SIMULACIÃ“N ---
     portfolio = {"cash": initial_capital, "positions": {}, "sector_count": {}}
     all_trades, equity_curve, pending_signals = [], [], []
 
@@ -198,20 +226,13 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
         curr_dt = pd.Timestamp(d_str)
         
         # 0. Market Context & Mode Selection
-        spy_slice_full = spy_full[spy_full.index <= curr_dt]
-        vix_slice_full = vix_full[vix_full.index <= curr_dt].tail(5)
-        health = calculate_health_score_pit(spy_slice_full, vix_slice_full)
+        health, regime_mode = get_health_score_for_date(d_str, health_lookup)
         active_mode = get_active_mode(health)
         
-        # Update configs based on mode
-        cfg_a["tier2_filters"]["use_theme_group_filter"] = active_mode["use_theme_group_filter"]
-        cfg_b["tier2_filters"]["use_theme_group_filter"] = active_mode["use_theme_group_filter"]
-        # If mode is Attack, we ensure sector filter is active (Baseline logic)
-        # If mode is Defense, we ensure sector filter is OFF (Variant E logic)
-        cfg_a["tier2_filters"]["use_sector_etf_filter"] = not active_mode["use_theme_group_filter"]
-        cfg_b["tier2_filters"]["use_sector_etf_filter"] = not active_mode["use_theme_group_filter"]
+        # E12 dynamic switch DISABLED — Gold Standard filters fixed permanently
+        # use_theme_group_filter = True, use_sector_etf_filter = False (set at init, never overridden)
         
-        effective_risk_pct = RISK_PCT_BASE * active_mode["risk_multiplier"]
+        effective_risk_pct = RISK_PCT_BASE  # E12 risk_multiplier DISABLED — Gold Standard fixed sizing
 
         # 1. Update Mark-to-Market
         total_equity = portfolio["cash"]
@@ -335,7 +356,7 @@ def run_backtest(start_date: str, end_date: str, initial_capital: float, max_tic
     df_equity.rename(columns={"equity": "0"}).to_csv(OUTPUT_DIR / f"{tag}_equity.csv", index=False)
     metrics = calculate_backtest_metrics(df_trades, df_equity)
     with open(OUTPUT_DIR / f"{tag}_metrics.json", "w") as f: json.dump(metrics, f, indent=2)
-    logger.info(f"✅ DONE | Return: {metrics.get('total_return')}% | MDD: {metrics.get('max_drawdown')}% | Trades: {len(df_trades)}")
+    logger.info(f"âœ… DONE | Return: {metrics.get('total_return')}% | MDD: {metrics.get('max_drawdown')}% | Trades: {len(df_trades)}")
 
 if __name__ == "__main__":
     import argparse
