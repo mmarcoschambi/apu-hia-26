@@ -293,6 +293,142 @@ def _is_watchlist_candidate(detail: dict) -> bool:
     return False
 
 
+# Umbrales
+_MAX_DIST_SMA20 = 6.77   # igual que producción
+_DIST_MODERATE  = 15.0   # sobre este valor = largo plazo
+
+def _enrich_with_history(signals: list[dict], date: str) -> list[dict]:
+    """
+    Enriquece cada signal con datos históricos de candidate_state:
+    setup_age, tendencia de dist_sma20, status histórico.
+    Si no hay DB o el ticker no tiene historia, los campos quedan en None.
+    """
+    db_path = PROJECT_ROOT / "data" / "ticker_cache.db"
+    if not db_path.exists():
+        return signals  # VPS sin DB — no enriquecer, no romper
+
+    tickers = [s.get("ticker", "").upper() for s in signals if s.get("ticker")]
+    if not tickers:
+        return signals
+
+    try:
+        import sqlite3
+        conn = sqlite3.connect(db_path)
+
+        # Traer los últimos 10 días de cada ticker para calcular tendencia
+        placeholders = ",".join(["?"] * len(tickers))
+        df = pd.read_sql_query(
+            f"""
+            SELECT ticker, date, setup_age, dist_sma20_pct, status, near_breakout
+            FROM candidate_state
+            WHERE ticker IN ({placeholders})
+              AND date <= ?
+            ORDER BY ticker, date DESC
+            """,
+            conn,
+            params=tickers + [date],
+        )
+        conn.close()
+    except Exception as e:
+        logger.warning(f"_enrich_with_history: error reading candidate_state: {e}")
+        return signals
+
+    if df.empty:
+        return signals
+
+    # Construir dict por ticker con los últimos N días
+    history: dict[str, dict] = {}
+    for ticker, grp in df.groupby("ticker"):
+        grp = grp.sort_values("date", ascending=False)
+        latest = grp.iloc[0]
+
+        # Tendencia dist_sma20: comparar hoy vs hace 5 días
+        dist_today = latest["dist_sma20_pct"]
+        dist_5d_ago = grp.iloc[min(4, len(grp)-1)]["dist_sma20_pct"]
+        dist_trend = None
+        if dist_today is not None and dist_5d_ago is not None:
+            dist_trend = round(float(dist_today) - float(dist_5d_ago), 1)
+            # Negativo = consolidando (bueno) | Positivo = extendiéndose (malo)
+
+        history[ticker.upper()] = {
+            "setup_age":    int(latest["setup_age"]) if latest["setup_age"] else 0,
+            "db_status":    latest["status"],          # BUILDING|NEAR|CONFIRMED
+            "near_breakout": bool(latest["near_breakout"]),
+            "dist_trend_5d": dist_trend,               # None si sin historia
+            "days_in_list":  len(grp),                 # cuántos días tiene data
+        }
+
+    # Enriquecer cada signal
+    for s in signals:
+        ticker = s.get("ticker", "").upper()
+        h = history.get(ticker, {})
+        s["_setup_age"]    = h.get("setup_age", 0)
+        s["_db_status"]    = h.get("db_status")
+        s["_near_breakout"]= h.get("near_breakout", False)
+        s["_dist_trend_5d"]= h.get("dist_trend_5d")   # negativo = mejorando
+        s["_days_in_list"] = h.get("days_in_list", 0)
+
+    return signals
+
+
+def _classify_urgency(signal: dict) -> tuple[str, str, str]:
+    """
+    Retorna (tier, badge_html, evolution_badge_html)
+    tier       : "A" | "B" | "C"
+    badge      : badge principal de urgencia
+    evo_badge  : badge de evolución (vacío si sin historia o sin movimiento)
+    """
+    reasons    = signal.get("reasons") or []
+    dist_sma   = float(signal.get("dist_sma20",
+                       signal.get("gate_dist_sma20", 0)) or 0)
+    gate       = signal.get("entry_gate_status", "BLOCKED")
+
+    # Datos históricos (pueden ser None si sin DB)
+    setup_age   = signal.get("_setup_age", 0) or 0
+    db_status   = signal.get("_db_status")
+    dist_trend  = signal.get("_dist_trend_5d")   # negativo = consolidando
+    near_bo     = signal.get("_near_breakout", False)
+
+    has_dist  = dist_sma > _MAX_DIST_SMA20
+    has_ma    = any("MA stack" in r or "MA Stack" in r for r in reasons)
+    has_bkout = any("breakout" in r.lower() for r in reasons)
+    has_rvol  = any("RVOL" in r for r in reasons)
+
+    # ── Badge de evolución ────────────────────────────────────────────────
+    evo_badge = ""
+
+    if setup_age >= 3:
+        if dist_trend is not None and dist_trend <= -5.0:
+            # Consolidando activamente — dist bajó ≥5% en 5 días
+            evo_badge = f"📈 <i>Consolidando {abs(dist_trend):.1f}% en 5d</i>"
+        elif near_bo or db_status == "NEAR":
+            evo_badge = f"⚡ <i>Cerca del trigger ({setup_age}d en lista)</i>"
+        elif db_status == "CONFIRMED":
+            evo_badge = f"🏆 <i>Confirmado ({setup_age}d)</i>"
+        elif setup_age >= 7:
+            # Lleva mucho tiempo sin moverse — puede estar perdiendo momentum
+            evo_badge = f"⏳ <i>{setup_age}d en lista</i>"
+
+    # ── Clasificación principal ───────────────────────────────────────────
+    if gate == "PASS":
+        return "A", "🟢 <b>ACTIVO</b>", evo_badge
+
+    if has_rvol and not has_dist and not has_ma and not has_bkout:
+        return "A", "🟢 <b>RVOL pendiente</b>", evo_badge
+
+    if has_bkout and not has_dist and not has_ma:
+        return "A", "🟡 <b>Esperar breakout</b>", evo_badge
+
+    if has_dist and not has_ma and dist_sma <= _DIST_MODERATE:
+        badge = "🟡 <b>Consolidar + RVOL</b>" if has_rvol else "🟡 <b>Consolidar</b>"
+        return "B", badge, evo_badge
+
+    if has_rvol and dist_sma <= _DIST_MODERATE and not has_ma:
+        return "B", "🟡 <b>Consolidar + RVOL</b>", evo_badge
+
+    return "C", "🔴 <b>Radar largo plazo</b>", evo_badge
+
+
 def load_watchlist_signals(date: str | None = None) -> tuple[str | None, list[dict[str, Any]]]:
     """Load watchlist candidates from pre-market snapshots and merge live triggers on top."""
     signals_dict = {}
@@ -501,8 +637,29 @@ def build_watchlist_message(date: str | None = None, page: int = 1) -> tuple[str
             [],
         )
 
-    # Sort by entry_score descending
-    signals = sorted(signals, key=lambda s: float(s.get("entry_score", 0) or 0), reverse=True)
+    # ── NUEVO: enriquecer con historia antes de clasificar ────────────────
+    signals = _enrich_with_history(signals, resolved)
+    # ─────────────────────────────────────────────────────────────────────
+
+    for s in signals:
+        tier, badge, evo_badge = _classify_urgency(s)   # ← ahora retorna 3 valores
+        s["_urgency_tier"]  = tier
+        s["_urgency_badge"] = badge
+        s["_evo_badge"]     = evo_badge                 # ← NUEVO
+
+    cnt = {"A": 0, "B": 0, "C": 0}
+    for s in signals:
+        cnt[s["_urgency_tier"]] += 1
+
+    tier_order = {"A": 0, "B": 1, "C": 2}
+    signals = sorted(
+        signals,
+        key=lambda s: (
+            tier_order.get(s.get("_urgency_tier", "C"), 2),
+            -float(s.get("entry_score", 0) or 0)
+        )
+    )
+
     total = len(signals)
     total_pages = max(1, (total + WATCHLIST_PAGE_SIZE - 1) // WATCHLIST_PAGE_SIZE)
     page = max(1, min(page, total_pages))
@@ -510,11 +667,12 @@ def build_watchlist_message(date: str | None = None, page: int = 1) -> tuple[str
     end_idx = start_idx + WATCHLIST_PAGE_SIZE
     page_signals = signals[start_idx:end_idx]
 
-    # Header
+    # Header enriquecido con conteo por tier
     lines = [
         f"🧭 <b>WATCHLIST | {resolved}</b>",
         f"<i>Grouped by Sector · Page {page}/{total_pages}</i>\n",
-        f"🔍 Candidates: <code>{total}</code>\n",
+        f"🔍 Candidates: <code>{total}</code>  "
+        f"🟢<code>{cnt['A']}</code> 🟡<code>{cnt['B']}</code> 🔴<code>{cnt['C']}</code>\n",
     ]
 
     # Group page signals by sector ETF
@@ -561,12 +719,14 @@ def _build_watchlist_grouped_lines(signals: list, date: str) -> list[str]:
         lines.append(f"<b>{etf} — {sector_name}</b>{s_icon}{s_dist_text}")
 
         for s in groups[etf]:
-            ticker = s.get("ticker", "?")
-            score = float(s.get("entry_score", 0) or 0)
-            entry = float(s.get("entry_price", 0) or 0)
-            adr = float(s.get("gate_adr_pct", 0) or 0)
+            ticker     = s.get("ticker", "?")
+            score      = float(s.get("entry_score", 0) or 0)
+            entry      = float(s.get("entry_price", 0) or 0)
+            adr        = float(s.get("gate_adr_pct", 0) or 0)
             gate_status = s.get("entry_gate_status", "")
-            gate_icon = "✅" if gate_status == "PASS" else "⛔"
+            gate_icon  = "✅" if gate_status == "PASS" else "⛔"
+            urgency_badge = s.get("_urgency_badge", "")
+            evo_badge     = s.get("_evo_badge", "")
 
             # Theme RS enrichment
             themes = get_themes(ticker)
@@ -580,11 +740,22 @@ def _build_watchlist_grouped_lines(signals: list, date: str) -> list[str]:
                     rs_part = f" {rs_icon} RS:{theme_rs:+.1%}"
                 theme_line = f"\n         └ {theme_names}{rs_part}"
 
+            # Badge de urgencia en línea separada si no es PASS (no saturar los verdes)
+            urgency_line = ""
+            if gate_status != "PASS" and urgency_badge:
+                urgency_line = f"\n         {urgency_badge}"
+
+            evo_line = ""
+            if evo_badge:
+                evo_line = f"\n         {evo_badge}"
+
             lines.append(
                 f"  <code>{ticker:<5}</code> ★{score:.0f}  "
                 f"Entry:<code>{entry:.2f}</code>  "
                 f"ADR:<code>{adr:.1f}%</code> {gate_icon}"
                 f"{theme_line}"
+                f"{urgency_line}"
+                f"{evo_line}"
             )
         lines.append("")
 

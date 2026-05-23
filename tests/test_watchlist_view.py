@@ -134,5 +134,100 @@ class TestWatchlistView(unittest.TestCase):
             "rs_pct": 85.0
         }))
 
+    def test_classify_urgency(self):
+        from src.paper.telegram_views import _classify_urgency
+
+        # PASS → tier A, ACTIVO
+        tier, badge, evo = _classify_urgency({"entry_gate_status": "PASS"})
+        self.assertEqual(tier, "A")
+        self.assertIn("ACTIVO", badge)
+        self.assertEqual(evo, "")
+
+        # Solo RVOL → tier A
+        tier, badge, evo = _classify_urgency({
+            "reasons": ["RVOL bajo"], "dist_sma20": 5.0,
+            "waiting_for": "RVOL >= 1.10", "entry_gate_status": "BLOCKED",
+            "_setup_age": 4, "_db_status": "NEAR", "_near_breakout": True
+        })
+        self.assertEqual(tier, "A")
+        self.assertIn("RVOL", badge)
+        self.assertIn("Cerca del trigger", evo)
+
+        # Solo breakout → tier A
+        tier, badge, evo = _classify_urgency({
+            "reasons": ["Falta breakout"], "dist_sma20": 4.0,
+            "entry_gate_status": "BLOCKED",
+            "_setup_age": 5, "_dist_trend_5d": -6.0
+        })
+        self.assertEqual(tier, "A")
+        self.assertIn("breakout", badge)
+        self.assertIn("Consolidando", evo)
+
+        # Dist moderada sin MA → tier B
+        tier, badge, evo = _classify_urgency({
+            "reasons": ["Extendido de SMA20"], "dist_sma20": 12.0,
+            "entry_gate_status": "BLOCKED",
+            "_setup_age": 8
+        })
+        self.assertEqual(tier, "B")
+        self.assertIn("en lista", evo)
+
+        # Dist > 15% → tier C
+        tier, badge, evo = _classify_urgency({
+            "reasons": ["Extendido de SMA20"], "dist_sma20": 22.0,
+            "entry_gate_status": "BLOCKED",
+            "_setup_age": 3, "_db_status": "CONFIRMED"
+        })
+        self.assertEqual(tier, "C")
+        self.assertIn("Confirmado", evo)
+
+        # MA stack roto → tier C siempre
+        tier, badge, evo = _classify_urgency({
+            "reasons": ["MA stack roto"], "dist_sma20": 5.0,
+            "entry_gate_status": "BLOCKED"
+        })
+        self.assertEqual(tier, "C")
+        self.assertEqual(evo, "")
+
+    @patch("src.paper.telegram_views.Path.exists")
+    @patch("src.paper.telegram_views.pd.read_sql_query")
+    @patch("src.paper.telegram_views.sqlite3.connect")
+    def test_enrich_with_history(self, mock_connect, mock_read_sql, mock_exists):
+        from src.paper.telegram_views import _enrich_with_history
+
+        mock_exists.return_value = True
+        
+        # Mock DataFrame returning history for VSH and ARM
+        df_mock = pd.DataFrame([
+            {"ticker": "VSH", "date": "2026-05-22", "setup_age": 5, "dist_sma20_pct": 10.0, "status": "NEAR", "near_breakout": 1},
+            {"ticker": "VSH", "date": "2026-05-21", "setup_age": 4, "dist_sma20_pct": 12.0, "status": "BUILDING", "near_breakout": 0},
+            {"ticker": "VSH", "date": "2026-05-20", "setup_age": 3, "dist_sma20_pct": 15.0, "status": "BUILDING", "near_breakout": 0},
+            {"ticker": "VSH", "date": "2026-05-19", "setup_age": 2, "dist_sma20_pct": 17.0, "status": "BUILDING", "near_breakout": 0},
+            {"ticker": "VSH", "date": "2026-05-18", "setup_age": 1, "dist_sma20_pct": 19.5, "status": "BUILDING", "near_breakout": 0},
+            {"ticker": "ARM", "date": "2026-05-22", "setup_age": 12, "dist_sma20_pct": 18.6, "status": "BUILDING", "near_breakout": 0},
+        ])
+        mock_read_sql.return_value = df_mock
+
+        signals = [
+            {"ticker": "VSH", "entry_score": 98.0, "entry_price": 42.17, "gate_dist_sma20": 10.0},
+            {"ticker": "ARM", "entry_score": 97.0, "entry_price": 298.16, "gate_dist_sma20": 18.6},
+        ]
+        
+        enriched = _enrich_with_history(signals, "2026-05-22")
+        
+        self.assertEqual(len(enriched), 2)
+        vsh = [s for s in enriched if s["ticker"] == "VSH"][0]
+        arm = [s for s in enriched if s["ticker"] == "ARM"][0]
+        
+        self.assertEqual(vsh["_setup_age"], 5)
+        self.assertEqual(vsh["_db_status"], "NEAR")
+        self.assertTrue(vsh["_near_breakout"])
+        self.assertEqual(vsh["_dist_trend_5d"], -9.5)
+        
+        self.assertEqual(arm["_setup_age"], 12)
+        self.assertEqual(arm["_db_status"], "BUILDING")
+        self.assertFalse(arm["_near_breakout"])
+        self.assertEqual(arm["_dist_trend_5d"], 0.0)
+
 if __name__ == "__main__":
     unittest.main()
