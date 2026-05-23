@@ -316,3 +316,119 @@ def test_gate_evaluation_parity(base_config):
     # Both should pass or match
     assert decision_pass.passed == passed_partial
 
+
+def test_cascaded_evaluation_loop_diagnostics():
+    from unittest.mock import MagicMock
+    
+    # Setup mock decisions
+    decision_a = MagicMock()
+    decision_a.passed = False
+    decision_a.reject_reason = "screener_fail:qullamaggie_momentum=FAIL"
+    
+    decision_b = MagicMock()
+    decision_b.passed = False
+    decision_b.reject_reason = "tier2_fail:dist_sma20:34.91>12.00"
+    
+    ACTIVE_COMBOS_MOCK = [
+        ("combo_pure_momentum", "A"),
+        ("combo_stage2_breakout", "B"),
+    ]
+    
+    reasons_list = []
+    best_decision = None
+    passed_combo_name = None
+    
+    decisions = {
+        "combo_pure_momentum": decision_a,
+        "combo_stage2_breakout": decision_b
+    }
+    
+    for combo_name, mode in ACTIVE_COMBOS_MOCK:
+        decision = decisions[combo_name]
+        if decision.passed:
+            passed_combo_name = combo_name
+            best_decision = decision
+            break
+        else:
+            lbl = "Qulla" if combo_name == "combo_pure_momentum" else "Minervini" if combo_name == "combo_stage2_breakout" else combo_name
+            reasons_list.append(f"{lbl}:{decision.reject_reason}")
+            if best_decision is None:
+                best_decision = decision
+                
+    if passed_combo_name:
+        entry_gate_status = "PASS"
+        entry_gate_reason = "passed"
+    elif best_decision:
+        entry_gate_status = "BLOCKED"
+        entry_gate_reason = "; ".join(reasons_list)
+        
+    assert entry_gate_status == "BLOCKED"
+    assert entry_gate_reason == "Qulla:screener_fail:qullamaggie_momentum=FAIL; Minervini:tier2_fail:dist_sma20:34.91>12.00"
+
+
+def test_load_watchlist_tickers(tmp_path, monkeypatch):
+    import json
+    import pandas as pd
+    from scripts.finviz_live_promoter import _load_watchlist_tickers
+    
+    # Mock FINVIZ_DIR and OUT_DIR to point to tmp_path
+    monkeypatch.setattr("scripts.finviz_live_promoter.FINVIZ_DIR", tmp_path / "paper_finviz")
+    monkeypatch.setattr("scripts.finviz_live_promoter.OUT_DIR", tmp_path / "live_signals")
+    
+    date = "2026-05-23"
+    
+    # 1. Create a mock snapshot.json with some tickers
+    snapshot_dir = tmp_path / "paper_finviz" / date
+    snapshot_dir.mkdir(parents=True)
+    snapshot_data = {
+        "watchlist_detail": {
+            # Candidate 1: Proximity >= 70
+            "AAPL": {
+                "proximity_score": 75.0,
+                "reasons": ["RVOL bajo"],
+                "rs_pct": 50.0
+            },
+            # Candidate 2: RS >= 90, Proximity >= 50
+            "MSFT": {
+                "proximity_score": 55.0,
+                "reasons": ["RVOL bajo", "Extendido"],
+                "rs_pct": 95.0
+            },
+            # Non-candidate: reasons >= 3
+            "TSLA": {
+                "proximity_score": 80.0,
+                "reasons": ["RVOL bajo", "Extendido", "MA stack roto"],
+                "rs_pct": 95.0
+            },
+            # Non-candidate: proximity < 70 and RS < 90
+            "NVDA": {
+                "proximity_score": 45.0,
+                "reasons": ["RVOL bajo"],
+                "rs_pct": 80.0
+            }
+        }
+    }
+    with open(snapshot_dir / "snapshot.json", "w") as f:
+        json.dump(snapshot_data, f)
+        
+    # 2. Create a mock combined.csv under live_signals
+    combined_dir = tmp_path / "live_signals" / date
+    combined_dir.mkdir(parents=True)
+    df_combined = pd.DataFrame({
+        "ticker": ["GOOG", "AMZN"]
+    })
+    df_combined.to_csv(combined_dir / "combined.csv", index=False)
+    
+    # Run the function
+    watchlist_tickers = _load_watchlist_tickers(date)
+    
+    # Verify candidates from snapshot: AAPL, MSFT
+    # Verify tickers from combined.csv: GOOG, AMZN
+    # Verify non-candidates are excluded: TSLA, NVDA
+    assert "AAPL" in watchlist_tickers
+    assert "MSFT" in watchlist_tickers
+    assert "GOOG" in watchlist_tickers
+    assert "AMZN" in watchlist_tickers
+    assert "TSLA" not in watchlist_tickers
+    assert "NVDA" not in watchlist_tickers
+

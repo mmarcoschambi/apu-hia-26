@@ -203,6 +203,50 @@ def check_snapshot_gate_partial(detail: dict, config: dict) -> tuple[bool, str]:
     return True, "passed"
 
 
+def _load_watchlist_tickers(date: str) -> set[str]:
+    """Carga los tickers candidatos oficiales (de la watchlist pre-market) del día."""
+    watchlist_tickers = set()
+    
+    # 1. Cargar desde snapshot.json usando el filtro de candidato
+    snapshot_path = FINVIZ_DIR / date / "snapshot.json"
+    if snapshot_path.exists():
+        try:
+            with open(snapshot_path, "r") as f:
+                snapshot = json.load(f)
+            watchlist = snapshot.get("watchlist_detail", {})
+            for ticker, detail in watchlist.items():
+                proximity = float(detail.get("proximity_score", 0) or 0)
+                reasons = detail.get("reasons", [])
+                rs_pct = float(detail.get("rs_pct", 0) or 0)
+                
+                # Excluir errores de cálculo
+                if any("No se pudo calcular" in r for r in reasons):
+                    continue
+                # Excluir tickers con demasiados blockers
+                if len(reasons) >= 3:
+                    continue
+                # Criterios del candidato real
+                if proximity >= 70:
+                    watchlist_tickers.add(ticker.upper())
+                elif rs_pct >= 90 and proximity >= 50:
+                    watchlist_tickers.add(ticker.upper())
+        except Exception as e:
+            logger.warning(f"Error loading watchlist from snapshot: {e}")
+            
+    # 2. Cargar desde combined.csv al inicio del día (si existía, p.ej. de daily_scan en lab)
+    combined_path = OUT_DIR / date / "combined.csv"
+    if combined_path.exists():
+        try:
+            df = pd.read_csv(combined_path)
+            if not df.empty and "ticker" in df.columns:
+                for ticker in df["ticker"].tolist():
+                    watchlist_tickers.add(str(ticker).upper())
+        except Exception as e:
+            logger.warning(f"Error loading watchlist from combined.csv: {e}")
+            
+    return watchlist_tickers
+
+
 def promote_candidates(date: str, min_rvol: float = 1.5, send_telegram: bool = False):
     snapshot_path = FINVIZ_DIR / date / "snapshot.json"
     if not snapshot_path.exists():
@@ -212,6 +256,8 @@ def promote_candidates(date: str, min_rvol: float = 1.5, send_telegram: bool = F
     logger.info(f"Promoter cycle start | date={date} | snapshot={snapshot_path}")
     with open(snapshot_path, "r") as f:
         snapshot = json.load(f)
+
+    watchlist_tickers = _load_watchlist_tickers(date)
 
     watchlist = snapshot.get("watchlist_detail", {})
     if not watchlist:
@@ -605,16 +651,42 @@ def promote_candidates(date: str, min_rvol: float = 1.5, send_telegram: bool = F
                 safe_ticker = html.escape(str(ticker), quote=False)
                 safe_sector = html.escape(str(sec), quote=False)
                 
+                # Check watchlist presence
+                in_watchlist = ticker.upper() in watchlist_tickers
+                watchlist_badge = "📋 <b>EN WATCHLIST</b>" if in_watchlist else "🆕 <b>NUEVO TICKER</b>"
+
                 # Determine icon and instruction for gate status
                 if entry_gate_status == "PASS":
                     gate_icon = "🟢"
-                    action_text = "Eligible for manual entry review"
+                    action_text = "🟢 Trigger validado. Elegible para entrada swing manual."
                 elif entry_gate_status == "BLOCKED":
                     gate_icon = "🔴"
-                    action_text = "Research/watch only, no entry signal"
+                    blockers = []
+                    reason_lower = entry_gate_reason.lower()
+                    if "adr" in reason_lower:
+                        blockers.append("ADR bajo")
+                    if "dist_sma20" in reason_lower or "dist_sma" in reason_lower:
+                        blockers.append("Extendido de SMA20")
+                    if "rs_percentile" in reason_lower or "rs_pct" in reason_lower:
+                        blockers.append("RS bajo")
+                    if "dollar_volume" in reason_lower or "dollar_vol" in reason_lower:
+                        blockers.append("DVol bajo")
+                    if "sector_etf" in reason_lower:
+                        blockers.append("Sector ETF bajista")
+                    if "stage2" in reason_lower or "minervini_stage2" in reason_lower:
+                        blockers.append("Falla Stage 2")
+                    if "ma_stack" in reason_lower:
+                        blockers.append("Medias desalineadas")
+                    if "trend_intensity" in reason_lower:
+                        blockers.append("Trend Intensity bajo")
+                    
+                    if blockers:
+                        action_text = f"🔴 Evitar entrada: bloqueado por {', '.join(blockers)}."
+                    else:
+                        action_text = "🔴 Evitar entrada: no cumple criterios de validación cascada."
                 else:
                     gate_icon = "🟡"
-                    action_text = "Manual verification required"
+                    action_text = "🟡 Requiere verificación manual de filtros."
                 
                 # Format metrics values cleanly
                 rs_str = f"{gate_rs_percentile:.1f}%" if gate_rs_percentile is not None else "N/A"
@@ -624,7 +696,8 @@ def promote_candidates(date: str, min_rvol: float = 1.5, send_telegram: bool = F
                 sec_dist_str = f"{gate_sector_etf_dist:.2f}%" if gate_sector_etf_dist is not None else "N/A"
                 
                 msg = (
-                    f"🧭 <b>LIVE SIGNAL: {safe_ticker}</b> ({safe_sector})\n\n"
+                    f"🧭 <b>LIVE SIGNAL: {safe_ticker}</b> ({safe_sector})\n"
+                    f"{watchlist_badge}\n\n"
                     f"⚡ <b>TRIGGER DETAILS:</b>\n"
                     f"• Live Trigger: <b>PASS</b>\n"
                     f"• Price: <b>${price:.2f}</b>{price_flag} (Break: ${breakout_lvl:.2f})\n"
@@ -638,6 +711,7 @@ def promote_candidates(date: str, min_rvol: float = 1.5, send_telegram: bool = F
                     f"• Dollar Volume: <b>{dv_str}</b>\n"
                     f"• Dist SMA20: <b>{dist20_str}</b>\n"
                     f"• Sector ETF Dist: <b>{sec_dist_str}</b>\n\n"
+                    f"📈 <a href=\"https://www.tradingview.com/symbols/{safe_ticker}/\">Ver en TradingView</a>\n\n"
                     f"📢 <b>ACTION:</b>\n"
                     f"<b>{action_text}</b>"
                 )

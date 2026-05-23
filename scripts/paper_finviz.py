@@ -67,7 +67,7 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger(__name__)
-ACTIVE_COMBOS = ["combo_pure_momentum"]
+ACTIVE_COMBOS = ["combo_pure_momentum", "combo_stage2_breakout"]
 INITIAL_CAPITAL = 100_000
 
 
@@ -928,8 +928,20 @@ def run_pre(trade_date, drift_override, rs_min_pct=RS_FINVIZ_MIN_PCT_DEFAULT, to
             for t, score in res.get("watchlist", {}).items():
                 if t not in watchlist_scores or score > watchlist_scores[t]: watchlist_scores[t] = score
             for t, detail in res.get("watchlist_detail", {}).items():
-                if t not in watchlist_details or detail.get("score", 0) > watchlist_details[t].get("score", 0):
+                combo_lbl = "Qulla" if combo_name == "combo_pure_momentum" else "Minervini" if combo_name == "combo_stage2_breakout" else combo_name
+                if t not in watchlist_details:
                     watchlist_details[t] = detail
+                    watchlist_details[t]["combos"] = [combo_lbl]
+                else:
+                    current_combos = watchlist_details[t].get("combos", [])
+                    if combo_lbl not in current_combos:
+                        current_combos.append(combo_lbl)
+                    
+                    if detail.get("score", 0) > watchlist_details[t].get("score", 0):
+                        # Keep the new detail but preserve and merge the combos list
+                        watchlist_details[t] = detail
+                    
+                    watchlist_details[t]["combos"] = current_combos
 
         seen = {}
         for s in signals:

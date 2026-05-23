@@ -101,22 +101,24 @@ def edit_message(
     message_id: int,
     text: str,
     parse_mode: str = "HTML",
+    buttons: list[list[dict[str, str]]] | None = None,
 ) -> bool:
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     if not token:
         return False
     url = f"https://api.telegram.org/bot{token}/editMessageText"
+    payload = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "text": text,
+        "parse_mode": parse_mode,
+        "disable_web_page_preview": True,
+    }
+    if buttons is not None:
+        payload["reply_markup"] = {"inline_keyboard": buttons}
     try:
         with httpx.Client(timeout=10.0) as client:
-            r = client.post(
-                url,
-                json={
-                    "chat_id": chat_id,
-                    "message_id": message_id,
-                    "text": text,
-                    "parse_mode": parse_mode,
-                },
-            )
+            r = client.post(url, json=payload)
             return r.status_code == 200
     except Exception:
         return False

@@ -788,8 +788,16 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
                     falta = ", ".join(reasons[:2]) if reasons else "OK"
                     trigger = html.escape(str(data.get('waiting_for', 'OK')))
 
+                    combos = data.get("combos", [])
+                    combo_badge = ""
+                    if combos:
+                        if len(combos) > 1:
+                            combo_badge = " <b>[Ambos]</b>"
+                        else:
+                            combo_badge = f" <b>[{combos[0]}]</b>"
+
                     lines.append(
-                        f"• {trend}<code>{ticker_esc}</code>{htf_badge}{theme_txt}\n"
+                        f"• {trend}<code>{ticker_esc}</code>{combo_badge}{htf_badge}{theme_txt}\n"
                         f"  RS: <b>{rs:.0f}</b> | Prox: <b>{prox:.0f}</b> | {_get_tv_link(ticker)}\n"
                         f"  Estado: <b>{html.escape(_estado_simple(data))}</b>\n"
                         f"  Dist SMA20: {dist} / max {max_dist}\n"
