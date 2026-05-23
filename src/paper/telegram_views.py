@@ -18,6 +18,10 @@ logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 MONITOR_ROOT = PROJECT_ROOT / "outputs" / "telegram_monitor"
 DEMO_ROOT = PROJECT_ROOT / "outputs" / "paper_demo_telegram" / "runs"
+LIVE_SIGNALS_ROOT = PROJECT_ROOT / "outputs" / "live_signals"
+FINVIZ_DIR = PROJECT_ROOT / "outputs" / "paper_finviz"
+
+WATCHLIST_PAGE_SIZE = 6
 
 GICS_TO_ETF = {
     "Information Technology": "XLK",
@@ -142,9 +146,12 @@ def _get_theme_rs_vs_etf(ticker: str, date: str, lookback: int = 20) -> float | 
 
 
 def _dated_dirs(base: Path) -> list[Path]:
+    import re
     if not base.exists():
         return []
-    return sorted([p for p in base.iterdir() if p.is_dir()], key=lambda p: p.name)
+    pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+    return sorted([p for p in base.iterdir() if p.is_dir() and pattern.match(p.name)], key=lambda p: p.name)
+
 
 
 def latest_date(base: Path) -> str | None:
@@ -197,6 +204,144 @@ def load_prealerts(date: str | None = None) -> tuple[str | None, list[dict[str, 
         return None, []
     payload = _load_json(MONITOR_ROOT / resolved / "prealerts.json") or {}
     return resolved, list(payload.get("signals", []))
+
+
+def _resolve_live_signals_date(date: str | None = None) -> str | None:
+    """Find latest date directory under live_signals/."""
+    if date:
+        if (LIVE_SIGNALS_ROOT / date).is_dir():
+            return date
+        return None
+    return latest_date(LIVE_SIGNALS_ROOT)
+
+
+def _map_premarket_detail_to_signal(ticker: str, detail: dict, date: str) -> dict[str, Any]:
+    premarket_combos = detail.get("combos", [])
+    if len(premarket_combos) > 1:
+        combo_label = "Ambos"
+    elif len(premarket_combos) == 1:
+        combo_label = premarket_combos[0]
+    else:
+        combo_label = "finviz_live"
+
+    gate_status = "BLOCKED"
+    reasons = detail.get("reasons", [])
+    waiting = detail.get("waiting_for", "")
+    primary_reason = detail.get("primary_reason", "")
+
+    # Usar el motivo real del snapshot en lugar de hardcodear
+    if reasons:
+        gate_reason = "; ".join(reasons[:2])  # máximo 2 razones
+    elif waiting and waiting != "OK":
+        gate_reason = waiting
+    elif primary_reason:
+        gate_reason = primary_reason
+    else:
+        gate_reason = "screener_fail:qullamaggie_momentum=FAIL"
+
+    if not primary_reason and reasons:
+        primary_reason = reasons[0]
+
+    return {
+        "ticker": ticker.upper(),
+        "agent_name": combo_label,
+        "entry_score": detail.get("score", 0.0),
+        "proximity_score": detail.get("proximity_score", 0.0),
+        "entry_price": detail.get("price", 0.0),
+        "breakout_level": detail.get("breakout_level", 0.0),
+        "rvol": detail.get("rvol", 0.0),
+        "live_volume": 0,
+        "signal_date": date,
+        "source_universe": "finviz",
+        "decision_source": "finviz_premarket",
+        "data_quality_status": detail.get("data_quality_status", "ok"),
+        "sector_etf": detail.get("sector_etf", "OTHER"),
+        "dollar_vol_M": detail.get("dollar_volume_m", 0.0),
+        "dist_sma20": detail.get("dist_sma20_pct", 0.0),
+        "waiting_for": waiting,
+        "primary_reason": primary_reason,
+        "live_trigger_status": "WAIT",
+        "entry_gate_status": gate_status,
+        "entry_gate_reason": gate_reason,
+        "entry_gate_source": "premarket",
+        "gate_rs_percentile": detail.get("rs_pct", detail.get("score")),
+        "gate_adr_pct": detail.get("adr", 0.0),
+        "gate_dollar_vol_M": detail.get("dollar_volume_m", 0.0),
+        "gate_dist_sma20": detail.get("dist_sma20_pct", 0.0),
+        "gate_sector_etf_dist": detail.get("sector_etf_dist_pct"),
+    }
+
+
+def _is_watchlist_candidate(detail: dict) -> bool:
+    """Filtra tickers del universo completo para quedarse solo con candidatos reales."""
+    proximity = float(detail.get("proximity_score", 0) or 0)
+    reasons = detail.get("reasons", [])
+    rs_pct = float(detail.get("rs_pct", 0) or 0)
+    waiting = detail.get("waiting_for", "OK")
+    
+    # Excluir errores de cálculo
+    if any("No se pudo calcular" in r for r in reasons):
+        return False
+    
+    # Candidato real: cerca del setup
+    if proximity >= 40:
+        return True
+    
+    # RS muy fuerte y no demasiado lejos
+    if rs_pct >= 85 and proximity >= 25:
+        return True
+    
+    # Solo 1 blocker pendiente (casi listo)
+    if len(reasons) <= 1 and waiting != "OK":
+        return True
+    
+    return False
+
+
+def load_watchlist_signals(date: str | None = None) -> tuple[str | None, list[dict[str, Any]]]:
+    """Load watchlist candidates from pre-market snapshots and merge live triggers on top."""
+    signals_dict = {}
+    resolved_pre = date or resolve_monitor_date()
+    
+    if resolved_pre:
+        status_path = MONITOR_ROOT / resolved_pre / "market_status.json"
+        snapshot_path = FINVIZ_DIR / resolved_pre / "snapshot.json"
+        
+        data = _load_json(status_path) or _load_json(snapshot_path)
+        if data and "watchlist_detail" in data:
+            watchlist = data["watchlist_detail"]
+            for ticker, detail in watchlist.items():
+                if _is_watchlist_candidate(detail):
+                    signals_dict[ticker.upper()] = _map_premarket_detail_to_signal(ticker, detail, resolved_pre)
+
+    if not signals_dict:
+        resolved_pre_fallback, pre_signals = load_prealerts(date)
+        if pre_signals:
+            resolved_pre = resolved_pre_fallback
+            for ps in pre_signals:
+                ticker = ps.get("ticker", "")
+                if ticker:
+                    signals_dict[ticker.upper()] = ps
+
+    resolved_live = _resolve_live_signals_date(date)
+    if resolved_live:
+        csv_path = LIVE_SIGNALS_ROOT / resolved_live / "combined.csv"
+        if csv_path.exists():
+            try:
+                df = pd.read_csv(csv_path)
+                df = df.where(pd.notnull(df), None)
+                if not df.empty:
+                    live_signals = df.to_dict(orient="records")
+                    for ls in live_signals:
+                        ticker = ls.get("ticker", "")
+                        if ticker:
+                            ls_clean = {k: (None if pd.isna(v) else v) for k, v in ls.items()}
+                            signals_dict[ticker.upper()] = ls_clean
+            except Exception as e:
+                logger.warning(f"Error loading combined.csv for {resolved_live}: {e}")
+
+    resolved_date = resolved_live or resolved_pre or date
+    return resolved_date, list(signals_dict.values())
 
 
 def load_demo_context(date: str | None = None) -> tuple[str | None, dict[str, Any]]:
@@ -347,22 +492,229 @@ def _build_grouped_signals_lines(signals: list, date: str, limit: int = 15) -> l
             
     return lines
 
-def build_watchlist_message(date: str | None = None, limit: int = 15) -> str:
-    resolved, signals = load_prealerts(date)
+def build_watchlist_message(date: str | None = None, page: int = 1) -> tuple[str, list]:
+    """Build paginated watchlist message. Returns (text, buttons)."""
+    resolved, signals = load_watchlist_signals(date)
     if not resolved:
-        return "⚠️ <b>WATCHLIST</b>\nNo prealerts available yet."
-        
-    lines = [
-        f"🧭 <b>WATCHLIST | {resolved}</b>", 
-        f"<i>(Manual Review - Grouped by Sector)</i>\n",
-        f"🔍 Candidates: <code>{len(signals)}</code>\n"
-    ]
-    
+        return "⚠️ <b>WATCHLIST</b>\nNo signal data available yet.", []
+
     if not signals:
-        lines.append("No watchlist candidates yet.")
-        return "\n".join(lines)
-        
-    lines.extend(_build_grouped_signals_lines(signals, resolved, limit))
+        return (
+            f"🧭 <b>WATCHLIST | {resolved}</b>\n"
+            f"<i>(Manual Review)</i>\n\n"
+            f"No watchlist candidates for this date.",
+            [],
+        )
+
+    # Sort by entry_score descending
+    signals = sorted(signals, key=lambda s: float(s.get("entry_score", 0) or 0), reverse=True)
+    total = len(signals)
+    total_pages = max(1, (total + WATCHLIST_PAGE_SIZE - 1) // WATCHLIST_PAGE_SIZE)
+    page = max(1, min(page, total_pages))
+    start_idx = (page - 1) * WATCHLIST_PAGE_SIZE
+    end_idx = start_idx + WATCHLIST_PAGE_SIZE
+    page_signals = signals[start_idx:end_idx]
+
+    # Header
+    lines = [
+        f"🧭 <b>WATCHLIST | {resolved}</b>",
+        f"<i>Grouped by Sector · Page {page}/{total_pages}</i>\n",
+        f"🔍 Candidates: <code>{total}</code>\n",
+    ]
+
+    # Group page signals by sector ETF
+    lines.extend(_build_watchlist_grouped_lines(page_signals, resolved))
+
+    # Footer stats
+    scores = [float(s.get("entry_score", 0) or 0) for s in signals]
+    if scores:
+        lines.append(f"\n📊 Top: <code>{max(scores):.0f}</code> | "
+                     f"Avg: <code>{sum(scores)/len(scores):.0f}</code> | "
+                     f"Showing {start_idx+1}-{min(end_idx, total)} of {total}")
+
+    # Pagination buttons
+    buttons = _watchlist_pagination_buttons(page, total_pages)
+    return "\n".join(lines), buttons
+
+
+def _build_watchlist_grouped_lines(signals: list, date: str) -> list[str]:
+    """Build enriched watchlist lines grouped by sector ETF."""
+    ticker_to_etf = _get_ticker_to_etf()
+    groups: dict[str, list[dict]] = {}
+    no_etf: list[dict] = []
+
+    for s in signals:
+        ticker = s.get("ticker", "")
+        # Try sector_etf from CSV first, then lookup
+        etf = s.get("sector_etf") or ticker_to_etf.get(ticker)
+        if etf:
+            groups.setdefault(etf, []).append(s)
+        else:
+            no_etf.append(s)
+
+    lines: list[str] = []
+    for etf in sorted(groups.keys()):
+        sector_name = ETF_TO_NAME.get(etf, etf)
+        s_status = _get_sector_status(etf, date)
+        s_icon = ""
+        s_dist_text = ""
+        if s_status is not None:
+            ok, dist = s_status
+            s_icon = " 🟢" if ok else " 🔴"
+            s_dist_text = f" ({dist:+.1%})"
+
+        lines.append(f"<b>{etf} — {sector_name}</b>{s_icon}{s_dist_text}")
+
+        for s in groups[etf]:
+            ticker = s.get("ticker", "?")
+            score = float(s.get("entry_score", 0) or 0)
+            entry = float(s.get("entry_price", 0) or 0)
+            adr = float(s.get("gate_adr_pct", 0) or 0)
+            gate_status = s.get("entry_gate_status", "")
+            gate_icon = "✅" if gate_status == "PASS" else "⛔"
+
+            # Theme RS enrichment
+            themes = get_themes(ticker)
+            theme_rs = _get_theme_rs_vs_etf(ticker, date)
+            theme_line = ""
+            if themes:
+                theme_names = ", ".join(themes[:2])
+                rs_part = ""
+                if theme_rs is not None:
+                    rs_icon = "✅" if theme_rs > 0 else "⚠️"
+                    rs_part = f" {rs_icon} RS:{theme_rs:+.1%}"
+                theme_line = f"\n         └ {theme_names}{rs_part}"
+
+            lines.append(
+                f"  <code>{ticker:<5}</code> ★{score:.0f}  "
+                f"Entry:<code>{entry:.2f}</code>  "
+                f"ADR:<code>{adr:.1f}%</code> {gate_icon}"
+                f"{theme_line}"
+            )
+        lines.append("")
+
+    if no_etf:
+        lines.append("<b>Sin sector mapeado</b>")
+        for s in no_etf:
+            ticker = s.get("ticker", "?")
+            score = float(s.get("entry_score", 0) or 0)
+            entry = float(s.get("entry_price", 0) or 0)
+            lines.append(f"  <code>{ticker:<5}</code> ★{score:.0f}  Entry:<code>{entry:.2f}</code>")
+        lines.append("")
+
+    return lines
+
+
+def _watchlist_pagination_buttons(page: int, total_pages: int) -> list[list[dict]]:
+    """Build pagination buttons for watchlist."""
+    if total_pages <= 1:
+        return [[{"text": "🔄 Refresh", "callback_data": "refresh:watchlist"}]]
+
+    nav_row: list[dict] = []
+    if page > 1:
+        nav_row.append({"text": "◀️", "callback_data": f"watchlist_page:{page - 1}"})
+    nav_row.append({"text": f"{page}/{total_pages}", "callback_data": "noop"})
+    if page < total_pages:
+        nav_row.append({"text": "▶️", "callback_data": f"watchlist_page:{page + 1}"})
+    nav_row.append({"text": "🔄", "callback_data": "refresh:watchlist"})
+    return [nav_row]
+
+
+def build_watchlist_detail(ticker: str, date: str | None = None) -> str:
+    """Build detailed card for a single ticker from watchlist signals."""
+    resolved, signals = load_watchlist_signals(date)
+    if not resolved or not signals:
+        return f"⚠️ <b>WATCHLIST</b>\nNo data for <code>{ticker.upper()}</code>."
+
+    # Find the ticker in signals
+    match = None
+    for s in signals:
+        if s.get("ticker", "").upper() == ticker.upper():
+            match = s
+            break
+
+    if not match:
+        return (
+            f"⚠️ <b>WATCHLIST | {resolved}</b>\n"
+            f"<code>{ticker.upper()}</code> not found in today's candidates."
+        )
+
+    score = float(match.get("entry_score", 0) or 0)
+    proximity = float(match.get("proximity_score", 0) or 0)
+    entry = float(match.get("entry_price", 0) or 0)
+    breakout = float(match.get("breakout_level", 0) or 0)
+    combo = match.get("agent_name", "n/a")
+    rvol = float(match.get("rvol", 0) or 0)
+    adr = float(match.get("gate_adr_pct", 0) or 0)
+    rs = float(match.get("gate_rs_percentile", 0) or 0)
+    dist_sma = float(match.get("dist_sma20", 0) or 0)
+    dvol = float(match.get("gate_dollar_vol_M", match.get("dollar_vol_M", 0)) or 0)
+    etf = match.get("sector_etf", "n/a")
+    gate = match.get("entry_gate_status", "n/a")
+    gate_reason = match.get("entry_gate_reason", "")
+    waiting = match.get("waiting_for", "")
+    primary_reason = match.get("primary_reason", "")
+    gate_sector_dist = match.get("gate_sector_etf_dist", "")
+
+    gate_icon = "✅" if gate == "PASS" else "⛔"
+
+    # Sector status
+    sector_line = f"Sector: <code>{etf}</code>"
+    if etf and etf != "n/a":
+        s_status = _get_sector_status(etf, resolved)
+        if s_status is not None:
+            ok, dist = s_status
+            s_ico = "🟢" if ok else "🔴"
+            sector_line = f"Sector: <code>{etf}</code> {s_ico} ({dist:+.1%})"
+
+    # Theme info
+    themes = get_themes(ticker.upper())
+    theme_rs = _get_theme_rs_vs_etf(ticker.upper(), resolved)
+    theme_line = "Theme: <i>(no theme)</i>"
+    if themes:
+        theme_names = ", ".join(themes[:3])
+        theme_line = f"Theme: <code>{theme_names}</code>"
+        if theme_rs is not None:
+            rs_ico = "✅" if theme_rs > 0 else "⚠️"
+            theme_line += f" {rs_ico} RS:{theme_rs:+.1%}"
+            # Variant E check
+            if etf and etf != "n/a":
+                s_status_e = _get_sector_status(etf, resolved)
+                if s_status_e is not None and theme_rs > 0 and not s_status_e[0]:
+                    theme_line += "\nVariant E: <b>✅ Theme OK, Sector NO</b>"
+
+    lines = [
+        f"📋 <b>WATCHLIST DETAIL | {ticker.upper()}</b>",
+        f"<i>{resolved}</i>\n",
+        f"{'─' * 28}",
+        f"Score:  ★ <code>{score:.0f}</code>",
+        f"Prox:   ★ <code>{proximity:.0f}</code>",
+        f"Combo:  <code>{combo}</code>",
+        f"Entry:  <code>${entry:.2f}</code>",
+        f"Brkout: <code>${breakout:.2f}</code>",
+        f"{'─' * 28}",
+        f"ADR:    <code>{adr:.1f}%</code>",
+        f"RVOL:   <code>{rvol:.1f}x</code>",
+        f"RS:     <code>P{rs:.0f}</code>",
+        f"Dist%:  <code>{dist_sma:+.1f}%</code>",
+        f"$Vol:   <code>${dvol:.1f}M</code>",
+        f"{'─' * 28}",
+        sector_line,
+        theme_line,
+        f"{'─' * 28}",
+        f"Gate:   {gate_icon} <code>{gate}</code>",
+    ]
+    if gate_reason:
+        if len(gate_reason) > 60:
+            lines.append(f"Reason: <code>{gate_reason[:60]}</code>")
+            lines.append(f"        <code>{gate_reason[60:120]}</code>")
+        else:
+            lines.append(f"Reason: <code>{gate_reason}</code>")
+    if waiting:
+        lines.append(f"Wait:   <code>{waiting[:60]}</code>")
+    if primary_reason:
+        lines.append(f"Setup:  <code>{primary_reason[:60]}</code>")
+
     return "\n".join(lines)
 
 

@@ -70,6 +70,19 @@ def today_ny() -> str:
         return datetime.now().strftime("%Y-%m-%d")
 
 
+def is_rth() -> bool:
+    """Check if current time is within Regular Trading Hours (9:30 AM - 4:00 PM EST)."""
+    try:
+        import pytz
+        tz = pytz.timezone("US/Eastern")
+        now = datetime.now(tz)
+    except ImportError:
+        now = datetime.now()
+    start = now.replace(hour=9, minute=30, second=0, microsecond=0)
+    end = now.replace(hour=16, minute=0, second=0, microsecond=0)
+    return start <= now <= end
+
+
 def fetch_live_data(tickers: list[str]) -> pd.DataFrame:
     """Obtiene precio actual y volumen acumulado usando yfinance."""
     if not tickers:
@@ -208,21 +221,12 @@ def promote_candidates(date: str, min_rvol: float = 1.5, send_telegram: bool = F
     # Resolve sectors for all tickers in watchlist
     sector_map = get_ticker_sector_mapping(list(watchlist.keys()))
 
-    # Load production config and combo merged config
+    # Load production config and define active combos/modes
     prod_config = load_production_config(PROJECT_ROOT / "config" / "production_config.json")
-    try:
-        combo_cfg, _ = load_combo_merged("combo_pure_momentum")
-    except Exception as e:
-        logger.warning(f"No se pudo cargar combo_pure_momentum, usando scaffold: {e}")
-        combo_cfg = {
-            "screener": {},
-            "pattern": {"signal_type": "breakout"},
-            "tier1_strategy": {},
-            "tier2_filters": {}
-        }
-    # Override combo configurations with active production values
-    combo_cfg["tier1_strategy"].update(prod_config.get("tier1_strategy", {}))
-    combo_cfg["tier2_filters"].update(prod_config.get("tier2_filters", {}))
+    ACTIVE_COMBOS = [
+        ("combo_pure_momentum", "A"),
+        ("combo_stage2_breakout", "B"),
+    ]
 
     # 1. Filtrar candidatos elegibles para monitoreo (OK + WARN)
     candidates = []
@@ -389,6 +393,8 @@ def promote_candidates(date: str, min_rvol: float = 1.5, send_telegram: bool = F
             entry_gate_status = "UNKNOWN"
             entry_gate_reason = "not_evaluated"
             entry_gate_source = "none"
+            passed_combo_name = None
+            premarket_combos = detail.get("combos", [])
             
             gate_rs_percentile = rs_pct
             gate_adr_pct = detail.get("adr")
@@ -430,56 +436,138 @@ def promote_candidates(date: str, min_rvol: float = 1.5, send_telegram: bool = F
                         spy_hist_df = pd.concat([spy_hist_df, new_row])
 
                 if len(hist_df) >= 65:
-                    try:
-                        decision = evaluate_ticker(
-                            ticker=ticker,
-                            df=hist_df,
-                            spy_df=spy_hist_df,
-                            combo_cfg=combo_cfg,
-                            mode="A",
-                            rs_percentile=rs_pct,
-                            scan_date=date,
-                            sector_etf_dist=sector_etf_dist
-                        )
-                        entry_gate_status = "PASS" if decision.passed else "BLOCKED"
-                        entry_gate_reason = "passed" if decision.passed else decision.reject_reason
-                        entry_gate_source = "canonical_signal_engine"
+                    best_decision = None
+                    passed_combo_name = None
+                    passed_mode = None
+                    reasons_list = []
 
-                        # Retrieve evaluated metrics
-                        if decision.tier2_metrics and decision.tier2_metrics.adr_pct > 0:
-                            gate_rs_percentile = decision.tier2_metrics.rs_percentile
-                            gate_adr_pct = decision.tier2_metrics.adr_pct
-                            gate_dollar_vol_M = decision.tier2_metrics.dollar_vol_M
-                            gate_dist_sma20 = decision.tier2_metrics.dist_sma20
-                            gate_sector_etf_dist = (
-                                decision.tier2_metrics.sector_etf_dist * 100.0 
-                                if decision.tier2_metrics.sector_etf_dist is not None else None
+                    # Pure cascaded fallback: evaluate combos in order filtered by premarket combos (Qulla -> Minervini)
+                    combos_to_eval = []
+                    for combo_name, mode in ACTIVE_COMBOS:
+                        lbl = "Qulla" if combo_name == "combo_pure_momentum" else "Minervini"
+                        if not premarket_combos or lbl in premarket_combos:
+                            combos_to_eval.append((combo_name, mode))
+                    if not combos_to_eval:
+                        combos_to_eval = ACTIVE_COMBOS
+                    
+                    for combo_name, mode in combos_to_eval:
+                        try:
+                            # Load combo_cfg
+                            combo_cfg, _ = load_combo_merged(combo_name)
+                            if "tier1_strategy" not in combo_cfg:
+                                combo_cfg["tier1_strategy"] = {}
+                            if "tier2_filters" not in combo_cfg:
+                                combo_cfg["tier2_filters"] = {}
+                            
+                            # Merge with production overrides
+                            combo_cfg["tier1_strategy"].update(prod_config.get("tier1_strategy", {}))
+                            
+                            if combo_name == "combo_pure_momentum":
+                                prod_t2 = prod_config.get("tier2_filters", {}).copy()
+                                # If the combo doesn't have use_rs_percentile enabled, do not force it to True
+                                if not combo_cfg["tier2_filters"].get("use_rs_percentile", False):
+                                    prod_t2["use_rs_percentile"] = False
+                                
+                                combo_cfg["tier2_filters"].update(prod_t2)
+                            
+                            decision = evaluate_ticker(
+                                ticker=ticker,
+                                df=hist_df,
+                                spy_df=spy_hist_df,
+                                combo_cfg=combo_cfg,
+                                mode=mode,
+                                rs_percentile=rs_pct,
+                                scan_date=date,
+                                sector_etf_dist=sector_etf_dist
                             )
-                    except Exception as e:
-                        logger.error(f"Error calling canonical evaluate_ticker for {ticker}: {e}")
+                            if decision.passed:
+                                best_decision = decision
+                                passed_combo_name = combo_name
+                                passed_mode = mode
+                                break
+                            else:
+                                lbl = "Qulla" if combo_name == "combo_pure_momentum" else "Minervini" if combo_name == "combo_stage2_breakout" else combo_name
+                                reasons_list.append(f"{lbl}:{decision.reject_reason}")
+                                if best_decision is None:
+                                    best_decision = decision
+                        except Exception as e:
+                            logger.error(f"Error calling canonical evaluate_ticker for {ticker} with {combo_name}: {e}")
+                            lbl = "Qulla" if combo_name == "combo_pure_momentum" else "Minervini" if combo_name == "combo_stage2_breakout" else combo_name
+                            reasons_list.append(f"{lbl}:error:{e}")
+                    
+                    if passed_combo_name:
+                        entry_gate_status = "PASS"
+                        entry_gate_reason = "passed"
+                        entry_gate_source = f"canonical_signal_engine:{passed_combo_name}"
+                    elif best_decision:
+                        entry_gate_status = "BLOCKED"
+                        entry_gate_reason = "; ".join(reasons_list) if reasons_list else best_decision.reject_reason
+                        entry_gate_source = "canonical_signal_engine:A+B_rejected"
+                    else:
                         entry_gate_status = "UNKNOWN"
-                        entry_gate_reason = f"engine_error:{e}"
+                        entry_gate_reason = "all_combos_evaluation_failed"
+
+                    if best_decision:
+                        # Retrieve evaluated metrics
+                        if best_decision.tier2_metrics and best_decision.tier2_metrics.adr_pct > 0:
+                            gate_rs_percentile = best_decision.tier2_metrics.rs_percentile
+                            gate_adr_pct = best_decision.tier2_metrics.adr_pct
+                            gate_dollar_vol_M = best_decision.tier2_metrics.dollar_vol_M
+                            gate_dist_sma20 = best_decision.tier2_metrics.dist_sma20
+                            gate_sector_etf_dist = (
+                                best_decision.tier2_metrics.sector_etf_dist * 100.0 
+                                if best_decision.tier2_metrics.sector_etf_dist is not None else None
+                            )
                 else:
                     entry_gate_status = "UNKNOWN"
                     entry_gate_reason = "insufficient_historical_bars"
             else:
-                # VPS/Torre de Control fallback: Snapshot manual gating
-                check_passed, check_reason = check_snapshot_gate_partial(detail, prod_config)
-                entry_gate_status = "PASS" if check_passed else "BLOCKED"
-                entry_gate_reason = check_reason
-                entry_gate_source = "snapshot_partial"
+                # VPS fallback: evaluar combos filtrados por premarket_combos con sus configs nativas
+                vps_passed = False
+                vps_reasons = []
+                combos_to_eval = []
+                for combo_name, mode in ACTIVE_COMBOS:
+                    lbl = "Qulla" if combo_name == "combo_pure_momentum" else "Minervini"
+                    if not premarket_combos or lbl in premarket_combos:
+                        combos_to_eval.append((combo_name, mode))
+                if not combos_to_eval:
+                    combos_to_eval = ACTIVE_COMBOS
+
+                for combo_name, _ in combos_to_eval:
+                    combo_cfg_vps, _ = load_combo_merged(combo_name)
+                    if combo_name == "combo_pure_momentum":
+                        combo_cfg_vps["tier2_filters"].update(prod_config.get("tier2_filters", {}))
+                    check_passed, check_reason = check_snapshot_gate_partial(detail, combo_cfg_vps)
+                    lbl = "Qulla" if combo_name == "combo_pure_momentum" else "Minervini"
+                    if check_passed:
+                        vps_passed = True
+                        passed_combo_name = combo_name
+                        entry_gate_source = f"snapshot_partial:{combo_name}"
+                        break
+                    vps_reasons.append(f"{lbl}:{check_reason}")
+                entry_gate_status = "PASS" if vps_passed else "BLOCKED"
+                entry_gate_reason = "; ".join(vps_reasons) if not vps_passed else "passed"
+                entry_gate_source = entry_gate_source if vps_passed else "snapshot_partial:A+B_rejected"
+
+            premarket_combos = detail.get("combos", [])
+            combo_label = "finviz_live"
+            if len(premarket_combos) > 1:
+                combo_label = "Ambos"
+            elif len(premarket_combos) == 1:
+                combo_label = premarket_combos[0]
 
             signal = {
                 "ticker": ticker,
-                "agent_name": detail.get("combo", "finviz_live"),
+                "agent_name": passed_combo_name or combo_label,
                 "entry_score": detail.get("score", 0.5),
+                "proximity_score": detail.get("proximity_score", 0.0),
                 "entry_price": price,
                 "breakout_level": breakout_lvl,
                 "rvol": round(live_rvol, 2),
                 "live_volume": int(vol),
                 "signal_date": date,
                 "source_universe": "finviz",
-                "decision_source": "finviz_live_promoter",
+                "decision_source": f"finviz_live_promoter:{passed_combo_name or 'none'}",
                 "data_quality_status": status,
                 "sector_etf": sec,
                 "dollar_vol_M": dv,
@@ -609,6 +697,12 @@ def main():
     while True:
         try:
             current_date = args.date or today_ny()
+            
+            # Guardia de horario US Regular Trading Hours (RTH: 9:30 AM - 4:00 PM EST)
+            if args.monitor and not is_rth():
+                logger.info("Outside US Regular Trading Hours (RTH). Sleeping 60s...")
+                time.sleep(60)
+                continue
             if args.monitor and last_date and current_date != last_date and args.date is None:
                 logger.info(
                     f"Date rollover detected ({last_date} -> {current_date}). Exiting for clean restart."
