@@ -216,13 +216,8 @@ def _resolve_live_signals_date(date: str | None = None) -> str | None:
 
 
 def _map_premarket_detail_to_signal(ticker: str, detail: dict, date: str) -> dict[str, Any]:
-    premarket_combos = detail.get("combos", [])
-    if len(premarket_combos) > 1:
-        combo_label = "Ambos"
-    elif len(premarket_combos) == 1:
-        combo_label = premarket_combos[0]
-    else:
-        combo_label = "finviz_live"
+    # El combo en pre-market es siempre "Pre-A→B" — la cascada corre en live
+    combo_label = "Pre-A→B"
 
     gate_status = "BLOCKED"
     reasons = detail.get("reasons", [])
@@ -715,6 +710,9 @@ def build_watchlist_detail(ticker: str, date: str | None = None) -> str:
         lines.append(f"Wait:   <code>{waiting[:60]}</code>")
     if primary_reason:
         lines.append(f"Setup:  <code>{primary_reason[:60]}</code>")
+
+    tv_url = f"https://www.tradingview.com/symbols/{ticker.upper()}/"
+    lines.append(f"\n📈 <a href=\"{tv_url}\">Ver en TradingView</a>")
 
     return "\n".join(lines)
 
