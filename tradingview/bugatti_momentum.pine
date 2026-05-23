@@ -23,10 +23,15 @@ sector_etf_sym  = input.symbol("AMEX:XLK", "Sector ETF", group = group_ctx, tool
 use_sector_filter = input.bool(true, "Enable Sector ETF Filter", group = group_ctx, tooltip = "Requires sector ETF price > SMA20. Disable for tickers without a clear sector mapping.")
 require_spy_sma50 = input.bool(true, "Require SPY > SMA50", group = group_ctx)
 
+// --- Active Mode Selector ---
+group_mode = "Active Strategy Mode"
+strategy_mode = input.string("Mode A (Qullamaggie)", "Active Strategy", options = ["Mode A (Qullamaggie)", "Mode B (Minervini)", "Mode A_OR_B (Any)", "Mode A_AND_B (Both)"], group = group_mode, tooltip = "Choose which strategy triggers the Buy signals.")
+
+
 // --- Screener: Qullamaggie ---
 group_scr = "Screener (Qullamaggie)"
 min_rs_pct_input     = input.float(58.01, "RS Mínimo (%)", minval = 0, maxval = 100, step = 1.0, group = group_scr, tooltip = "Production default: 58.01 (Trial 380).\nFórmula: 50 + (ticker_ret - spy_ret) × 500, clamp [0,100]")
-min_trend_int_input  = input.float(108.0, "Trend Intensity Mínimo", minval = 100, maxval = 150, step = 0.5, group = group_scr, tooltip = "(SMA13 / SMA65) × 100. Default: 108")
+min_trend_int_input  = input.float(105.0, "Trend Intensity Mínimo", minval = 100, maxval = 150, step = 0.5, group = group_scr, tooltip = "(SMA13 / SMA65) × 100. Production: 105.0")
 ma_tol_input         = input.float(0.002, "MA Stack Tolerancia", minval = 0, maxval = 0.05, step = 0.001, group = group_scr, tooltip = "0.2% tolerance for MA stack ordering")
 rs_lookback_input    = input.int(60, "RS Lookback (días)", minval = 10, maxval = 252, group = group_scr)
 
@@ -41,6 +46,7 @@ min_dvol_m_input     = input.float(20.0, "Dollar Vol Mín ($M)", minval = 0, ste
 // --- Risk Management ---
 group_risk = "Risk Management"
 risk_dollars_input   = input.float(2878.0, "Risk per Trade ($)", minval = 100, step = 100, group = group_risk, tooltip = "$100k × 2.878% = $2,878 (Trial 380)")
+max_stop_pct_input   = input.float(8.0, "Max Stop %", group = group_risk, tooltip = "Production: 8%")
 tp1_r_input          = input.float(1.25, "TP1 R-Multiple", minval = 0.5, maxval = 5, step = 0.25, group = group_risk)
 tp2_r_input          = input.float(3.0, "TP2 R-Multiple", minval = 1, maxval = 10, step = 0.5, group = group_risk)
 tp1_pct_input        = input.float(33.0, "TP1 Exit %", minval = 0, maxval = 100, step = 1, group = group_risk, tooltip = "33% at TP1, 33% at TP2, 34% runner")
@@ -190,24 +196,35 @@ tier2_ok = rvol_ok and adr_ok and dist20_ok and vol_ok and dvol_ok
 
 // ====================== 7. COMPOSITE SIGNAL ======================
 
-signal_long = screener_ok and tier2_ok and is_breakout and regime_ok and sector_ok
+// Active screener resolved dynamically based on chosen mode
+screener_active = strategy_mode == "Mode A (Qullamaggie)" ? screener_ok :
+                  strategy_mode == "Mode B (Minervini)" ? minervini_ok :
+                  strategy_mode == "Mode A_OR_B (Any)" ? (screener_ok or minervini_ok) :
+                  strategy_mode == "Mode A_AND_B (Both)" ? (screener_ok and minervini_ok) :
+                  false
+
+signal_long = screener_active and tier2_ok and is_breakout and regime_ok and sector_ok
 
 // First bar where signal fires
 signal_new = signal_long and not signal_long[1]
 
-// Determine block reason (first failing filter)
-block_reason = not ma_stack_ok ? "MA Stack roto" :
-               not na(rs_pct) and not rs_ok ? "RS bajo (" + str.tostring(rs_pct, "#.#") + ")" :
-               na(rs_pct) ? "RS sin datos" :
-               not ti_ok ? "Trend bajo (" + str.tostring(trend_int, "#.#") + ")" :
-               not is_breakout ? "Sin breakout" :
-               not regime_ok ? "SPY < SMA50" :
-               not sector_ok ? "Sector débil" :
-               not rvol_ok ? "RVOL bajo (" + str.tostring(rvol_val, "#.##") + ")" :
-               not adr_ok ? "ADR bajo (" + str.tostring(adr_val, "#.#") + ")" :
-               not dist20_ok ? "Extendido (" + str.tostring(dist_sma20_val, "#.#") + "%)" :
-               not vol_ok ? "Vol bajo" :
-               not dvol_ok ? "DolVol bajo" : ""
+// Determine block reason (first failing filter depending on the active strategy)
+block_reason = 
+     strategy_mode == "Mode B (Minervini)" and not minervini_ok ? "Minervini Stage 2 roto (" + str.tostring(minervini_n) + "/7)" :
+     strategy_mode == "Mode A (Qullamaggie)" and not ma_stack_ok ? "MA Stack roto" :
+     strategy_mode == "Mode A (Qullamaggie)" and not na(rs_pct) and not rs_ok ? "RS bajo (" + str.tostring(rs_pct, "#.#") + ")" :
+     strategy_mode == "Mode A (Qullamaggie)" and not ti_ok ? "Trend bajo (" + str.tostring(trend_int, "#.#") + ")" :
+     not is_breakout ? "Sin breakout" :
+     not regime_ok ? "SPY < SMA50" :
+     not sector_ok ? "Sector débil" :
+     not rvol_ok ? "RVOL bajo (" + str.tostring(rvol_val, "#.##") + ")" :
+     not adr_ok ? "ADR bajo (" + str.tostring(adr_val, "#.#") + ")" :
+     not dist20_ok ? "Extendido (" + str.tostring(dist_sma20_val, "#.#") + "%)" :
+     not vol_ok ? "Vol bajo" :
+     not dvol_ok ? "DolVol bajo" : 
+     strategy_mode == "Mode A_AND_B (Both)" and not screener_ok ? "Qullamaggie falló" :
+     strategy_mode == "Mode A_AND_B (Both)" and not minervini_ok ? "Minervini falló" :
+     strategy_mode == "Mode A_OR_B (Any)" and not screener_ok and not minervini_ok ? "Ambos fallaron" : ""
 
 
 // ====================== 8. RISK MANAGEMENT ======================
@@ -219,8 +236,8 @@ stop_dist_raw = not na(atr_14) ? 2.0 * atr_14 : na
 // Fallback: 7% if ATR unavailable or inconsistent
 stop_dist_fb = na(stop_dist_raw) or stop_dist_raw <= 0 or stop_dist_raw >= close ? close * 0.07 : stop_dist_raw
 
-// Cap: max 12%
-max_stop_d = close * 0.12
+// Cap: max stop percent
+max_stop_d = close * (max_stop_pct_input / 100.0)
 stop_dist_cap = stop_dist_fb > max_stop_d ? max_stop_d : stop_dist_fb
 
 // Floor: 0.5%
@@ -343,8 +360,8 @@ if barstate.islast and show_dashboard
     r += 1
 
     // --- Section: Screener ---
-    table.cell(tbl, 0, r, "── Screener ──", text_color = c_lbl, bgcolor = c_bg_sec, text_halign = text.align_left, text_size = txt_sz)
-    table.cell(tbl, 1, r, screener_ok ? "PASS ✅" : "FAIL ❌", text_color = screener_ok ? c_pass : c_fail, bgcolor = c_bg_sec, text_halign = text.align_right, text_size = txt_sz)
+    table.cell(tbl, 0, r, "── " + strategy_mode + " ──", text_color = c_lbl, bgcolor = c_bg_sec, text_halign = text.align_left, text_size = txt_sz)
+    table.cell(tbl, 1, r, screener_active ? "PASS ✅" : "FAIL ❌", text_color = screener_active ? c_pass : c_fail, bgcolor = c_bg_sec, text_halign = text.align_right, text_size = txt_sz)
     r += 1
 
     // MA Stack
@@ -455,7 +472,10 @@ if barstate.islast and show_dashboard
     // --- SIGNAL ROW ---
     if signal_long
         table.cell(tbl, 0, r, "⚡ SIGNAL", text_color = color.white, bgcolor = c_sig_bg, text_halign = text.align_left, text_size = txt_sz)
-        table.cell(tbl, 1, r, "LONG | " + str.tostring(qulla_score, "#.#"), text_color = color.white, bgcolor = c_sig_bg, text_halign = text.align_right, text_size = txt_sz)
+        sig_info = strategy_mode == "Mode B (Minervini)" ? "Stage 2 ✅" :
+                   strategy_mode == "Mode A (Qullamaggie)" ? "Qulla Score " + str.tostring(qulla_score, "#.#") :
+                   screener_ok ? "Qulla ✅" : minervini_ok ? "Minervini ✅" : "—"
+        table.cell(tbl, 1, r, "LONG | " + sig_info, text_color = color.white, bgcolor = c_sig_bg, text_halign = text.align_right, text_size = txt_sz)
     else
         table.cell(tbl, 0, r, "❌ BLOCKED", text_color = c_lbl, bgcolor = c_blk_bg, text_halign = text.align_left, text_size = txt_sz)
         table.cell(tbl, 1, r, block_reason, text_color = c_fail, bgcolor = c_blk_bg, text_halign = text.align_right, text_size = txt_sz)
@@ -472,6 +492,7 @@ alertcondition(not ma_stack_ok and ma_stack_ok[1], "❌ MA Stack Broken", "MA ST
 // Dynamic alert with full signal details
 if signal_new
     alert_msg = "🏎️ BUGATTI SIGNAL: " + syminfo.ticker +
+         "\n🛡️ Mode: " + strategy_mode +
          "\n📍 Entry: $" + str.tostring(close, "#.##") +
          "\n🛑 Stop: $" + str.tostring(stop_px, "#.##") + " (2×ATR)" +
          "\n🎯 TP1: $" + str.tostring(tp1_px, "#.##") + " (" + str.tostring(tp1_r_input, "#.##") + "R)" +
