@@ -282,19 +282,19 @@ def _is_watchlist_candidate(detail: dict) -> bool:
     # Excluir errores de cálculo
     if any("No se pudo calcular" in r for r in reasons):
         return False
-    
-    # Candidato real: cerca del setup
-    if proximity >= 40:
+        
+    # Excluir tickers con demasiados blockers — no son candidatos reales
+    if len(reasons) >= 3:
+        return False
+        
+    # Candidato real: alta proximidad al setup (máximo 1-2 blockers permitidos)
+    if proximity >= 70:
         return True
-    
-    # RS muy fuerte y no demasiado lejos
-    if rs_pct >= 85 and proximity >= 25:
+        
+    # RS elite + moderadamente cerca (máximo 2 blockers, ya garantizado arriba)
+    if rs_pct >= 90 and proximity >= 50:
         return True
-    
-    # Solo 1 blocker pendiente (casi listo)
-    if len(reasons) <= 1 and waiting != "OK":
-        return True
-    
+        
     return False
 
 

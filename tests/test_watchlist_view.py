@@ -98,18 +98,41 @@ class TestWatchlistView(unittest.TestCase):
         # 1. Calculation error -> False
         self.assertFalse(_is_watchlist_candidate({"reasons": ["No se pudo calcular SMA"]}))
         
-        # 2. Proximity >= 40 -> True
-        self.assertTrue(_is_watchlist_candidate({"proximity_score": 45.0}))
+        # 2. Too many blockers (reasons >= 3) -> False
+        self.assertFalse(_is_watchlist_candidate({
+            "proximity_score": 90.0,
+            "reasons": ["RVOL bajo", "Extendido", "MA stack roto"],
+            "rs_pct": 98.0
+        }))
         
-        # 3. RS >= 85 and Proximity >= 25 -> True
-        self.assertTrue(_is_watchlist_candidate({"rs_pct": 87.0, "proximity_score": 30.0}))
-        self.assertFalse(_is_watchlist_candidate({"rs_pct": 80.0, "proximity_score": 30.0}))
-        self.assertFalse(_is_watchlist_candidate({"rs_pct": 87.0, "proximity_score": 20.0}))
+        # 3. Proximity >= 70 and < 3 blockers -> True
+        self.assertTrue(_is_watchlist_candidate({
+            "proximity_score": 75.0,
+            "reasons": ["RVOL bajo", "Extendido"],
+            "rs_pct": 50.0
+        }))
+        self.assertFalse(_is_watchlist_candidate({
+            "proximity_score": 65.0,
+            "reasons": ["RVOL bajo", "Extendido"],
+            "rs_pct": 50.0
+        }))
         
-        # 4. Only 1 blocker and waiting != OK -> True
-        self.assertTrue(_is_watchlist_candidate({"reasons": ["RVOL bajo"], "waiting_for": "RVOL >= 1.10"}))
-        # More than 1 blocker -> False
-        self.assertFalse(_is_watchlist_candidate({"reasons": ["RVOL bajo", "Extendido"], "waiting_for": "RVOL/SMA"}))
+        # 4. RS >= 90 and Proximity >= 50 and < 3 blockers -> True
+        self.assertTrue(_is_watchlist_candidate({
+            "proximity_score": 55.0,
+            "reasons": ["RVOL bajo", "Extendido"],
+            "rs_pct": 92.0
+        }))
+        self.assertFalse(_is_watchlist_candidate({
+            "proximity_score": 45.0,
+            "reasons": ["RVOL bajo", "Extendido"],
+            "rs_pct": 92.0
+        }))
+        self.assertFalse(_is_watchlist_candidate({
+            "proximity_score": 55.0,
+            "reasons": ["RVOL bajo", "Extendido"],
+            "rs_pct": 85.0
+        }))
 
 if __name__ == "__main__":
     unittest.main()
