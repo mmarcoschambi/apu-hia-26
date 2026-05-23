@@ -5,7 +5,10 @@
 CRON_TZ=America/New_York
 
 # 1. Premarket brief: 08:30 NY (L-V)
-30 8 * * 1-5 /home/xxmalcomandaxx/swing-momentum-v1/run_vps_job.sh scripts/finviz_monitor.py >> /home/xxmalcomandaxx/swing-momentum-v1/logs/cron_finviz_monitor.log 2>&1
+30 8 * * 1-5 /home/xxmalcomandaxx/swing-momentum-v1/run_vps_job.sh scripts/finviz_monitor.py >> /home/xxmalcomandaxx/swing-momentum-v1/logs/cron_pre_market.log 2>&1
+
+# 1b. Watchlist auto-send at market open: 09:30 NY (L-V)
+30 9 * * 1-5 /home/xxmalcomandaxx/swing-momentum-v1/run_vps_job.sh scripts/send_watchlist.py >> /home/xxmalcomandaxx/swing-momentum-v1/logs/cron_watchlist.log 2>&1
 
 # 2. Start live promoter: 09:29 NY (L-V)
 29 9 * * 1-5 /usr/bin/systemctl start finviz-live-promoter.service
