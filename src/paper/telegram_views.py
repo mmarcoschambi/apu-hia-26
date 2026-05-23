@@ -651,9 +651,10 @@ def build_watchlist_detail(ticker: str, date: str | None = None) -> str:
     dvol = float(match.get("gate_dollar_vol_M", match.get("dollar_vol_M", 0)) or 0)
     etf = match.get("sector_etf", "n/a")
     gate = match.get("entry_gate_status", "n/a")
-    gate_reason = match.get("entry_gate_reason", "")
-    waiting = match.get("waiting_for", "")
-    primary_reason = match.get("primary_reason", "")
+    import html
+    gate_reason = html.escape(match.get("entry_gate_reason", ""))
+    waiting = html.escape(match.get("waiting_for", ""))
+    primary_reason = html.escape(match.get("primary_reason", ""))
     gate_sector_dist = match.get("gate_sector_etf_dist", "")
 
     gate_icon = "✅" if gate == "PASS" else "⛔"
