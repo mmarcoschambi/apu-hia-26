@@ -45,11 +45,19 @@ def load_regime_market_frame(
     buffer_start = (start - pd.Timedelta(days=260)).strftime("%Y-%m-%d")
     end_str = end.strftime("%Y-%m-%d")
 
-    spy = _load_ohlcv(provider.get_daily_data("SPY", period="max"), buffer_start, end_str)
+    spy = _load_ohlcv(
+        provider.get_daily_data("SPY", period="max", start_date=buffer_start, end_date=end_str),
+        buffer_start,
+        end_str,
+    )
     if spy.empty:
         raise ValueError("Could not load SPY data")
 
-    vix = _load_ohlcv(provider.get_daily_data("^VIX", period="max"), buffer_start, end_str)
+    vix = _load_ohlcv(
+        provider.get_daily_data("^VIX", period="max", start_date=buffer_start, end_date=end_str),
+        buffer_start,
+        end_str,
+    )
     if vix.empty:
         raise ValueError("Could not load VIX data")
 
@@ -89,7 +97,11 @@ def _build_breadth_series(
 ) -> pd.Series:
     closes = []
     for ticker in tickers:
-        df = _load_ohlcv(provider.get_daily_data(ticker, period="max"), start_date, end_date)
+        df = _load_ohlcv(
+            provider.get_daily_data(ticker, period="max", start_date=start_date, end_date=end_date),
+            start_date,
+            end_date,
+        )
         if df.empty or "Close" not in df.columns:
             continue
         closes.append(df["Close"].rename(ticker))

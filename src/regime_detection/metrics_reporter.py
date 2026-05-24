@@ -94,6 +94,11 @@ def _merge_signals_and_labels(
         right = right.reset_index().rename(columns={right.index.name or "index": date_col})
         right[date_col] = pd.to_datetime(right[date_col])
 
+    # Drop target columns from left if they already exist to prevent duplicate suffixing (_x, _y)
+    for col in ["target_regime", "forward_ret_10d"]:
+        if col in left.columns:
+            left = left.drop(columns=[col])
+
     label_cols = [col for col in ["target_regime", "forward_ret_10d"] if col in right.columns]
     return left.merge(right[[date_col] + label_cols], on=date_col, how="left")
 
