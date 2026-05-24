@@ -35,9 +35,9 @@ def build_signal_features(
         mk["spy_return_5d"] = mk["Close"].pct_change(5)
         mk["spy_return_10d"] = mk["Close"].pct_change(10)
         mk["spy_return_20d"] = mk["Close"].pct_change(20)
-        mk["spy_atr_ratio"] = (
-            mk["Close"].rolling(20).max() - mk["Close"].rolling(20).min()
-        ) / mk["Close"].shift(20)
+        mk["spy_atr_ratio"] = (mk["Close"].rolling(20).max() - mk["Close"].rolling(20).min()) / mk[
+            "Close"
+        ].shift(20)
 
     if "vix" in mk.columns:
         mk["vix_change_5d"] = mk["vix"].pct_change(5)
@@ -82,4 +82,5 @@ def build_signal_features(
         else:
             raise ValueError(f"missing target column: {actual_target}")
 
+    features.attrs["resolved_target_col"] = actual_target
     return features

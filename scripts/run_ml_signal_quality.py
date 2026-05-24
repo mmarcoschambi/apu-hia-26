@@ -55,7 +55,7 @@ def calculate_trade_metrics(
     wins = active_pnl[active_pnl > 0]
     losses = active_pnl[active_pnl < 0]
     win_rate = len(wins) / len(active_pnl)
-    
+
     pos_sum = float(wins.sum())
     neg_sum = float(abs(losses.sum()))
     profit_factor = pos_sum / neg_sum if neg_sum > 0 else float("inf")
@@ -71,15 +71,15 @@ def calculate_trade_metrics(
     if "entry_date" in sorted_df.columns:
         sorted_df["entry_date"] = pd.to_datetime(sorted_df["entry_date"])
         sorted_df = sorted_df.sort_values("entry_date")
-    
+
     cum_pnl = sorted_df["pnl_val"].cumsum()
     is_pct = pnl_col == "return_pct" or active_pnl.abs().mean() < 0.5
-    
+
     if is_pct:
         equity = initial_capital * (1.0 + sorted_df["pnl_val"]).cumprod()
     else:
         equity = initial_capital + cum_pnl * risk_per_trade_r
-        
+
     running_max = equity.cummax()
     drawdown = (equity - running_max) / running_max
     max_dd = float(drawdown.min() * 100.0) if not drawdown.empty else 0.0
@@ -126,27 +126,31 @@ def calculate_decile_analysis(df: pd.DataFrame, score_col: str, target_col: str)
     decile_rows = []
     for name, group in work.groupby("decile", observed=False):
         if group.empty:
-            decile_rows.append({
-                "decile": name,
-                "trades": 0,
-                "win_rate": 0.0,
-                "mean_pnl": 0.0,
-                "total_pnl": 0.0,
-            })
+            decile_rows.append(
+                {
+                    "decile": name,
+                    "trades": 0,
+                    "win_rate": 0.0,
+                    "mean_pnl": 0.0,
+                    "total_pnl": 0.0,
+                }
+            )
             continue
 
         pnl = pd.to_numeric(group[target_col], errors="coerce").dropna()
         wins = pnl[pnl > 0]
         win_rate = len(wins) / len(pnl) if len(pnl) > 0 else 0.0
-        
-        decile_rows.append({
-            "decile": str(name),
-            "trades": int(len(pnl)),
-            "win_rate": round(win_rate * 100.0, 2),
-            "mean_pnl": round(float(pnl.mean()), 3) if len(pnl) > 0 else 0.0,
-            "total_pnl": round(float(pnl.sum()), 2) if len(pnl) > 0 else 0.0,
-        })
-        
+
+        decile_rows.append(
+            {
+                "decile": str(name),
+                "trades": int(len(pnl)),
+                "win_rate": round(win_rate * 100.0, 2),
+                "mean_pnl": round(float(pnl.mean()), 3) if len(pnl) > 0 else 0.0,
+                "total_pnl": round(float(pnl.sum()), 2) if len(pnl) > 0 else 0.0,
+            }
+        )
+
     return decile_rows
 
 
@@ -172,41 +176,32 @@ def main() -> int:
     logger.info(json.dumps(audit.__dict__, indent=2, default=str))
 
     featured = build_signal_features(signals, market, target_col=target_col)
+    target_col = featured.attrs.get("resolved_target_col", target_col)
     feature_cols = [
         c
         for c in [
+            "entry_score",
+            "signal_size_proxy",
             "vix",
-            "vix_change_5d",
-            "vix_vs_ma",
             "breadth_pct",
-            "breadth_change_5d",
-            "breadth_vs_ma",
             "dix",
-            "dix_change_5d",
             "gex_net",
-            "gex_zscore",
-            "spy_return_5d",
             "spy_return_10d",
             "spy_return_20d",
             "spy_atr_ratio",
-            "rsi_entry",
             "rvol",
             "adr_pct",
             "dist_sma20",
-            "dollar_vol_M",
-            "entry_score",
-            "regime_signal",
-            "signal_size_proxy",
         ]
         if c in featured.columns
     ]
 
-    trainer = SignalWalkForwardTrainer(model_name=args.model)
+    trainer = SignalWalkForwardTrainer(model_name=args.model, min_rows=50)
     result = trainer.run(
         featured,
         date_col="entry_date",
         symbol_col="symbol",
-        target_col="r_multiple" if "r_multiple" in featured.columns else "return_pct",
+        target_col=target_col,
         feature_cols=feature_cols,
     )
 
@@ -217,10 +212,16 @@ def main() -> int:
     target_col = "r_multiple" if "r_multiple" in featured.columns else "return_pct"
     comparison = {
         "original_gold_standard": calculate_trade_metrics(result.predictions, pnl_col=target_col),
-        "ml_filtered": calculate_trade_metrics(result.predictions, pnl_col=target_col, weight_col="take_trade"),
-        "ml_sized": calculate_trade_metrics(result.predictions, pnl_col=target_col, weight_col="risk_multiplier"),
+        "ml_filtered": calculate_trade_metrics(
+            result.predictions, pnl_col=target_col, weight_col="take_trade"
+        ),
+        "ml_sized": calculate_trade_metrics(
+            result.predictions, pnl_col=target_col, weight_col="risk_multiplier"
+        ),
     }
-    decile_an = calculate_decile_analysis(result.predictions, score_col="pred_score", target_col=target_col)
+    decile_an = calculate_decile_analysis(
+        result.predictions, score_col="pred_score", target_col=target_col
+    )
 
     summary = {
         "audit": audit.__dict__,
