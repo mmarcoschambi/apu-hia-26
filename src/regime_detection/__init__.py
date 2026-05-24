@@ -20,6 +20,8 @@ from src.regime_detection.backtest_engine import (
     WalkForwardBacktestResult,
     WalkForwardRegimeBacktester,
 )
+from src.regime_detection.ml_features import build_ml_features
+from src.regime_detection.ml_trainer import WalkForwardMLResult, WalkForwardMLTrainer
 from src.regime_detection.metrics_reporter import (
     compare_baseline_to_buy_and_hold,
     generate_metrics_report,
@@ -35,6 +37,9 @@ __all__ = [
     "BacktestConfig",
     "WalkForwardBacktestResult",
     "WalkForwardRegimeBacktester",
+    "build_ml_features",
+    "WalkForwardMLResult",
+    "WalkForwardMLTrainer",
     "compare_baseline_to_buy_and_hold",
     "generate_metrics_report",
 ]
