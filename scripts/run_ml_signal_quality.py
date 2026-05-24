@@ -49,6 +49,7 @@ def calculate_trade_metrics(
             "mean_pnl": 0.0,
             "sharpe_ratio": 0.0,
             "max_drawdown_pct": 0.0,
+            "cagr": 0.0,
         }
 
     wins = active_pnl[active_pnl > 0]
@@ -83,6 +84,21 @@ def calculate_trade_metrics(
     drawdown = (equity - running_max) / running_max
     max_dd = float(drawdown.min() * 100.0) if not drawdown.empty else 0.0
 
+    # Calculate CAGR based on the entire period's duration
+    years = 0.0
+    if "entry_date" in df.columns and len(df) > 1:
+        dates = pd.to_datetime(df["entry_date"]).dropna()
+        if len(dates) > 1:
+            years = (dates.max() - dates.min()).days / 365.25
+
+    cagr = 0.0
+    if years > 0 and not equity.empty:
+        ending_val = float(equity.iloc[-1])
+        if ending_val > 0:
+            cagr = (ending_val / initial_capital) ** (1.0 / years) - 1.0
+        else:
+            cagr = -1.0
+
     return {
         "total_trades": int(len(active_pnl)),
         "win_rate": round(win_rate * 100.0, 2),
@@ -91,6 +107,7 @@ def calculate_trade_metrics(
         "mean_pnl": round(mean_pnl, 3),
         "sharpe_ratio": round(float(sharpe), 3),
         "max_drawdown_pct": round(max_dd, 2),
+        "cagr": round(cagr * 100.0, 2),
     }
 
 
@@ -150,10 +167,11 @@ def main() -> int:
         if str(args.market).endswith(".parquet")
         else pd.read_csv(args.market)
     )
-    audit = audit_signal_dataset(signals)
+    target_col = "r_multiple" if "r_multiple" in signals.columns else "return_pct"
+    audit = audit_signal_dataset(signals, target_col=target_col)
     logger.info(json.dumps(audit.__dict__, indent=2, default=str))
 
-    featured = build_signal_features(signals, market)
+    featured = build_signal_features(signals, market, target_col=target_col)
     feature_cols = [
         c
         for c in [

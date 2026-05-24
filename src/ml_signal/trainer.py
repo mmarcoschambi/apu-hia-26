@@ -8,6 +8,8 @@ import pandas as pd
 from sklearn.linear_model import ElasticNet, Ridge
 from sklearn.metrics import mean_squared_error, r2_score
 
+from .backtest import score_to_percentile
+
 try:
     from lightgbm import LGBMRegressor
 except Exception:  # pragma: no cover
@@ -107,7 +109,7 @@ class SignalWalkForwardTrainer:
             raw_pred = pd.Series(model.predict(X_test), index=X_test.index)
             train_pred = pd.Series(model.predict(X_train), index=X_train.index)
             test_pred["pred_return"] = raw_pred
-            test_pred["pred_score"] = self._percentile_from_train(train_pred, raw_pred)
+            test_pred["pred_score"] = score_to_percentile(train_pred, raw_pred)
             test_pred["fold_id"] = fold_id
 
             best_threshold = self._find_best_threshold(train_pred, y_train)
@@ -207,22 +209,12 @@ class SignalWalkForwardTrainer:
         for col in out.columns:
             if pd.api.types.is_bool_dtype(out[col]):
                 out[col] = out[col].astype(float)
-            elif pd.api.types.is_object_dtype(out[col]) or pd.api.types.is_categorical_dtype(
-                out[col]
-            ):
+            elif pd.api.types.is_object_dtype(out[col]) or isinstance(out[col].dtype, pd.CategoricalDtype):
                 out[col] = out[col].astype("category").cat.codes.replace(-1, np.nan)
         return out.apply(pd.to_numeric, errors="coerce")
 
-    def _percentile_from_train(self, train_pred: pd.Series, test_pred: pd.Series) -> pd.Series:
-        train = pd.Series(train_pred).dropna().values
-        if len(train) == 0:
-            return pd.Series(np.zeros(len(test_pred)), index=test_pred.index)
-        return pd.Series(
-            [100.0 * (train <= v).mean() for v in test_pred.values], index=test_pred.index
-        )
-
     def _find_best_threshold(self, train_pred: pd.Series, y_train: pd.Series) -> float:
-        train_score = self._percentile_from_train(train_pred, train_pred)
+        train_score = score_to_percentile(train_pred, train_pred)
         best_threshold = 70.0  # Default fallback
         best_sharpe = -np.inf
         

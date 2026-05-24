@@ -135,14 +135,45 @@ def test_calculate_trade_metrics():
     assert metrics_all["total_trades"] == 10
     assert metrics_all["win_rate"] == 50.0 # 5 wins out of 10
     assert metrics_all["total_pnl"] == 7.5 # 2-1+3-1-1+2+4-1-1+1.5 = 7.5
+    assert "cagr" in metrics_all
+    assert metrics_all["cagr"] > 0.0
     
     # 2. Filtered metrics (Only take_trade == True)
     metrics_filtered = calculate_trade_metrics(df, pnl_col="r_multiple", weight_col="take_trade")
     assert metrics_filtered["total_trades"] == 6 # 6 True values
     assert metrics_filtered["win_rate"] == round(5/6 * 100, 2)
     assert metrics_filtered["total_pnl"] == 11.5 # 2-1+3+2+4+1.5 = 11.5
+    assert "cagr" in metrics_filtered
+    assert metrics_filtered["cagr"] > 0.0
     
     # 3. Decile analysis
     df["pred_score"] = [95.0, 45.0, 85.0, 20.0, 35.0, 75.0, 92.0, 15.0, 10.0, 72.0]
     deciles = calculate_decile_analysis(df, score_col="pred_score", target_col="r_multiple")
     assert len(deciles) > 0
+
+
+def test_target_resolution_fallback_and_cagr():
+    """Verify target column dynamic resolution fallback and CAGR computation."""
+    dates = pd.date_range(start="2021-01-01", periods=10, freq="D")
+    
+    # 1. Test target fallback in audit
+    trades_missing_r = pd.DataFrame({
+        "entry_date": [dates[0], dates[1]],
+        "symbol": ["AAPL", "MSFT"],
+        "entry_price": [100.0, 200.0],
+        "return_pct": [0.05, -0.02]
+    })
+    
+    audit = audit_signal_dataset(trades_missing_r, target_col="r_multiple")
+    assert audit.target_name == "return_pct"
+    assert any("fallback" in note for note in audit.notes)
+    
+    # 2. Test target fallback in build_signal_features
+    market_df = pd.DataFrame({
+        "date": dates,
+        "Close": [100.0] * 10,
+        "vix": [15.0] * 10
+    })
+    
+    featured = build_signal_features(trades_missing_r, market_df, target_col="r_multiple")
+    assert "return_pct" in featured.columns

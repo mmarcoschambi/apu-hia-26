@@ -75,7 +75,11 @@ def build_signal_features(
     if "regime_signal" not in features.columns:
         features["regime_signal"] = pd.NA
 
-    if target_col not in features.columns:
-        raise ValueError(f"missing target column: {target_col}")
+    actual_target = target_col
+    if actual_target not in features.columns:
+        if actual_target == "r_multiple" and "return_pct" in features.columns:
+            actual_target = "return_pct"
+        else:
+            raise ValueError(f"missing target column: {actual_target}")
 
     return features

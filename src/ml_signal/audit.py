@@ -49,9 +49,11 @@ def audit_signal_dataset(
         recommended_model = "LightGBM optional"
         notes.append(">500 trades: booster can be considered, but only with strict walk-forward")
 
+    target_name = target_col
     if target_col not in df.columns:
         if target_col == "r_multiple" and "return_pct" in df.columns:
             notes.append("using return_pct as fallback for missing r_multiple")
+            target_name = "return_pct"
         else:
             notes.append(f"missing target column: {target_col}")
 
@@ -60,7 +62,7 @@ def audit_signal_dataset(
         unique_symbols=unique_symbols,
         start_date=start_date,
         end_date=end_date,
-        target_name=target_col,
+        target_name=target_name,
         recommended_model=recommended_model,
         notes=notes,
     )
