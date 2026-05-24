@@ -50,7 +50,10 @@ def audit_signal_dataset(
         notes.append(">500 trades: booster can be considered, but only with strict walk-forward")
 
     if target_col not in df.columns:
-        notes.append(f"missing target column: {target_col}")
+        if target_col == "r_multiple" and "return_pct" in df.columns:
+            notes.append("using return_pct as fallback for missing r_multiple")
+        else:
+            notes.append(f"missing target column: {target_col}")
 
     return SignalDatasetAudit(
         rows=rows,

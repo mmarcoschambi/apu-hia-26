@@ -30,37 +30,38 @@ def build_signal_features(
     if signal_date_col not in sig.columns:
         raise ValueError(f"missing signal date column: {signal_date_col}")
 
+    # Calculate rolling market features on the daily market frame FIRST
+    if "Close" in mk.columns:
+        mk["spy_return_5d"] = mk["Close"].pct_change(5)
+        mk["spy_return_10d"] = mk["Close"].pct_change(10)
+        mk["spy_return_20d"] = mk["Close"].pct_change(20)
+        mk["spy_atr_ratio"] = (
+            mk["Close"].rolling(20).max() - mk["Close"].rolling(20).min()
+        ) / mk["Close"].shift(20)
+
+    if "vix" in mk.columns:
+        mk["vix_change_5d"] = mk["vix"].pct_change(5)
+        mk["vix_ma_20"] = mk["vix"].rolling(20).mean()
+        mk["vix_vs_ma"] = mk["vix"] / mk["vix_ma_20"] - 1.0
+
+    if "breadth_pct" in mk.columns:
+        mk["breadth_change_5d"] = mk["breadth_pct"].diff(5)
+        mk["breadth_ma_20"] = mk["breadth_pct"].rolling(20).mean()
+        mk["breadth_vs_ma"] = mk["breadth_pct"] - mk["breadth_ma_20"]
+
+    if "dix" in mk.columns:
+        mk["dix_change_5d"] = mk["dix"].pct_change(5)
+        mk["dix_ma_20"] = mk["dix"].rolling(20).mean()
+
+    if "gex_net" in mk.columns:
+        mk["gex_ma_20"] = mk["gex_net"].rolling(20).mean()
+        mk["gex_zscore"] = (mk["gex_net"] - mk["gex_ma_20"]) / (
+            mk["gex_net"].rolling(20).std(ddof=0) + 1e-8
+        )
+
     features = sig.merge(
         mk, how="left", left_on=signal_date_col, right_index=True, suffixes=("", "_mkt")
     )
-
-    if "Close" in features.columns:
-        features["spy_return_5d"] = features["Close"].pct_change(5)
-        features["spy_return_10d"] = features["Close"].pct_change(10)
-        features["spy_return_20d"] = features["Close"].pct_change(20)
-        features["spy_atr_ratio"] = (
-            features["Close"].rolling(20).max() - features["Close"].rolling(20).min()
-        ) / features["Close"].shift(20)
-
-    if "vix" in features.columns:
-        features["vix_change_5d"] = features["vix"].pct_change(5)
-        features["vix_ma_20"] = features["vix"].rolling(20).mean()
-        features["vix_vs_ma"] = features["vix"] / features["vix_ma_20"] - 1.0
-
-    if "breadth_pct" in features.columns:
-        features["breadth_change_5d"] = features["breadth_pct"].diff(5)
-        features["breadth_ma_20"] = features["breadth_pct"].rolling(20).mean()
-        features["breadth_vs_ma"] = features["breadth_pct"] - features["breadth_ma_20"]
-
-    if "dix" in features.columns:
-        features["dix_change_5d"] = features["dix"].pct_change(5)
-        features["dix_ma_20"] = features["dix"].rolling(20).mean()
-
-    if "gex_net" in features.columns:
-        features["gex_ma_20"] = features["gex_net"].rolling(20).mean()
-        features["gex_zscore"] = (features["gex_net"] - features["gex_ma_20"]) / (
-            features["gex_net"].rolling(20).std(ddof=0) + 1e-8
-        )
 
     if signal_price_col in features.columns:
         features["signal_size_proxy"] = np.log1p(

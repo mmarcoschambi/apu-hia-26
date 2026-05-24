@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import ElasticNet, Ridge
 from sklearn.metrics import mean_squared_error, r2_score
-from sklearn.model_selection import TimeSeriesSplit
 
 try:
     from lightgbm import LGBMRegressor
@@ -110,12 +109,15 @@ class SignalWalkForwardTrainer:
             test_pred["pred_return"] = raw_pred
             test_pred["pred_score"] = self._percentile_from_train(train_pred, raw_pred)
             test_pred["fold_id"] = fold_id
-            test_pred["take_trade"] = test_pred["pred_score"] >= 70.0
+
+            best_threshold = self._find_best_threshold(train_pred, y_train)
+            test_pred["best_threshold"] = best_threshold
+            test_pred["take_trade"] = test_pred["pred_score"] >= best_threshold
             test_pred["risk_multiplier"] = np.select(
                 [
-                    test_pred["pred_score"] >= 80.0,
-                    test_pred["pred_score"] >= 70.0,
-                    test_pred["pred_score"] >= 50.0,
+                    test_pred["pred_score"] >= (best_threshold + 10.0),
+                    test_pred["pred_score"] >= best_threshold,
+                    test_pred["pred_score"] >= (best_threshold - 20.0),
                 ],
                 [2.0, 1.0, 0.5],
                 default=0.0,
@@ -131,10 +133,11 @@ class SignalWalkForwardTrainer:
                     "test_end": test[date_col].max(),
                     "train_rows": len(X_train),
                     "test_rows": len(test_pred),
+                    "best_threshold": float(best_threshold),
                     "rmse": float(
-                        mean_squared_error(
-                            test_pred[target_col], test_pred["pred_return"], squared=False
-                        )
+                        np.sqrt(mean_squared_error(
+                            test_pred[target_col], test_pred["pred_return"]
+                        ))
                     ),
                     "corr": float(test_pred[[target_col, "pred_return"]].corr().iloc[0, 1])
                     if len(test_pred) > 1
@@ -171,7 +174,7 @@ class SignalWalkForwardTrainer:
             else 0.0
         )
         rmse_oos = (
-            float(mean_squared_error(pred_df[target_col], pred_df["pred_return"], squared=False))
+            float(np.sqrt(mean_squared_error(pred_df[target_col], pred_df["pred_return"])))
             if len(pred_df)
             else 0.0
         )
@@ -217,3 +220,25 @@ class SignalWalkForwardTrainer:
         return pd.Series(
             [100.0 * (train <= v).mean() for v in test_pred.values], index=test_pred.index
         )
+
+    def _find_best_threshold(self, train_pred: pd.Series, y_train: pd.Series) -> float:
+        train_score = self._percentile_from_train(train_pred, train_pred)
+        best_threshold = 70.0  # Default fallback
+        best_sharpe = -np.inf
+        
+        # Test percentile thresholds from 50 to 80
+        for threshold in [50.0, 60.0, 70.0, 80.0]:
+            selected_y = y_train[train_score >= threshold]
+            if len(selected_y) < 15 or len(selected_y) < 0.1 * len(y_train):
+                continue
+            
+            mean_y = selected_y.mean()
+            std_y = selected_y.std(ddof=1)
+            sharpe = (mean_y / std_y) if (std_y > 0 and not pd.isna(std_y)) else 0.0
+            
+            # We want to maximize the Sharpe ratio OOS
+            if sharpe > best_sharpe:
+                best_sharpe = sharpe
+                best_threshold = threshold
+                
+        return best_threshold

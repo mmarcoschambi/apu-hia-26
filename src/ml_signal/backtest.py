@@ -15,14 +15,6 @@ class SignalFilterConfig:
 
 def score_to_percentile(train_scores: pd.Series, test_scores: pd.Series) -> pd.Series:
     train = pd.Series(train_scores).dropna().values
-    test = pd.Series(test_scores).fillna(0.0)
-    if len(train) == 0:
-        return pd.Series(np.zeros(len(test)), index=test.index)
-    return pd.Series([100.0 * (train <= score).mean() for score in test.values], index=test.index)
-
-
-def score_to_percentile(train_scores: pd.Series, test_scores: pd.Series) -> pd.Series:
-    train = pd.Series(train_scores).dropna().values
     test = pd.Series(test_scores).fillna(train.min() if len(train) else 0.0).values
     if len(train) == 0:
         return pd.Series(np.zeros(len(test)), index=test_scores.index)
