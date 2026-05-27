@@ -8,6 +8,16 @@
 *.bak_pre*
 *.bak_prefixes
 *.bak_patterns*
+*.db
+*.sqlite
+*.pkl
+*.parquet
+*.backup
+*.backup_*
+Zone.Identifier
+:Zone.Identifier
+*Zone.Identifier
+
 
 # Herramientas externas
 .qwen/

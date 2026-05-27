@@ -52,12 +52,11 @@ rsync -avz --progress \
     --exclude='data/backtest_data/' \
     --exclude='data/prices/' \
     --exclude='data/history/' \
-    --exclude='outputs/walk_forward/' \
-    --exclude='outputs/backtests/' \
-    --exclude='outputs/best_combos_run/' \
-    --exclude='outputs/portfolio_status/' \
-    --exclude='outputs/quantstats/' \
-    --exclude='outputs/paper_local_db/' \
+    --exclude='data/processed/' \
+    --exclude='outputs/' \
+    --exclude='quantconnect/' \
+    --exclude='sp500/' \
+    --exclude='scratch/' \
     --exclude='study/' \
     --exclude='experiments/' \
     --exclude='archive/' \
