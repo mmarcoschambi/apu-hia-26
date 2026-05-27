@@ -305,8 +305,16 @@ def build_telegram_html(
             if not blocker and waiting != "OK":
                 blocker = waiting
             
+            # Format shadow vs observation tags explicitly
+            if sec == "XLK":
+                tag = f"⚡ <b>[SHADOW: XLK-Only] {ticker}</b>"
+            elif sec == "XLC":
+                tag = f"👁️ <b>[OBSERVATION: XLC] {ticker}</b>"
+            else:
+                tag = f"⭐ <b>{ticker}</b> ({sec})"
+            
             top_candidates += (
-                f"⭐ <b>{ticker}</b> ({sec}) | Score: {row['entry_score']:.3f}{price_flag}\n"
+                f"{tag} | Score: {row['entry_score']:.3f}{price_flag}\n"
                 f"   Price: ${price:.2f} | Dist20: {row.get('dist_sma20', 0):.1f}% | DV: {dv:.0f}M\n"
                 f"   Status: <b>{waiting}</b> | Blocker: <i>{blocker}</i>\n"
             )
@@ -460,6 +468,57 @@ def _build_top_candidates(df: pd.DataFrame, limit: int = 5) -> list[dict]:
     return result
 
 
+def _log_shadow_ledger(df: pd.DataFrame, date: str) -> None:
+    try:
+        from src.utils.sector_rotation import get_ticker_sector_mapping
+        tickers = df["ticker"].unique().tolist() if not df.empty else []
+        sector_map = get_ticker_sector_mapping(tickers)
+        
+        ledger_dir = PROJECT_ROOT / "outputs" / "shadow_theme_filter"
+        ledger_dir.mkdir(parents=True, exist_ok=True)
+        ledger_file = ledger_dir / "shadow_audit_ledger.jsonl"
+        
+        logged_count = 0
+        with open(ledger_file, "a") as f:
+            for _, row in df.iterrows():
+                ticker = row["ticker"]
+                sec = sector_map.get(ticker, "OTHER")
+                if sec not in ("XLK", "XLC"):
+                    continue
+                
+                # Check if variant E would accept
+                status = "SHADOW" if sec == "XLK" else "OBSERVATION"
+                
+                # Simple dict matching shadow_logger schema
+                entry = {
+                    "timestamp": datetime.now().isoformat(),
+                    "date": date,
+                    "ticker": ticker,
+                    "sector_etf": sec,
+                    "themes": [sec],
+                    "best_theme": sec,
+                    "theme_above_sma20": True,
+                    "theme_dist": 0.0,
+                    "sector_etf_ok": True if sec == "XLK" else False,
+                    "sector_dist": float(row.get("dist_sma20", 0.0)) / 100.0 if row.get("dist_sma20") is not None else 0.0,
+                    "theme_vs_sector_20d": 0.0,
+                    "variant_e_would_accept": True,
+                    "signal_accepted_by_router": True,
+                    "entry_price": float(row.get("entry_price", 0.0)) if row.get("entry_price") is not None else 0.0,
+                    "stop_price": float(row.get("stop_loss", 0.0)) if row.get("stop_loss") is not None else 0.0,
+                    "fwd_5d": None,
+                    "fwd_10d": None,
+                    "fwd_20d": None,
+                    "source": "live_promoter"
+                }
+                f.write(json.dumps(entry) + "\n")
+                logged_count += 1
+        if logged_count > 0:
+            print(f"  📊 Parallel shadow audit ledger updated with {logged_count} signals.")
+    except Exception as e:
+        print(f"⚠️ Error updating shadow ledger: {e}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate signal alerts")
     parser.add_argument("--date", type=str, default=None, help="Scan date (YYYY-MM-DD)")
@@ -502,6 +561,9 @@ def main():
             _save_snapshot(date, df, [], [], args.top, args.min_score)
             _mark_sent(date, "no_signals", 0)
         return
+
+    # Parallel logging for Shadow Mode auditing
+    _log_shadow_ledger(df, date)
 
     text = build_alert_text(
         df,

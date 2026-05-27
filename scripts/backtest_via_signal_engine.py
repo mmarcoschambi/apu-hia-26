@@ -19,7 +19,7 @@ from src.integration.universe_builder import build_universe_for_fold
 from src.config.dynamic_config import load_production_config
 from src.utils.sector_rotation import SECTOR_MAP, SECTOR_ETFS
 from src.signals.thematic_logic import calculate_equal_weighted_index
-from src.data.theme_taxonomy import THEME_MAP, get_themes
+from src.data.theme_taxonomy import THEME_MAP, get_themes, get_theme_map_for_date
 
 # Configuration
 DB_PATH = PROJECT_ROOT / "data" / "ticker_cache.db"
@@ -134,9 +134,10 @@ def run_backtest(
     max_tickers: int,
     tag: str,
     use_variant_e: bool = False,
+    index_name: str = "SP500",
 ):
     logger.info(
-        f"🚀 BACKTEST (PARITY{' + VAR-E' if use_variant_e else ''}) | Range: {start_date} -> {end_date}"
+        f"🚀 BACKTEST (PARITY{' + VAR-E' if use_variant_e else ''}) | Index: {index_name} | Range: {start_date} -> {end_date}"
     )
     dates_str = get_trading_dates(start_date, end_date)
     if not dates_str:
@@ -155,19 +156,21 @@ def run_backtest(
             # CRITICAL: We need sector data for divergence, but we MUST NOT block if sector is weak!
             cfg["tier2_filters"]["use_sector_etf_filter"] = False
 
-    logger.info("🔭 Building PIT universes for each date...")
+    logger.info(f"🔭 Building PIT universes for each date (Index: {index_name})...")
     universe_by_date = {}
     superset_tickers = set()
     for d_str in tqdm(dates_str, desc="Universe Building"):
         u_start = (pd.to_datetime(d_str) - timedelta(days=730)).strftime("%Y-%m-%d")
-        snap = build_universe_for_fold(DB_PATH, d_str, u_start, max_tickers=max_tickers)
+        snap = build_universe_for_fold(DB_PATH, d_str, u_start, max_tickers=max_tickers, index_name=index_name)
         universe_by_date[d_str] = snap.tickers
         superset_tickers.update(snap.tickers)
 
     superset_tickers.update(["SPY", "^VIX"])
     superset_tickers.update(SECTOR_ETFS)
     if use_variant_e:
-        for t in THEME_MAP:
+        from src.data.theme_taxonomy import THEME_MAP_2020, THEME_MAP_2022, THEME_MAP_CURRENT
+        all_theme_tickers = set(THEME_MAP_2020.keys()) | set(THEME_MAP_2022.keys()) | set(THEME_MAP_CURRENT.keys())
+        for t in all_theme_tickers:
             superset_tickers.add(t)
 
     logger.info(f"Superset size: {len(superset_tickers)} tickers")
@@ -204,32 +207,51 @@ def run_backtest(
 
     theme_metrics_full = {}
     if use_variant_e:
-        logger.info("🧪 Pre-calculating Theme Indices for Variant E...")
-        # 1. Agrupar tickers por tema
-        theme_to_tickers = {}
-        for t, themes in THEME_MAP.items():
-            for theme in themes:
-                theme_to_tickers.setdefault(theme, []).append(t)
+        logger.info("🧪 Pre-calculating Dynamic Theme Indices for Variant E...")
+        from src.data.theme_taxonomy import THEME_MAP_2020, THEME_MAP_2022, THEME_MAP_CURRENT
+        all_theme_tickers = set(THEME_MAP_2020.keys()) | set(THEME_MAP_2022.keys()) | set(THEME_MAP_CURRENT.keys())
 
-        # 2. Calcular índices
+        # 1. Calcular DataFrame de cierres y retornos
         market_data_closes = pd.DataFrame(
             {t: df["close"] for t, df in all_ohlcv.items() if t in superset_tickers}
         )
-        theme_indices = {}
-        for theme, members in theme_to_tickers.items():
-            idx = calculate_equal_weighted_index(market_data_closes, members)
-            if not idx.empty:
-                theme_indices[theme] = idx
+        market_returns = market_data_closes.pct_change()
 
-        df_themes = pd.DataFrame(theme_indices)
+        # 2. Calcular retornos diarios dinámicos por tema
+        theme_daily_returns = {}
+        for dt in market_data_closes.index:
+            theme_map = get_theme_map_for_date(dt)
+            theme_to_tickers_date = {}
+            for t, themes in theme_map.items():
+                for theme in themes:
+                    theme_to_tickers_date.setdefault(theme, []).append(t)
+            
+            for th, members in theme_to_tickers_date.items():
+                valid_members = [m for m in members if m in market_returns.columns]
+                if valid_members:
+                    rets_day = market_returns.loc[dt, valid_members].dropna()
+                    if not rets_day.empty:
+                        theme_daily_returns.setdefault(th, {})[dt] = rets_day.mean()
+
+        # Convertir a DataFrame de retornos y calcular índices acumulados
+        df_theme_returns = pd.DataFrame(theme_daily_returns).reindex(market_data_closes.index)
+        df_themes = (1 + df_theme_returns.fillna(0)).cumprod() * 100
+
+        # Restaurar NaNs donde no había miembros válidos reportando ese día
+        import numpy as np
+        for col in df_themes.columns:
+            nan_dates = df_themes.index.difference(theme_daily_returns[col].keys())
+            df_themes.loc[nan_dates, col] = np.nan
+
         theme_sma20 = df_themes.rolling(20).mean()
         theme_dists = (df_themes - theme_sma20) / theme_sma20
 
-        for t in THEME_MAP:
-            t_themes = get_themes(t)
+        # 3. Mapear métricas de distancia por ticker y fecha (Point-in-Time)
+        for t in all_theme_tickers:
             theme_metrics_full[t] = {}
             for d in dates_str:
                 dt = pd.Timestamp(d)
+                t_themes = get_themes(t, dt)  # Dinámico y libre de Look-ahead
                 best_dist = -999
                 for th in t_themes:
                     if th in theme_dists.columns and dt in theme_dists.index:
@@ -434,6 +456,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--variant-e", action="store_true", help="Enable Thematic Divergence Filter"
     )
+    parser.add_argument(
+        "--index",
+        default="SP500",
+        choices=["SP500", "RUSSELL1000", "RUSSELL2000", "NASDAQ100"],
+        help="Target index for backtesting"
+    )
     args = parser.parse_args()
     run_backtest(
         args.start,
@@ -442,4 +470,5 @@ if __name__ == "__main__":
         args.universe_size,
         args.tag,
         use_variant_e=args.variant_e,
+        index_name=args.index,
     )

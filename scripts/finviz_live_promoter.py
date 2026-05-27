@@ -695,8 +695,16 @@ def promote_candidates(date: str, min_rvol: float = 1.5, send_telegram: bool = F
                 dist20_str = f"{gate_dist_sma20:.2f}%" if gate_dist_sma20 is not None else "N/A"
                 sec_dist_str = f"{gate_sector_etf_dist:.2f}%" if gate_sector_etf_dist is not None else "N/A"
                 
+                # Formatting shadow vs observation labels
+                if sec == "XLK":
+                    header_title = f"⚡ <b>[SHADOW: XLK-Only] {safe_ticker}</b>"
+                elif sec == "XLC":
+                    header_title = f"👁️ <b>[OBSERVATION: XLC] {safe_ticker}</b>"
+                else:
+                    header_title = f"🧭 <b>LIVE SIGNAL: {safe_ticker}</b> ({safe_sector})"
+                
                 msg = (
-                    f"🧭 <b>LIVE SIGNAL: {safe_ticker}</b> ({safe_sector})\n"
+                    f"{header_title}\n"
                     f"{watchlist_badge}\n\n"
                     f"⚡ <b>TRIGGER DETAILS:</b>\n"
                     f"• Live Trigger: <b>PASS</b>\n"

@@ -66,6 +66,7 @@ def build_universe_for_fold(
     recent_bars: int = 60,
     max_gap_pct: float = 0.15,
     table: str = "ohlcv_cache",
+    index_name: str = "SP500",
 ) -> UniverseSnapshot:
     """
     Construye un universo PIT (Point-In-Time) basado en la cutoff_date.
@@ -74,16 +75,50 @@ def build_universe_for_fold(
     conn = sqlite3.connect(str(db_path))
     try:
         # 1) candidatos con historia mínima en [window_start, cutoff_date]
-        hist_rows = conn.execute(
-            f"""
-            SELECT ticker, COUNT(*) as bars
-            FROM {table}
-            WHERE date >= ? AND date <= ?
-            GROUP BY ticker
-            HAVING COUNT(*) >= ?
-            """,
-            (window_start, cutoff_date, min_bars),
-        ).fetchall()
+        # Integración de pit_constituents de QuantConnect:
+        use_pit_filter = False
+        pit_date = None
+        
+        # Verificar si existe la tabla pit_constituents y tiene registros para esta fecha
+        table_exists = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='pit_constituents'"
+        ).fetchone()
+        
+        if table_exists:
+            # Buscamos el snapshot de membresía mensual más cercano (menor o igual a cutoff_date) para ese índice específico
+            db_date_row = conn.execute(
+                "SELECT DISTINCT date FROM pit_constituents WHERE date <= ? AND index_member = ? ORDER BY date DESC LIMIT 1",
+                (cutoff_date, index_name)
+            ).fetchone()
+            if db_date_row:
+                pit_date = db_date_row[0]
+                use_pit_filter = True
+                logger.info(f"🎯 PIT filter enabled for {cutoff_date} (Index: {index_name}, using snapshot {pit_date})")
+
+        if use_pit_filter:
+            hist_rows = conn.execute(
+                f"""
+                SELECT ticker, COUNT(*) as bars
+                FROM {table}
+                WHERE date >= ? AND date <= ?
+                  AND ticker IN (SELECT ticker FROM pit_constituents WHERE date = ? AND index_member = ?)
+                GROUP BY ticker
+                HAVING COUNT(*) >= ?
+                """,
+                (window_start, cutoff_date, pit_date, index_name, min_bars),
+            ).fetchall()
+        else:
+            hist_rows = conn.execute(
+                f"""
+                SELECT ticker, COUNT(*) as bars
+                FROM {table}
+                WHERE date >= ? AND date <= ?
+                GROUP BY ticker
+                HAVING COUNT(*) >= ?
+                """,
+                (window_start, cutoff_date, min_bars),
+            ).fetchall()
+            
         n_candidates_raw = len(hist_rows)
 
         # 2) filtro símbolo

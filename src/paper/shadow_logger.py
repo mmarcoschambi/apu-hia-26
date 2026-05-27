@@ -172,6 +172,21 @@ class ShadowLogger:
         
         with open(output_file, "w") as f:
             json.dump(payload, f, indent=2)
+
+        # Log to the consolidated parallel ledger
+        ledger_file = self.output_dir / "shadow_audit_ledger.jsonl"
+        try:
+            with open(ledger_file, "a") as f:
+                for r in results:
+                    entry = {
+                        "timestamp": datetime.now().isoformat(),
+                        "date": date,
+                        **r
+                    }
+                    f.write(json.dumps(entry) + "\n")
+            logger.info(f"✅ Consolidated parallel ledger updated in {ledger_file}")
+        except Exception as le:
+            logger.error(f"Error writing to consolidated ledger: {le}")
             
         logger.info(f"✅ Shadow round logged to {output_file}")
         return output_file
