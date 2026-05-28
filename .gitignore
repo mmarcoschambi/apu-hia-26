@@ -71,3 +71,11 @@ logs/
 
 # Study material (copyrighted)
 study/
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
