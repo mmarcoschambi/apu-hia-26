@@ -135,9 +135,20 @@ def run_backtest(
     tag: str,
     use_variant_e: bool = False,
     index_name: str = "SP500",
+    use_e25_sizing: bool = False,
+    e25_version: str = "v1_monotonic",
+    exclude_tickers: list[str] | None = None,
 ):
+    # Support both space-separated (--exclude-tickers NVDA AMD) and
+    # comma-separated (--exclude-tickers NVDA,AMD) formats.
+    exclude_set = {
+        tok.upper()
+        for raw in (exclude_tickers or [])
+        for tok in raw.split(",")
+        if tok.strip()
+    }
     logger.info(
-        f"🚀 BACKTEST (PARITY{' + VAR-E' if use_variant_e else ''}) | Index: {index_name} | Range: {start_date} -> {end_date}"
+        f"🚀 BACKTEST (PARITY{' + VAR-E' if use_variant_e else ''}{' + E25-SIZING (' + e25_version + ')' if use_e25_sizing else ''}) | Index: {index_name} | Range: {start_date} -> {end_date}{' | Excluding: ' + ','.join(sorted(exclude_set)) if exclude_set else ''}"
     )
     dates_str = get_trading_dates(start_date, end_date)
     if not dates_str:
@@ -156,22 +167,50 @@ def run_backtest(
             # CRITICAL: We need sector data for divergence, but we MUST NOT block if sector is weak!
             cfg["tier2_filters"]["use_sector_etf_filter"] = False
 
+    if use_e25_sizing:
+        for cfg in [cfg_a, cfg_b]:
+            # Activar el feature flag del sizing dinámico en tier3_fixed
+            cfg["tier3_fixed"] = {
+                "use_dynamic_extension_sizing": True,
+                "dynamic_extension_sizing": {
+                    "version": e25_version,
+                    "comfort_pct": 6.76,
+                    "mid_pct": 15.0,
+                    "high_pct": 30.0,
+                    "max_pct": 50.0,
+                    "min_factor": 0.5,
+                    "extreme_factor": 0.2,
+                    "adr_exception_pct": 8.0,
+                },
+            }
+            # Reemplazar el bloqueo de max_dist_sma20 en tier2_filters (Experimento 2 de E25)
+            cfg["tier2_filters"]["use_dynamic_extension"] = True
+
     logger.info(f"🔭 Building PIT universes for each date (Index: {index_name})...")
     universe_by_date = {}
     superset_tickers = set()
     for d_str in tqdm(dates_str, desc="Universe Building"):
         u_start = (pd.to_datetime(d_str) - timedelta(days=730)).strftime("%Y-%m-%d")
-        snap = build_universe_for_fold(DB_PATH, d_str, u_start, max_tickers=max_tickers, index_name=index_name)
-        universe_by_date[d_str] = snap.tickers
-        superset_tickers.update(snap.tickers)
+        snap = build_universe_for_fold(
+            DB_PATH, d_str, u_start, max_tickers=max_tickers, index_name=index_name
+        )
+        filtered_tickers = [t for t in snap.tickers if t.upper() not in exclude_set]
+        universe_by_date[d_str] = filtered_tickers
+        superset_tickers.update(filtered_tickers)
 
     superset_tickers.update(["SPY", "^VIX"])
     superset_tickers.update(SECTOR_ETFS)
     if use_variant_e:
         from src.data.theme_taxonomy import THEME_MAP_2020, THEME_MAP_2022, THEME_MAP_CURRENT
-        all_theme_tickers = set(THEME_MAP_2020.keys()) | set(THEME_MAP_2022.keys()) | set(THEME_MAP_CURRENT.keys())
+
+        all_theme_tickers = (
+            set(THEME_MAP_2020.keys()) | set(THEME_MAP_2022.keys()) | set(THEME_MAP_CURRENT.keys())
+        )
         for t in all_theme_tickers:
-            superset_tickers.add(t)
+            if t.upper() not in exclude_set:
+                superset_tickers.add(t)
+
+    superset_tickers.difference_update(exclude_set)
 
     logger.info(f"Superset size: {len(superset_tickers)} tickers")
 
@@ -209,7 +248,10 @@ def run_backtest(
     if use_variant_e:
         logger.info("🧪 Pre-calculating Dynamic Theme Indices for Variant E...")
         from src.data.theme_taxonomy import THEME_MAP_2020, THEME_MAP_2022, THEME_MAP_CURRENT
-        all_theme_tickers = set(THEME_MAP_2020.keys()) | set(THEME_MAP_2022.keys()) | set(THEME_MAP_CURRENT.keys())
+
+        all_theme_tickers = (
+            set(THEME_MAP_2020.keys()) | set(THEME_MAP_2022.keys()) | set(THEME_MAP_CURRENT.keys())
+        )
 
         # 1. Calcular DataFrame de cierres y retornos
         market_data_closes = pd.DataFrame(
@@ -225,7 +267,7 @@ def run_backtest(
             for t, themes in theme_map.items():
                 for theme in themes:
                     theme_to_tickers_date.setdefault(theme, []).append(t)
-            
+
             for th, members in theme_to_tickers_date.items():
                 valid_members = [m for m in members if m in market_returns.columns]
                 if valid_members:
@@ -239,6 +281,7 @@ def run_backtest(
 
         # Restaurar NaNs donde no había miembros válidos reportando ese día
         import numpy as np
+
         for col in df_themes.columns:
             nan_dates = df_themes.index.difference(theme_daily_returns[col].keys())
             df_themes.loc[nan_dates, col] = np.nan
@@ -334,11 +377,19 @@ def run_backtest(
                     "entry_price": p["entry_px"],
                     "exit_price": p["last_close"],
                     "pnl": p["realized_pnl"],
+                    "initial_size": p.get("initial_size", 0),  # <-- Real sizing audit
                     "return_pct": (p["realized_pnl"] / (p["entry_px"] * p["initial_size"])) * 100
                     if (p["entry_px"] * p["initial_size"]) > 0
                     else 0,
                     "exit_phase": "+".join(p["exit_reasons"]),
                     "entry_score": p["entry_score"],
+                    # E25 Sizing Metadata
+                    "dist_sma20": p.get("dist_sma20", 0.0),
+                    "adr_pct": p.get("adr_pct", 0.0),
+                    "sizing_factor": p.get("sizing_factor", 1.0),
+                    "sizing_reason": p.get("sizing_reason", ""),
+                    "risk_budget_usd": p.get("risk_budget_usd", 0.0),
+                    "raw_risk_budget_usd": p.get("raw_risk_budget_usd", 0.0),
                 }
             )
 
@@ -356,7 +407,9 @@ def run_backtest(
                 entry_px = r["open"] * (1 + SLIPPAGE_BPS / 10000)
                 regime_mode = regime_lookup.get(curr_dt, "DEFENSE_PARTIAL")
                 risk_pct = RISK_PCT_BY_REGIME.get(regime_mode, 0.028)
-                risk_amt = total_equity * risk_pct
+                raw_risk_amt = total_equity * risk_pct
+                # Siempre usar el sizing_factor canónico calculado por el engine de señales para consistencia
+                risk_amt = raw_risk_amt * sig.sizing_factor
                 price_risk = entry_px - sig.stop_price
                 if price_risk > 0:
                     shares = int(risk_amt / price_risk)
@@ -383,6 +436,13 @@ def run_backtest(
                                 "exit_reasons": [],
                                 "entry_score": sig.entry_score,
                                 "last_close": entry_px,
+                                # E25 metrics
+                                "dist_sma20": sig.tier2_metrics.dist_sma20,
+                                "adr_pct": sig.tier2_metrics.adr_pct,
+                                "sizing_factor": sig.sizing_factor,
+                                "sizing_reason": sig.sizing_reason,
+                                "risk_budget_usd": risk_amt,              # <-- RIESGO DYNAMIC REAL DEL BACKTEST
+                                "raw_risk_budget_usd": raw_risk_amt,      # <-- RIESGO DYNAMIC REAL DEL BACKTEST
                             }
 
         spy_slice = spy_full[spy_full.index <= curr_dt].tail(400)
@@ -397,6 +457,8 @@ def run_backtest(
                 day_universe = universe_by_date.get(d_str, [])
                 results_a, results_b = [], []
                 for ticker in day_universe:
+                    if ticker.upper() in exclude_set:
+                        continue
                     if ticker not in all_ohlcv:
                         continue
                     ticker_df = all_ohlcv[ticker][all_ohlcv[ticker].index <= curr_dt]
@@ -457,10 +519,29 @@ if __name__ == "__main__":
         "--variant-e", action="store_true", help="Enable Thematic Divergence Filter"
     )
     parser.add_argument(
+        "--e25-sizing",
+        action="store_true",
+        help="Enable E25 Dynamic Extension up to 50%% with sizing penalty",
+    )
+    parser.add_argument(
+        "--e25-version",
+        default="v1_monotonic",
+        choices=["v1_monotonic", "v2_atlas_informed"],
+        help="Sizing curve version for E25",
+    )
+    parser.add_argument(
         "--index",
         default="SP500",
         choices=["SP500", "RUSSELL1000", "RUSSELL2000", "NASDAQ100"],
-        help="Target index for backtesting"
+        help="Target index for backtesting",
+    )
+    parser.add_argument(
+        "--exclude-tickers",
+        nargs="+",
+        default=[],
+        metavar="TICKER",
+        help="Tickers to exclude from the backtest universe. "
+             "Accepts space-separated (NVDA AMD) or comma-separated (NVDA,AMD) formats.",
     )
     args = parser.parse_args()
     run_backtest(
@@ -471,4 +552,7 @@ if __name__ == "__main__":
         args.tag,
         use_variant_e=args.variant_e,
         index_name=args.index,
+        use_e25_sizing=args.e25_sizing,
+        e25_version=args.e25_version,
+        exclude_tickers=args.exclude_tickers,
     )
