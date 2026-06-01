@@ -67,6 +67,7 @@ def build_universe_for_fold(
     max_gap_pct: float = 0.15,
     table: str = "ohlcv_cache",
     index_name: str = "SP500",
+    use_pit: bool = True,
 ) -> UniverseSnapshot:
     """
     Construye un universo PIT (Point-In-Time) basado en la cutoff_date.
@@ -84,7 +85,7 @@ def build_universe_for_fold(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='pit_constituents'"
         ).fetchone()
         
-        if table_exists:
+        if table_exists and use_pit:
             # Buscamos el snapshot de membresía mensual más cercano (menor o igual a cutoff_date) para ese índice específico
             db_date_row = conn.execute(
                 "SELECT DISTINCT date FROM pit_constituents WHERE date <= ? AND index_member = ? ORDER BY date DESC LIMIT 1",

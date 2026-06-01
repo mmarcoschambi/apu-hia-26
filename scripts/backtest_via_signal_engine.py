@@ -80,7 +80,7 @@ def load_ohlcv_batch_memory(tickers: list[str], start: str, end: str) -> dict[st
     return res
 
 
-def calculate_backtest_metrics(trades_df, equity_curve_df):
+def calculate_backtest_metrics(trades_df, equity_curve_df, rs_coverage_pct=100.0):
     if trades_df.empty:
         initial = 100000.0
         final = initial
@@ -91,6 +91,7 @@ def calculate_backtest_metrics(trades_df, equity_curve_df):
             "total_trades": 0,
             "max_drawdown": 0,
             "sharpe_ratio": 0,
+            "rs_coverage_pct": rs_coverage_pct,
         }
 
     pnl = trades_df["pnl"]
@@ -124,6 +125,7 @@ def calculate_backtest_metrics(trades_df, equity_curve_df):
         "annualized_return": round(float(ann_ret), 2),
         "total_return": round(float((final / initial - 1) * 100), 2),
         "total_trades": len(trades_df),
+        "rs_coverage_pct": rs_coverage_pct,
     }
 
 
@@ -138,6 +140,7 @@ def run_backtest(
     use_e25_sizing: bool = False,
     e25_version: str = "v1_monotonic",
     exclude_tickers: list[str] | None = None,
+    use_pit: bool = True,
 ):
     # Support both space-separated (--exclude-tickers NVDA AMD) and
     # comma-separated (--exclude-tickers NVDA,AMD) formats.
@@ -157,6 +160,26 @@ def run_backtest(
     # --- FASE 1: PRE-CARGA Y CONFIGURACIÓN ---
     logger.info("📦 Loading configs and pre-loading superset...")
 
+    # Load production config for backtest constants and E25 dynamic extension sizing
+    prod_cfg = load_production_config()
+    bt_cfg = prod_cfg.get("backtest", {})
+
+    max_positions = bt_cfg.get("max_positions", 8)
+    max_per_sector = bt_cfg.get("max_per_sector", 2)
+    holding_days_limit = bt_cfg.get("holding_days_limit", 10)
+    fee_bps = bt_cfg.get("fee_bps", 1.0)
+    slippage_bps = bt_cfg.get("slippage_bps", 5.0)
+    risk_pct_by_regime = bt_cfg.get("risk_pct_by_regime", {
+        "ATTACK": 0.0364,
+        "DEFENSE_PARTIAL": 0.028,
+        "DEFENSE_FULL": 0.0168
+    })
+
+    # For Issue #21 RS Coverage metric tracking
+    missing_rs_count = {}
+    evaluated_rs_total = 0
+    available_rs_count = 0
+
     cfg_a, _ = load_combo_merged("combo_pure_momentum")
     cfg_b, _ = load_combo_merged("combo_stage2_breakout")
 
@@ -168,20 +191,27 @@ def run_backtest(
             cfg["tier2_filters"]["use_sector_etf_filter"] = False
 
     if use_e25_sizing:
+        # Load from config, falling back to safe defaults if not found
+        prod_dynamic_sizing = prod_cfg.get("tier3_fixed", {}).get("dynamic_extension_sizing", {
+            "version": e25_version,
+            "comfort_pct": 6.76,
+            "valley_pct": 10.0,
+            "mid_pct": 15.0,
+            "high_pct": 25.0,
+            "extreme_pct": 35.0,
+            "max_pct": 50.0,
+            "min_factor": 0.5,
+            "extreme_factor": 0.2,
+            "adr_exception_pct": 8.0,
+        })
+        # Override version from CLI if it's passed explicitly
+        prod_dynamic_sizing["version"] = e25_version
+
         for cfg in [cfg_a, cfg_b]:
             # Activar el feature flag del sizing dinámico en tier3_fixed
             cfg["tier3_fixed"] = {
                 "use_dynamic_extension_sizing": True,
-                "dynamic_extension_sizing": {
-                    "version": e25_version,
-                    "comfort_pct": 6.76,
-                    "mid_pct": 15.0,
-                    "high_pct": 30.0,
-                    "max_pct": 50.0,
-                    "min_factor": 0.5,
-                    "extreme_factor": 0.2,
-                    "adr_exception_pct": 8.0,
-                },
+                "dynamic_extension_sizing": prod_dynamic_sizing,
             }
             # Reemplazar el bloqueo de max_dist_sma20 en tier2_filters (Experimento 2 de E25)
             cfg["tier2_filters"]["use_dynamic_extension"] = True
@@ -192,7 +222,12 @@ def run_backtest(
     for d_str in tqdm(dates_str, desc="Universe Building"):
         u_start = (pd.to_datetime(d_str) - timedelta(days=730)).strftime("%Y-%m-%d")
         snap = build_universe_for_fold(
-            DB_PATH, d_str, u_start, max_tickers=max_tickers, index_name=index_name
+            DB_PATH,
+            d_str,
+            u_start,
+            max_tickers=max_tickers,
+            index_name=index_name,
+            use_pit=use_pit,
         )
         filtered_tickers = [t for t in snap.tickers if t.upper() not in exclude_set]
         universe_by_date[d_str] = filtered_tickers
@@ -334,8 +369,8 @@ def run_backtest(
                 exit_px, reason = pos["stop"], "STOP"
 
             if exit_px:
-                px = exit_px * (1 - SLIPPAGE_BPS / 10000)
-                portfolio["cash"] += px * pos["size"] - (px * pos["size"] * FEE_BPS / 10000)
+                px = exit_px * (1 - slippage_bps / 10000)
+                portfolio["cash"] += px * pos["size"] - (px * pos["size"] * fee_bps / 10000)
                 pos["realized_pnl"] += (px - pos["entry_px"]) * pos["size"]
                 pos["exit_reasons"].append(reason)
                 closed.append(t)
@@ -343,23 +378,23 @@ def run_backtest(
 
             if not pos["tp1_hit"] and r["high"] >= pos["tp1"]:
                 sz = int(pos["initial_size"] * 0.33)
-                px = pos["tp1"] * (1 - SLIPPAGE_BPS / 10000)
-                portfolio["cash"] += px * sz - (px * sz * FEE_BPS / 10000)
+                px = pos["tp1"] * (1 - slippage_bps / 10000)
+                portfolio["cash"] += px * sz - (px * sz * fee_bps / 10000)
                 pos["realized_pnl"] += (px - pos["entry_px"]) * sz
                 pos["size"], pos["tp1_hit"], pos["stop"] = pos["size"] - sz, True, pos["entry_px"]
                 pos["exit_reasons"].append("TP1")
 
             if pos["tp1_hit"] and not pos["tp2_hit"] and r["high"] >= pos["tp2"]:
                 sz = min(int(pos["initial_size"] * 0.33), pos["size"])
-                px = pos["tp2"] * (1 - SLIPPAGE_BPS / 10000)
-                portfolio["cash"] += px * sz - (px * sz * FEE_BPS / 10000)
+                px = pos["tp2"] * (1 - slippage_bps / 10000)
+                portfolio["cash"] += px * sz - (px * sz * fee_bps / 10000)
                 pos["realized_pnl"] += (px - pos["entry_px"]) * sz
                 pos["size"], pos["tp2_hit"] = pos["size"] - sz, True
                 pos["exit_reasons"].append("TP2")
 
-            if pos["days_held"] >= HOLDING_DAYS_LIMIT:
-                px = r["close"] * (1 - SLIPPAGE_BPS / 10000)
-                portfolio["cash"] += px * pos["size"] - (px * pos["size"] * FEE_BPS / 10000)
+            if pos["days_held"] >= pos.get("target_hold_days", holding_days_limit):
+                px = r["close"] * (1 - slippage_bps / 10000)
+                portfolio["cash"] += px * pos["size"] - (px * pos["size"] * fee_bps / 10000)
                 pos["realized_pnl"] += (px - pos["entry_px"]) * pos["size"]
                 pos["exit_reasons"].append("EOD")
                 closed.append(t)
@@ -390,6 +425,7 @@ def run_backtest(
                     "sizing_reason": p.get("sizing_reason", ""),
                     "risk_budget_usd": p.get("risk_budget_usd", 0.0),
                     "raw_risk_budget_usd": p.get("raw_risk_budget_usd", 0.0),
+                    "target_hold_days": p.get("target_hold_days", holding_days_limit),
                 }
             )
 
@@ -400,50 +436,50 @@ def run_backtest(
             r = all_ohlcv[t].loc[curr_dt]
             sec = SECTOR_MAP.get(t, "UNKNOWN")
             if (
-                len(portfolio["positions"]) < MAX_POSITIONS
+                len(portfolio["positions"]) < max_positions
                 and t not in portfolio["positions"]
-                and portfolio["sector_count"].get(sec, 0) < MAX_PER_SECTOR
+                and portfolio["sector_count"].get(sec, 0) < max_per_sector
             ):
-                entry_px = r["open"] * (1 + SLIPPAGE_BPS / 10000)
-                regime_mode = regime_lookup.get(curr_dt, "DEFENSE_PARTIAL")
-                risk_pct = RISK_PCT_BY_REGIME.get(regime_mode, 0.028)
-                raw_risk_amt = total_equity * risk_pct
-                # Siempre usar el sizing_factor canónico calculado por el engine de señales para consistencia
-                risk_amt = raw_risk_amt * sig.sizing_factor
-                price_risk = entry_px - sig.stop_price
-                if price_risk > 0:
-                    shares = int(risk_amt / price_risk)
-                    if shares > 0:
-                        cost = shares * entry_px
-                        if portfolio["cash"] >= (cost * 1.0001):
-                            portfolio["cash"] -= cost * 1.0001
-                            portfolio["sector_count"][sec] = (
-                                portfolio["sector_count"].get(sec, 0) + 1
-                            )
-                            portfolio["positions"][t] = {
-                                "size": shares,
-                                "initial_size": shares,
-                                "entry_px": entry_px,
-                                "stop": sig.stop_price,
-                                "tp1": sig.tp1_price,
-                                "tp2": sig.tp2_price,
-                                "entry_date": d_str,
-                                "sector": sec,
-                                "days_held": 0,
-                                "tp1_hit": False,
-                                "tp2_hit": False,
-                                "realized_pnl": 0,
-                                "exit_reasons": [],
-                                "entry_score": sig.entry_score,
-                                "last_close": entry_px,
-                                # E25 metrics
-                                "dist_sma20": sig.tier2_metrics.dist_sma20,
-                                "adr_pct": sig.tier2_metrics.adr_pct,
-                                "sizing_factor": sig.sizing_factor,
-                                "sizing_reason": sig.sizing_reason,
-                                "risk_budget_usd": risk_amt,              # <-- RIESGO DYNAMIC REAL DEL BACKTEST
-                                "raw_risk_budget_usd": raw_risk_amt,      # <-- RIESGO DYNAMIC REAL DEL BACKTEST
-                            }
+                entry_px = r["open"] * (1 + slippage_bps / 10000)
+
+                # Option A Unified Sizing: Use sig.shares calculated canonically by SignalEngine
+                shares = sig.shares
+                # Get the dynamic risk budget for this trade
+                risk_amt = dynamic_risk_dollars * sig.sizing_factor
+                raw_risk_amt = dynamic_risk_dollars
+
+                if shares > 0:
+                    cost = shares * entry_px
+                    if portfolio["cash"] >= (cost * 1.0001):
+                        portfolio["cash"] -= cost * 1.0001
+                        portfolio["sector_count"][sec] = (
+                            portfolio["sector_count"].get(sec, 0) + 1
+                        )
+                        portfolio["positions"][t] = {
+                            "size": shares,
+                            "initial_size": shares,
+                            "entry_px": entry_px,
+                            "stop": sig.stop_price,
+                            "tp1": sig.tp1_price,
+                            "tp2": sig.tp2_price,
+                            "entry_date": d_str,
+                            "sector": sec,
+                            "days_held": 0,
+                            "tp1_hit": False,
+                            "tp2_hit": False,
+                            "realized_pnl": 0,
+                            "exit_reasons": [],
+                            "entry_score": sig.entry_score,
+                            "last_close": entry_px,
+                            # E25 metrics
+                            "dist_sma20": sig.tier2_metrics.dist_sma20,
+                            "adr_pct": sig.tier2_metrics.adr_pct,
+                            "sizing_factor": sig.sizing_factor,
+                            "sizing_reason": sig.sizing_reason,
+                            "risk_budget_usd": risk_amt,              # <-- RIESGO DYNAMIC REAL DEL BACKTEST
+                            "raw_risk_budget_usd": raw_risk_amt,      # <-- RIESGO DYNAMIC REAL DEL BACKTEST
+                            "target_hold_days": sig.target_hold_days if sig.target_hold_days is not None else holding_days_limit,
+                        }
 
         spy_slice = spy_full[spy_full.index <= curr_dt].tail(400)
         vix_slice = vix_full[vix_full.index <= curr_dt].tail(1)
@@ -454,6 +490,14 @@ def run_backtest(
         ):
             vix_ok = vix_slice["close"].iloc[0] < 35.0 if not vix_slice.empty else True
             if vix_ok:
+                regime_mode = regime_lookup.get(curr_dt, "DEFENSE_PARTIAL")
+                risk_pct = risk_pct_by_regime.get(regime_mode, 0.028)
+                dynamic_risk_dollars = total_equity * risk_pct
+
+                # Inject dynamic_risk_dollars into both combo configs tier1_strategy risk_dollars
+                cfg_a["tier1_strategy"]["risk_dollars"] = dynamic_risk_dollars
+                cfg_b["tier1_strategy"]["risk_dollars"] = dynamic_risk_dollars
+
                 day_universe = universe_by_date.get(d_str, [])
                 results_a, results_b = [], []
                 for ticker in day_universe:
@@ -464,41 +508,81 @@ def run_backtest(
                     ticker_df = all_ohlcv[ticker][all_ohlcv[ticker].index <= curr_dt]
                     if len(ticker_df) < 65:
                         continue
+                    
+                    # Track RS percentile lookup
                     rs_val = rs_lookup.get((curr_dt, ticker))
+                    evaluated_rs_total += 1
+                    if rs_val is None:
+                        missing_rs_count[ticker] = missing_rs_count.get(ticker, 0) + 1
+                    else:
+                        available_rs_count += 1
+
                     etf = SECTOR_MAP.get(ticker)
                     s_dist = etf_dists_full.get(etf, {}).get(curr_dt) if etf else None
                     t_dist = theme_metrics_full.get(ticker, {}).get(curr_dt)
 
-                    res_a = evaluate_ticker(
-                        ticker,
-                        ticker_df,
-                        spy_slice,
-                        cfg_a,
-                        rs_percentile=rs_val,
-                        scan_date=d_str,
-                        sector_etf_dist=s_dist,
-                        theme_dist=t_dist,
-                    )
-                    if res_a.passed:
-                        results_a.append(res_a)
-                    res_b = evaluate_ticker(
-                        ticker,
-                        ticker_df,
-                        spy_slice,
-                        cfg_b,
-                        rs_percentile=rs_val,
-                        scan_date=d_str,
-                        sector_etf_dist=s_dist,
-                        theme_dist=t_dist,
-                    )
-                    if res_b.passed:
-                        results_b.append(res_b)
+                    # Wrap evaluate_ticker in try/except (Issue #21 General Robustness)
+                    try:
+                        res_a = evaluate_ticker(
+                            ticker,
+                            ticker_df,
+                            spy_slice,
+                            cfg_a,
+                            rs_percentile=rs_val,
+                            scan_date=d_str,
+                            sector_etf_dist=s_dist,
+                            theme_dist=t_dist,
+                        )
+                        if res_a.passed:
+                            results_a.append(res_a)
+                    except Exception as e:
+                        logger.error(
+                            f"❌ Exception in evaluate_ticker {ticker} (System A) on {d_str}: {e}",
+                            exc_info=True
+                        )
+
+                    try:
+                        res_b = evaluate_ticker(
+                            ticker,
+                            ticker_df,
+                            spy_slice,
+                            cfg_b,
+                            rs_percentile=rs_val,
+                            scan_date=d_str,
+                            sector_etf_dist=s_dist,
+                            theme_dist=t_dist,
+                        )
+                        if res_b.passed:
+                            results_b.append(res_b)
+                    except Exception as e:
+                        logger.error(
+                            f"❌ Exception in evaluate_ticker {ticker} (System B) on {d_str}: {e}",
+                            exc_info=True
+                        )
+
                 pending_signals = merge_ab_signals(results_a, results_b)
 
     df_trades, df_equity = pd.DataFrame(all_trades), pd.DataFrame(equity_curve)
     df_trades.to_csv(OUTPUT_DIR / f"{tag}_trades.csv", index=False)
     df_equity.rename(columns={"equity": "0"}).to_csv(OUTPUT_DIR / f"{tag}_equity.csv", index=False)
-    metrics = calculate_backtest_metrics(df_trades, df_equity)
+
+    # Calculate RS coverage percentage
+    rs_coverage_pct = 100.0
+    if evaluated_rs_total > 0:
+        rs_coverage_pct = round((available_rs_count / evaluated_rs_total) * 100, 2)
+    
+    logger.info(f"📊 RS Coverage Metric: {rs_coverage_pct}% ({available_rs_count}/{evaluated_rs_total} lookups succeeded)")
+    if rs_coverage_pct < 95.0:
+        logger.warning(
+            f"⚠️ PROMINENT WARNING: RS Coverage is low ({rs_coverage_pct}%). "
+            f"There are {evaluated_rs_total - available_rs_count} missing RS lookups."
+        )
+        if missing_rs_count:
+            # log top 10 tickers with missing RS data
+            top_missing = sorted(missing_rs_count.items(), key=lambda x: x[1], reverse=True)[:10]
+            logger.warning(f"Top tickers with missing RS: {', '.join(f'{k}:{v}' for k, v in top_missing)}")
+
+    metrics = calculate_backtest_metrics(df_trades, df_equity, rs_coverage_pct=rs_coverage_pct)
     with open(OUTPUT_DIR / f"{tag}_metrics.json", "w") as f:
         json.dump(metrics, f, indent=2)
     logger.info(
@@ -517,6 +601,13 @@ if __name__ == "__main__":
     parser.add_argument("--tag", default="gold_standard_variant_e")
     parser.add_argument(
         "--variant-e", action="store_true", help="Enable Thematic Divergence Filter"
+    )
+    parser.add_argument(
+        "--no-pit",
+        action="store_false",
+        dest="use_pit",
+        default=True,
+        help="Disable Point-In-Time universe filter even if pit_constituents table exists",
     )
     parser.add_argument(
         "--e25-sizing",
@@ -555,4 +646,5 @@ if __name__ == "__main__":
         use_e25_sizing=args.e25_sizing,
         e25_version=args.e25_version,
         exclude_tickers=args.exclude_tickers,
+        use_pit=args.use_pit,
     )
