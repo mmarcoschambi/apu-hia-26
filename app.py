@@ -1397,8 +1397,25 @@ def _render_dashboard_v2(
     _render_warnings(combo_run.get("warnings", []), "combo scanner")
     _render_warnings(universe_run.get("warnings", []), "stable universe")
 
-    overview_tab, shadow_tab, health_tab, pipeline_tab, universe_tab, research_tab, canonical_tab, legacy_tab = st.tabs(
-        [
+    if mode == "historical":
+        tabs_list = [
+            "Overview",
+            "Research / Historical",
+            "Canonical Portfolio",
+            "Legacy",
+        ]
+        tabs = st.tabs(tabs_list)
+        overview_tab = tabs[0]
+        research_tab = tabs[1]
+        canonical_tab = tabs[2]
+        legacy_tab = tabs[3]
+        
+        shadow_tab = None
+        health_tab = None
+        pipeline_tab = None
+        universe_tab = None
+    else:
+        tabs_list = [
             "Overview",
             "Shadow Mode (Variant E)",
             "Market Health",
@@ -1408,7 +1425,15 @@ def _render_dashboard_v2(
             "Canonical Portfolio",
             "Legacy",
         ]
-    )
+        tabs = st.tabs(tabs_list)
+        overview_tab = tabs[0]
+        shadow_tab = tabs[1]
+        health_tab = tabs[2]
+        pipeline_tab = tabs[3]
+        universe_tab = tabs[4]
+        research_tab = tabs[5]
+        canonical_tab = tabs[6]
+        legacy_tab = tabs[7]
 
     with overview_tab:
         _render_phase_status(run)
@@ -1428,62 +1453,66 @@ def _render_dashboard_v2(
                     "⚠ System B is currently blocked in live due to input pricing without historical authorization."
                 )
 
-    with shadow_tab:
-        _render_shadow_mode_tab()
+    if shadow_tab:
+        with shadow_tab:
+            _render_shadow_mode_tab()
 
-    with health_tab:
-        _render_market_health_tab()
+    if health_tab:
+        with health_tab:
+            _render_market_health_tab()
 
-    with pipeline_tab:
-        pipe_tab, exec_tab, edge_tab = st.tabs(["Pipeline", "Execution", "Edge"])
-        with pipe_tab:
-            st.subheader("Unified Signals (F1)")
-            f1 = _filter_by_system(run.get("unified_signals_df", pd.DataFrame()), system_view)
-            if f1.empty:
-                st.info("No F1 signals found.")
-            else:
-                cols = [
-                    c
-                    for c in [
-                        "source_system",
-                        "strategy_id",
-                        "ticker",
-                        "signal_time",
-                        "entry_price_ref",
-                        "meta_historical_plan",
-                        "meta_price_origin",
+    if pipeline_tab:
+        with pipeline_tab:
+            pipe_tab, exec_tab, edge_tab = st.tabs(["Pipeline", "Execution", "Edge"])
+            with pipe_tab:
+                st.subheader("Unified Signals (F1)")
+                f1 = _filter_by_system(run.get("unified_signals_df", pd.DataFrame()), system_view)
+                if f1.empty:
+                    st.info("No F1 signals found.")
+                else:
+                    cols = [
+                        c
+                        for c in [
+                            "source_system",
+                            "strategy_id",
+                            "ticker",
+                            "signal_time",
+                            "entry_price_ref",
+                            "meta_historical_plan",
+                            "meta_price_origin",
+                        ]
+                        if c in f1.columns
                     ]
-                    if c in f1.columns
-                ]
-                st.dataframe(f1[cols].head(250), use_container_width=True, height=260)
-            st.subheader("Routed Signals (F2)")
-            f2 = _filter_by_system(run.get("routed_signals_df", pd.DataFrame()), system_view)
-            if not f2.empty:
-                cols = [
-                    c
-                    for c in [
-                        "source_system",
-                        "strategy_id",
-                        "ticker",
-                        "signal_time",
-                        "entry_price_ref",
-                        "router_reason",
-                        "meta_historical_plan",
+                    st.dataframe(f1[cols].head(250), use_container_width=True, height=260)
+                st.subheader("Routed Signals (F2)")
+                f2 = _filter_by_system(run.get("routed_signals_df", pd.DataFrame()), system_view)
+                if not f2.empty:
+                    cols = [
+                        c
+                        for c in [
+                            "source_system",
+                            "strategy_id",
+                            "ticker",
+                            "signal_time",
+                            "entry_price_ref",
+                            "router_reason",
+                            "meta_historical_plan",
+                        ]
+                        if c in f2.columns
                     ]
-                    if c in f2.columns
-                ]
-                st.dataframe(f2[cols].head(250), use_container_width=True, height=260)
-        with exec_tab:
-            _render_execution_table(run, system_view)
-        with edge_tab:
-            _render_edge_panel(run, system_view)
+                    st.dataframe(f2[cols].head(250), use_container_width=True, height=260)
+            with exec_tab:
+                _render_execution_table(run, system_view)
+            with edge_tab:
+                _render_edge_panel(run, system_view)
 
-    with universe_tab:
-        top_tab, combo_tab = st.tabs(["Universe", "Combos"])
-        with top_tab:
-            _render_universe_panel(universe_run)
-        with combo_tab:
-            _render_combo_panel(combo_run, selected_agent)
+    if universe_tab:
+        with universe_tab:
+            top_tab, combo_tab = st.tabs(["Universe", "Combos"])
+            with top_tab:
+                _render_universe_panel(universe_run)
+            with combo_tab:
+                _render_combo_panel(combo_run, selected_agent)
 
     with research_tab:
         st.subheader("Historical Calibration")
