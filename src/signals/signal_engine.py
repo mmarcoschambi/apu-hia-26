@@ -102,6 +102,11 @@ class SignalDecision:
     risk_budget_usd: float = 0.0
     risk_per_share: float = 0.0
 
+    # E25 Dynamic Extension Sizing fields
+    sizing_factor: float = 1.0
+    sizing_reason: str = ""
+    raw_risk_budget_usd: float = 0.0
+
     @property
     def composite_score(self) -> float:
         return self.entry_score
@@ -135,6 +140,9 @@ class SignalDecision:
             "shares": self.shares,
             "risk_budget_usd": self.risk_budget_usd,
             "risk_per_share": self.risk_per_share,
+            "sizing_factor": self.sizing_factor,
+            "sizing_reason": self.sizing_reason,
+            "raw_risk_budget_usd": self.raw_risk_budget_usd,
         }
 
     @classmethod
@@ -163,7 +171,89 @@ class SignalDecision:
             shares=d.get("shares", 0),
             risk_budget_usd=d.get("risk_budget_usd", 0.0),
             risk_per_share=d.get("risk_per_share", 0.0),
+            sizing_factor=d.get("sizing_factor", 1.0),
+            sizing_reason=d.get("sizing_reason", ""),
+            raw_risk_budget_usd=d.get("raw_risk_budget_usd", 0.0),
         )
+
+
+def calculate_dynamic_sizing_factor(dist_sma20: float, adr_pct: float, combo_cfg: dict) -> tuple[float, str]:
+    """
+    Calcula un factor de penalización del tamaño de la posición entre 0.0 y 1.0
+    basado en la extensión del SMA20 y el ADR del stock. Los umbrales y factores se leen
+    de la configuración 'dynamic_extension_sizing' en lugar de estar hardcodeados.
+    Soporta versiones 'v1_monotonic' y 'v2_atlas_informed'.
+    
+    Retorna: (sizing_factor, sizing_reason)
+    """
+    t3 = combo_cfg.get("tier3_fixed", combo_cfg.get("tier3_risk", {}))
+    if not t3.get("use_dynamic_extension_sizing", False):
+        return 1.0, "disabled"
+        
+    sizing_cfg = t3.get("dynamic_extension_sizing", {})
+    version = sizing_cfg.get("version", "v1_monotonic")
+    
+    comfort = float(sizing_cfg.get("comfort_pct", 6.76))
+    valley = float(sizing_cfg.get("valley_pct", 10.0))
+    mid = float(sizing_cfg.get("mid_pct", 15.0))
+    high = float(sizing_cfg.get("high_pct", 25.0))  # default alineado con production_config
+    extreme_cutoff = float(sizing_cfg.get("extreme_pct", 35.0))
+    max_pct = float(sizing_cfg.get("max_pct", 50.0))
+    
+    min_factor = float(sizing_cfg.get("min_factor", 0.5))
+    extreme_factor = float(sizing_cfg.get("extreme_factor", 0.2))
+    adr_exc = float(sizing_cfg.get("adr_exception_pct", 8.0))
+    
+    if dist_sma20 <= comfort:
+        return 1.0, "comfort_zone"
+        
+    if version == "v2_atlas_informed":
+        # Curva no monotónica informada por los datos de Atlas Trading Room
+        if dist_sma20 <= valley:
+            # [comfort..valley] -> Valle de muerte: penalización fuerte 1.0→0.3
+            ratio = (dist_sma20 - comfort) / (valley - comfort)
+            factor = 1.0 - (ratio * (1.0 - 0.3))
+            return round(factor, 2), f"v2_valley_penalty:{factor:.2f}"
+            
+        elif dist_sma20 <= mid:
+            # [valley..mid] -> Sweetspot Atlas Room: recupera tamaño 0.3→0.5
+            ratio = (dist_sma20 - valley) / (mid - valley)
+            factor = 0.3 + (ratio * (0.5 - 0.3))
+            return round(factor, 2), f"v2_atlas_sweetspot:{factor:.2f}"
+            
+        elif dist_sma20 <= high:
+            # [mid..high] -> Extensión moderada alta: penalización 0.5→0.3
+            ratio = (dist_sma20 - mid) / (high - mid)
+            factor = 0.5 - (ratio * (0.5 - 0.3))
+            return round(factor, 2), f"v2_high_ext_penalty:{factor:.2f}"
+            
+        elif dist_sma20 <= extreme_cutoff:
+            # [high..extreme_cutoff] -> Extensión extrema: penalización 0.3→0.1
+            ratio = (dist_sma20 - high) / (extreme_cutoff - high)
+            factor = 0.3 - (ratio * (0.3 - 0.1))
+            return round(factor, 2), f"v2_extreme_ext_penalty:{factor:.2f}"
+            
+        else:
+            # > 35% de extensión: Excepción por ADR alto
+            if adr_pct > adr_exc and dist_sma20 <= max_pct:
+                return 0.15, "extreme_adr_exception"
+            return 0.0, "blocked_extreme_extension"
+            
+    else:  # 'v1_monotonic'
+        if dist_sma20 <= mid:
+            ratio = (dist_sma20 - comfort) / (mid - comfort)
+            factor = 1.0 - (ratio * (1.0 - min_factor))
+            return round(factor, 2), f"v1_mid_extension_penalty:{factor:.2f}"
+            
+        elif dist_sma20 <= high:
+            ratio = (dist_sma20 - mid) / (high - mid)
+            factor = min_factor - (ratio * (min_factor - extreme_factor))
+            return round(factor, 2), f"v1_high_extension_penalty:{factor:.2f}"
+            
+        else:
+            if adr_pct > adr_exc and dist_sma20 <= max_pct:
+                return 0.15, "extreme_adr_exception"
+            return 0.0, "blocked_extreme_extension"
 
 
 def resolve_canonical_risk(
@@ -209,7 +299,11 @@ def resolve_canonical_risk(
     tp2_pct = t1.get("tp2_pct", 0.33)
     runner_pct = round(1.0 - tp1_pct - tp2_pct, 2)
 
-    shares = int(risk_dollars / stop_dist) if stop_dist > 0 else 0
+    # 4. Sizing dinámico con penalización por extensión SMA20 (E25)
+    sizing_factor, sizing_reason = calculate_dynamic_sizing_factor(metrics.dist_sma20, metrics.adr_pct, combo_cfg)
+    adjusted_risk_dollars = risk_dollars * sizing_factor
+
+    shares = int(adjusted_risk_dollars / stop_dist) if stop_dist > 0 and sizing_factor > 0 else 0
 
     return {
         "stop_price": round(stop_price, 4),
@@ -219,8 +313,11 @@ def resolve_canonical_risk(
         "tp2_pct": round(tp2_pct, 4),
         "runner_pct": round(runner_pct, 4),
         "shares": shares,
-        "risk_budget_usd": risk_dollars,
+        "risk_budget_usd": round(adjusted_risk_dollars, 2),
         "risk_per_share": round(stop_dist, 4),
+        "sizing_factor": sizing_factor,
+        "sizing_reason": sizing_reason,
+        "raw_risk_budget_usd": risk_dollars,
     }
 
 
@@ -305,7 +402,8 @@ def compute_tier2_metrics(
 def apply_tier2_filters(
     metrics: Tier2Metrics, 
     t2_cfg: dict, 
-    target_hold_days: int = 20
+    target_hold_days: int = 20,
+    use_dynamic_extension_sizing: bool = False,
 ) -> tuple[bool, str]:
     """Evalúa métricas contra umbrales Tier2. Mismo en live y backtest."""
     if metrics.rvol < t2_cfg.get("min_rvol", 0):
@@ -318,10 +416,13 @@ def apply_tier2_filters(
             False,
             f"tier2_fail:adr_pct:{metrics.adr_pct:.2f}<{t2_cfg.get('min_adr', 0):.2f}",
         )
-    if metrics.dist_sma20 > t2_cfg.get("max_dist_sma20", 999):
+    
+    # E25: Sustituir el bloqueo por un umbral de seguridad de 50.0% si el sizing dinámico está activo
+    max_allowed_dist = 50.0 if use_dynamic_extension_sizing else t2_cfg.get("max_dist_sma20", 999)
+    if metrics.dist_sma20 > max_allowed_dist:
         return (
             False,
-            f"tier2_fail:dist_sma20:{metrics.dist_sma20:.2f}>{t2_cfg.get('max_dist_sma20', 999):.2f}",
+            f"tier2_fail:dist_sma20:{metrics.dist_sma20:.2f}>{max_allowed_dist:.2f}",
         )
     if metrics.dollar_vol_M * 1e6 < t2_cfg.get("min_dollar_volume", 0):
         return (
@@ -528,7 +629,10 @@ def evaluate_ticker(
                 ticker, date=scan_date, metric=t2_cfg.get("rs_metric", "rs_composite")
             )
         except Exception as e:
-            logger.debug(f"Tier2 RS lookup error {ticker}: {e}")
+            if t2_cfg.get("use_rs_percentile", False):
+                logger.warning(f"Tier2 RS lookup error for {ticker} on {scan_date}: {e}")
+            else:
+                logger.debug(f"Tier2 RS lookup error {ticker}: {e}")
 
     if breakout_min is not None and scan_date:
         try:
@@ -552,7 +656,12 @@ def evaluate_ticker(
             logger.debug(f"Breakout RS lookup error {ticker}: {e}")
 
     if not skip_tier2:
-        tier2_ok, tier2_reason = apply_tier2_filters(metrics, t2_cfg, target_hold_days)
+        t3_cfg = combo_cfg.get("tier3_fixed", combo_cfg.get("tier3_risk", {}))
+        use_dyn = t3_cfg.get("use_dynamic_extension_sizing", False)
+        
+        tier2_ok, tier2_reason = apply_tier2_filters(
+            metrics, t2_cfg, target_hold_days, use_dynamic_extension_sizing=use_dyn
+        )
         if not tier2_ok:
             return SignalDecision(
                 ticker=ticker,
@@ -567,9 +676,10 @@ def evaluate_ticker(
             )
 
     entry_score = round(screener_score / 100.0, 3)
+    cost_cfg = combo_cfg.get("tier3_fixed", combo_cfg.get("tier3_risk", {}))
     cost_model = {
-        "fee_rate": combo_cfg.get("tier3_fixed", {}).get("fee_rate", 0.001),
-        "slippage_rate": combo_cfg.get("tier3_fixed", {}).get("slippage_rate", 0.0005),
+        "fee_rate": cost_cfg.get("fee_rate", 0.001),
+        "slippage_rate": cost_cfg.get("slippage_rate", 0.0005),
     }
 
     # resolve canonical risk levels
@@ -603,6 +713,9 @@ def evaluate_ticker(
         shares=risk["shares"],
         risk_budget_usd=risk["risk_budget_usd"],
         risk_per_share=risk["risk_per_share"],
+        sizing_factor=risk.get("sizing_factor", 1.0),
+        sizing_reason=risk.get("sizing_reason", ""),
+        raw_risk_budget_usd=risk.get("raw_risk_budget_usd", 0.0),
     )
 
 
