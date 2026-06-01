@@ -64,17 +64,26 @@ def build_combo_pipeline(combo_name: str) -> ScreenerPipeline:
     Construye un ScreenerPipeline desde un combo YAML.
     Redirigido al cargador canónico para asegurar consistencia PBO.
     """
-    combo_dict = load_combo(combo_name)
-    screener_cfg = combo_dict["screener"]
+    from config.combo_loader import load_combo_configs, get_combo_by_name
+    combos = load_combo_configs()
+    combo = get_combo_by_name(combos, combo_name, require_go=False)
+    if not combo:
+        raise ValueError(f"Combo '{combo_name}' no encontrado en YAMLs (configs/combos/).")
 
-    screener_name = screener_cfg["name"]
-    mode = screener_cfg.get("mode", "all")
+    screeners_list = getattr(combo, "screeners", [])
+    mode = getattr(combo, "mode", "all")
 
-    # Cargar configuración desde el registro (buscará en config/screeners/)
-    config = ScreenerRegistry.load_config(screener_name)
-    screener = ScreenerRegistry.get(screener_name, config)
+    if not screeners_list:
+        screeners_list = [combo.scanner_filter]
+        mode = "all"
 
-    return ScreenerPipeline([screener], mode=mode)
+    screeners = []
+    for s_name in screeners_list:
+        config = ScreenerRegistry.load_config(s_name)
+        screener = ScreenerRegistry.get(s_name, config)
+        screeners.append(screener)
+
+    return ScreenerPipeline(screeners, mode=mode)
 
 
 def get_combo_info(combo_name: str) -> Dict[str, Any]:

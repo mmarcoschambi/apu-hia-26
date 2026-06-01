@@ -20,6 +20,7 @@ class ScreenerRegistry:
     """
     _screeners: Dict[str, Type[BaseScreener]] = {}
     _default_configs: Dict[str, ScreenerConfig] = {}
+    _cached_configs: Dict[str, ScreenerConfig] = {}
 
     @classmethod
     def register(cls, screener_class: Type[BaseScreener]) -> Type[BaseScreener]:
@@ -60,6 +61,11 @@ class ScreenerRegistry:
         El JSON puede contener cualquier subconjunto de campos de ScreenerConfig.
         Campos desconocidos van a 'params'.
         """
+        cache_key = f"{name}:{config_path}" if config_path else name
+        if cache_key in cls._cached_configs:
+            import copy
+            return copy.deepcopy(cls._cached_configs[cache_key])
+
         if config_path:
             with open(config_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -71,14 +77,23 @@ class ScreenerRegistry:
             extra = {k: v for k, v in data.items() if k not in known}
             if extra:
                 known.setdefault("params", {}).update(extra)
-            return ScreenerConfig(**known)
+            cfg = ScreenerConfig(**known)
+            cls._cached_configs[cache_key] = cfg
+            import copy
+            return copy.deepcopy(cfg)
 
         # Buscar JSON en config/screeners/<name>.json
         default_path = Path(__file__).parent.parent.parent / "config" / "screeners" / f"{name}.json"
         if default_path.exists():
-            return cls.load_config(name, str(default_path))
+            cfg = cls.load_config(name, str(default_path))
+            cls._cached_configs[cache_key] = cfg
+            import copy
+            return copy.deepcopy(cfg)
 
-        return cls._default_configs.get(name, ScreenerConfig(name=name))
+        cfg = cls._default_configs.get(name, ScreenerConfig(name=name))
+        cls._cached_configs[cache_key] = cfg
+        import copy
+        return copy.deepcopy(cfg)
 
     @classmethod
     def describe(cls) -> Dict[str, str]:

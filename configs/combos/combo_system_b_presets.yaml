@@ -1,0 +1,33 @@
+name: combo_system_b_presets
+status: PENDING
+pbo: 0.15
+wf_sharpe_mean: 1.55
+wf_sharpe_min: 0.8
+wf_sortino_mean: 2.1
+wf_max_drawdown: 0.12
+scanner_filter: ll_hl_confirmed
+screeners:
+  - ll_hl_confirmed
+  - fib_0618_break_between_hl_and_swing_high
+mode: sequential
+pattern_filter: any
+regime_blocked: []
+fee_rate: 0.001
+slippage_rate: 0.001
+spx_sma_period: 50
+vix_max: 35.0
+spx_vol_max: 20.0
+green_light_points: 5
+lookback_days: 180
+max_setups: 5
+flat_base_range_pct: 0.15
+vcp_contraction_threshold: 0.7
+min_rvol: 1.0
+min_adr: 1.0
+min_consolidation_days: 5
+max_positions: 4
+max_position_pct: 0.25
+max_exposure_pct: 0.65
+alerts:
+  - "System B Presets Sequential Combo Pipeline"
+notes: "Combo sequential pipeline using LL-HL and Fibonacci breakouts."
