@@ -226,5 +226,17 @@
     "enabled": false,
     "threshold": 0.40,
     "model_path": "models/entry_scorer.pkl"
+  },
+  "backtest": {
+    "max_positions": 8,
+    "max_per_sector": 2,
+    "holding_days_limit": 10,
+    "fee_bps": 1.0,
+    "slippage_bps": 5.0,
+    "risk_pct_by_regime": {
+      "ATTACK": 0.0364,
+      "DEFENSE_PARTIAL": 0.028,
+      "DEFENSE_FULL": 0.0168
+    }
   }
 }
