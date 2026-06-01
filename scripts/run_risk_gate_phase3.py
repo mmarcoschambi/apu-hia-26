@@ -152,10 +152,9 @@ def main():
     if args.config:
         config = load_config(Path(args.config))
     else:
-        config = RiskGateConfig(
-            capital_total_usd=args.capital,
-            risk_per_trade_usd=args.risk_per_trade,
-        )
+        config = RiskGateConfig.from_production_config()
+        config.capital_total_usd = args.capital
+        config.risk_per_trade_usd = args.risk_per_trade
 
     plans, gate_rejected = apply_risk_gate(hydrated, config)
 
