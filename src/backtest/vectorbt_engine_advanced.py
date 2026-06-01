@@ -1,4 +1,4 @@
-﻿"""
+"""
 Advanced VectorBT Engine with Partial Exits
 --------------------------------------------
 Implements Triad Protocol with 3-phase exit system:
@@ -596,6 +596,7 @@ class AdvancedVectorBTEngine:
         rs_short_weight: float = 0.35,  # Weight of 20d RS in entry score (0 = disabled)
         rs_divergence_block: bool = False,  # Block entry if short RS diverges from long RS (experimental, opt-in)
         use_ml_filter: bool = False,  # ML EntryScorer: filter + boost (LightGBM)
+        use_ml_postfilter: bool = False,  # ML post-filter (LightGBM post-backtest)
         ml_filter_threshold: float = 0.40,  # Block entries with ML prob < threshold
         ml_boost_weight: float = 0.20,  # entry_score += ml_boost_weight * ml_prob
         _preloaded_regime_classifier=None,  # PERF: skip SPY/VIX reload in optimizer (inject from template)
@@ -878,6 +879,7 @@ class AdvancedVectorBTEngine:
         self.rs_short_weight = rs_short_weight
         self.rs_divergence_block = rs_divergence_block
         self.use_ml_filter = use_ml_filter
+        self.use_ml_postfilter = use_ml_postfilter
         self.ml_filter_threshold = ml_filter_threshold
         self.ml_boost_weight = ml_boost_weight
 
@@ -2376,6 +2378,52 @@ class AdvancedVectorBTEngine:
                 trades_df["rs_percentile"] = rs_vals
 
             # ═══════════════════════════════════════════════════════════════
+            # ENRIQUECER CON DÍAS A EARNINGS REALES (Fix Issue #1)
+            # ═══════════════════════════════════════════════════════════════
+            logger.info("   📅 Enriqueciendo reporte con días a los próximos earnings...")
+            earnings_days_vals = []
+            time_since_earnings_vals = []
+            
+            for _, row in trades_df.iterrows():
+                try:
+                    entry_date = pd.to_datetime(row["entry_date"]).tz_localize(None)
+                    sym = row["symbol"]
+                    
+                    earnings_dates = self.data_provider.get_earnings_dates(sym)
+                    
+                    if earnings_dates is not None and not earnings_dates.empty:
+                        earning_dt = pd.to_datetime(earnings_dates).tz_localize(None)
+                        
+                        # 1. Próximos earnings (days_to_next_earnings)
+                        future_earnings = earning_dt[earning_dt > entry_date]
+                        if not future_earnings.empty:
+                            next_earning = future_earnings[0]
+                            days_to = (next_earning - entry_date).days
+                            earnings_days_vals.append(int(days_to))
+                        else:
+                            earnings_days_vals.append(-1)
+                            
+                        # 2. Últimos earnings (time_since_earnings)
+                        past_earnings = earning_dt[earning_dt <= entry_date]
+                        if not past_earnings.empty:
+                            last_earning = past_earnings[-1]
+                            days_since = (entry_date - last_earning).days
+                            time_since_earnings_vals.append(int(days_since))
+                        else:
+                            time_since_earnings_vals.append(-1)
+                    else:
+                        earnings_days_vals.append(-1)
+                        time_since_earnings_vals.append(-1)
+                except Exception as e:
+                    logger.debug(f"Error calculating earnings for {sym} at {entry_date}: {e}")
+                    earnings_days_vals.append(-1)
+                    time_since_earnings_vals.append(-1)
+            
+            trades_df["days_to_next_earnings"] = earnings_days_vals
+            trades_df["time_since_earnings"] = time_since_earnings_vals
+
+
+            # ═══════════════════════════════════════════════════════════════
             # PATTERN INFO at Entry
             # ═══════════════════════════════════════════════════════════════
             if self.pattern_confidence_matrix is not None and len(trades_df) > 0:
@@ -2504,7 +2552,7 @@ class AdvancedVectorBTEngine:
             # Architecture: run_backtest() -> trades_df (with all features) ->
             #   ML scores each trade -> filter/boost applied to results dict
             # ================================================================
-            if getattr(self, "use_ml_filter", False):
+            if getattr(self, "use_ml_postfilter", False):
                 try:
                     import pickle as _pkl, os as _os, pandas as _pd_ml
 
@@ -4099,6 +4147,12 @@ class AdvancedVectorBTEngine:
                 )
                 logger.info(f"   📉 Tasa de rechazo: {rejection_pct:.1f}%")
 
+            # stop_dist_df using ATR(14) * 2.0 / close, capped and floor (same as production signal_engine)
+            atr_for_stop = self.calculate_atr(14)
+            stop_dist_df = (2.0 * atr_for_stop) / self.close
+            stop_dist_df = stop_dist_df.clip(lower=0.005, upper=0.12)
+            stop_dist_df = stop_dist_df.fillna(0.07)
+
             # ═══════════════════════════════════════════════════════════════
             # 🛡️ FILTRO DE LIQUIDEZ: RVOL Mínimo, ADR Mínimo, Volumen Mínimo
             # ═══════════════════════════════════════════════════════════════
@@ -4111,6 +4165,9 @@ class AdvancedVectorBTEngine:
                 low_adr_mask = pd.DataFrame(
                     False, index=self.adr_pct.index, columns=self.adr_pct.columns
                 )
+                wide_stop_mask = pd.DataFrame(
+                    False, index=self.close.index, columns=self.close.columns
+                )
 
                 for date in self.rvol.index:
                     if date in self.min_rvol_dynamic.index:
@@ -4118,6 +4175,12 @@ class AdvancedVectorBTEngine:
                         adr_threshold = self.min_adr_dynamic.loc[date]
                         low_rvol_mask.loc[date] = self.rvol.loc[date] < rvol_threshold
                         low_adr_mask.loc[date] = self.adr_pct.loc[date] < adr_threshold
+                    
+                    if date in self.max_stop_pct_dynamic.index:
+                        stop_threshold = self.max_stop_pct_dynamic.loc[date]
+                    else:
+                        stop_threshold = self.max_stop_pct
+                    wide_stop_mask.loc[date] = stop_dist_df.loc[date] > stop_threshold
             else:
                 logger.info(
                     f"🔍 Aplicando filtros de liquidez estáticos (RVOL≥{self.min_rvol}x, ADR≥{self.min_adr}%)..."
@@ -4125,6 +4188,7 @@ class AdvancedVectorBTEngine:
 
                 low_rvol_mask = self.rvol < self.min_rvol
                 low_adr_mask = self.adr_pct < self.min_adr
+                wide_stop_mask = stop_dist_df > self.max_stop_pct
 
             low_volume_mask = self.volume < self.min_volume
             low_dollar_volume_mask = self.dollar_volume < self.min_dollar_volume
@@ -4134,6 +4198,7 @@ class AdvancedVectorBTEngine:
             rejected_low_adr = (entries & low_adr_mask).sum().sum()
             rejected_low_volume = (entries & low_volume_mask).sum().sum()
             rejected_low_dollar_volume = (entries & low_dollar_volume_mask).sum().sum()
+            rejected_wide_stop = (entries & wide_stop_mask).sum().sum()
 
             entries = (
                 entries
@@ -4141,6 +4206,7 @@ class AdvancedVectorBTEngine:
                 & ~low_adr_mask
                 & ~low_volume_mask
                 & ~low_dollar_volume_mask
+                & ~wide_stop_mask
             )
 
             total_entries_post_liquidity = entries.sum().sum()
@@ -4155,6 +4221,9 @@ class AdvancedVectorBTEngine:
             )
             logger.info(
                 f"   ❌ Rechazadas por $Vol<${self.min_dollar_volume / 1e6:.0f}M: {rejected_low_dollar_volume}"
+            )
+            logger.info(
+                f"   ❌ Rechazadas por Stop amplio (>max_stop_pct): {rejected_wide_stop}"
             )
             logger.info(f"   ✅ Entries finales: {total_entries_post_liquidity}")
 
@@ -4368,6 +4437,91 @@ class AdvancedVectorBTEngine:
             logger.info(f"   ✅ Entries finales: {total_entries_post_extension}")
 
         # ═══════════════════════════════════════════════════════════════
+
+        # ═══════════════════════════════════════════════════════════════
+        # 🤖 ML PRE-ENTRY FILTER: predict probability of trade success before Numba JIT simulation
+        # ═══════════════════════════════════════════════════════════════
+        if getattr(self, "use_ml_filter", False):
+            logger.info("🤖 Applying pre-numba ML entry scorer filter...")
+            try:
+                from src.ml.entry_scorer_gate import EntryScorerGate
+                _ml_path = "models/entry_scorer.pkl"
+                _scorer_gate = EntryScorerGate(model_path=_ml_path)
+                
+                if _scorer_gate.scorer is not None:
+                    # Extract (date, ticker) coordinates where entries is True
+                    entry_indices = entries.stack()
+                    entry_coords = entry_indices[entry_indices].index
+                    
+                    if len(entry_coords) > 0:
+                        # 1. Precalculate/load required features as stacked Series
+                        # context_rvol
+                        rvol_series = self.rvol.stack().reindex(entry_coords).fillna(1.0)
+                        # context_adr
+                        adr_series = self.adr_pct.stack().reindex(entry_coords).fillna(2.0)
+                        # dist_sma20_pct
+                        dist_series = self.dist_sma20_pct.stack().reindex(entry_coords).fillna(0.0)
+                        # context_dollar_vol
+                        dvol_series = self.dollar_volume.stack().reindex(entry_coords).fillna(1e7)
+                        # context_vol
+                        vol_series = self.volume.stack().reindex(entry_coords).fillna(1e5)
+                        
+                        # stop_distance_pct (stop_dist_df)
+                        atr_for_stop = self.calculate_atr(14)
+                        stop_dist_df = (2.0 * atr_for_stop) / self.close
+                        stop_dist_df = stop_dist_df.clip(lower=0.005, upper=0.12) * 100 # convert to pct
+                        stop_dist_df = stop_dist_df.fillna(7.0)
+                        stop_dist_series = stop_dist_df.stack().reindex(entry_coords)
+                        
+                        # entry_score: let's calculate the exact entry_score as computed in prepare_numba_arrays
+                        rs_lookback = getattr(self, "rs_lookback_days", 60)
+                        score_rs = self.close.pct_change(rs_lookback).fillna(0.0)
+                        # Normalize to 0-1 percentile rank
+                        score_rs = score_rs.rank(axis=1, pct=True)
+                        
+                        high_52wk = self.high.rolling(window=min(252, len(self.high))).max().fillna(1.0)
+                        proximity_52wk = self.close / high_52wk
+                        
+                        entry_score_df = 1.0 * score_rs + 0.0 * proximity_52wk
+                        # Apply pattern bonus if applicable
+                        if getattr(self, "use_pattern_filter", False) and getattr(self, "pattern_confidence_matrix", None) is not None:
+                            entry_score_df = entry_score_df + self.pattern_confidence_matrix.fillna(0.0)
+                        entry_score_df = entry_score_df.clip(0.0, 1.0)
+                        
+                        entry_score_series = entry_score_df.stack().reindex(entry_coords).fillna(0.5)
+                        
+                        # Build DataFrame of features for predict_series
+                        features_df = pd.DataFrame({
+                            "context_rvol": rvol_series,
+                            "context_adr": adr_series,
+                            "entry_score": entry_score_series,
+                            "dist_sma20_pct": dist_series,
+                            "stop_distance_pct": stop_dist_series,
+                            "context_dollar_vol": dvol_series,
+                            "context_vol": vol_series,
+                        })
+                        
+                        # Get probabilities
+                        ml_probs = _scorer_gate.scorer.predict_series(features_df)
+                        
+                        # Identify blocked entries
+                        threshold = getattr(self, "ml_filter_threshold", 0.40)
+                        passed_coords = ml_probs[ml_probs >= threshold].index
+                        
+                        # Construct new entries mask
+                        new_entries = pd.DataFrame(False, index=entries.index, columns=entries.columns)
+                        if len(passed_coords) > 0:
+                            # Set passed entries to True
+                            for date, ticker in passed_coords:
+                                new_entries.loc[date, ticker] = True
+                                
+                        blocked_count = len(entry_coords) - len(passed_coords)
+                        logger.info(f"   🤖 ML pre-filter (threshold={threshold}): blocked {blocked_count}/{len(entry_coords)} entries")
+                        entries = new_entries
+                    else:
+                        logger.info("   🤖 ML pre-filter: no candidate entries to score.")
+            except Exception as e:
+                logger.warning(f"   🤖 ML pre-filter failed: {e}. Bypassing.")
 
         # Calculate ATR
         atr = self.calculate_atr(14)
