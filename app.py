@@ -2898,6 +2898,7 @@ if dashboard_view == "Integrated 2.0":
         selected_combo_run=None if selected_combo_run == "latest" else selected_combo_run,
         selected_agent=selected_agent,
     )
+    st.stop()
 else:
     st.title("Institutional Dashboard")
 
