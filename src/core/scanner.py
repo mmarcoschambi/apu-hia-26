@@ -96,8 +96,13 @@ class TriadScanner:
             market_ctx = self.market_context.analyze_indices(['SPY', 'QQQ'])
             logger.info(f"Market Weak: {market_ctx.get('market_weak', False)}")
             
+            # Check sector leadership
+            is_leading = self.market_context.is_sector_leading(symbol, market_ctx.get('sector_leaders', {}))
+            market_ctx['is_leading_sector'] = is_leading
+            
             # 5. Generate Signal
             logger.info("Generating signal...")
+            base_data['symbol'] = symbol  # Ensure symbol is available for strategy
             signal = self.strategy.analyze(
                 base_data=base_data,
                 avwap_data=avwap_data,

@@ -83,6 +83,40 @@ class TriadStrategy:
         distance_to_avwap_pct = abs(avwap_data['distance_to_avwap_pct'])
         
         # ============================================
+        # 🛡️ ALPHA SECTOR FILTER (Main)
+        # ============================================
+        # Solo permitir trades en los Top 3 Sectores del día.
+        # Si no es líder, degradar a MANUAL_WATCH o NO_SETUP.
+        sector_leaders = market_context.get('sector_leaders', {})
+        stock_symbol = base_data.get('symbol', 'UNKNOWN')
+        
+        # Note: TriadScanner needs to pass 'symbol' in base_data or we need another way.
+        # For now, let's assume we want to check leadership.
+        if sector_leaders:
+            from src.core.market_context import MarketContext
+            # We need an instance to use get_stock_sector, or make it static/helper
+            # Actually, MarketContext.is_sector_leading does exactly this.
+            # But we don't have the instance here. 
+            # We'll use a simplified version or assume market_context has 'is_leading'
+            is_leading = market_context.get('is_leading_sector', True) # Default to True if not provided
+            
+            if not is_leading:
+                logger.info(f"⚠️ REJECTED Alpha Sector: {stock_symbol} is not in a Top 3 Sector today.")
+                return Signal(
+                    camino=None,
+                    action='NO_SETUP',
+                    entry_price=None,
+                    stop_loss=None,
+                    position_size_multiplier=0.0,
+                    reasoning=f"REJECTED: Alpha Sector Filter. Ticker is not in one of the Top 3 leading sectors. "
+                              f"Alpha is found in sector momentum. Wait for sector rotation or pick a leader.",
+                    context={
+                        'sector_leaders': list(sector_leaders.keys())[:3],
+                        'rejection_reason': 'Sector_Not_Leading'
+                    }
+                )
+
+        # ============================================
         # EXPERIMENTAL: STAGE EXTENSION GATE (exptt)
         # ============================================
         # Monster Stocks must be caught before they are > 6.77% extended from pivot
