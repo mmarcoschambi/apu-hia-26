@@ -140,6 +140,7 @@ def run_backtest(
     use_e25_sizing: bool = False,
     e25_version: str = "v1_monotonic",
     exclude_tickers: list[str] | None = None,
+    exclude_sectors: list[str] | None = None,
     use_pit: bool = True,
 ):
     # Support both space-separated (--exclude-tickers NVDA AMD) and
@@ -150,8 +151,16 @@ def run_backtest(
         for tok in raw.split(",")
         if tok.strip()
     }
+    exclude_sectors_set = {
+        tok.upper()
+        for raw in (exclude_sectors or [])
+        for tok in raw.split(",")
+        if tok.strip()
+    }
     logger.info(
-        f"🚀 BACKTEST (PARITY{' + VAR-E' if use_variant_e else ''}{' + E25-SIZING (' + e25_version + ')' if use_e25_sizing else ''}) | Index: {index_name} | Range: {start_date} -> {end_date}{' | Excluding: ' + ','.join(sorted(exclude_set)) if exclude_set else ''}"
+        f"🚀 BACKTEST (PARITY{' + VAR-E' if use_variant_e else ''}{' + E25-SIZING (' + e25_version + ')' if use_e25_sizing else ''}) | Index: {index_name} | Range: {start_date} -> {end_date}"
+        f"{' | Excluding Tickers: ' + ','.join(sorted(exclude_set)) if exclude_set else ''}"
+        f"{' | Excluding Sectors: ' + ','.join(sorted(exclude_sectors_set)) if exclude_sectors_set else ''}"
     )
     dates_str = get_trading_dates(start_date, end_date)
     if not dates_str:
@@ -229,7 +238,11 @@ def run_backtest(
             index_name=index_name,
             use_pit=use_pit,
         )
-        filtered_tickers = [t for t in snap.tickers if t.upper() not in exclude_set]
+        filtered_tickers = [
+            t for t in snap.tickers 
+            if t.upper() not in exclude_set 
+            and SECTOR_MAP.get(t.upper(), "UNKNOWN") not in exclude_sectors_set
+        ]
         universe_by_date[d_str] = filtered_tickers
         superset_tickers.update(filtered_tickers)
 
@@ -242,10 +255,14 @@ def run_backtest(
             set(THEME_MAP_2020.keys()) | set(THEME_MAP_2022.keys()) | set(THEME_MAP_CURRENT.keys())
         )
         for t in all_theme_tickers:
-            if t.upper() not in exclude_set:
+            if t.upper() not in exclude_set and SECTOR_MAP.get(t.upper(), "UNKNOWN") not in exclude_sectors_set:
                 superset_tickers.add(t)
 
     superset_tickers.difference_update(exclude_set)
+    superset_tickers = {
+        t for t in superset_tickers 
+        if t in ["SPY", "^VIX"] or t in SECTOR_ETFS or SECTOR_MAP.get(t.upper(), "UNKNOWN") not in exclude_sectors_set
+    }
 
     logger.info(f"Superset size: {len(superset_tickers)} tickers")
 
@@ -698,6 +715,14 @@ if __name__ == "__main__":
         help="Tickers to exclude from the backtest universe. "
              "Accepts space-separated (NVDA AMD) or comma-separated (NVDA,AMD) formats.",
     )
+    parser.add_argument(
+        "--exclude-sectors",
+        nargs="+",
+        default=[],
+        metavar="SECTOR",
+        help="Sectors to exclude from the backtest universe. "
+             "Accepts space-separated (XLF XLV) or comma-separated (XLF,XLV) formats.",
+    )
     args = parser.parse_args()
     run_backtest(
         args.start,
@@ -710,5 +735,6 @@ if __name__ == "__main__":
         use_e25_sizing=args.e25_sizing,
         e25_version=args.e25_version,
         exclude_tickers=args.exclude_tickers,
+        exclude_sectors=args.exclude_sectors,
         use_pit=args.use_pit,
     )
