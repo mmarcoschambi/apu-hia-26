@@ -339,14 +339,20 @@ def compute_tier2_metrics(
     volume = df["volume"]
 
     # ATR calculation (Canonical 14-period)
-    high_low = high - low
-    high_close = np.abs(high - close.shift())
-    low_close = np.abs(low - close.shift())
-    tr = np.maximum(high_low, np.maximum(high_close, low_close))
-    atr = tr.rolling(14).mean().iloc[-1]
+    if "atr14" in df.columns:
+        atr = df["atr14"].iloc[-1]
+    else:
+        high_low = high - low
+        high_close = np.abs(high - close.shift())
+        low_close = np.abs(low - close.shift())
+        tr = np.maximum(high_low, np.maximum(high_close, low_close))
+        atr = tr.rolling(14).mean().iloc[-1]
     atr = 0.0 if np.isnan(atr) else float(atr)
 
-    sma20 = close.rolling(20).mean()
+    if "sma20" in df.columns:
+        sma20 = df["sma20"]
+    else:
+        sma20 = close.rolling(20).mean()
     avg_vol = volume.rolling(20).mean().replace(0, np.nan)
     rvol = (volume / avg_vol).iloc[-1] if not np.isnan(volume.iloc[-1] / avg_vol.iloc[-1]) else 0.0
     adr = (((high - low) / close.replace(0, np.nan)) * 100).rolling(20).mean().iloc[-1]

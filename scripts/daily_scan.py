@@ -212,7 +212,39 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
 
     # Combinar para escaneo único
     all_scan_tickers = sorted(list(tickers_local | tickers_finviz))
-    logger.info(f"Combined Scan Universe: {len(all_scan_tickers)} unique tickers.")
+
+    # Apply exclusions from master config
+    exclude_tickers = master_cfg.get("exclude_tickers", []) if isinstance(master_cfg, dict) else []
+    exclude_sectors = master_cfg.get("exclude_sectors", []) if isinstance(master_cfg, dict) else []
+    
+    exclude_set = set()
+    for x in exclude_tickers:
+        if isinstance(x, str):
+            for tok in x.split(","):
+                if tok.strip():
+                    exclude_set.add(tok.upper().strip())
+                    
+    exclude_sectors_set = set()
+    for x in exclude_sectors:
+        if isinstance(x, str):
+            for tok in x.split(","):
+                if tok.strip():
+                    exclude_sectors_set.add(tok.upper().strip())
+
+    if exclude_set or exclude_sectors_set:
+        original_count = len(all_scan_tickers)
+        all_scan_tickers = [
+            t for t in all_scan_tickers
+            if t.upper() not in exclude_set
+            and SECTOR_MAP.get(t.upper(), "UNKNOWN") not in exclude_sectors_set
+        ]
+        logger.info(
+            f"Exclusions applied: Excluded {original_count - len(all_scan_tickers)} tickers. "
+            f"Remaining: {len(all_scan_tickers)} tickers. "
+            f"Excluding Tickers: {sorted(list(exclude_set))}, Sectors: {sorted(list(exclude_sectors_set))}"
+        )
+    else:
+        logger.info(f"Combined Scan Universe: {len(all_scan_tickers)} unique tickers.")
 
     # 4. Cargar SPY para régimen de mercado (SMA200 real)
     logger.info("Checking Market Regime & Health Score...")
@@ -430,6 +462,7 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
                 s_dict["dist_sma20"] = round(sig.tier2_metrics.dist_sma20, 2)
                 s_dict["consol_days"] = sig.tier2_metrics.consol_days
                 s_dict["volume"] = int(sig.tier2_metrics.volume)
+                s_dict["avg_volume_20d"] = round(sig.tier2_metrics.volume / sig.tier2_metrics.rvol, 0) if sig.tier2_metrics.rvol and sig.tier2_metrics.rvol > 0 else 0
                 s_dict["dollar_vol_M"] = round(sig.tier2_metrics.dollar_vol_M, 1)
                 s_dict["rs_ret"] = (
                     round(sig.tier2_metrics.rs_ret, 4)

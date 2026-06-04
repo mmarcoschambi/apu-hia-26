@@ -142,6 +142,8 @@ def run_backtest(
     exclude_tickers: list[str] | None = None,
     exclude_sectors: list[str] | None = None,
     use_pit: bool = True,
+    ticker_cap: float | None = None,
+    sector_cap: float | None = None,
 ):
     # Support both space-separated (--exclude-tickers NVDA AMD) and
     # comma-separated (--exclude-tickers NVDA,AMD) formats.
@@ -226,25 +228,56 @@ def run_backtest(
             cfg["tier2_filters"]["use_dynamic_extension"] = True
 
     logger.info(f"🔭 Building PIT universes for each date (Index: {index_name})...")
+    
+    # Load disk cache for universe builder to speed up consecutive backtest runs
+    cache_dir = Path(".cache")
+    cache_dir.mkdir(exist_ok=True)
+    cache_file = cache_dir / f"universes_{index_name}_{max_tickers}.json"
+    universe_cache = {}
+    if cache_file.exists():
+        try:
+            with open(cache_file, "r") as f:
+                universe_cache = json.load(f)
+            logger.info(f"Loaded {len(universe_cache)} cached universes from {cache_file}")
+        except Exception as e:
+            logger.warning(f"Error loading universe cache: {e}")
+
     universe_by_date = {}
     superset_tickers = set()
+    cache_updated = False
+
     for d_str in tqdm(dates_str, desc="Universe Building"):
-        u_start = (pd.to_datetime(d_str) - timedelta(days=730)).strftime("%Y-%m-%d")
-        snap = build_universe_for_fold(
-            DB_PATH,
-            d_str,
-            u_start,
-            max_tickers=max_tickers,
-            index_name=index_name,
-            use_pit=use_pit,
-        )
+        if d_str in universe_cache:
+            snap_tickers = universe_cache[d_str]
+        else:
+            u_start = (pd.to_datetime(d_str) - timedelta(days=730)).strftime("%Y-%m-%d")
+            snap = build_universe_for_fold(
+                DB_PATH,
+                d_str,
+                u_start,
+                max_tickers=max_tickers,
+                index_name=index_name,
+                use_pit=use_pit,
+            )
+            snap_tickers = snap.tickers
+            universe_cache[d_str] = snap_tickers
+            cache_updated = True
+
         filtered_tickers = [
-            t for t in snap.tickers 
+            t for t in snap_tickers 
             if t.upper() not in exclude_set 
             and SECTOR_MAP.get(t.upper(), "UNKNOWN") not in exclude_sectors_set
         ]
         universe_by_date[d_str] = filtered_tickers
         superset_tickers.update(filtered_tickers)
+
+    if cache_updated:
+        try:
+            with open(cache_file, "w") as f:
+                json.dump(universe_cache, f)
+            logger.info(f"Saved {len(universe_cache)} universes to cache file: {cache_file}")
+        except Exception as e:
+            logger.warning(f"Error saving universe cache: {e}")
 
     superset_tickers.update(["SPY", "^VIX"])
     superset_tickers.update(SECTOR_ETFS)
@@ -318,6 +351,29 @@ def run_backtest(
     lookback_start = (pd.to_datetime(start_date) - timedelta(days=400)).strftime("%Y-%m-%d")
     all_ohlcv = load_ohlcv_batch_memory(list(superset_tickers), lookback_start, end_date)
 
+    logger.info("⚡ Pre-calculating indicators (MA stack & ATR) for all tickers...")
+    for t_sym, t_df in all_ohlcv.items():
+        if len(t_df) < 5:
+            continue
+        c = t_df["close"]
+        t_df["ema10"] = c.ewm(span=10, adjust=False).mean()
+        t_df["sma20"] = c.rolling(20).mean()
+        t_df["sma50"] = c.rolling(50).mean()
+        t_df["sma100"] = c.rolling(100).mean()
+        t_df["sma150"] = c.rolling(150).mean()
+        t_df["sma200"] = c.rolling(200).mean()
+        t_df["sma13"] = c.rolling(13).mean()
+        t_df["sma65"] = c.rolling(65).mean()
+        
+        # ATR14
+        h = t_df["high"]
+        l = t_df["low"]
+        high_low = h - l
+        high_close = (h - c.shift()).abs()
+        low_close = (l - c.shift()).abs()
+        tr = np.maximum(high_low, np.maximum(high_close, low_close))
+        t_df["atr14"] = tr.rolling(14).mean()
+
     spy_full = all_ohlcv.get("SPY", pd.DataFrame())
     vix_full = all_ohlcv.get("^VIX", pd.DataFrame())
 
@@ -364,8 +420,6 @@ def run_backtest(
         df_themes = (1 + df_theme_returns.fillna(0)).cumprod() * 100
 
         # Restaurar NaNs donde no había miembros válidos reportando ese día
-        import numpy as np
-
         for col in df_themes.columns:
             nan_dates = df_themes.index.difference(theme_daily_returns[col].keys())
             df_themes.loc[nan_dates, col] = np.nan
@@ -498,6 +552,27 @@ def run_backtest(
                 raw_risk_amt = dynamic_risk_dollars
 
                 if shares > 0:
+                    # Apply ticker cap
+                    if ticker_cap is not None:
+                        max_cost = total_equity * ticker_cap
+                        if shares * entry_px > max_cost:
+                            shares = int(max_cost / entry_px)
+
+                    # Apply sector cap
+                    if sector_cap is not None:
+                        current_sec_val = sum(
+                            pos["size"] * pos["last_close"]
+                            for pos in portfolio["positions"].values()
+                            if pos["sector"] == sec
+                        )
+                        max_sec_val = total_equity * sector_cap
+                        allowed_sec_val = max(0.0, max_sec_val - current_sec_val)
+                        if shares * entry_px > allowed_sec_val:
+                            shares = int(allowed_sec_val / entry_px)
+
+                    if shares <= 0:
+                        continue
+
                     cost = shares * entry_px
                     if portfolio["cash"] >= (cost * 1.0001):
                         portfolio["cash"] -= cost * 1.0001
@@ -723,6 +798,18 @@ if __name__ == "__main__":
         help="Sectors to exclude from the backtest universe. "
              "Accepts space-separated (XLF XLV) or comma-separated (XLF,XLV) formats.",
     )
+    parser.add_argument(
+        "--ticker-cap",
+        type=float,
+        default=None,
+        help="Maximum position size for any single ticker as a percentage of total portfolio equity (e.g. 0.15 for 15%%)",
+    )
+    parser.add_argument(
+        "--sector-cap",
+        type=float,
+        default=None,
+        help="Maximum total position value for any single sector as a percentage of total portfolio equity (e.g. 0.40 for 40%%)",
+    )
     args = parser.parse_args()
     run_backtest(
         args.start,
@@ -737,4 +824,6 @@ if __name__ == "__main__":
         exclude_tickers=args.exclude_tickers,
         exclude_sectors=args.exclude_sectors,
         use_pit=args.use_pit,
+        ticker_cap=args.ticker_cap,
+        sector_cap=args.sector_cap,
     )

@@ -8,13 +8,12 @@ This project implements a high-conviction momentum trading system based on growt
 - **Tier 2 Filters**: Multi-layered validation including RS, ADR, Sector ETF, and Thematic Groups.
 - **Thematic Divergence**: Variant E (Theme OK, Sector NO) is the current high-conviction filter for swing setups (horizon >= 10 days).
 
-## Thematic Divergence Verification (Plan E11 - In Progress)
-- **Status**: SHADOW MODE (Verification phase).
-- **Consolidation**: Canonical logic implemented in `src/signals/thematic_logic.py`.
-- **Target Rule**: `theme_above_sma20 AND NOT sector_etf_ok` (Variant E).
-- **Monitoring**: Active in Shadow Logger and Telegram Views (Theme RS).
-- **Gate GO/NO-GO**: Requires 15 real rounds with PF > 3.0 and WR > 55%.
-- **Documentation**: Detailed plan in `docs/analysis/THEMATIC_DIVERGENCE_VERIFICATION_E11.md`.
+## Gold Standard Candidate: ex-XLV (Healthcare Exclusion)
+- **Status**: SHADOW MODE (Promoted as Gold Standard Candidate / Shadow Candidate).
+- **Target Strategy**: Russell 1000 + E25 Dynamic Extension Sizing + Sector Exclusion (XLV blacklisted).
+- **Variant E Filter**: Kept out of the core config for now.
+- **Monitoring**: Exclusions active in daily scans and backtests.
+- **Documentation**: Detailed reports in `docs/analysis/` and `russell_e25_robustness_report.md`.
 
 ## Phase 3: Paper Trading (Current)
 - **Research**: Use `experiments/` for sandbox validation.
@@ -31,7 +30,7 @@ This project implements a high-conviction momentum trading system based on growt
 - **Fixed Production Bugs**: Corrected ATR propagation (stops now use 2xATR correctly) and dynamic sizing ($2,878 risk-per-trade read from config). Live paper trading is now accurate.
 - **Canonical Backtest Engine**: `scripts/backtest_via_signal_engine.py` is now the single source of truth for simulation. Implements full A/B merge, PIT universe (ADV20), and real Portfolio Manager (6 positions, 2/sector).
 - **Gold Standard Baseline**: +2.5% Return, -16.1% MDD, 0.45 Sharpe (2023-2024 PIT).
-- **Variant E (Shadow)**: Validated via OOS in 2021-22 (-3.1% vs -19.4% Base) and 2019-20 (identifying opportunity cost in broad bull runs). Currently in Shadow Mode.
+- **ex-XLV Candidate (Shadow)**: Sector exclusion (ex-XLV) validated over 2019-2025: Net PnL $77,105.43, Max Drawdown -16.26%, temporal consistency passed (3/4 windows positive). Promoted to Shadow Candidate.
 
 ## Pending Roadmap
 - **Dynamic Switch (Ataque/Defensa)**: Blocked until historical `health_score` is pre-calculated in DB.

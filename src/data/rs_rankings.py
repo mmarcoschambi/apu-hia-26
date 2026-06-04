@@ -19,6 +19,21 @@ def _get_conn() -> sqlite3.Connection:
     return sqlite3.connect(DB_PATH)
 
 
+@lru_cache(maxsize=1048576)
+def _get_rs_percentile_cached(ticker: str, date: Optional[str], metric: str) -> Optional[float]:
+    conn = _get_conn()
+    try:
+        if date:
+            query = f"SELECT {metric} FROM daily_rs_rankings WHERE ticker=? AND date=?"
+            row = conn.execute(query, (ticker, date)).fetchone()
+        else:
+            query = f"SELECT {metric} FROM daily_rs_rankings WHERE ticker=? ORDER BY date DESC LIMIT 1"
+            row = conn.execute(query, (ticker,)).fetchone()
+        return row[0] if row else None
+    finally:
+        conn.close()
+
+
 def get_rs_percentile(
     ticker: str,
     date: Optional[str] = None,
@@ -41,21 +56,16 @@ def get_rs_percentile(
     if metric not in valid_metrics:
         raise ValueError(f"metric debe ser uno de {valid_metrics}")
 
-    close_conn = conn is None
-    conn = conn or _get_conn()
-
-    try:
+    if conn is not None:
         if date:
             query = f"SELECT {metric} FROM daily_rs_rankings WHERE ticker=? AND date=?"
             row = conn.execute(query, (ticker, date)).fetchone()
         else:
             query = f"SELECT {metric} FROM daily_rs_rankings WHERE ticker=? ORDER BY date DESC LIMIT 1"
             row = conn.execute(query, (ticker,)).fetchone()
-
         return row[0] if row else None
-    finally:
-        if close_conn:
-            conn.close()
+
+    return _get_rs_percentile_cached(ticker, date, metric)
 
 
 def get_top_rs_tickers(

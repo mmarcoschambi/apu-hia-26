@@ -43,8 +43,8 @@
     "use_sector_etf_filter": false,
     "sector_etf_sma_period": 20,
     "sector_etf_dist_threshold": 0.0,
-    "use_theme_group_filter": true,
-    "theme_filter_mode": "divergence",
+    "use_theme_group_filter": false,
+    "theme_filter_mode": null,
     "theme_min_members": 5,
     "theme_min_hold_days": 10,
     "theme_divergence_lookback": 20,
@@ -238,5 +238,9 @@
       "DEFENSE_PARTIAL": 0.028,
       "DEFENSE_FULL": 0.0168
     }
-  }
+  },
+  "exclude_sectors": [
+    "XLV"
+  ],
+  "exclude_tickers": []
 }
