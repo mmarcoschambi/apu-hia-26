@@ -351,7 +351,7 @@ def run_backtest(
     lookback_start = (pd.to_datetime(start_date) - timedelta(days=400)).strftime("%Y-%m-%d")
     all_ohlcv = load_ohlcv_batch_memory(list(superset_tickers), lookback_start, end_date)
 
-    logger.info("⚡ Pre-calculating indicators (MA stack & ATR) for all tickers...")
+    logger.info("⚡ Pre-calculating indicators (MA stack, ATR, ADR%, Consolidation) for all tickers...")
     for t_sym, t_df in all_ohlcv.items():
         if len(t_df) < 5:
             continue
@@ -373,6 +373,18 @@ def run_backtest(
         low_close = (l - c.shift()).abs()
         tr = np.maximum(high_low, np.maximum(high_close, low_close))
         t_df["atr14"] = tr.rolling(14).mean()
+
+        # Average Volume 20
+        v = t_df["volume"]
+        t_df["avg_vol20"] = v.rolling(20).mean()
+
+        # ADR pct
+        t_df["adr_pct"] = (((h - l) / c.replace(0, np.nan)) * 100).rolling(20).mean()
+
+        # Consolidation Days
+        bb_std = c.rolling(20).std()
+        inside_bb = (c >= t_df["sma20"] - bb_std * 2) & (c <= t_df["sma20"] + bb_std * 2)
+        t_df["consol_days"] = inside_bb.rolling(20).sum()
 
     spy_full = all_ohlcv.get("SPY", pd.DataFrame())
     vix_full = all_ohlcv.get("^VIX", pd.DataFrame())

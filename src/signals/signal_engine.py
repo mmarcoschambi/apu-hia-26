@@ -349,20 +349,48 @@ def compute_tier2_metrics(
         atr = tr.rolling(14).mean().iloc[-1]
     atr = 0.0 if np.isnan(atr) else float(atr)
 
+    # SMA20
     if "sma20" in df.columns:
-        sma20 = df["sma20"]
+        sma20_val = df["sma20"].iloc[-1]
     else:
-        sma20 = close.rolling(20).mean()
-    avg_vol = volume.rolling(20).mean().replace(0, np.nan)
-    rvol = (volume / avg_vol).iloc[-1] if not np.isnan(volume.iloc[-1] / avg_vol.iloc[-1]) else 0.0
-    adr = (((high - low) / close.replace(0, np.nan)) * 100).rolling(20).mean().iloc[-1]
+        sma20_val = close.rolling(20).mean().iloc[-1]
+
+    # Average Volume 20
+    if "avg_vol20" in df.columns:
+        avg_vol_val = df["avg_vol20"].iloc[-1]
+    else:
+        avg_vol_val = volume.rolling(20).mean().iloc[-1]
+
+    # RVOL
+    if "rvol" in df.columns:
+        rvol = df["rvol"].iloc[-1]
+    else:
+        rvol = volume.iloc[-1] / avg_vol_val if not np.isnan(avg_vol_val) and avg_vol_val > 0 else 0.0
+
+    # ADR
+    if "adr_pct" in df.columns:
+        adr = df["adr_pct"].iloc[-1]
+    else:
+        adr = (((high - low) / close.replace(0, np.nan)) * 100).rolling(20).mean().iloc[-1]
     adr = 0.0 if np.isnan(adr) else adr
-    dist_sma20_val = ((close - sma20.replace(0, np.nan)) / sma20.replace(0, np.nan) * 100).iloc[-1]
-    dist_sma20_val = 0.0 if np.isnan(dist_sma20_val) else dist_sma20_val
-    bb_std = close.rolling(20).std()
-    inside_bb = (close >= sma20 - bb_std * 2) & (close <= sma20 + bb_std * 2)
-    consol_days = int(inside_bb.rolling(20).sum().iloc[-1])
-    dollar_vol = (close * avg_vol).iloc[-1] if not np.isnan((close * avg_vol).iloc[-1]) else 0.0
+
+    # Dist SMA20
+    dist_sma20_val = ((close.iloc[-1] - sma20_val) / sma20_val * 100) if sma20_val > 0 else 0.0
+
+    # Consolidation Days
+    if "consol_days" in df.columns:
+        consol_days = int(df["consol_days"].iloc[-1])
+    else:
+        if "sma20" in df.columns:
+            sma20 = df["sma20"]
+        else:
+            sma20 = close.rolling(20).mean()
+        bb_std = close.rolling(20).std()
+        inside_bb = (close >= sma20 - bb_std * 2) & (close <= sma20 + bb_std * 2)
+        consol_days = int(inside_bb.rolling(20).sum().iloc[-1])
+
+    # Dollar Volume M (Millions)
+    dollar_vol = close.iloc[-1] * avg_vol_val if not np.isnan(avg_vol_val) else 0.0
 
     rs_ret: Optional[float] = None
     if spy_df is not None and len(df) >= rs_lookback + 5 and len(spy_df) >= rs_lookback + 5:
@@ -385,10 +413,15 @@ def compute_tier2_metrics(
     spy_above_sma200 = True
     if spy_df is not None:
         spy_close = spy_df["close"] if "close" in spy_df.columns else spy_df["Close"]
-        if len(spy_df) >= 50:
+        if "sma50" in spy_df.columns:
+            spy_above_sma50 = float(spy_close.iloc[-1]) > float(spy_df["sma50"].iloc[-1])
+        elif len(spy_df) >= 50:
             spy_sma50 = spy_close.rolling(50).mean().iloc[-1]
             spy_above_sma50 = float(spy_close.iloc[-1]) > float(spy_sma50)
-        if len(spy_df) >= 200:
+
+        if "sma200" in spy_df.columns:
+            spy_above_sma200 = float(spy_close.iloc[-1]) > float(spy_df["sma200"].iloc[-1])
+        elif len(spy_df) >= 200:
             spy_sma200 = spy_close.rolling(200).mean().iloc[-1]
             spy_above_sma200 = float(spy_close.iloc[-1]) > float(spy_sma200)
 
@@ -652,11 +685,15 @@ def evaluate_ticker(
 
     if breakout_min is not None and scan_date:
         try:
-            from src.data.rs_rankings import get_rs_percentile
+            if metrics.rs_percentile is not None:
+                breakout_rs = metrics.rs_percentile
+            else:
+                from src.data.rs_rankings import get_rs_percentile
+                breakout_rs = get_rs_percentile(
+                    ticker, date=scan_date, metric=t2_cfg.get("rs_metric", "rs_composite")
+                )
+                metrics.rs_percentile = breakout_rs
 
-            breakout_rs = get_rs_percentile(
-                ticker, date=scan_date, metric=t2_cfg.get("rs_metric", "rs_composite")
-            )
             if breakout_rs is None or breakout_rs < float(breakout_min):
                 return SignalDecision(
                     ticker=ticker,
