@@ -1,0 +1,36 @@
+# =============================================================================
+# CRONTAB LOCAL  -  WSL2 Ubuntu
+# Propósito: Automatizar el sync del VPS los viernes al cierre del mercado.
+#
+# INSTALACIÓN:
+#   1. Abrir terminal WSL2
+#   2. Ejecutar:  crontab -e
+#   3. Pegar las líneas de abajo (sin el #)
+#
+# IMPORTANTE PARA WSL2:
+#   El cron de WSL2 NO se inicia automáticamente. Hay dos opciones:
+#   A) Iniciarlo manualmente al abrir WSL: sudo service cron start
+#   B) Agregarlo al ~/.bashrc o ~/.profile:
+#      [[ $(service cron status) != *running* ]] && sudo service cron start
+#
+#   Para que sudo no pida contraseña al iniciar cron, agregar a /etc/sudoers:
+#      tu_usuario ALL=(ALL) NOPASSWD: /usr/sbin/service cron start
+# =============================================================================
+
+# Zona horaria del cron (ajustar si tu WSL usa UTC)
+CRON_TZ=America/Argentina/Buenos_Aires
+
+# ── VIERNES 18:30 ARG (= 16:30 NY, 30 min después del cierre) ──────────────
+# Sync automático de toda la data de investigación del VPS
+30 18 * * 5 cd /home/marcos/trade/momentum-v2 && bash sync_from_vps.sh >> logs/sync_from_vps.log 2>&1
+
+# ── OPCIONAL: Sync adicional lunes 09:00 ARG ────────────────────────────────
+# Para asegurarse que tenés la última config del VPS antes de la semana
+# 0 9 * * 1 cd /home/marcos/trade/momentum-v2 && bash sync_from_vps.sh >> logs/sync_from_vps.log 2>&1
+
+# =============================================================================
+# VERIFICACIÓN:
+#   Ver que el cron está corriendo:  service cron status
+#   Ver logs del sync:               tail -f logs/sync_from_vps.log
+#   Listar crons activos:            crontab -l
+# =============================================================================

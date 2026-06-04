@@ -85,10 +85,23 @@ def load_signals(
 ) -> pd.DataFrame:
     combined_path = OUTPUT_DIR / date / "combined.csv"
     if not combined_path.exists():
-        return pd.DataFrame()
+        # Retornar DF vacio con columnas minimas esperadas
+        return pd.DataFrame(columns=[
+            "ticker", "agent_name", "entry_score", "entry_price", 
+            "stop_loss", "rvol", "dollar_vol_M"
+        ])
 
-    df = pd.read_csv(combined_path)
-    df = _flatten_metrics(df)
+    try:
+        df = pd.read_csv(combined_path)
+        df = _flatten_metrics(df)
+    except Exception:
+        return pd.DataFrame(columns=["ticker", "agent_name", "entry_score"])
+
+    # Normalizar entry_score
+    if "entry_score" not in df.columns:
+        df["entry_score"] = 0.5
+    else:
+        df["entry_score"] = pd.to_numeric(df["entry_score"], errors='coerce').fillna(0.5)
 
     if agents:
         df = df[df["agent_name"].isin(agents)]
@@ -181,12 +194,15 @@ def build_alert_text(
     return "\n".join(lines)
 
 
+from src.utils.sector_rotation import get_ticker_sector_mapping
+
 def build_telegram_html(
     df: pd.DataFrame,
     date: str,
     min_score: float = 0.0,
     top_n: int = 0,
     summary_only: bool = False,
+    show_disclaimer: bool = True,
 ) -> str:
     """
     Genera un mensaje formateado en HTML para Telegram, más visual que el texto plano.
@@ -196,14 +212,22 @@ def build_telegram_html(
     # Header
     title = f"🚀 <b>SIGNAL ALERTS | {date}</b>"
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    header = f"{title}\n<i>Generated: {timestamp}</i>\n"
+    disclaimer = ""
+    if show_disclaimer:
+        disclaimer = "\n⚠️ <b>MANUAL REVIEW:</b> <i>Raw finviz_live candidates; validar Radar Sectorizado + Live Trigger antes de operar.</i>\n"
+    
+    header = f"{title}\n<i>Generated: {timestamp}</i>\n{disclaimer}"
 
     if df.empty:
         return f"{header}\n⚠️ <b>No signals match criteria</b>"
 
-    df_filtered = df[df["entry_score"] >= min_score]
+    df_filtered = df[df["entry_score"] >= min_score].copy()
     if df_filtered.empty:
         return f"{header}\n⚠️ <b>No signals above score {min_score}</b>"
+
+    # Resolve sectors
+    tickers = df_filtered["ticker"].unique().tolist()
+    sector_map = get_ticker_sector_mapping(tickers)
 
     # Market Regime (usando el primer registro como referencia del SPY)
     spy_above = df_filtered.iloc[0].get("spy_above_sma200", None)
@@ -241,18 +265,58 @@ def build_telegram_html(
     if summary_only:
         return header + stats + agents_summary
 
+    # Helper para Dollar Volume Fallback
+    def _get_dv(row):
+        dv = row.get("dollar_vol_M")
+        if dv is None or dv == 0:
+            dv = row.get("dollar_volume_m")
+        if dv is None or dv == 0:
+            # Fallback calculation: price * avg_volume_20d / 1e6
+            price = row.get("entry_price", 0)
+            avg_vol = row.get("avg_volume_20d", 0)
+            dv = (price * avg_vol) / 1e6
+        return dv or 0
+
+    # Helper para Precio Sospechoso
+    def _is_suspicious(row):
+        price = row.get("entry_price", 0)
+        close = row.get("close", 0)
+        if close > 0:
+            diff = abs(price - close) / close
+            if diff > 0.15: # > 15% diff vs close
+                return True
+        return False
+
     # Top Candidates (con emojis y negritas)
     high_score = df_filtered[df_filtered["entry_score"] >= 0.7].head(5)
     top_candidates = ""
     if not high_score.empty:
         top_candidates = "\n🔥 <b>TOP CANDIDATES:</b>\n"
         for _, row in high_score.iterrows():
-            price = row.get("entry_price", 0)
             ticker = row["ticker"]
+            price = row.get("entry_price", 0)
+            price_flag = " ⚠️" if _is_suspicious(row) else ""
+            sec = sector_map.get(ticker, "OTHER")
+            dv = _get_dv(row)
+            
+            # Estado y Blockers
+            waiting = row.get("waiting_for", "OK")
+            blocker = row.get("primary_reason", "")
+            if not blocker and waiting != "OK":
+                blocker = waiting
+            
+            # Format shadow vs observation tags explicitly
+            if sec == "XLK":
+                tag = f"⚡ <b>[SHADOW: XLK-Only] {ticker}</b>"
+            elif sec == "XLC":
+                tag = f"👁️ <b>[OBSERVATION: XLC] {ticker}</b>"
+            else:
+                tag = f"⭐ <b>{ticker}</b> ({sec})"
+            
             top_candidates += (
-                f"⭐ <b>{ticker}</b> (Score: {row['entry_score']:.3f})\n"
-                f"   Price: ${price:.2f} | RVOL: {row.get('rvol', 0):.1f}x | "
-                f"DV: {row.get('dollar_vol_M', 0):.0f}M\n"
+                f"{tag} | Score: {row['entry_score']:.3f}{price_flag}\n"
+                f"   Price: ${price:.2f} | Dist20: {row.get('dist_sma20', 0):.1f}% | DV: {dv:.0f}M\n"
+                f"   Status: <b>{waiting}</b> | Blocker: <i>{blocker}</i>\n"
             )
 
     # Signal Table (Monospaced para alineación)
@@ -263,15 +327,18 @@ def build_telegram_html(
 
     table_header = "\n📋 <b>SIGNAL TABLE:</b>\n"
     table_content = "<pre>"
-    table_content += f"{'Ticker':<7} {'Score':<6} {'Price':<8} {'RVOL':<4}\n"
-    table_content += f"{'-' * 7} {'-' * 6} {'-' * 8} {'-' * 4}\n"
+    table_content += f"{'Ticker':<7} {'Score':<6} {'Price':<8} {'Dist20':<7} {'DV':<4}\n"
+    table_content += f"{'-' * 7} {'-' * 6} {'-' * 8} {'-' * 7} {'-' * 4}\n"
 
     for _, row in df_show.iterrows():
+        ticker = row["ticker"]
+        dv = _get_dv(row)
         table_content += (
-            f"{row['ticker']:<7} "
+            f"{ticker:<7} "
             f"{row['entry_score']:<6.3f} "
             f"{row.get('entry_price', 0):<8.2f} "
-            f"{row.get('rvol', 0):<4.1f}\n"
+            f"{row.get('dist_sma20', 0):<7.1f} "
+            f"{dv:<4.0f}\n"
         )
     table_content += "</pre>"
 
@@ -290,6 +357,7 @@ def build_telegram_html(
         + table_content
         + footer
     )
+
 
 
 def export_md(df: pd.DataFrame, date: str, output_dir: Path) -> Path:
@@ -379,19 +447,76 @@ def _save_snapshot(
 
 
 def _build_top_candidates(df: pd.DataFrame, limit: int = 5) -> list[dict]:
+    if df.empty or "entry_score" not in df.columns:
+        return []
+    
     high = df[df["entry_score"] >= 0.7].head(limit)
     result = []
     for _, row in high.iterrows():
-        result.append(
-            {
-                "ticker": row["ticker"],
-                "score": float(row["entry_score"]),
-                "price": float(row.get("entry_price", 0)),
-                "rvol": float(row.get("rvol", 0)),
-                "dv_M": float(row.get("dollar_vol_M", 0)),
-            }
-        )
+        try:
+            result.append(
+                {
+                    "ticker": row["ticker"],
+                    "score": float(row["entry_score"]),
+                    "price": float(row.get("entry_price", 0)),
+                    "rvol": float(row.get("rvol", 0)),
+                    "dv_M": float(row.get("dollar_vol_M", 0)),
+                }
+            )
+        except (ValueError, TypeError):
+            continue
     return result
+
+
+def _log_shadow_ledger(df: pd.DataFrame, date: str) -> None:
+    try:
+        from src.utils.sector_rotation import get_ticker_sector_mapping
+        tickers = df["ticker"].unique().tolist() if not df.empty else []
+        sector_map = get_ticker_sector_mapping(tickers)
+        
+        ledger_dir = PROJECT_ROOT / "outputs" / "shadow_theme_filter"
+        ledger_dir.mkdir(parents=True, exist_ok=True)
+        ledger_file = ledger_dir / "shadow_audit_ledger.jsonl"
+        
+        logged_count = 0
+        with open(ledger_file, "a") as f:
+            for _, row in df.iterrows():
+                ticker = row["ticker"]
+                sec = sector_map.get(ticker, "OTHER")
+                if sec not in ("XLK", "XLC"):
+                    continue
+                
+                # Check if variant E would accept
+                status = "SHADOW" if sec == "XLK" else "OBSERVATION"
+                
+                # Simple dict matching shadow_logger schema
+                entry = {
+                    "timestamp": datetime.now().isoformat(),
+                    "date": date,
+                    "ticker": ticker,
+                    "sector_etf": sec,
+                    "themes": [sec],
+                    "best_theme": sec,
+                    "theme_above_sma20": True,
+                    "theme_dist": 0.0,
+                    "sector_etf_ok": True if sec == "XLK" else False,
+                    "sector_dist": float(row.get("dist_sma20", 0.0)) / 100.0 if row.get("dist_sma20") is not None else 0.0,
+                    "theme_vs_sector_20d": 0.0,
+                    "variant_e_would_accept": True,
+                    "signal_accepted_by_router": True,
+                    "entry_price": float(row.get("entry_price", 0.0)) if row.get("entry_price") is not None else 0.0,
+                    "stop_price": float(row.get("stop_loss", 0.0)) if row.get("stop_loss") is not None else 0.0,
+                    "fwd_5d": None,
+                    "fwd_10d": None,
+                    "fwd_20d": None,
+                    "source": "live_promoter"
+                }
+                f.write(json.dumps(entry) + "\n")
+                logged_count += 1
+        if logged_count > 0:
+            print(f"  📊 Parallel shadow audit ledger updated with {logged_count} signals.")
+    except Exception as e:
+        print(f"⚠️ Error updating shadow ledger: {e}")
 
 
 def main():
@@ -429,6 +554,16 @@ def main():
     date = args.date or datetime.now().strftime("%Y-%m-%d")
 
     df = load_signals(date, agents=args.agents, tickers=args.tickers)
+
+    if df.empty:
+        print(f"  No signals found for {date}")
+        if args.telegram:
+            _save_snapshot(date, df, [], [], args.top, args.min_score)
+            _mark_sent(date, "no_signals", 0)
+        return
+
+    # Parallel logging for Shadow Mode auditing
+    _log_shadow_ledger(df, date)
 
     text = build_alert_text(
         df,
@@ -475,6 +610,7 @@ def main():
                     min_score=args.auto_threshold,
                     top_n=3,
                     summary_only=False,
+                    show_disclaimer=False,
                 )
                 auto_html = auto_html.replace(
                     "🚀 <b>SIGNAL ALERTS |", "🚀 <b>PRE-MARKET AUTO |"

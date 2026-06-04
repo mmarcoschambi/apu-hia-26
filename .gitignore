@@ -8,6 +8,16 @@
 *.bak_pre*
 *.bak_prefixes
 *.bak_patterns*
+*.db
+*.sqlite
+*.pkl
+*.parquet
+*.backup
+*.backup_*
+Zone.Identifier
+:Zone.Identifier
+*Zone.Identifier
+
 
 # Herramientas externas
 .qwen/
@@ -61,3 +71,11 @@ logs/
 
 # Study material (copyrighted)
 study/
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/

@@ -15,6 +15,8 @@ Uso:
 import csv
 import json
 import tempfile
+import contextlib
+import shutil
 from datetime import datetime
 from pathlib import Path
 
@@ -28,6 +30,43 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 STABLE_CSV = PROJECT_ROOT / "data" / "stable_universe.csv"
 STABLE_META = PROJECT_ROOT / "data" / "stable_universe.meta.json"
+
+
+@contextlib.contextmanager
+def temp_tiny_stable_universe():
+    backup = PROJECT_ROOT / "data" / "stable_universe.csv.tiny_temp.bak"
+    backup_meta = PROJECT_ROOT / "data" / "stable_universe.meta.json.tiny_temp.bak"
+    
+    if STABLE_CSV.exists():
+        shutil.copy(STABLE_CSV, backup)
+    if STABLE_META.exists():
+        shutil.copy(STABLE_META, backup_meta)
+        
+    try:
+        STABLE_CSV.parent.mkdir(parents=True, exist_ok=True)
+        with open(STABLE_CSV, "w") as f:
+            f.write("ticker,sector,theme\nAAPL,Technology,tech_theme\nMSFT,Technology,tech_theme\n")
+        with open(STABLE_META, "w") as f:
+            json.dump({
+                "tickers_count": 2,
+                "tickers_hash": "d3b07384d113edec49eaa6238ad5ff00b7190280a7ae24317130a08e1e7e4072",
+                "provider": "finviz_scrape",
+                "fetched_at": "2026-05-21T15:00:00",
+                "filters": "cap_fake_filter"
+            }, f)
+        yield
+    finally:
+        if backup.exists():
+            shutil.move(backup, STABLE_CSV)
+        else:
+            if STABLE_CSV.exists():
+                STABLE_CSV.unlink()
+        if backup_meta.exists():
+            shutil.move(backup_meta, STABLE_META)
+        else:
+            if STABLE_META.exists():
+                STABLE_META.unlink()
+
 
 
 def test_universe_loader_explicit():
@@ -165,20 +204,21 @@ def test_sync_meta_json():
 def test_scanner_stable_flag():
     import subprocess
 
-    result = subprocess.run(
-        [
-            "python3",
-            "src/scanner/daily_signal_scanner.py",
-            "--universe-source",
-            "stable",
-            "--top",
-            "10",
-            "--quiet",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
+    with temp_tiny_stable_universe():
+        result = subprocess.run(
+            [
+                "python3",
+                "src/scanner/daily_signal_scanner.py",
+                "--universe-source",
+                "stable",
+                "--top",
+                "10",
+                "--quiet",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
     assert result.returncode == 0, f"Scanner failed: {result.stderr}"
     assert "Scanning" in result.stdout and "tickers" in result.stdout, (
         f"Unexpected output: {result.stdout[:200]}"
@@ -189,22 +229,23 @@ def test_scanner_stable_flag():
 def test_combo_scanner_multi():
     import subprocess
 
-    result = subprocess.run(
-        [
-            "python3",
-            "scripts/run_combo_scanner.py",
-            "--universe-source",
-            "stable",
-            "--agents",
-            "combo_pure_momentum",
-            "combo_ideal_setup",
-            "--dry-run",
-            "--skip-tier2",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
+    with temp_tiny_stable_universe():
+        result = subprocess.run(
+            [
+                "python3",
+                "scripts/run_combo_scanner.py",
+                "--universe-source",
+                "stable",
+                "--agents",
+                "combo_pure_momentum",
+                "combo_ideal_setup",
+                "--dry-run",
+                "--skip-tier2",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
     assert result.returncode == 0, f"Combo scanner failed: {result.stderr}"
     assert "combo_pure_momentum" in result.stdout, (
         f"Missing pure_momentum: {result.stdout}"
@@ -220,12 +261,13 @@ def test_combo_scanner_output_files():
     import subprocess
     from scripts.run_combo_scanner import run_combo_scan
 
-    result = run_combo_scan(
-        universe_source="stable",
-        agent_names=["combo_pure_momentum"],
-        dry_run=False,
-        skip_tier2=True,
-    )
+    with temp_tiny_stable_universe():
+        result = run_combo_scan(
+            universe_source="stable",
+            agent_names=["combo_pure_momentum"],
+            dry_run=False,
+            skip_tier2=True,
+        )
 
     today = datetime.now().strftime("%Y-%m-%d")
     out_dir = PROJECT_ROOT / "outputs" / "live_signals" / today
@@ -249,38 +291,17 @@ def test_combo_scanner_output_files():
 
 def test_screener_gate_blocks_signal():
     import importlib
-    from src.screeners.base import ScreenerResult
+    from src.signals.signal_engine import SignalDecision
 
     mod = importlib.import_module("scripts.run_combo_scanner")
-    orig_compute = mod._compute_tier2_from_df
-    orig_apply = mod._apply_tier2
+    orig_evaluate = mod.evaluate_ticker
 
-    mod._compute_tier2_from_df = lambda *a, **kw: {
-        "rvol": 2.0,
-        "adr_pct": 3.0,
-        "dist_sma20": 3.0,
-        "consol_days": 10,
-        "volume": 500000,
-        "close": 100.0,
-        "dollar_vol_M": 50.0,
-        "rs_ret": 0.1,
-    }
-    mod._apply_tier2 = lambda *a, **kw: (True, "passed")
-
-    fake_result = ScreenerResult(
-        passed=False,
+    mod.evaluate_ticker = lambda *a, **kw: SignalDecision(
         ticker="TESTFAIL",
-        screener_name="fake",
-        score=0.0,
-        reason="Fake failure",
-        metrics={},
+        mode="A",
+        passed=False,
+        reject_reason="screener_fail:Fake failure",
     )
-
-    orig_pipeline = mod._build_pipeline
-    fake_pipeline = lambda cfg: type(
-        "F", (), {"scan": lambda s, t, df, spy: fake_result}
-    )()
-    mod._build_pipeline = fake_pipeline
 
     signals = mod.scan_combo(
         {
@@ -290,13 +311,12 @@ def test_screener_gate_blocks_signal():
             "pattern": {},
         },
         ["TESTFAIL"],
+        {"TESTFAIL": pd.DataFrame({"close": [100.0] * 70})},
         None,
         {"TESTFAIL": pd.Series([100.0] * 70)},
     )
 
-    mod._compute_tier2_from_df = orig_compute
-    mod._apply_tier2 = orig_apply
-    mod._build_pipeline = orig_pipeline
+    mod.evaluate_ticker = orig_evaluate
 
     assert len(signals) == 0, (
         f"Ticker must NOT appear when screener returns passed=False, got {len(signals)} signals"
@@ -306,38 +326,17 @@ def test_screener_gate_blocks_signal():
 
 def test_tier2_gate_blocks_signal():
     import importlib
-    from src.screeners.base import ScreenerResult
+    from src.signals.signal_engine import SignalDecision
 
     mod = importlib.import_module("scripts.run_combo_scanner")
-    orig_compute = mod._compute_tier2_from_df
-    orig_apply = mod._apply_tier2
+    orig_evaluate = mod.evaluate_ticker
 
-    mod._compute_tier2_from_df = lambda *a, **kw: {
-        "rvol": 0.1,
-        "adr_pct": 0.1,
-        "dist_sma20": 30.0,
-        "consol_days": 0,
-        "volume": 1000,
-        "close": 100.0,
-        "dollar_vol_M": 0.1,
-        "rs_ret": None,
-    }
-    mod._apply_tier2 = lambda *a, **kw: (False, "tier2_fail:rvol:0.10 < 0.80")
-
-    fake_result = ScreenerResult(
-        passed=True,
+    mod.evaluate_ticker = lambda *a, **kw: SignalDecision(
         ticker="TESTPASS",
-        screener_name="fake",
-        score=80.0,
-        reason="OK",
-        metrics={},
+        mode="A",
+        passed=False,
+        reject_reason="tier2_fail:rvol:0.10 < 0.80",
     )
-
-    orig_pipeline = mod._build_pipeline
-    fake_pipeline = lambda cfg: type(
-        "F", (), {"scan": lambda s, t, df, spy: fake_result}
-    )()
-    mod._build_pipeline = fake_pipeline
 
     signals = mod.scan_combo(
         {
@@ -347,13 +346,12 @@ def test_tier2_gate_blocks_signal():
             "pattern": {},
         },
         ["TESTPASS"],
+        {"TESTPASS": pd.DataFrame({"close": [100.0] * 70})},
         None,
         {"TESTPASS": pd.Series([100.0] * 70)},
     )
 
-    mod._compute_tier2_from_df = orig_compute
-    mod._apply_tier2 = orig_apply
-    mod._build_pipeline = orig_pipeline
+    mod.evaluate_ticker = orig_evaluate
 
     assert len(signals) == 0, (
         f"Ticker must NOT appear when tier2 returns passed=False, got {len(signals)} signals"
@@ -362,21 +360,20 @@ def test_tier2_gate_blocks_signal():
 
 
 def test_tier2_rs_percentile_required_when_enabled():
-    import importlib
+    from src.signals.signal_engine import apply_tier2_filters, Tier2Metrics
 
-    mod = importlib.import_module("scripts.run_combo_scanner")
-    metrics = {
-        "rvol": 1.0,
-        "adr_pct": 2.0,
-        "dist_sma20": 4.0,
-        "consol_days": 6,
-        "volume": 500000,
-        "close": 100.0,
-        "dollar_vol_M": 50.0,
-        "rs_ret": 0.1,
-        "rs_percentile": 65.0,
-    }
-    passed, reason = mod._apply_tier2(
+    metrics = Tier2Metrics(
+        rvol=1.0,
+        adr_pct=2.0,
+        dist_sma20=4.0,
+        consol_days=6,
+        volume=500000,
+        close=100.0,
+        dollar_vol_M=50.0,
+        rs_ret=0.1,
+        rs_percentile=65.0,
+    )
+    passed, reason = apply_tier2_filters(
         metrics,
         {
             "use_rs_percentile": True,
@@ -384,26 +381,25 @@ def test_tier2_rs_percentile_required_when_enabled():
         },
     )
     assert not passed, "RS percentile must block when enabled and below threshold"
-    assert reason == "tier2_fail:rs_percentile:65.0 < 80.0"
+    assert reason == "tier2_fail:rs_percentile:65.0<80.0"
     print("  PASS: RS percentile enforced when enabled")
 
 
 def test_tier2_rs_percentile_ignored_when_disabled():
-    import importlib
+    from src.signals.signal_engine import apply_tier2_filters, Tier2Metrics
 
-    mod = importlib.import_module("scripts.run_combo_scanner")
-    metrics = {
-        "rvol": 1.0,
-        "adr_pct": 2.0,
-        "dist_sma20": 4.0,
-        "consol_days": 6,
-        "volume": 500000,
-        "close": 100.0,
-        "dollar_vol_M": 50.0,
-        "rs_ret": 0.1,
-        "rs_percentile": 10.0,
-    }
-    passed, reason = mod._apply_tier2(
+    metrics = Tier2Metrics(
+        rvol=1.0,
+        adr_pct=2.0,
+        dist_sma20=4.0,
+        consol_days=6,
+        volume=500000,
+        close=100.0,
+        dollar_vol_M=50.0,
+        rs_ret=0.1,
+        rs_percentile=10.0,
+    )
+    passed, reason = apply_tier2_filters(
         metrics,
         {
             "use_rs_percentile": False,
@@ -459,18 +455,18 @@ def test_universe_stats_db_count_eligible_tickers():
 
 
 def test_tier2_all_thresholds_respected():
-    from scripts.run_combo_scanner import _apply_tier2
+    from src.signals.signal_engine import apply_tier2_filters, Tier2Metrics
 
-    m = {
-        "rvol": 0.5,
-        "adr_pct": 1.0,
-        "dist_sma20": 20.0,
-        "consol_days": 2,
-        "volume": 50000,
-        "close": 50.0,
-        "dollar_vol_M": 5.0,
-        "rs_ret": None,
-    }
+    m = Tier2Metrics(
+        rvol=0.5,
+        adr_pct=1.0,
+        dist_sma20=20.0,
+        consol_days=2,
+        volume=50000,
+        close=50.0,
+        dollar_vol_M=5.0,
+        rs_ret=None,
+    )
     t2 = {
         "min_rvol": 0.8,
         "min_adr": 2.0,
@@ -480,66 +476,75 @@ def test_tier2_all_thresholds_respected():
         "min_dollar_volume": 10_000_000,
     }
 
-    passed, reason = _apply_tier2(m, t2)
+    passed, reason = apply_tier2_filters(m, t2)
     assert not passed, f"Should fail tier2: {reason}"
     assert "rvol" in reason, f"Expected rvol reason, got: {reason}"
     print(f"  PASS: tier2 correctly rejects (first fail: {reason})")
 
 
 def test_tier2_dist_sma20_threshold():
-    from scripts.run_combo_scanner import _apply_tier2
+    from src.signals.signal_engine import apply_tier2_filters, Tier2Metrics
 
-    m = {
-        "rvol": 2.0,
-        "adr_pct": 3.0,
-        "dist_sma20": 50.0,
-        "consol_days": 10,
-        "volume": 1_000_000,
-        "close": 100.0,
-        "dollar_vol_M": 100.0,
-    }
-    passed, reason = _apply_tier2(m, {"max_dist_sma20": 10.0})
+    m = Tier2Metrics(
+        rvol=2.0,
+        adr_pct=3.0,
+        dist_sma20=50.0,
+        consol_days=10,
+        volume=1_000_000,
+        close=100.0,
+        dollar_vol_M=100.0,
+    )
+    passed, reason = apply_tier2_filters(m, {"max_dist_sma20": 10.0})
     assert not passed, f"Should fail on dist_sma20: {reason}"
     assert "dist" in reason
     print(f"  PASS: dist_sma20 threshold respected ({reason})")
 
 
 def test_tier2_dollar_vol_threshold():
-    from scripts.run_combo_scanner import _apply_tier2
+    from src.signals.signal_engine import apply_tier2_filters, Tier2Metrics
 
-    m = {
-        "rvol": 2.0,
-        "adr_pct": 3.0,
-        "dist_sma20": 3.0,
-        "consol_days": 10,
-        "volume": 500_000,
-        "close": 10.0,
-        "dollar_vol_M": 1.0,
-    }
-    passed, reason = _apply_tier2(m, {"min_dollar_volume": 10_000_000})
+    m = Tier2Metrics(
+        rvol=2.0,
+        adr_pct=3.0,
+        dist_sma20=3.0,
+        consol_days=10,
+        volume=500_000,
+        close=10.0,
+        dollar_vol_M=1.0,
+    )
+    passed, reason = apply_tier2_filters(m, {"min_dollar_volume": 10_000_000})
     assert not passed, f"Should fail on dollar_vol: {reason}"
     assert "tier2_fail:dollar_vol:" in reason
     print(f"  PASS: dollar_vol threshold respected ({reason})")
 
 
 def test_tier2_require_positive_rs():
-    from scripts.run_combo_scanner import _apply_tier2
+    from src.signals.signal_engine import apply_tier2_filters, Tier2Metrics
 
-    m_neg = {
-        "rvol": 2.0,
-        "adr_pct": 3.0,
-        "dist_sma20": 3.0,
-        "consol_days": 10,
-        "volume": 500_000,
-        "close": 100.0,
-        "dollar_vol_M": 100.0,
-        "rs_ret": -0.05,
-    }
-    passed, _ = _apply_tier2(m_neg, {"require_positive_rs": True})
+    m_neg = Tier2Metrics(
+        rvol=2.0,
+        adr_pct=3.0,
+        dist_sma20=3.0,
+        consol_days=10,
+        volume=500_000,
+        close=100.0,
+        dollar_vol_M=100.0,
+        rs_ret=-0.05,
+    )
+    passed, _ = apply_tier2_filters(m_neg, {"require_positive_rs": True})
     assert not passed, "Negative RS should be rejected"
 
-    m_pos = {**m_neg, "rs_ret": 0.10}
-    passed, _ = _apply_tier2(m_pos, {"require_positive_rs": True})
+    m_pos = Tier2Metrics(
+        rvol=2.0,
+        adr_pct=3.0,
+        dist_sma20=3.0,
+        consol_days=10,
+        volume=500_000,
+        close=100.0,
+        dollar_vol_M=100.0,
+        rs_ret=0.10,
+    )
+    passed, _ = apply_tier2_filters(m_pos, {"require_positive_rs": True})
     assert passed, "Positive RS should be accepted"
     print("  PASS: require_positive_rs gate works")
 
@@ -570,48 +575,28 @@ def test_universe_stats_db_count():
 
 def test_combo_scanner_screener_plus_tier2():
     from scripts.run_combo_scanner import run_combo_scan
-    from src.screeners.base import ScreenerResult
+    from src.signals.signal_engine import SignalDecision
     import importlib
 
     mod = importlib.import_module("scripts.run_combo_scanner")
-    orig_compute = mod._compute_tier2_from_df
-    orig_apply = mod._apply_tier2
-    orig_pipeline = mod._build_pipeline
+    orig_evaluate = mod.evaluate_ticker
 
-    mod._compute_tier2_from_df = lambda *a, **kw: {
-        "rvol": 2.0,
-        "adr_pct": 3.0,
-        "dist_sma20": 3.0,
-        "consol_days": 10,
-        "volume": 500_000,
-        "close": 100.0,
-        "dollar_vol_M": 50.0,
-        "rs_ret": 0.1,
-    }
-    mod._apply_tier2 = lambda *a, **kw: (False, "fake_rvol_fail")
-
-    fake_result = ScreenerResult(
-        passed=True,
+    mod.evaluate_ticker = lambda *a, **kw: SignalDecision(
         ticker="TICK",
-        screener_name="fake",
-        score=80.0,
-        reason="screener passed",
-        metrics={},
-    )
-    mod._build_pipeline = lambda cfg: type(
-        "F", (), {"scan": lambda s, t, df, spy: fake_result}
-    )()
-
-    result = run_combo_scan(
-        universe_source="stable",
-        agent_names=["combo_pure_momentum"],
-        dry_run=True,
-        skip_tier2=False,
+        mode="A",
+        passed=False,
+        reject_reason="fake_rvol_fail",
     )
 
-    mod._compute_tier2_from_df = orig_compute
-    mod._apply_tier2 = orig_apply
-    mod._build_pipeline = orig_pipeline
+    with temp_tiny_stable_universe():
+        result = run_combo_scan(
+            universe_source="stable",
+            agent_names=["combo_pure_momentum"],
+            dry_run=True,
+            skip_tier2=False,
+        )
+
+    mod.evaluate_ticker = orig_evaluate
 
     assert result["total_signals"] == 0, (
         f"Must emit 0 signals when tier2 blocks (screener passed but tier2 failed). "
@@ -652,18 +637,19 @@ def main():
     failed = 0
     skipped = 0
 
-    for name, fn in tests:
-        print(f"  {name}...")
-        try:
-            fn()
-            passed += 1
-        except Exception as e:
-            if "SKIP" in str(e) or "skipped" in str(e).lower():
-                skipped += 1
-                print(f"  SKIP: {e}")
-            else:
-                failed += 1
-                print(f"  FAIL: {e}")
+    with temp_tiny_stable_universe():
+        for name, fn in tests:
+            print(f"  {name}...")
+            try:
+                fn()
+                passed += 1
+            except Exception as e:
+                if "SKIP" in str(e) or "skipped" in str(e).lower():
+                    skipped += 1
+                    print(f"  SKIP: {e}")
+                else:
+                    failed += 1
+                    print(f"  FAIL: {e}")
 
     print(f"\n{'=' * 60}")
     print(f"  Results: {passed} passed, {failed} failed, {skipped} skipped")

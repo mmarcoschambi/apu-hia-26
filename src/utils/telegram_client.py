@@ -45,6 +45,11 @@ def telegram_send(
                     },
                 )
                 if r.status_code != 200:
+                    try:
+                        err_msg = r.json().get("description", "Unknown error")
+                    except:
+                        err_msg = r.text
+                    print(f"[Telegram] Error {r.status_code}: {err_msg}")
                     success = False
         except Exception:
             success = False
@@ -79,8 +84,15 @@ def send_message_with_buttons(
                     "disable_web_page_preview": True,
                 },
             )
+            if r.status_code != 200:
+                try:
+                    err_msg = r.json().get("description", "Unknown error")
+                except:
+                    err_msg = r.text
+                print(f"[Telegram] Error {r.status_code} in send_message_with_buttons: {err_msg}")
             return r.status_code == 200
-    except Exception:
+    except Exception as e:
+        print(f"[Telegram] Exception in send_message_with_buttons: {e}")
         return False
 
 
@@ -89,22 +101,24 @@ def edit_message(
     message_id: int,
     text: str,
     parse_mode: str = "HTML",
+    buttons: list[list[dict[str, str]]] | None = None,
 ) -> bool:
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     if not token:
         return False
     url = f"https://api.telegram.org/bot{token}/editMessageText"
+    payload = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "text": text,
+        "parse_mode": parse_mode,
+        "disable_web_page_preview": True,
+    }
+    if buttons is not None:
+        payload["reply_markup"] = {"inline_keyboard": buttons}
     try:
         with httpx.Client(timeout=10.0) as client:
-            r = client.post(
-                url,
-                json={
-                    "chat_id": chat_id,
-                    "message_id": message_id,
-                    "text": text,
-                    "parse_mode": parse_mode,
-                },
-            )
+            r = client.post(url, json=payload)
             return r.status_code == 200
     except Exception:
         return False

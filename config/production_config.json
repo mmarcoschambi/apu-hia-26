@@ -1,6 +1,6 @@
 {
   "_schema_version": "2.1",
-  "_description": "S4 Optuna — Trial 380, seleccionado por OOS Sharpe (Val=0.60, OOS=1.53, Calmar=2.73)",
+  "_description": "S4 Optuna \u2014 Trial 380, seleccionado por OOS Sharpe (Val=0.60, OOS=1.53, Calmar=2.73)",
   "_last_updated": "2026-04-10T23:30:00",
   "_optimization_method": "S4_Optuna_600trials_200tickers_2019-2024",
   "_promoted_trial": 380,
@@ -26,7 +26,7 @@
     "risk_dollars": 2878,
     "use_phases": true,
     "signal_type": "breakout",
-    "_source": "S4 Trial 380 — risk_per_trade_pct=0.02878 × $100k"
+    "_source": "S4 Trial 380 \u2014 risk_per_trade_pct=0.02878 \u00d7 $100k"
   },
   "=== TIER 2: FILTERS (S4 Optuna) ===": {},
   "tier2_filters": {
@@ -40,13 +40,22 @@
     "min_dollar_volume": 20000000,
     "use_composite_sector_scoring": false,
     "sector_top_percentile": 0.319,
-    "use_sector_etf_filter": true,
+    "use_sector_etf_filter": false,
     "sector_etf_sma_period": 20,
     "sector_etf_dist_threshold": 0.0,
+    "use_theme_group_filter": false,
+    "theme_filter_mode": null,
+    "theme_min_members": 5,
+    "theme_min_hold_days": 10,
+    "theme_divergence_lookback": 20,
+    "theme_monthly_signal_floor": 15,
+    "theme_rollback_weeks": 4,
+    "theme_dist_threshold": 0.0,
+    "theme_rank_threshold": 70.0,
     "use_atr_stop": false,
     "atr_stop_multiplier": 1.507,
     "atr_trailing_multiplier": 2.981,
-    "_source": "S4 Optuna Trial 380 — convergido con espacio 2019-2024, 200 tickers"
+    "_source": "S4 Optuna Trial 380 \u2014 convergido con espacio 2019-2024, 200 tickers"
   },
   "=== TIER 3: RISK MANAGEMENT ===": {},
   "tier3_risk": {
@@ -66,6 +75,27 @@
     "risk_fraction": 0.02878,
     "compounding_enabled": false,
     "_source": "S4 max_exposure_pct=0.294 de Trial 380, resto institucional fijo"
+  },
+  "=== E25 SHADOW SIZING (paper/shadow only) ===": {},
+  "tier3_fixed": {
+    "use_dynamic_extension_sizing": true,
+    "dynamic_extension_sizing": {
+      "version": "v2_atlas_informed",
+      "comfort_pct": 6.76,
+      "valley_pct": 10.0,
+      "mid_pct": 15.0,
+      "high_pct": 25.0,
+      "extreme_pct": 35.0,
+      "max_pct": 50.0,
+      "min_factor": 0.5,
+      "extreme_factor": 0.2,
+      "adr_exception_pct": 8.0
+    },
+    "shadow_status": "GO_SHADOW",
+    "live_status": "HOLD_LIVE",
+    "validated_report": "outputs/backtests/e25_validation_report.json",
+    "rollback": "Set use_dynamic_extension_sizing=false to restore baseline sizing.",
+    "_source": "E25_v2 Atlas-Informed shadow promotion, validated 2019-2026 PIT SP500"
   },
   "=== MARKET REGIME ===": {},
   "market_regime": {
@@ -97,10 +127,10 @@
     "default_universe_size": 50,
     "lookback_days": 365
   },
-  "=== SHADOW CONFIGS (para comparación en paper) ===": {},
+  "=== SHADOW CONFIGS (para comparaci\u00f3n en paper) ===": {},
   "shadow_configs": {
     "trial_236": {
-      "description": "Más estable IS→Val→OOS (degradation=0.33)",
+      "description": "M\u00e1s estable IS\u2192Val\u2192OOS (degradation=0.33)",
       "min_rvol": 1.107,
       "max_dist_sma20": 6.682,
       "min_rs_percentile": 82.32,
@@ -111,13 +141,13 @@
       "sector_top_percentile": 0.258
     },
     "trial_319": {
-      "description": "OOS Sharpe 1.15, degradation=0.32 — segunda opción sólida",
+      "description": "OOS Sharpe 1.15, degradation=0.32 \u2014 segunda opci\u00f3n s\u00f3lida",
       "min_rvol": 1.124,
       "max_dist_sma20": 6.542,
       "min_rs_percentile": 56.47,
       "min_adr": 1.694,
       "risk_per_trade_pct": 0.02726,
-      "max_exposure_pct": 0.290,
+      "max_exposure_pct": 0.29,
       "use_composite_sector_scoring": true,
       "sector_top_percentile": 0.293
     }
@@ -140,7 +170,7 @@
       "promoted_trial": 380,
       "selection_method": "OOS_SHARPE",
       "approved": true,
-      "notes": "Trial 380 seleccionado sobre Trial 431 (IS rank 1) porque Trial 431 colapsa en Val (-0.34). Trial 380: Val=0.60, OOS=1.53, estable en todos los regímenes."
+      "notes": "Trial 380 seleccionado sobre Trial 431 (IS rank 1) porque Trial 431 colapsa en Val (-0.34). Trial 380: Val=0.60, OOS=1.53, estable en todos los reg\u00edmenes."
     }
   ],
   "_oos_stamped": "2026-04-10T23:30:00",
@@ -172,5 +202,45 @@
       "block_on_parse_error": true,
       "block_on_high_drift": true
     }
-  }
+  },
+  "risk_gate": {
+    "capital_total_usd": 100000.0,
+    "risk_per_trade_usd": 1000.0,
+    "budget_split": {
+      "A": 0.7,
+      "B": 0.3
+    },
+    "max_exposure_total_pct": 0.65,
+    "max_exposure_per_ticker_pct": 0.12,
+    "max_positions_total": 8,
+    "max_positions_per_source": {
+      "A": 6,
+      "B": 4
+    },
+    "default_stop_pct": 0.05,
+    "max_allowed_stop_pct": 0.08,
+    "min_shares": 1,
+    "min_price": 1.0
+  },
+  "ml_entry_filter": {
+    "enabled": false,
+    "threshold": 0.40,
+    "model_path": "models/entry_scorer.pkl"
+  },
+  "backtest": {
+    "max_positions": 8,
+    "max_per_sector": 2,
+    "holding_days_limit": 10,
+    "fee_bps": 1.0,
+    "slippage_bps": 5.0,
+    "risk_pct_by_regime": {
+      "ATTACK": 0.0364,
+      "DEFENSE_PARTIAL": 0.028,
+      "DEFENSE_FULL": 0.0168
+    }
+  },
+  "exclude_sectors": [
+    "XLV"
+  ],
+  "exclude_tickers": []
 }

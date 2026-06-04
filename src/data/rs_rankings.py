@@ -15,8 +15,30 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 DB_PATH = PROJECT_ROOT / "data" / "ticker_cache.db"
 
 
+_persistent_conn = None
+
+
+def _get_persistent_conn() -> sqlite3.Connection:
+    global _persistent_conn
+    if _persistent_conn is None:
+        _persistent_conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    return _persistent_conn
+
+
 def _get_conn() -> sqlite3.Connection:
     return sqlite3.connect(DB_PATH)
+
+
+@lru_cache(maxsize=1048576)
+def _get_rs_percentile_cached(ticker: str, date: Optional[str], metric: str) -> Optional[float]:
+    conn = _get_persistent_conn()
+    if date:
+        query = f"SELECT {metric} FROM daily_rs_rankings WHERE ticker=? AND date=?"
+        row = conn.execute(query, (ticker, date)).fetchone()
+    else:
+        query = f"SELECT {metric} FROM daily_rs_rankings WHERE ticker=? ORDER BY date DESC LIMIT 1"
+        row = conn.execute(query, (ticker,)).fetchone()
+    return row[0] if row else None
 
 
 def get_rs_percentile(
@@ -41,21 +63,16 @@ def get_rs_percentile(
     if metric not in valid_metrics:
         raise ValueError(f"metric debe ser uno de {valid_metrics}")
 
-    close_conn = conn is None
-    conn = conn or _get_conn()
-
-    try:
+    if conn is not None:
         if date:
             query = f"SELECT {metric} FROM daily_rs_rankings WHERE ticker=? AND date=?"
             row = conn.execute(query, (ticker, date)).fetchone()
         else:
             query = f"SELECT {metric} FROM daily_rs_rankings WHERE ticker=? ORDER BY date DESC LIMIT 1"
             row = conn.execute(query, (ticker,)).fetchone()
-
         return row[0] if row else None
-    finally:
-        if close_conn:
-            conn.close()
+
+    return _get_rs_percentile_cached(ticker, date, metric)
 
 
 def get_top_rs_tickers(

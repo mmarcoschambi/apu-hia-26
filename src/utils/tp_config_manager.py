@@ -17,15 +17,45 @@ class TPConfigManager:
     """Gestor centralizado de configuraciones TP óptimas."""
 
     CONFIG_PATH = Path("config/tp_optimal.json")
+    PRESETS_PATH = Path("config/tp_presets.json")
 
     # Distribuciones hardcoded disponibles (fallback)
-    PRESETS = {
+    FALLBACK_PRESETS = {
         "classic": {"tp1_pct": 0.50, "tp2_pct": 0.30, "runner_pct": 0.20},
         "balanced": {"tp1_pct": 0.33, "tp2_pct": 0.33, "runner_pct": 0.34},
         "aggressive_runner": {"tp1_pct": 0.25, "tp2_pct": 0.30, "runner_pct": 0.45},
         "conservative": {"tp1_pct": 0.40, "tp2_pct": 0.35, "runner_pct": 0.25},
         "extreme": {"tp1_pct": 0.20, "tp2_pct": 0.30, "runner_pct": 0.50},
     }
+
+    PRESETS = FALLBACK_PRESETS
+
+    @classmethod
+    def load_presets(cls) -> Dict:
+        """Carga presets de tp_presets.json y los valida."""
+        if cls.PRESETS_PATH.exists():
+            try:
+                with open(cls.PRESETS_PATH, "r") as f:
+                    presets = json.load(f)
+                # Validar la suma de cada preset
+                for name, dist in presets.items():
+                    tp1 = float(dist.get("tp1_pct", 0.0))
+                    tp2 = float(dist.get("tp2_pct", 0.0))
+                    runner = float(dist.get("runner_pct", 0.0))
+                    if abs(tp1 + tp2 + runner - 1.0) >= 1e-4:
+                        raise ValueError(
+                            f"Preset '{name}' distribution does not sum to 1.0: "
+                            f"{tp1} + {tp2} + {runner} = {tp1 + tp2 + runner}"
+                        )
+                cls.PRESETS = presets
+                return presets
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(
+                    f"Error loading {cls.PRESETS_PATH}: {e}. Using fallback presets."
+                )
+        cls.PRESETS = cls.FALLBACK_PRESETS
+        return cls.FALLBACK_PRESETS
 
     @classmethod
     def get_optimal_tp(cls, preset_name: str = "optimize") -> Optional[Dict]:
@@ -38,9 +68,21 @@ class TPConfigManager:
         Returns:
             Dict con tp1_pct, tp2_pct, runner_pct o None si no existe
         """
-        # Si no es optimize, devolver preset hardcoded
+        cls.load_presets()
+
+        # Si no es optimize, devolver preset
         if preset_name != "optimize":
-            return cls.PRESETS.get(preset_name)
+            val = cls.PRESETS.get(preset_name)
+            if val:
+                tp1 = float(val.get("tp1_pct", 0.0))
+                tp2 = float(val.get("tp2_pct", 0.0))
+                runner = float(val.get("runner_pct", 0.0))
+                if abs(tp1 + tp2 + runner - 1.0) >= 1e-4:
+                    raise ValueError(
+                        f"Loaded TP distribution for preset '{preset_name}' does not sum to 1.0: "
+                        f"{tp1} + {tp2} + {runner} = {tp1 + tp2 + runner}"
+                    )
+            return val
 
         # Si es optimize, intentar cargar óptimo guardado
         if cls.CONFIG_PATH.exists():
@@ -55,10 +97,18 @@ class TPConfigManager:
                 days_old = (datetime.now() - saved_date).days
 
                 if days_old <= 7:
+                    tp1 = float(config["tp1_pct"])
+                    tp2 = float(config["tp2_pct"])
+                    runner = float(config["runner_pct"])
+                    if abs(tp1 + tp2 + runner - 1.0) >= 1e-4:
+                        raise ValueError(
+                            f"Saved optimal TP distribution does not sum to 1.0: "
+                            f"{tp1} + {tp2} + {runner} = {tp1 + tp2 + runner}"
+                        )
                     return {
-                        "tp1_pct": config["tp1_pct"],
-                        "tp2_pct": config["tp2_pct"],
-                        "runner_pct": config["runner_pct"],
+                        "tp1_pct": tp1,
+                        "tp2_pct": tp2,
+                        "runner_pct": runner,
                         "sharpe": config.get("sharpe", 0),
                         "source": f"saved ({days_old}d ago)",
                     }
@@ -93,6 +143,12 @@ class TPConfigManager:
             trades: Número de trades
             source: Fuente de los datos (e.g., "optimize_tp_distributions", "walk_forward")
         """
+        if abs(tp1_pct + tp2_pct + runner_pct - 1.0) >= 1e-4:
+            raise ValueError(
+                f"TP distribution to save does not sum to 1.0: "
+                f"{tp1_pct} + {tp2_pct} + {runner_pct} = {tp1_pct + tp2_pct + runner_pct}"
+            )
+
         cls.CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
         config = {
@@ -116,6 +172,7 @@ class TPConfigManager:
     @classmethod
     def get_all_presets(cls) -> Dict:
         """Devuelve todos los presets disponibles."""
+        cls.load_presets()
         return cls.PRESETS.copy()
 
     @classmethod
@@ -124,6 +181,10 @@ class TPConfigManager:
         if cls.CONFIG_PATH.exists():
             cls.CONFIG_PATH.unlink()
             print(f"🗑️  Cleared saved TP config: {cls.CONFIG_PATH}")
+
+
+# Inicializar
+TPConfigManager.load_presets()
 
 
 # Funciones de conveniencia para uso directo

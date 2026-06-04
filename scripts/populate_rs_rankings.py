@@ -115,9 +115,20 @@ def compute_rs_for_date(conn, target_date):
     ret_60d = safe_ret(last, p60)
 
     has_60d = ret_60d != 0.0
-    ret_5d = ret_5d[has_60d]
-    ret_20d = ret_20d[has_60d]
-    ret_60d = ret_60d[has_60d]
+    has_20d = ret_20d != 0.0
+    # Accept tickers with valid 60d OR 20d returns (not just 60d)
+    # This prevents dropping tickers with <60 days of history
+    has_data = has_60d | has_20d
+    n_dropped = (~has_data).sum()
+    if n_dropped > 0:
+        dropped_tickers = ret_60d[~has_data].index.tolist()
+        logger.debug(
+            f"{target_date}: {n_dropped} tickers dropped (zero 60d+20d return): "
+            f"{dropped_tickers[:10]}"
+        )
+    ret_5d = ret_5d[has_data]
+    ret_20d = ret_20d[has_data]
+    ret_60d = ret_60d[has_data]
 
     if len(ret_60d) < 2:
         return pd.DataFrame()

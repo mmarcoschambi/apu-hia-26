@@ -11,32 +11,83 @@ from src.integration.routed_signal import RoutedSignal
 class RiskGateConfig:
     capital_total_usd: float = 100000.0
     risk_per_trade_usd: float = 1000.0
-    budget_split: dict[str, float] = field(default_factory=lambda: {"A": 0.7, "B": 0.3})
+    budget_split: dict[str, float] = None
     max_exposure_total_pct: float = 0.65
     max_exposure_per_ticker_pct: float = 0.12
     max_positions_total: int = 8
-    max_positions_per_source: dict[str, int] = field(
-        default_factory=lambda: {"A": 6, "B": 4}
-    )
+    max_positions_per_source: dict[str, int] = None
     default_stop_pct: float = 0.05
+    max_allowed_stop_pct: float = 0.15
     min_shares: int = 1
     min_price: float = 1.0
+
+    def __post_init__(self):
+        if self.budget_split is None:
+            self.budget_split = {"A": 0.7, "B": 0.3}
+        if self.max_positions_per_source is None:
+            self.max_positions_per_source = {"A": 6, "B": 4}
+
+    @classmethod
+    def from_production_config(cls) -> "RiskGateConfig":
+        """
+        Carga la configuración de riesgo desde config/production_config.json
+        """
+        try:
+            from src.config.dynamic_config import load_production_config
+            cfg = load_production_config()
+            gate_cfg = cfg.get("risk_gate")
+            if not gate_cfg:
+                raise KeyError("Missing 'risk_gate' section in production_config.json")
+            
+            return cls(
+                capital_total_usd=float(gate_cfg["capital_total_usd"]),
+                risk_per_trade_usd=float(gate_cfg["risk_per_trade_usd"]),
+                budget_split=gate_cfg["budget_split"],
+                max_exposure_total_pct=float(gate_cfg["max_exposure_total_pct"]),
+                max_exposure_per_ticker_pct=float(gate_cfg["max_exposure_per_ticker_pct"]),
+                max_positions_total=int(gate_cfg["max_positions_total"]),
+                max_positions_per_source=gate_cfg["max_positions_per_source"],
+                default_stop_pct=float(gate_cfg["default_stop_pct"]),
+                max_allowed_stop_pct=float(gate_cfg["max_allowed_stop_pct"]),
+                min_shares=int(gate_cfg["min_shares"]),
+                min_price=float(gate_cfg["min_price"]),
+            )
+        except Exception as e:
+            # Fallback a valores seguros si falla
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Error loading from production config: {e}. Using safe defaults.")
+            return cls(
+                capital_total_usd=100000.0,
+                risk_per_trade_usd=1000.0,
+                budget_split={"A": 0.7, "B": 0.3},
+                max_exposure_total_pct=0.65,
+                max_exposure_per_ticker_pct=0.12,
+                max_positions_total=8,
+                max_positions_per_source={"A": 6, "B": 4},
+                default_stop_pct=0.05,
+                max_allowed_stop_pct=0.08,
+                min_shares=1,
+                min_price=1.0,
+            )
 
 
 def load_config(config_path: Path) -> RiskGateConfig:
     with open(config_path, "r") as f:
         data = json.load(f)
+    gate_data = data.get("risk_gate", data)
     return RiskGateConfig(
-        capital_total_usd=data.get("capital_total_usd", 100000.0),
-        risk_per_trade_usd=data.get("risk_per_trade_usd", 1000.0),
-        budget_split=data.get("budget_split", {"A": 0.7, "B": 0.3}),
-        max_exposure_total_pct=data.get("max_exposure_total_pct", 0.65),
-        max_exposure_per_ticker_pct=data.get("max_exposure_per_ticker_pct", 0.12),
-        max_positions_total=data.get("max_positions_total", 8),
-        max_positions_per_source=data.get("max_positions_per_source", {"A": 6, "B": 4}),
-        default_stop_pct=data.get("default_stop_pct", 0.05),
-        min_shares=data.get("min_shares", 1),
-        min_price=data.get("min_price", 1.0),
+        capital_total_usd=gate_data.get("capital_total_usd", 100000.0),
+        risk_per_trade_usd=gate_data.get("risk_per_trade_usd", 1000.0),
+        budget_split=gate_data.get("budget_split", {"A": 0.7, "B": 0.3}),
+        max_exposure_total_pct=gate_data.get("max_exposure_total_pct", 0.65),
+        max_exposure_per_ticker_pct=gate_data.get("max_exposure_per_ticker_pct", 0.12),
+        max_positions_total=gate_data.get("max_positions_total", 8),
+        max_positions_per_source=gate_data.get("max_positions_per_source", {"A": 6, "B": 4}),
+        default_stop_pct=gate_data.get("default_stop_pct", 0.05),
+        max_allowed_stop_pct=gate_data.get("max_allowed_stop_pct", 0.08),
+        min_shares=gate_data.get("min_shares", 1),
+        min_price=gate_data.get("min_price", 1.0),
     )
 
 
@@ -132,6 +183,19 @@ def apply_risk_gate(
                 {
                     "signal": routed,
                     "reason": "invalid_stop",
+                }
+            )
+            continue
+
+        # Check if stop loss percentage exceeds maximum allowed
+        stop_pct = per_share_risk / entry_price
+        if stop_pct > config.max_allowed_stop_pct:
+            rejected.append(
+                {
+                    "signal": routed,
+                    "reason": "max_allowed_stop_pct",
+                    "stop_pct": stop_pct,
+                    "max_allowed": config.max_allowed_stop_pct,
                 }
             )
             continue

@@ -39,15 +39,15 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from src.utils.market_context_live import get_market_context_live
 from src.scanner.universe_loader import load_scan_universe
+from src.config.config_loader import load_production_config
 
 CONFIG_PATH = PROJECT_ROOT / "config" / "production_config.json"
 DB_PATH = PROJECT_ROOT / "data" / "ticker_cache.db"
 OUTPUT_DIR = PROJECT_ROOT / "outputs" / "live_signals"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Load golden config
-with open(CONFIG_PATH) as f:
-    _cfg = json.load(f)
+# Load golden config strictly
+_cfg = load_production_config()
 
 T1 = _cfg["tier1_strategy"]
 T2 = _cfg["tier2_filters"]
@@ -64,6 +64,16 @@ MIN_RS_PCT = T2.get("min_rs_percentile", 70.0)
 RS_LOOKBACK = T2.get("rs_lookback_days", 60)
 MAX_VIX = MR.get("max_vix", 35.0)
 REQ_SPY_SMA50 = MR.get("require_spy_above_sma50", True)
+ML_CFG = _cfg["ml_entry_filter"]
+
+_scorer_gate = None
+
+def get_scorer_gate():
+    global _scorer_gate
+    if _scorer_gate is None:
+        from src.ml.entry_scorer_gate import EntryScorerGate
+        _scorer_gate = EntryScorerGate(model_path=ML_CFG["model_path"])
+    return _scorer_gate
 
 LOOKBACK_DAYS = 130
 MIN_HISTORY = 65
@@ -201,11 +211,34 @@ def scan_ticker(ticker, df, all_closes):
 
     entry_score = round(1.0 * rs_score + 0.0 * prox_52w, 3)
 
-    # Stop / TP levels (reference for paper trading)
-    stop_dist = last_close * T1.get("max_stop_pct", 0.08)
+    # Stop / TP levels (reference for paper trading) strictly from config
+    if "max_stop_pct" not in T1:
+        raise KeyError("Missing required config 'max_stop_pct' in tier1_strategy")
+    if "tp1_r" not in T1:
+        raise KeyError("Missing required config 'tp1_r' in tier1_strategy")
+    if "tp2_r" not in T1:
+        raise KeyError("Missing required config 'tp2_r' in tier1_strategy")
+    if "risk_dollars" not in T1:
+        raise KeyError("Missing required config 'risk_dollars' in tier1_strategy")
+
+    stop_dist = last_close * T1["max_stop_pct"]
     stop_price = round(last_close - stop_dist, 4)
-    tp1_price = round(last_close + stop_dist * T1.get("tp1_r", 1.75), 4)
-    tp2_price = round(last_close + stop_dist * T1.get("tp2_r", 3.75), 4)
+    tp1_price = round(last_close + stop_dist * T1["tp1_r"], 4)
+    tp2_price = round(last_close + stop_dist * T1["tp2_r"], 4)
+
+    # ML entry score / filter
+    scorer_gate = get_scorer_gate()
+    ml_prob = scorer_gate.score({
+        "context_rvol": last_rvol,
+        "context_adr": adr_val,
+        "entry_score": entry_score,
+        "dist_sma20_pct": last_dist,
+        "stop_distance_pct": T1["max_stop_pct"] * 100,
+        "context_dollar_vol": dollar_vol,
+    })
+
+    if ML_CFG.get("enabled", False) and ml_prob < ML_CFG.get("threshold", 0.40):
+        return None
 
     return {
         "ticker": ticker,
@@ -223,7 +256,8 @@ def scan_ticker(ticker, df, all_closes):
         "stop_price": stop_price,
         "tp1": tp1_price,
         "tp2": tp2_price,
-        "risk_$": T1.get("risk_dollars", 1000),
+        "risk_$": T1["risk_dollars"],
+        "ml_entry_prob": round(ml_prob, 3),
     }
 
 
@@ -245,6 +279,12 @@ def main():
         type=str,
         default="",
         help="CSV path for --universe-source file",
+    )
+    parser.add_argument(
+        "--screener-combo",
+        type=str,
+        default="none",
+        help="Combo name (from configs/combos/) to build and run as a sequential ScreenerPipeline"
     )
     args = parser.parse_args()
 
@@ -288,6 +328,13 @@ def main():
         universe = load_scan_universe(source="db", top_n=args.top)
     print(f"Scanning {len(universe)} tickers...")
 
+    # Load ScreenerPipeline if specified
+    pipeline = None
+    if args.screener_combo != "none":
+        from src.screeners.combo_loader import build_combo_pipeline
+        print(f"Loading sequential ScreenerPipeline for combo: {args.screener_combo}...")
+        pipeline = build_combo_pipeline(args.screener_combo)
+
     # Load RS universe
     all_closes = {}
     for t in universe:
@@ -301,8 +348,17 @@ def main():
         df = load_ohlcv(ticker)
         if df.empty or len(df) < MIN_HISTORY:
             continue
+
+        # Execute ScreenerPipeline if specified
+        if pipeline:
+            res = pipeline.scan(ticker, df)
+            if not res.passed:
+                continue
+
         r = scan_ticker(ticker, df, all_closes)
         if r:
+            if pipeline:
+                r["screener_score"] = round(res.score, 2)
             signals.append(r)
         if not args.quiet and i % 500 == 0:
             print(f"  [{i}/{len(universe)}] signals: {len(signals)}")
@@ -316,12 +372,12 @@ def main():
     )
     print(f"{'=' * 70}")
     if signals:
-        hdr = f"{'Ticker':<8} {'Score':>6} {'RS%':>5} {'RVOL':>5} {'ADR%':>5} {'Dist%':>6} {'$M':>6} {'Price':>8} {'Stop':>8} {'TP1':>8} {'TP2':>8}"
+        hdr = f"{'Ticker':<8} {'Score':>6} {'ML_Prob':>7} {'RS%':>5} {'RVOL':>5} {'ADR%':>5} {'Dist%':>6} {'$M':>6} {'Price':>8} {'Stop':>8} {'TP1':>8} {'TP2':>8}"
         print(f"\n{hdr}")
         print("-" * len(hdr))
         for s in signals:
             print(
-                f"{s['ticker']:<8} {s['entry_score']:>6.3f} {s['rs_percentile']:>5.1f} "
+                f"{s['ticker']:<8} {s['entry_score']:>6.3f} {s['ml_entry_prob']:>7.3f} {s['rs_percentile']:>5.1f} "
                 f"{s['rvol']:>5.2f} {s['adr_pct']:>5.2f} {s['dist_sma20']:>6.2f} "
                 f"{s['dollar_vol_M']:>6.1f} {s['signal_price']:>8.2f} "
                 f"{s['stop_price']:>8.2f} {s['tp1']:>8.2f} {s['tp2']:>8.2f}"

@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
+import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -29,6 +30,9 @@ from src.integration.combo_loader import load_combo_merged
 from src.integration.universe_builder import build_universe_for_fold
 from src.config.dynamic_config import load_production_config
 from src.utils.sector_rotation import SECTOR_MAP, SECTOR_ETFS
+from src.signals.thematic_logic import calculate_equal_weighted_index
+from src.utils.market_health import calculate_health_score_pit
+from config.feature_flags import get_active_mode
 
 logging.basicConfig(
     level=logging.INFO,
@@ -77,47 +81,202 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
         t2_master = {}
         use_sector_filter = False
 
-    # 2. Pre-fetch ETF data si el filtro está activo
+    # 2. Pre-fetch ETF and Theme data si los filtros están activos
     etf_dists = {}
-    if use_sector_filter:
+    theme_metrics_map = {}
+    
+    use_theme_filter = t2_master.get("use_theme_group_filter", False)
+
+    if use_sector_filter or use_theme_filter:
         import yfinance as yf
-        logger.info("Fetching Sector ETF data for filter...")
-        etf_start = (today - timedelta(days=60)).strftime("%Y-%m-%d")
+        from src.data.theme_taxonomy import THEME_MAP, get_themes
+        
+        logger.info("Fetching Market Data for Filters (Sector + Theme)...")
+        etf_start = (today - timedelta(days=90)).strftime("%Y-%m-%d")
+        
+        # Recolectar todos los tickers necesarios
+        tickers_to_fetch = set(SECTOR_ETFS)
+        if use_theme_filter:
+            for t in THEME_MAP:
+                tickers_to_fetch.add(t)
+        
         try:
-            etf_data = yf.download(SECTOR_ETFS, start=etf_start, end=date_str, progress=False)["Close"]
-            if isinstance(etf_data.columns, pd.MultiIndex):
-                etf_data.columns = etf_data.columns.get_level_values(0)
+            market_data = yf.download(list(tickers_to_fetch), start=etf_start, end=date_str, progress=False)["Close"]
+            if isinstance(market_data, pd.Series):
+                # Caso un solo ticker
+                ticker = list(tickers_to_fetch)[0]
+                market_data = market_data.to_frame()
+                market_data.columns = [ticker]
+            elif isinstance(market_data.columns, pd.MultiIndex):
+                market_data.columns = market_data.columns.get_level_values(0)
             
+            market_data = market_data.ffill()
+            
+            # 2a. Calcular ETF Dists
             sma_period = t2_master.get("sector_etf_sma_period", 20)
             for etf in SECTOR_ETFS:
-                if etf in etf_data.columns:
-                    series = etf_data[etf].ffill()
+                if etf in market_data.columns:
+                    series = market_data[etf]
                     if len(series) >= sma_period:
                         sma = series.rolling(sma_period).mean().iloc[-1]
                         current = series.iloc[-1]
                         etf_dists[etf] = (current / sma) - 1
-            logger.info(f"  ETF Dists calculated for {len(etf_dists)} sectors.")
+            
+            # 2b. Calcular Theme Metrics
+            if use_theme_filter:
+                theme_to_tickers = {}
+                for t, themes in THEME_MAP.items():
+                    for theme in themes:
+                        theme_to_tickers.setdefault(theme, []).append(t)
+                
+                theme_indices = {}
+                for theme, members in theme_to_tickers.items():
+                    t_idx = calculate_equal_weighted_index(market_data, members, min_members=None)
+                    if not t_idx.empty:
+                        theme_indices[theme] = t_idx
+                
+                df_themes = pd.DataFrame(theme_indices)
+                theme_sma20 = df_themes.rolling(20).mean()
+                
+                # Theme Metrics for each ticker
+                for ticker in THEME_MAP:
+                    ticker_themes = get_themes(ticker)
+                    etf_sym = SECTOR_MAP.get(ticker)
+                    
+                    best_theme = None
+                    best_theme_vs_sector = -999
+                    
+                    metrics_found = False
+                    
+                    for theme in ticker_themes:
+                        if theme not in df_themes.columns: continue
+                        
+                        try:
+                            t_price = df_themes[theme].iloc[-1]
+                            t_sma = theme_sma20[theme].iloc[-1]
+                            if pd.isna(t_price) or pd.isna(t_sma): continue
+                            
+                            t_dist = (t_price / t_sma) - 1
+                            t_ret_20d = df_themes[theme].pct_change(20).iloc[-1]
+                            
+                            vs_sector = 0.0
+                            if etf_sym and etf_sym in market_data.columns:
+                                etf_ret_20d = market_data[etf_sym].pct_change(20).iloc[-1]
+                                vs_sector = t_ret_20d - etf_ret_20d
+                            
+                            if vs_sector > best_theme_vs_sector:
+                                best_theme_vs_sector = vs_sector
+                                best_theme = theme
+                                
+                                theme_metrics_map[ticker] = {
+                                    "theme_dist": t_dist,
+                                    "theme_vs_sector": vs_sector,
+                                    "theme_rank_pct": 0.0, # simplified rank for live
+                                    "best_theme": theme
+                                }
+                            metrics_found = True
+                        except:
+                            continue
+            
+            logger.info(f"  ETF Dists: {len(etf_dists)} | Theme Metrics: {len(theme_metrics_map)} calculated.")
         except Exception as e:
-            logger.error(f"Error fetching ETF data: {e}. Filter might fail for some tickers.")
+            logger.error(f"Error fetching market data: {e}. Filters might fail.")
 
-    # 3. Construir universo idéntico al WF
-    logger.info(f"Building universe (limit={max_tickers})...")
-    universe_start = (today - timedelta(days=730)).strftime("%Y-%m-%d")
-    snap = build_universe_for_fold(
-        DB_PATH, date_str, universe_start, max_tickers=max_tickers
-    )
-    tickers = snap.tickers
-    logger.info(f"Universe: {len(tickers)} tickers selected.")
+    # 3. Construir universos
+    db_exists = DB_PATH.exists()
+    tickers_local = set()
+    if db_exists:
+        logger.info(f"Building Local PIT universe (limit={max_tickers})...")
+        universe_start = (today - timedelta(days=730)).strftime("%Y-%m-%d")
+        snap_local = build_universe_for_fold(
+            DB_PATH, date_str, universe_start, max_tickers=max_tickers
+        )
+        tickers_local = set(snap_local.tickers)
+        logger.info(f"Local Universe: {len(tickers_local)} tickers selected.")
+    else:
+        logger.warning(f"Database NOT FOUND at {DB_PATH}. Running in VPS mode.")
+
+    # 3b. Finviz Universe
+    tickers_finviz = set()
+    u_source_cfg = master_cfg.get("universe_source", {})
+    if u_source_cfg.get("enabled", False) or not db_exists:
+        try:
+            from src.data.finviz_universe_provider import FinvizUniverseProvider
+            # Usar filtros del config para el scrapeo live (o default si no hay)
+            f_cfg = u_source_cfg.get("finviz", {"filters": "sh_avgvol_over500,sh_price_over2"})
+            provider = FinvizUniverseProvider(f_cfg)
+            tickers_finviz = set(provider.get_universe())
+            logger.info(f"Finviz Universe: {len(tickers_finviz)} tickers fetched.")
+        except Exception as e:
+            logger.warning(f"Failed to load Finviz universe: {e}")
+
+    # Combinar para escaneo único
+    all_scan_tickers = sorted(list(tickers_local | tickers_finviz))
+
+    # Apply exclusions from master config
+    exclude_tickers = master_cfg.get("exclude_tickers", []) if isinstance(master_cfg, dict) else []
+    exclude_sectors = master_cfg.get("exclude_sectors", []) if isinstance(master_cfg, dict) else []
+    
+    exclude_set = set()
+    for x in exclude_tickers:
+        if isinstance(x, str):
+            for tok in x.split(","):
+                if tok.strip():
+                    exclude_set.add(tok.upper().strip())
+                    
+    exclude_sectors_set = set()
+    for x in exclude_sectors:
+        if isinstance(x, str):
+            for tok in x.split(","):
+                if tok.strip():
+                    exclude_sectors_set.add(tok.upper().strip())
+
+    if exclude_set or exclude_sectors_set:
+        original_count = len(all_scan_tickers)
+        all_scan_tickers = [
+            t for t in all_scan_tickers
+            if t.upper() not in exclude_set
+            and SECTOR_MAP.get(t.upper(), "UNKNOWN") not in exclude_sectors_set
+        ]
+        logger.info(
+            f"Exclusions applied: Excluded {original_count - len(all_scan_tickers)} tickers. "
+            f"Remaining: {len(all_scan_tickers)} tickers. "
+            f"Excluding Tickers: {sorted(list(exclude_set))}, Sectors: {sorted(list(exclude_sectors_set))}"
+        )
+    else:
+        logger.info(f"Combined Scan Universe: {len(all_scan_tickers)} unique tickers.")
 
     # 4. Cargar SPY para régimen de mercado (SMA200 real)
-    logger.info("Checking Market Regime (SMA200)...")
+    logger.info("Checking Market Regime & Health Score...")
     spy_start = (today - timedelta(days=400)).strftime("%Y-%m-%d")
     spy_df = load_ohlcv("SPY", spy_start, date_str)
+    
+    # NEW: Market Health & Mode Selection
+    vix_start = (today - timedelta(days=10)).strftime("%Y-%m-%d")
+    vix_df = load_ohlcv("^VIX", vix_start, date_str)
+    health = calculate_health_score_pit(spy_df, vix_df)
+    active_mode = get_active_mode(health)
+    
+    logger.info(f"MARKET HEALTH: {health}/7 | ACTIVE MODE: {active_mode['mode']}")
 
     # 5. Cargar configuraciones de combos
     logger.info("Loading combo configurations...")
     cfg_a, _ = load_combo_merged("combo_pure_momentum")
     cfg_b, _ = load_combo_merged("combo_stage2_breakout")
+
+    # Dynamic Mode Application
+    cfg_a["tier2_filters"]["use_theme_group_filter"] = active_mode["use_theme_group_filter"]
+    cfg_b["tier2_filters"]["use_theme_group_filter"] = active_mode["use_theme_group_filter"]
+    cfg_a["tier2_filters"]["use_sector_etf_filter"] = not active_mode["use_theme_group_filter"]
+    cfg_b["tier2_filters"]["use_sector_etf_filter"] = not active_mode["use_theme_group_filter"]
+    
+    # Effective Risk Calculation
+    base_risk = float(master_cfg.get("tier1_strategy", {}).get("risk_dollars", 2878.0))
+    effective_risk = base_risk * active_mode["risk_multiplier"]
+    cfg_a["tier1_strategy"]["risk_dollars"] = effective_risk
+    cfg_b["tier1_strategy"]["risk_dollars"] = effective_risk
+    
+    logger.info(f"Effective Risk per Trade: ${effective_risk:.2f} ({active_mode['risk_multiplier']*100:.0f}%)")
 
     # Aplicar Overrides: Master Config gana, luego VALIDATED_OVERRIDES como fallback/legacy
     VALIDATED_OVERRIDES = {
@@ -152,11 +311,15 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
     # 6. Scan
     all_signals = []
     rejection_audit = []
-    logger.info(f"Scanning {len(tickers)} tickers with A+B modes...")
+    logger.info(f"Scanning {len(all_scan_tickers)} tickers with A+B modes...")
 
-    for ticker in tickers:
+    for ticker in all_scan_tickers:
         df = pd.DataFrame()
         try:
+            # Ticker source info
+            in_local = ticker in tickers_local
+            in_finviz = ticker in tickers_finviz
+            
             # Lookback de seguridad para medias móviles
             df_start = (today - timedelta(days=300)).strftime("%Y-%m-%d")
             df = load_ohlcv(ticker, df_start, date_str)
@@ -167,6 +330,12 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
             # Obtener dist del ETF para este ticker
             etf_symbol = SECTOR_MAP.get(ticker)
             dist = etf_dists.get(etf_symbol) if etf_symbol else None
+            
+            # Obtener metrics temáticas
+            t_m = theme_metrics_map.get(ticker, {})
+            t_dist = t_m.get("theme_dist")
+            t_vs_sec = t_m.get("theme_vs_sector")
+            t_rank = t_m.get("theme_rank_pct")
 
             # Evaluar ambos modos
             da = evaluate_ticker(
@@ -176,7 +345,10 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
                 combo_cfg=cfg_a,
                 mode="A",
                 scan_date=date_str,
-                sector_etf_dist=dist
+                sector_etf_dist=dist,
+                theme_dist=t_dist,
+                theme_vs_sector=t_vs_sec,
+                theme_rank_pct=t_rank
             )
             da_no_sector = evaluate_ticker(
                 ticker=ticker,
@@ -185,7 +357,10 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
                 combo_cfg=cfg_a_no_sector,
                 mode="A",
                 scan_date=date_str,
-                sector_etf_dist=dist
+                sector_etf_dist=dist,
+                theme_dist=t_dist,
+                theme_vs_sector=t_vs_sec,
+                theme_rank_pct=t_rank
             )
             db = evaluate_ticker(
                 ticker=ticker,
@@ -194,7 +369,10 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
                 combo_cfg=cfg_b,
                 mode="B",
                 scan_date=date_str,
-                sector_etf_dist=dist
+                sector_etf_dist=dist,
+                theme_dist=t_dist,
+                theme_vs_sector=t_vs_sec,
+                theme_rank_pct=t_rank
             )
             db_no_sector = evaluate_ticker(
                 ticker=ticker,
@@ -203,29 +381,45 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
                 combo_cfg=cfg_b_no_sector,
                 mode="B",
                 scan_date=date_str,
-                sector_etf_dist=dist
+                sector_etf_dist=dist,
+                theme_dist=t_dist,
+                theme_vs_sector=t_vs_sec,
+                theme_rank_pct=t_rank
             )
 
             # Auditoria contrafactual: mismo ticker/mode con filtro ON vs OFF.
-            for with_sector, without_sector in [(da, da_no_sector), (db, db_no_sector)]:
+            for with_theme, without_theme in [(da, da_no_sector), (db, db_no_sector)]:
+                blocked_by_theme = (
+                    without_theme.passed
+                    and not with_theme.passed
+                    and "theme_group" in with_theme.reject_reason
+                )
                 blocked_by_sector = (
-                    without_sector.passed
-                    and not with_sector.passed
-                    and "sector_etf" in with_sector.reject_reason
+                    without_theme.passed
+                    and not with_theme.passed
+                    and "sector_etf" in with_theme.reject_reason
                 )
                 rejection_audit.append({
                     "ticker": ticker,
-                    "mode": with_sector.mode,
+                    "in_local": in_local,
+                    "in_finviz": in_finviz,
+                    "mode": with_theme.mode,
                     "sector_etf": etf_symbol,
-                    "sector_etf_dist": dist,
-                    "passed_with_sector": with_sector.passed,
-                    "reject_reason_with_sector": with_sector.reject_reason,
-                    "passed_without_sector": without_sector.passed,
-                    "reject_reason_without_sector": without_sector.reject_reason,
+                    "best_theme": t_m.get("best_theme"),
+                    "theme_vs_sector": t_vs_sec,
+                    "passed_with_filter": with_theme.passed,
+                    "reject_reason": with_theme.reject_reason,
+                    "passed_without_filter": without_theme.passed,
+                    "blocked_by_theme": blocked_by_theme,
                     "blocked_by_sector": blocked_by_sector,
+                    "target_hold_days": with_theme.target_hold_days
                 })
 
-            # Mergear señales
+            # Mergear señales (Solo señales del universo LOCAL pasan al combined.csv para decisión en Fase 3)
+            # Finviz queda como observación puramente en rejection_audit.csv
+            if not in_local:
+                continue
+
             merged = merge_ab_signals(
                 [da] if da.passed else [], [db] if db.passed else []
             )
@@ -268,6 +462,7 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
                 s_dict["dist_sma20"] = round(sig.tier2_metrics.dist_sma20, 2)
                 s_dict["consol_days"] = sig.tier2_metrics.consol_days
                 s_dict["volume"] = int(sig.tier2_metrics.volume)
+                s_dict["avg_volume_20d"] = round(sig.tier2_metrics.volume / sig.tier2_metrics.rvol, 0) if sig.tier2_metrics.rvol and sig.tier2_metrics.rvol > 0 else 0
                 s_dict["dollar_vol_M"] = round(sig.tier2_metrics.dollar_vol_M, 1)
                 s_dict["rs_ret"] = (
                     round(sig.tier2_metrics.rs_ret, 4)
@@ -282,6 +477,16 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
                 s_dict["close"] = round(sig.tier2_metrics.close, 4)
                 s_dict["spy_above_sma50"] = sig.tier2_metrics.spy_above_sma50
                 s_dict["spy_above_sma200"] = sig.tier2_metrics.spy_above_sma200
+                s_dict["theme_dist"] = (
+                    round(sig.tier2_metrics.theme_dist, 4)
+                    if sig.tier2_metrics.theme_dist is not None
+                    else None
+                )
+                s_dict["theme_vs_sector"] = (
+                    round(sig.tier2_metrics.theme_vs_sector, 4)
+                    if sig.tier2_metrics.theme_vs_sector is not None
+                    else None
+                )
 
                 all_signals.append(s_dict)
                 logger.info(
@@ -296,8 +501,23 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if rejection_audit:
-        pd.DataFrame(rejection_audit).to_csv(out_dir / "rejection_audit.csv", index=False)
+        df_audit = pd.DataFrame(rejection_audit)
+        df_audit.to_csv(out_dir / "rejection_audit.csv", index=False)
         logger.info(f"Saved {len(rejection_audit)} rejection records to {out_dir / 'rejection_audit.csv'}")
+        
+        # Summary for Thematic Divergence (Fase 2.3)
+        theme_blocked = df_audit["blocked_by_theme"].sum()
+        theme_passed = (df_audit["passed_with_filter"] & df_audit["best_theme"].notna()).sum()
+        logger.info("=" * 40)
+        logger.info("THEMATIC FILTER SUMMARY (Divergence Mode)")
+        logger.info(f"  Allowed: {theme_passed} | Blocked: {theme_blocked}")
+        logger.info("=" * 40)
+        
+        # Weekly floor alert (Fase 2.3)
+        floor = t2_master.get("theme_monthly_signal_floor", 15) / 4.0
+        eligible_signals = (df_audit["passed_without_filter"] & (df_audit["target_hold_days"] >= 10)).sum()
+        if eligible_signals < floor:
+            logger.warning(f"ALERT: Weekly signal floor risk! Eligible signals today: {eligible_signals} (Floor target: {floor:.1f})")
 
     df_results = pd.DataFrame(all_signals)
     if not df_results.empty:

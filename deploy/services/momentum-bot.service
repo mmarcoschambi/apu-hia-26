@@ -1,0 +1,17 @@
+[Unit]
+Description=Momentum V2 - Telegram Bot Listener
+After=network.target
+
+[Service]
+User=xxmalcomandaxx
+Group=xxmalcomandaxx
+WorkingDirectory=/home/xxmalcomandaxx/swing-momentum-v1
+EnvironmentFile=/home/xxmalcomandaxx/swing-momentum-v1/.env
+ExecStart=/home/xxmalcomandaxx/swing-momentum-v1/.venv/bin/python scripts/telegram_bot_listener.py
+Restart=always
+RestartSec=10
+StandardOutput=append:/home/xxmalcomandaxx/swing-momentum-v1/logs/live/telegram_bot.log
+StandardError=append:/home/xxmalcomandaxx/swing-momentum-v1/logs/live/telegram_bot.log
+
+[Install]
+WantedBy=multi-user.target

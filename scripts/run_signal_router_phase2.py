@@ -74,6 +74,23 @@ def main():
     router = SignalRouter(cooldown_enabled=cooldown_enabled)
     accepted, dropped, blocked = router.route_signals(signals)
 
+    # --- SHADOW LOGGING (E11) ---
+    try:
+        from src.paper.shadow_logger import ShadowLogger
+        # Determine date from signals or today
+        log_date = datetime.now().strftime("%Y-%m-%d")
+        if signals:
+            from src.integration.signal_router import get_trade_date
+            log_date = get_trade_date(signals[0].signal_time)
+            
+        logger_shadow = ShadowLogger()
+        logger_shadow.log_round(accepted, log_date)
+        # Also try to fill forward returns for previous days
+        logger_shadow.fill_forward_returns()
+    except Exception as e:
+        print(f"⚠️ Shadow logging failed: {e}")
+    # ----------------------------
+
     accepted_jsonl = output_base.with_suffix(".jsonl")
     accepted_csv = output_base.with_name(
         output_base.stem.replace("accepted", "accepted") + ".csv"

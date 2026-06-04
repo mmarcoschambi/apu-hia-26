@@ -1,0 +1,22 @@
+{
+  "strategy": "THOR Permissive",
+  "objective": "More trades = higher exposure",
+  "filters": {
+    "min_rvol": 0.8,
+    "min_adr": 1.2,
+    "max_dist_sma20": 25.0,
+    "min_volume": 50000,
+    "min_dollar_volume": 5000000,
+    "min_consolidation_days": 3
+  },
+  "position_sizing": {
+    "risk_dollars": 1500,
+    "max_exposure": 0.95,
+    "max_position": 0.30
+  },
+  "expected_results": {
+    "trades_per_year": 80,
+    "avg_exposure": "70-80%",
+    "target_return": "SPY + 10%"
+  }
+}

@@ -39,8 +39,9 @@ from src.paper.telegram_views import (
     build_signal_cards,
     build_signals_message,
     build_watchlist_message,
+    build_watchlist_detail,
 )
-from src.utils.telegram_client import answer_callback, get_updates, send_message_with_buttons
+from src.utils.telegram_client import answer_callback, edit_message, get_updates, send_message_with_buttons
 
 EVENTS_DIR = PROJECT_ROOT / "outputs" / "telegram_events"
 STATE_DIR = PROJECT_ROOT / "outputs" / "telegram_state"
@@ -48,7 +49,9 @@ STATE_DIR.mkdir(parents=True, exist_ok=True)
 EVENTS_DIR.mkdir(parents=True, exist_ok=True)
 
 REFRESH_BUTTONS = {
-    "market": [[{"text": "🔄 Refresh", "callback_data": "refresh:market"}]],
+    "market": [
+        [{"text": "🔄 Refresh", "callback_data": "refresh:market"}, {"text": "⚡ Regen All", "callback_data": "regenerate:market"}]
+    ],
     "signals": [[{"text": "🔄 Refresh", "callback_data": "refresh:signals"}]],
     "watchlist": [[{"text": "🔄 Refresh", "callback_data": "refresh:watchlist"}]],
     "portfolio": [[{"text": "🔄 Refresh", "callback_data": "refresh:portfolio"}]],
@@ -110,18 +113,51 @@ def _command_args(text: str) -> tuple[str, str]:
     return command, arg
 
 
+def _is_ticker(val: str) -> bool:
+    if not val:
+        return False
+    val = val.strip().upper()
+    if "-" in val:
+        return False
+    if val.isdigit():
+        return False
+    return 1 <= len(val) <= 6
+
+
 def _send_view(chat_id: str, view: str, arg: str = "", interactive: bool = False) -> None:
     if view == "market":
+        msg_text, msg_buttons = build_market_message(arg or None)
         send_message_with_buttons(
-            build_market_message(arg or None),
-            buttons=REFRESH_BUTTONS["market"],
+            msg_text,
+            buttons=msg_buttons if msg_buttons else REFRESH_BUTTONS["market"],
             chat_id=chat_id,
         )
         return
     if view == "watchlist":
+        if arg and _is_ticker(arg):
+            msg_text = build_watchlist_detail(arg)
+            buttons = [
+                [
+                    {"text": "🔄 Refresh", "callback_data": f"watchlist_detail:{arg.upper()}"},
+                    {"text": "📋 Watchlist", "callback_data": "watchlist_page:1"},
+                ]
+            ]
+            send_message_with_buttons(msg_text, buttons=buttons, chat_id=chat_id)
+            return
+
+        # Resolve page and date
+        page = 1
+        date_str = None
+        if arg:
+            if "-" in arg:
+                date_str = arg
+            elif arg.isdigit():
+                page = int(arg)
+
+        msg_text, msg_buttons = build_watchlist_message(date=date_str, page=page)
         send_message_with_buttons(
-            build_watchlist_message(arg or None),
-            buttons=REFRESH_BUTTONS["watchlist"],
+            msg_text,
+            buttons=msg_buttons if msg_buttons else REFRESH_BUTTONS["watchlist"],
             chat_id=chat_id,
         )
         return
@@ -246,16 +282,13 @@ def _handle_message(update: dict) -> None:
             )
             return
         if command == "watchlist":
-            send_message_with_buttons(
-                build_watchlist_message(arg or None),
-                buttons=REFRESH_BUTTONS["watchlist"],
-                chat_id=chat_id,
-            )
+            _send_view(chat_id, command, arg, interactive=False)
             return
         if command == "market":
+            msg_text, msg_buttons = build_market_message(arg or None)
             send_message_with_buttons(
-                build_market_message(arg or None),
-                buttons=REFRESH_BUTTONS["market"],
+                msg_text,
+                buttons=msg_buttons if msg_buttons else REFRESH_BUTTONS["market"],
                 chat_id=chat_id,
             )
             return
@@ -288,10 +321,41 @@ def _handle_callback(update: dict) -> None:
     action, _, payload = data.partition(":")
     state = load_state()
 
+    if action == "regenerate":
+        import subprocess
+        target = payload or "market"
+        answer_callback(callback_id, f"Regenerating {target} data... (approx 30s)")
+        
+        if target == "market":
+            subprocess.Popen([sys.executable, "scripts/finviz_monitor.py"])
+        
+        _log_action(chat_id, user_id, "regenerate", {"target": target}, status="applied")
+        return
+
     if action == "refresh":
         target = payload or "market"
         if target == "position":
             answer_callback(callback_id, "use /position <ticker>")
+            return
+        if target == "watchlist":
+            page = 1
+            msg_text = message.get("text", "")
+            import re
+            m = re.search(r"Page (\d+)/", msg_text)
+            if m:
+                try:
+                    page = int(m.group(1))
+                except:
+                    pass
+            resolved_text, resolved_buttons = build_watchlist_message(page=page)
+            edit_message(
+                chat_id=chat_id,
+                message_id=message.get("message_id"),
+                text=resolved_text,
+                buttons=resolved_buttons,
+            )
+            _log_action(chat_id, user_id, "refresh", {"target": target, "page": page}, status="applied")
+            answer_callback(callback_id, "Watchlist refreshed")
             return
         if monitor_chat and not shared_chat and target == "signals":
             send_message_with_buttons(
@@ -306,6 +370,43 @@ def _handle_callback(update: dict) -> None:
         _send_view(chat_id, target, "", interactive=interactive)
         _log_action(chat_id, user_id, "refresh", {"target": target}, status="applied")
         answer_callback(callback_id, f"{target} refreshed")
+        return
+
+    if action == "noop":
+        answer_callback(callback_id)
+        return
+
+    if action == "watchlist_page":
+        try:
+            page = int(payload)
+        except ValueError:
+            page = 1
+        resolved_text, resolved_buttons = build_watchlist_message(page=page)
+        edit_message(
+            chat_id=chat_id,
+            message_id=message.get("message_id"),
+            text=resolved_text,
+            buttons=resolved_buttons,
+        )
+        answer_callback(callback_id, f"Page {page} loaded")
+        return
+
+    if action == "watchlist_detail":
+        ticker = payload.upper()
+        msg_text = build_watchlist_detail(ticker)
+        buttons = [
+            [
+                {"text": "🔄 Refresh", "callback_data": f"watchlist_detail:{ticker}"},
+                {"text": "📋 Watchlist", "callback_data": "watchlist_page:1"},
+            ]
+        ]
+        edit_message(
+            chat_id=chat_id,
+            message_id=message.get("message_id"),
+            text=msg_text,
+            buttons=buttons,
+        )
+        answer_callback(callback_id, f"{ticker} refreshed")
         return
 
     if not (demo_chat or shared_chat):

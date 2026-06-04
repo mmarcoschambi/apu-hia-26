@@ -86,7 +86,7 @@ def test_adapter_b_maps_all_required_fields():
         "reason_codes": "rs_1m_percentile_min",
     }
     preset_lookup = {"preset_06": 0.75}
-    signal = adapt_signal_b(row, preset_lookup)
+    signal = adapt_signal_b(row, preset_lookup, historical_mode=True)
     assert signal.source_system == "B"
     assert signal.strategy_id == "preset_06"
     assert signal.ticker == "MSFT"

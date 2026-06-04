@@ -65,19 +65,22 @@ def _fetch_last_close_yf(
 
 
 def _fetch_last_close_cache(
-    db_path: Path, ticker: str, days: int = 10
+    db_path: Path, ticker: str, days: int = 10, as_of: Optional[str | pd.Timestamp] = None
 ) -> Tuple[Optional[float], Optional[str]]:
     """Descarga último close desde cache local (ticker_cache.db)."""
     try:
+        ref_dt = pd.Timestamp(as_of) if as_of else datetime.now()
+        cutoff = (ref_dt - timedelta(days=days)).strftime("%Y-%m-%d")
+        as_of_str = ref_dt.strftime("%Y-%m-%d")
+
         conn = sqlite3.connect(str(db_path))
-        cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
         row = conn.execute(
-            "SELECT close FROM ohlcv_cache WHERE ticker=? AND date>=? ORDER BY date DESC LIMIT 1",
-            (ticker, cutoff),
+            "SELECT close FROM ohlcv_cache WHERE ticker=? AND date>=? AND date<=? ORDER BY date DESC LIMIT 1",
+            (ticker, cutoff, as_of_str),
         ).fetchone()
         conn.close()
         if not row:
-            return None, f"{ticker}: no cache row"
+            return None, f"{ticker}: no cache row up to {as_of_str}"
         return float(row[0]), None
     except Exception as e:
         return None, f"{ticker}: cache error {e}"
@@ -115,6 +118,7 @@ def get_market_context_live(
     spy_lookback_days: int = 300,
     max_vix: float = 35.0,
     db_path: Optional[Path] = None,
+    as_of: Optional[str | pd.Timestamp] = None,
 ) -> Dict[str, Any]:
     """
     Obtiene contexto de mercado de forma robusta con fallback chain.
@@ -125,6 +129,7 @@ def get_market_context_live(
         spy_lookback_days: Días de historia a descargar para el SPY.
         max_vix: Umbral máximo de VIX para aprobar.
         db_path: Path al DB de cache (default: PROJECT_ROOT/data/ticker_cache.db)
+        as_of: Fecha de referencia para el cálculo (default: hoy).
 
     Returns:
         Dict con estructura:
@@ -157,10 +162,30 @@ def get_market_context_live(
 
     # === SPY robusto ===
     try:
-        spy_df = yf.download(
-            "SPY", period=f"{spy_lookback_days}d", auto_adjust=True, progress=False, timeout=10
-        )
+        download_kwargs = {
+            "period": f"{spy_lookback_days}d",
+            "auto_adjust": True,
+            "progress": False,
+            "timeout": 10,
+        }
+        if as_of:
+            as_of_ts = pd.Timestamp(as_of)
+            end_dt = (as_of_ts + timedelta(days=1)).strftime("%Y-%m-%d")
+            start_dt = (as_of_ts - timedelta(days=int(spy_lookback_days * 1.5))).strftime(
+                "%Y-%m-%d"
+            )
+            download_kwargs = {
+                "start": start_dt,
+                "end": end_dt,
+                "auto_adjust": True,
+                "progress": False,
+                "timeout": 10,
+            }
+
+        spy_df = yf.download("SPY", **download_kwargs)
         spy_s = _extract_close_series(spy_df)
+        if as_of:
+            spy_s = spy_s[spy_s.index <= pd.Timestamp(as_of)]
 
         if not spy_s.empty:
             spy_price = float(spy_s.iloc[-1])
@@ -201,7 +226,12 @@ def get_market_context_live(
         ctx["warnings"].append(f"SPY fetch failed: {e}; gate degraded")
 
     if ctx["spy_price"] is None:
-        spy_s, err = _fetch_close_series_cache(db_path, "SPY", days=max(spy_lookback_days + 30, 365))
+        spy_s, err = _fetch_close_series_cache(
+            db_path, "SPY", days=max(spy_lookback_days + 30, 365)
+        )
+        if as_of:
+            spy_s = spy_s[spy_s.index <= pd.Timestamp(as_of)]
+
         if not spy_s.empty:
             spy_price = float(spy_s.iloc[-1])
             ctx["spy_price"] = spy_price
@@ -231,8 +261,31 @@ def get_market_context_live(
         elif err:
             ctx["warnings"].append(err)
 
-    # === VIX chain: ^VIX -> VIXY -> cache ^VIX -> cache VIXY -> PASS_WARNING ===
-    vix_val, err = _fetch_last_close_yf("^VIX", "10d")
+    # === VIX chain ===
+    vix_kwargs = {"period": "10d", "auto_adjust": True, "progress": False, "timeout": 10}
+    if as_of:
+        as_of_ts = pd.Timestamp(as_of)
+        vix_kwargs = {
+            "start": (as_of_ts - timedelta(days=10)).strftime("%Y-%m-%d"),
+            "end": (as_of_ts + timedelta(days=1)).strftime("%Y-%m-%d"),
+            "auto_adjust": True,
+            "progress": False,
+            "timeout": 10,
+        }
+
+    def _fetch_vix_logic(ticker: str) -> Tuple[Optional[float], Optional[str]]:
+        try:
+            df = yf.download(ticker, **vix_kwargs)
+            s = _extract_close_series(df)
+            if as_of:
+                s = s[s.index <= pd.Timestamp(as_of)]
+            if s.empty:
+                return None, f"{ticker}: series empty"
+            return float(s.iloc[-1]), None
+        except Exception as e:
+            return None, f"{ticker}: {e}"
+
+    vix_val, err = _fetch_vix_logic("^VIX")
     if vix_val is not None:
         ctx["vix"] = vix_val
         ctx["vix_ok"] = vix_val < max_vix
@@ -242,7 +295,7 @@ def get_market_context_live(
     if err:
         ctx["warnings"].append(err)
 
-    proxy_val, err = _fetch_last_close_yf("VIXY", "10d")
+    proxy_val, err = _fetch_vix_logic("VIXY")
     if proxy_val is not None:
         ctx["vix"] = proxy_val
         ctx["vix_ok"] = True
@@ -255,7 +308,7 @@ def get_market_context_live(
         ctx["warnings"].append(err)
 
     for ticker in ("^VIX", "VIXY"):
-        cached, err = _fetch_last_close_cache(db_path, ticker, days=14)
+        cached, err = _fetch_last_close_cache(db_path, ticker, days=14, as_of=as_of)
         if cached is not None:
             ctx["vix"] = cached
             ctx["vix_ok"] = True

@@ -67,9 +67,27 @@ class TickerCache:
                 volume INTEGER,
                 dollar_volume REAL,
                 rolling_dollar_vol_20 REAL,
+                sma20 REAL,
+                sma50 REAL,
+                sma100 REAL,
+                sma200 REAL,
+                adr_pct_20 REAL,
                 PRIMARY KEY (ticker, date)
             )
         """)
+
+        # Migración automática para bases de datos existentes
+        cursor = self.conn.execute("PRAGMA table_info(ohlcv_cache)")
+        existing_cols = [row[1] for row in cursor.fetchall()]
+        
+        for col in ["sma20", "sma50", "sma100", "sma200", "adr_pct_20"]:
+            if col not in existing_cols:
+                logger.info(f"Migrating ticker_cache.db: adding column {col} to ohlcv_cache")
+                try:
+                    self.conn.execute(f"ALTER TABLE ohlcv_cache ADD COLUMN {col} REAL")
+                except Exception as e:
+                    logger.warning(f"Failed to add column {col}: {e}")
+
 
         # Nueva tabla para guardar el Top 500 de cada mes y no recalcularlo
         self.conn.execute("""
@@ -498,7 +516,7 @@ class TickerCache:
         query = f"""
             SELECT ticker, date, open, high, low, close, volume,
                    dollar_volume, rolling_dollar_vol_20,
-                   sma20, sma50, adr_pct_20
+                   sma20, sma50, sma100, sma200, adr_pct_20
             FROM ohlcv_cache
             WHERE ticker IN ({placeholders})
               AND date BETWEEN ? AND ?
@@ -581,7 +599,7 @@ class TickerCache:
                     """
                     SELECT date, open, high, low, close, volume,
                            dollar_volume, rolling_dollar_vol_20,
-                           sma20, sma50, adr_pct_20
+                           sma20, sma50, sma100, sma200, adr_pct_20
                     FROM ohlcv_cache
                     WHERE ticker = ? AND date BETWEEN ? AND ?
                     ORDER BY date
@@ -607,6 +625,8 @@ class TickerCache:
                     "rolling_dollar_vol_20",
                     "sma20",
                     "sma50",
+                    "sma100",
+                    "sma200",
                     "adr_pct_20",
                 ],
             )
@@ -753,6 +773,18 @@ class TickerCache:
             df["rolling_dollar_vol_20"] = (
                 df["dollar_volume"].rolling(window=20, min_periods=1).mean()
             )
+            df['sma20'] = close_s.rolling(window=20).mean()
+            df['sma50'] = close_s.rolling(window=50).mean()
+            df['sma100'] = close_s.rolling(window=100).mean()
+            df['sma200'] = close_s.rolling(window=200).mean()
+            
+            high_s = df["High"]
+            low_s = df["Low"]
+            if isinstance(high_s, pd.DataFrame): high_s = high_s.iloc[:, 0]
+            if isinstance(low_s, pd.DataFrame): low_s = low_s.iloc[:, 0]
+            
+            df['daily_range_pct'] = ((high_s - low_s) / low_s) * 100
+            df['adr_pct_20'] = df['daily_range_pct'].rolling(window=20).mean()
 
             # ── TAREA 1.1: BULK INSERT — reemplaza row-by-row (10-50x más rápido) ──
             records = []
@@ -790,6 +822,19 @@ class TickerCache:
                     )
                     rv_raw = row["rolling_dollar_vol_20"]
                     rv_val = rv_raw.iloc[0] if hasattr(rv_raw, "iloc") else rv_raw
+                    
+                    sma20 = row["sma20"]
+                    sma50 = row["sma50"]
+                    sma100 = row["sma100"]
+                    sma200 = row["sma200"]
+                    adr20 = row["adr_pct_20"]
+                    
+                    sma20 = sma20.iloc[0] if hasattr(sma20, "iloc") else sma20
+                    sma50 = sma50.iloc[0] if hasattr(sma50, "iloc") else sma50
+                    sma100 = sma100.iloc[0] if hasattr(sma100, "iloc") else sma100
+                    sma200 = sma200.iloc[0] if hasattr(sma200, "iloc") else sma200
+                    adr20 = adr20.iloc[0] if hasattr(adr20, "iloc") else adr20
+
                     records.append(
                         (
                             ticker,
@@ -801,6 +846,11 @@ class TickerCache:
                             int(vol_val),
                             float(dv_val),
                             float(rv_val) if pd.notna(rv_val) else None,
+                            float(sma20) if pd.notna(sma20) else None,
+                            float(sma50) if pd.notna(sma50) else None,
+                            float(sma100) if pd.notna(sma100) else None,
+                            float(sma200) if pd.notna(sma200) else None,
+                            float(adr20) if pd.notna(adr20) else None,
                         )
                     )
                 except Exception as e:
@@ -811,8 +861,8 @@ class TickerCache:
                 self.conn.executemany(
                     """
                     INSERT OR REPLACE INTO ohlcv_cache
-                    (ticker, date, open, high, low, close, volume, dollar_volume, rolling_dollar_vol_20)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (ticker, date, open, high, low, close, volume, dollar_volume, rolling_dollar_vol_20, sma20, sma50, sma100, sma200, adr_pct_20)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                     records,
                 )
