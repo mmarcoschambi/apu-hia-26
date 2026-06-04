@@ -29,6 +29,9 @@ logger = logging.getLogger(__name__)
 
 SignalMode = Literal["A", "B", "A_BOTH"]
 
+# Global cache to reuse instantiated ScreenerPipelines and avoid massive disk / deepcopy overhead (Issue #21 Performance)
+_pipeline_cache = {}
+
 
 class RejectReason(str):
     pass
@@ -234,7 +237,7 @@ def calculate_dynamic_sizing_factor(dist_sma20: float, adr_pct: float, combo_cfg
             return round(factor, 2), f"v2_extreme_ext_penalty:{factor:.2f}"
             
         else:
-            # > 35% de extensión: Excepción por ADR alto
+            # > extreme_pct de extensión: Excepción por ADR alto (si dist <= max_pct)
             if adr_pct > adr_exc and dist_sma20 <= max_pct:
                 return 0.15, "extreme_adr_exception"
             return 0.0, "blocked_extreme_extension"
@@ -562,23 +565,30 @@ def evaluate_ticker(
     screener_name = screener_cfg.get("name")
     pipeline: Optional[ScreenerPipeline] = None
     if screener_name:
-        try:
-            # 1. Cargar config base de disco o default
-            config = ScreenerRegistry.load_config(screener_name)
+        import json
+        # Serialise config to build a hashable key for caching pipelines (Issue #21 Performance)
+        cache_key = (screener_name, json.dumps(screener_cfg, sort_keys=True))
+        if cache_key in _pipeline_cache:
+            pipeline = _pipeline_cache[cache_key]
+        else:
+            try:
+                # 1. Cargar config base de disco o default
+                config = ScreenerRegistry.load_config(screener_name)
 
-            # 2. Aplicar overrides desde combo_cfg (que pueden venir de la memoria/argumentos)
-            # Esto es CRÍTICO para que los experimentos funcionen
-            if "min_adr_pct" in screener_cfg:
-                config.min_adr_pct = screener_cfg["min_adr_pct"]
-            if "params" in screener_cfg:
-                config.params.update(screener_cfg["params"])
+                # 2. Aplicar overrides desde combo_cfg (que pueden venir de la memoria/argumentos)
+                # Esto es CRÍTICO para que los experimentos funcionen
+                if "min_adr_pct" in screener_cfg:
+                    config.min_adr_pct = screener_cfg["min_adr_pct"]
+                if "params" in screener_cfg:
+                    config.params.update(screener_cfg["params"])
 
-            logger.debug(f"Screener {screener_name} FINAL PARAMS: {config.params}")
+                logger.debug(f"Screener {screener_name} FINAL PARAMS: {config.params}")
 
-            screener = ScreenerRegistry.get(screener_name, config)
-            pipeline = ScreenerPipeline([screener], mode=screener_cfg.get("mode", "all"))
-        except Exception as e:
-            logger.debug(f"Screener init error {screener_name}: {e}")
+                screener = ScreenerRegistry.get(screener_name, config)
+                pipeline = ScreenerPipeline([screener], mode=screener_cfg.get("mode", "all"))
+                _pipeline_cache[cache_key] = pipeline
+            except Exception as e:
+                logger.debug(f"Screener init error {screener_name}: {e}")
 
     screener_passed = True
     screener_score = 0.0

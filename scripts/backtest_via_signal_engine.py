@@ -258,6 +258,38 @@ def run_backtest(
     rs_all["date"] = pd.to_datetime(rs_all["date"], format="mixed").dt.normalize()
     rs_lookup = rs_all.set_index(["date", "ticker"])["rs_composite"].to_dict()
 
+    # Pre-run RS coverage validation check (Issue #21 Prevention)
+    pre_evaluated_total = 0
+    pre_available_count = 0
+    pre_missing_tickers = {}
+    for d_str, day_universe in universe_by_date.items():
+        curr_dt = pd.to_datetime(d_str).normalize()
+        for ticker in day_universe:
+            if ticker.upper() in exclude_set:
+                continue
+            pre_evaluated_total += 1
+            if (curr_dt, ticker) in rs_lookup:
+                pre_available_count += 1
+            else:
+                pre_missing_tickers[ticker] = pre_missing_tickers.get(ticker, 0) + 1
+    
+    pre_coverage_pct = 100.0
+    if pre_evaluated_total > 0:
+        pre_coverage_pct = round((pre_available_count / pre_evaluated_total) * 100, 2)
+    
+    logger.info(f"📊 Pre-run RS Coverage Check: {pre_coverage_pct}% ({pre_available_count}/{pre_evaluated_total} lookups succeeded)")
+    if pre_coverage_pct < 95.0:
+        logger.warning(
+            f"⚠️ PROMINENT WARNING: RS Coverage is low ({pre_coverage_pct}%). "
+            f"There are {pre_evaluated_total - pre_available_count} missing RS lookups."
+        )
+        if pre_missing_tickers:
+            top_missing = sorted(pre_missing_tickers.items(), key=lambda x: x[1], reverse=True)[:10]
+            logger.warning(f"Top tickers missing from daily_rs_rankings: {', '.join(f'{k}:{v}' for k, v in top_missing)}")
+            logger.warning(
+                f"Suggested fix: Run: ./.venv/bin/python3 scripts/populate_rankings_daily.py --start {start_date} --end {end_date} --workers 4 --rs-only --overwrite"
+            )
+
     health_all = pd.read_sql(
         "SELECT date, regime_mode FROM daily_health_scores WHERE date >= ? AND date <= ? || ' 23:59:59'",
         conn,
@@ -481,8 +513,8 @@ def run_backtest(
                             "target_hold_days": sig.target_hold_days if sig.target_hold_days is not None else holding_days_limit,
                         }
 
-        spy_slice = spy_full[spy_full.index <= curr_dt].tail(400)
-        vix_slice = vix_full[vix_full.index <= curr_dt].tail(1)
+        spy_slice = spy_full.loc[:curr_dt].tail(400)
+        vix_slice = vix_full.loc[:curr_dt].tail(1)
         pending_signals = []
         if (
             len(spy_slice) >= 200
@@ -505,7 +537,7 @@ def run_backtest(
                         continue
                     if ticker not in all_ohlcv:
                         continue
-                    ticker_df = all_ohlcv[ticker][all_ohlcv[ticker].index <= curr_dt]
+                    ticker_df = all_ohlcv[ticker].loc[:curr_dt]
                     if len(ticker_df) < 65:
                         continue
                     
@@ -588,6 +620,38 @@ def run_backtest(
     logger.info(
         f"✅ DONE | Return: {metrics.get('total_return')}% | MDD: {metrics.get('max_drawdown')}% | Trades: {len(df_trades)}"
     )
+
+    # Calculate comprehensive robustness report (Issue #11)
+    equity_series = df_equity.set_index(pd.to_datetime(df_equity["date"]))["equity"]
+    if len(equity_series) >= 30:
+        try:
+            from src.validation.robustness_metrics import calculate_comprehensive_robustness_report
+            backtest_result = {
+                "equity_curve": equity_series,
+                "trades_df": df_trades,
+                "sharpe_ratio": metrics.get("sharpe_ratio", 0.0),
+                "max_drawdown_pct": abs(metrics.get("max_drawdown", 0.0)),
+                "total_trades": len(df_trades),
+                "win_rate_pct": metrics.get("win_rate", 0.0),
+                "profit_factor": metrics.get("profit_factor", 0.0),
+            }
+            robustness_report = calculate_comprehensive_robustness_report(backtest_result)
+            
+            # Save robustness report to outputs/backtests
+            with open(OUTPUT_DIR / f"{tag}_robustness.json", "w") as f:
+                json.dump(robustness_report, f, indent=2)
+                
+            logger.info(
+                f"🛡️  Robustness Metrics | Sortino: {robustness_report['risk_adjusted']['sortino']:.2f} | "
+                f"Omega: {robustness_report['risk_adjusted']['omega']:.2f} | "
+                f"Calmar: {robustness_report['risk_adjusted']['calmar']:.2f} | "
+                f"Tail Ratio: {robustness_report['risk_adjusted']['tail_ratio']:.2f} | "
+                f"Prob of Loss: {robustness_report['probability_of_loss']*100:.1f}%"
+            )
+        except Exception as e:
+            logger.warning(f"⚠️  Could not calculate robustness metrics: {e}")
+    else:
+        logger.warning(f"⚠️  Equity curve demasiado corta para robustez ({len(equity_series)} puntos). Mínimo requerido: 30.")
 
 
 if __name__ == "__main__":
