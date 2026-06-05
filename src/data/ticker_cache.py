@@ -557,7 +557,233 @@ class TickerCache:
         )
         return result
 
-    def get_ohlcv(self, ticker, start_date, end_date, offline=False):
+    def save_ohlcv_dataframe(self, ticker: str, df: pd.DataFrame, start_date: str, end_date: str) -> Optional[pd.DataFrame]:
+        if df is None or df.empty:
+            return None
+
+        parquet_path = self.cache_dir / f"{ticker}.parquet"
+        pkl_path = self.cache_dir / f"{ticker}.pkl"
+
+        try:
+            # yf.Ticker.history returns timezone-aware index, remove timezone for SQLite
+            if getattr(df.index, 'tz', None) is not None:
+                df.index = df.index.tz_localize(None)
+
+            # Tickers con historia insuficiente
+            if len(df) < 10:
+                logger.warning(f"Ticker {ticker} tiene historia mínima ({len(df)} días). Guardando para evitar re-descarga.")
+
+            # Isolar ticker en DataFrame multi-columna de yfinance
+            if isinstance(df.columns, pd.MultiIndex):
+                if "Ticker" in df.columns.names:
+                    try:
+                        df = df.xs(ticker.upper(), axis=1, level="Ticker")
+                    except Exception:
+                        if ticker.upper() in df.columns.get_level_values("Ticker"):
+                            df = df.loc[:, (slice(None), ticker.upper())]
+                            df.columns = df.columns.droplevel("Ticker")
+                
+                if isinstance(df.columns, pd.MultiIndex):
+                    try:
+                        if ticker.upper() in df.columns:
+                            df = df[ticker.upper()]
+                        else:
+                            unique_tickers = df.columns.get_level_values(1).unique()
+                            if len(unique_tickers) == 1:
+                                df.columns = df.columns.droplevel(1)
+                            else:
+                                logger.error(f"Ambiguity in yfinance data for {ticker}: {unique_tickers}")
+                                return None
+                    except: pass
+
+            # Asegurar que no hay columnas duplicadas y nombres limpios
+            df = df.loc[:, ~df.columns.duplicated()]
+            if not all(c in df.columns for c in ["Open", "High", "Low", "Close", "Volume"]):
+                df.rename(columns={c: c.capitalize() for c in df.columns}, inplace=True)
+            
+            if isinstance(df["Close"], pd.DataFrame):
+                logger.error(f"Data corruption risk for {ticker}: Close is still a DataFrame")
+                return None
+
+            if df.index.duplicated().any():
+                dupe_count = df.index.duplicated().sum()
+                logger.debug(f"Deduplicating {ticker}: {dupe_count} duplicate dates removed (keeping last)")
+                df = df[~df.index.duplicated(keep="last")]
+
+            close_s = df["Close"]
+            volume_s = df["Volume"]
+            if isinstance(close_s, pd.DataFrame):
+                close_s = close_s.iloc[:, 0]
+            if isinstance(volume_s, pd.DataFrame):
+                volume_s = volume_s.iloc[:, 0]
+
+            df["dollar_volume"] = close_s * volume_s
+            df["rolling_dollar_vol_20"] = df["dollar_volume"].rolling(window=20, min_periods=1).mean()
+            df['sma20'] = close_s.rolling(window=20).mean()
+            df['sma50'] = close_s.rolling(window=50).mean()
+            df['sma100'] = close_s.rolling(window=100).mean()
+            df['sma200'] = close_s.rolling(window=200).mean()
+            
+            high_s = df["High"]
+            low_s = df["Low"]
+            if isinstance(high_s, pd.DataFrame): high_s = high_s.iloc[:, 0]
+            if isinstance(low_s, pd.DataFrame): low_s = low_s.iloc[:, 0]
+            
+            df['daily_range_pct'] = ((high_s - low_s) / low_s) * 100
+            df['adr_pct_20'] = df['daily_range_pct'].rolling(window=20).mean()
+
+            # BULK INSERT
+            records = []
+            for date, row in df.iterrows():
+                try:
+                    open_val = row["Open"].iloc[0] if hasattr(row["Open"], "iloc") else row["Open"]
+                    high_val = row["High"].iloc[0] if hasattr(row["High"], "iloc") else row["High"]
+                    low_val = row["Low"].iloc[0] if hasattr(row["Low"], "iloc") else row["Low"]
+                    close_val = row["Close"].iloc[0] if hasattr(row["Close"], "iloc") else row["Close"]
+                    vol_val = row["Volume"].iloc[0] if hasattr(row["Volume"], "iloc") else row["Volume"]
+                    dv_val = row["dollar_volume"].iloc[0] if hasattr(row["dollar_volume"], "iloc") else row["dollar_volume"]
+                    rv_raw = row["rolling_dollar_vol_20"]
+                    rv_val = rv_raw.iloc[0] if hasattr(rv_raw, "iloc") else rv_raw
+                    
+                    sma20 = row["sma20"]
+                    sma50 = row["sma50"]
+                    sma100 = row["sma100"]
+                    sma200 = row["sma200"]
+                    adr20 = row["adr_pct_20"]
+                    
+                    sma20 = sma20.iloc[0] if hasattr(sma20, "iloc") else sma20
+                    sma50 = sma50.iloc[0] if hasattr(sma50, "iloc") else sma50
+                    sma100 = sma100.iloc[0] if hasattr(sma100, "iloc") else sma100
+                    sma200 = sma200.iloc[0] if hasattr(sma200, "iloc") else sma200
+                    adr20 = adr20.iloc[0] if hasattr(adr20, "iloc") else adr20
+
+                    records.append((
+                        ticker,
+                        date.strftime("%Y-%m-%d"),
+                        float(open_val),
+                        float(high_val),
+                        float(low_val),
+                        float(close_val),
+                        int(vol_val),
+                        float(dv_val),
+                        float(rv_val) if pd.notna(rv_val) else None,
+                        float(sma20) if pd.notna(sma20) else None,
+                        float(sma50) if pd.notna(sma50) else None,
+                        float(sma100) if pd.notna(sma100) else None,
+                        float(sma200) if pd.notna(sma200) else None,
+                        float(adr20) if pd.notna(adr20) else None,
+                    ))
+                except Exception as e:
+                    logger.debug(f"Row prep error for {ticker} on {date}: {e}")
+                    continue
+
+            with self.lock:
+                self.conn.executemany("""
+                    INSERT OR REPLACE INTO ohlcv_cache
+                    (ticker, date, open, high, low, close, volume, dollar_volume, rolling_dollar_vol_20, sma20, sma50, sma100, sma200, adr_pct_20)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, records)
+                self.conn.commit()
+
+            # Guardar en Parquet
+            try:
+                df.index.name = "date"
+                if parquet_path.exists():
+                    try:
+                        old_df = pd.read_parquet(parquet_path)
+                        combined = pd.concat([old_df, df])
+                        combined = combined[~combined.index.duplicated(keep="last")].sort_index()
+                        df = combined
+                    except Exception as e:
+                        logger.warning(f"Failed to merge existing parquet for {ticker}: {e}")
+
+                df.to_parquet(parquet_path, engine="pyarrow", compression="snappy")
+                if pkl_path.exists():
+                    pkl_path.unlink()
+                    logger.debug(f"Migrated {ticker}: pkl → parquet")
+            except Exception as e:
+                try:
+                    import pickle
+
+                    with open(pkl_path, "wb") as f:
+                        pickle.dump(df, f)
+                except Exception as e2:
+                    logger.debug(f"Pickle fallback also failed for {ticker}: {e2}")
+
+            df.index.name = "date"
+            return df
+
+        except Exception as e:
+            logger.error(f"Error processing dataframe for {ticker}: {e}")
+            return None
+
+    def update_ohlcv_batch(self, tickers: List[str], start_date: str, end_date: str) -> int:
+        """
+        Descarga datos en lotes utilizando yfinance.download en grupos de 40 tickers,
+        calcula las métricas y los guarda en SQLite y Parquet de forma súper rápida,
+        evitando rate-limits de Yahoo Finance.
+        """
+        import time
+        if not tickers:
+            return 0
+            
+        logger.info(f"Starting batch update for {len(tickers)} tickers from {start_date} to {end_date}...")
+        
+        # Agrupar tickers de a 40
+        chunk_size = 40
+        chunks = [tickers[i:i + chunk_size] for i in range(0, len(tickers), chunk_size)]
+        
+        success_count = 0
+        
+        for idx, chunk in enumerate(chunks):
+            logger.info(f"Downloading chunk {idx+1}/{len(chunks)} ({len(chunk)} tickers)...")
+            try:
+                # Descargar en lote
+                df_download = yf.download(
+                    chunk,
+                    start=start_date,
+                    end=end_date,
+                    group_by='ticker',
+                    auto_adjust=True,
+                    threads=True,
+                    progress=False
+                )
+                
+                if df_download.empty:
+                    logger.warning(f"Empty download result for chunk {idx+1}")
+                    continue
+                    
+                # Guardar cada ticker del lote
+                for ticker in chunk:
+                    df_ticker = None
+                    try:
+                        if len(chunk) == 1:
+                            df_ticker = df_download.copy()
+                        else:
+                            # Extraer datos de este ticker específico del MultiIndex
+                            if ticker.upper() in df_download.columns.get_level_values(0):
+                                df_ticker = df_download[ticker.upper()].copy()
+                    except Exception as e:
+                        logger.debug(f"Failed to extract dataframe for {ticker} from batch: {e}")
+                        
+                    if df_ticker is not None and not df_ticker.empty:
+                        # Filtrar filas donde todos los valores son NaN
+                        df_ticker.dropna(how="all", inplace=True)
+                        if not df_ticker.empty:
+                            res = self.save_ohlcv_dataframe(ticker, df_ticker, start_date, end_date)
+                            if res is not None:
+                                success_count += 1
+                
+                # Pequeño delay de cortesía
+                time.sleep(1.0)
+            except Exception as e:
+                logger.error(f"Error downloading chunk {idx+1}: {e}")
+                time.sleep(2.0)
+                
+        logger.info(f"Batch update completed: successfully updated {success_count}/{len(tickers)} tickers.")
+        return success_count
+
+    def get_ohlcv(self, ticker: str, start_date: str, end_date: str, offline: bool = False) -> Optional[pd.DataFrame]:
         """
         Obtiene datos OHLCV con todas las métricas calculadas, usa cache o descarga.
         Prioriza archivos Parquet > Pickle > SQLite por velocidad.
@@ -642,20 +868,12 @@ class TickerCache:
                 },
                 inplace=True,
             )
+            return df
 
-            if offline:
-                return df
-
-            if not df.empty:
-                last_date = df.index[-1].date()
-                yesterday = (datetime.now() - timedelta(days=1)).date()
-                req_end = pd.to_datetime(end_date).date()
-                if last_date >= req_end or last_date >= yesterday:
-                    return df
-        elif offline:
+        if offline:
             return None
 
-        # ── NIVEL 3: DESCARGA ─────────────────────────────────────────────────
+        # ── NIVEL 3: DESCARGA INDIVIDUAL ──────────────────────────────────────
         logger.info(
             f"Downloading {ticker} data from {start_date} to {end_date} using {DATA_SOURCE}..."
         )
@@ -695,215 +913,12 @@ class TickerCache:
                     end=end_date,
                     auto_adjust=True,
                 )
-                
-                # yf.Ticker.history returns timezone-aware index, remove timezone for SQLite
-                if not df.empty and getattr(df.index, 'tz', None) is not None:
-                    df.index = df.index.tz_localize(None)
 
-            if df.empty:
-                return None
-
-            # ── [FIX] Tickers con historia insuficiente ─────────────────────
-            # Si el ticker tiene pocos datos (ej: IPO reciente), lo guardamos
-            # igual en Parquet. En la próxima corrida, get_ohlcv lo leerá de disco,
-            # verá que no llega a la fecha requerida (o que sigue teniendo pocos días)
-            # y el engine lo rechazará SIN intentar descargar de nuevo.
-            min_required_days = 200 # Umbral típico para indicadores (SMA200)
-            if len(df) < 10: # Si es extremadamente corto (error de data o muy nuevo)
-                 logger.warning(f"Ticker {ticker} tiene historia mínima ({len(df)} días). Guardando para evitar re-descarga.")
-
-            # ── [FIX] Isolar ticker en DataFrame multi-columna de yfinance ────
-            if isinstance(df.columns, pd.MultiIndex):
-                # Caso ideal: yfinance devuelve niveles [Price, Ticker]
-                if "Ticker" in df.columns.names:
-                    try:
-                        df = df.xs(ticker.upper(), axis=1, level="Ticker")
-                    except Exception:
-                        # Si no está el ticker exacto, intentar con el primero
-                        # pero SOLO si estamos seguros de que es el que pedimos
-                        if ticker.upper() in df.columns.get_level_values("Ticker"):
-                            df = df.loc[:, (slice(None), ticker.upper())]
-                            df.columns = df.columns.droplevel("Ticker")
-                
-                # Si sigue siendo MultiIndex, intentar aplanarlo buscando el ticker
-                if isinstance(df.columns, pd.MultiIndex):
-                    try:
-                        # Si yfinance devolvió múltiples tickers, buscamos el nuestro
-                        if ticker.upper() in df.columns:
-                            df = df[ticker.upper()]
-                        else:
-                            # Fallback: droplevel solo si el resultado tiene las columnas correctas
-                            # y no hay ambigüedad (solo un ticker)
-                            unique_tickers = df.columns.get_level_values(1).unique()
-                            if len(unique_tickers) == 1:
-                                df.columns = df.columns.droplevel(1)
-                            else:
-                                logger.error(f"Ambiguity in yfinance data for {ticker}: {unique_tickers}")
-                                return None
-                    except: pass
-
-            # Asegurar que no hay columnas duplicadas y nombres limpios
-            df = df.loc[:, ~df.columns.duplicated()]
-            if not all(c in df.columns for c in ["Open", "High", "Low", "Close", "Volume"]):
-                # Intentar mapeo de minúsculas si es necesario
-                df.rename(columns={c: c.capitalize() for c in df.columns}, inplace=True)
-            
-            # Verificación final: ¿tenemos escalares en las filas?
-            # Si 'Close' sigue siendo un DF o tiene duplicados, fallar para no corromper DB
-            if isinstance(df["Close"], pd.DataFrame):
-                logger.error(f"Data corruption risk for {ticker}: Close is still a DataFrame")
-                return None
-
-            # ── Deduplicate dates at source (root cause fix for SPY/VIX dupes) ──
-            if df.index.duplicated().any():
-                dupe_count = df.index.duplicated().sum()
-                logger.debug(
-                    f"Deduplicating {ticker}: {dupe_count} duplicate dates removed (keeping last)"
-                )
-                df = df[~df.index.duplicated(keep="last")]
-
-            close_s = df["Close"]
-            volume_s = df["Volume"]
-            if isinstance(close_s, pd.DataFrame):
-                close_s = close_s.iloc[:, 0]
-            if isinstance(volume_s, pd.DataFrame):
-                volume_s = volume_s.iloc[:, 0]
-
-            df["dollar_volume"] = close_s * volume_s
-            df["rolling_dollar_vol_20"] = (
-                df["dollar_volume"].rolling(window=20, min_periods=1).mean()
-            )
-            df['sma20'] = close_s.rolling(window=20).mean()
-            df['sma50'] = close_s.rolling(window=50).mean()
-            df['sma100'] = close_s.rolling(window=100).mean()
-            df['sma200'] = close_s.rolling(window=200).mean()
-            
-            high_s = df["High"]
-            low_s = df["Low"]
-            if isinstance(high_s, pd.DataFrame): high_s = high_s.iloc[:, 0]
-            if isinstance(low_s, pd.DataFrame): low_s = low_s.iloc[:, 0]
-            
-            df['daily_range_pct'] = ((high_s - low_s) / low_s) * 100
-            df['adr_pct_20'] = df['daily_range_pct'].rolling(window=20).mean()
-
-            # ── TAREA 1.1: BULK INSERT — reemplaza row-by-row (10-50x más rápido) ──
-            records = []
-            for date, row in df.iterrows():
-                try:
-                    open_val = (
-                        row["Open"].iloc[0]
-                        if hasattr(row["Open"], "iloc")
-                        else row["Open"]
-                    )
-                    high_val = (
-                        row["High"].iloc[0]
-                        if hasattr(row["High"], "iloc")
-                        else row["High"]
-                    )
-                    low_val = (
-                        row["Low"].iloc[0]
-                        if hasattr(row["Low"], "iloc")
-                        else row["Low"]
-                    )
-                    close_val = (
-                        row["Close"].iloc[0]
-                        if hasattr(row["Close"], "iloc")
-                        else row["Close"]
-                    )
-                    vol_val = (
-                        row["Volume"].iloc[0]
-                        if hasattr(row["Volume"], "iloc")
-                        else row["Volume"]
-                    )
-                    dv_val = (
-                        row["dollar_volume"].iloc[0]
-                        if hasattr(row["dollar_volume"], "iloc")
-                        else row["dollar_volume"]
-                    )
-                    rv_raw = row["rolling_dollar_vol_20"]
-                    rv_val = rv_raw.iloc[0] if hasattr(rv_raw, "iloc") else rv_raw
-                    
-                    sma20 = row["sma20"]
-                    sma50 = row["sma50"]
-                    sma100 = row["sma100"]
-                    sma200 = row["sma200"]
-                    adr20 = row["adr_pct_20"]
-                    
-                    sma20 = sma20.iloc[0] if hasattr(sma20, "iloc") else sma20
-                    sma50 = sma50.iloc[0] if hasattr(sma50, "iloc") else sma50
-                    sma100 = sma100.iloc[0] if hasattr(sma100, "iloc") else sma100
-                    sma200 = sma200.iloc[0] if hasattr(sma200, "iloc") else sma200
-                    adr20 = adr20.iloc[0] if hasattr(adr20, "iloc") else adr20
-
-                    records.append(
-                        (
-                            ticker,
-                            date.strftime("%Y-%m-%d"),
-                            float(open_val),
-                            float(high_val),
-                            float(low_val),
-                            float(close_val),
-                            int(vol_val),
-                            float(dv_val),
-                            float(rv_val) if pd.notna(rv_val) else None,
-                            float(sma20) if pd.notna(sma20) else None,
-                            float(sma50) if pd.notna(sma50) else None,
-                            float(sma100) if pd.notna(sma100) else None,
-                            float(sma200) if pd.notna(sma200) else None,
-                            float(adr20) if pd.notna(adr20) else None,
-                        )
-                    )
-                except Exception as e:
-                    logger.debug(f"Row prep error for {ticker} on {date}: {e}")
-                    continue
-
-            with self.lock:
-                self.conn.executemany(
-                    """
-                    INSERT OR REPLACE INTO ohlcv_cache
-                    (ticker, date, open, high, low, close, volume, dollar_volume, rolling_dollar_vol_20, sma20, sma50, sma100, sma200, adr_pct_20)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                    records,
-                )
-                self.conn.commit()
-
-            # ── Guardar en Parquet (reemplaza Pickle) para futuras lecturas ──
-            try:
-                df.index.name = "date"
-                
-                # [MERGE] Tarea 1.1b: Mergear con data existente en disco
-                if parquet_path.exists():
-                    try:
-                        old_df = pd.read_parquet(parquet_path)
-                        # Concatenar y eliminar duplicados (quedarse con lo más nuevo)
-                        combined = pd.concat([old_df, df])
-                        # Eliminar duplicados por índice (date)
-                        combined = combined[~combined.index.duplicated(keep="last")].sort_index()
-                        df = combined
-                    except Exception as e:
-                        logger.warning(f"Failed to merge existing parquet for {ticker}: {e}")
-
-                df.to_parquet(parquet_path, engine="pyarrow", compression="snappy")
-                # Si existe el .pkl legado, borrarlo para liberar espacio
-                if pkl_path.exists():
-                    pkl_path.unlink()
-                    logger.debug(f"Migrated {ticker}: pkl → parquet")
-            except Exception as e:
-                # Parquet puede fallar si pyarrow no está instalado; fallback a pickle
-                logger.debug(
-                    f"Parquet write failed for {ticker}, falling back to pickle: {e}"
-                )
-                try:
-                    import pickle
-
-                    with open(pkl_path, "wb") as f:
-                        pickle.dump(df, f)
-                except Exception as e2:
-                    logger.debug(f"Pickle fallback also failed for {ticker}: {e2}")
-
-            df.index.name = "date"
-            return df
+            res_df = self.save_ohlcv_dataframe(ticker, df, start_date, end_date)
+            if res_df is not None:
+                mask = (res_df.index >= start_date) & (res_df.index <= end_date)
+                return res_df.loc[mask]
+            return None
 
         except Exception as e:
             logger.error(f"Error downloading data for {ticker}: {e}")

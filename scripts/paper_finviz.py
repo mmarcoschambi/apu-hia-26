@@ -105,18 +105,12 @@ def pre_warm_cache(universe: list[str], date_str: str):
         logger.info("    [Pre-warm] Todo el universo esta al dia. Saltando descargas.")
         return
 
-    logger.info(f"    [Pre-warm] Refrescando {len(to_update)} tickers desactualizados...")
-
-    def _fetch(t):
-        try:
-            cache.get_ohlcv(t, start, date_str)
-            time.sleep(0.5)  # Pequeño respiro para el CPU/Red
-        except:
-            pass
-
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        executor.map(_fetch, to_update)
-    logger.info("    [Pre-warm] Cache actualizado.")
+    logger.info(f"    [Pre-warm] Refrescando {len(to_update)} tickers desactualizados usando descargas en lote...")
+    try:
+        cache.update_ohlcv_batch(to_update, start, date_str)
+    except Exception as e:
+        logger.error(f"Error during batch pre-warm: {e}")
+    logger.info("    [Pre-warm] Cache de batch completado.")
 
 
 def _nearest_candidates_from_snapshot(snapshot: dict, limit: int = 5) -> list[tuple[str, dict]]:
