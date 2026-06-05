@@ -51,6 +51,8 @@ tp1_r_input          = input.float(1.25, "TP1 R-Multiple", minval = 0.5, maxval 
 tp2_r_input          = input.float(3.0, "TP2 R-Multiple", minval = 1, maxval = 10, step = 0.5, group = group_risk)
 tp1_pct_input        = input.float(33.0, "TP1 Exit %", minval = 0, maxval = 100, step = 1, group = group_risk, tooltip = "33% at TP1, 33% at TP2, 34% runner")
 tp2_pct_input        = input.float(33.0, "TP2 Exit %", minval = 0, maxval = 100, step = 1, group = group_risk)
+use_e25              = input.bool(true, "Habilitar Penalización E25", group = group_risk, tooltip = "Aplica reducción dinámica de posición según la extensión.")
+e25_ver              = input.string("v2_atlas_informed", "E25 Versión Curva", options = ["v1_monotonic", "v2_atlas_informed"], group = group_risk)
 
 // --- Visual Settings ---
 group_vis = "Visual"
@@ -101,6 +103,71 @@ adr_val = ta.sma(daily_range, 20)
 
 // --- Distance from SMA20 (%) ---
 dist_sma20_val = sma_20 > 0 and not na(sma_20) ? ((close - sma_20) / sma_20) * 100.0 : 0.0
+
+// --- Sector Blacklist (ex-XLV) ---
+is_xlv = sector_etf_sym == "AMEX:XLV" or sector_etf_sym == "XLV" or sector_etf_sym == "NYSEARCA:XLV" or sector_etf_sym == "XLV Symbol"
+sector_blacklisted = is_xlv
+
+// --- E25 Dynamic Sizing Penalty ---
+var float sizing_factor = 1.0
+var string sizing_reason = "comfort_zone"
+
+if use_e25
+    comfort = 6.76
+    valley = 10.0
+    mid = 15.0
+    high = e25_ver == "v2_atlas_informed" ? 25.0 : 30.0
+    extreme_cutoff = 35.0
+    max_pct = 50.0
+    adr_exc = 8.0
+    
+    if dist_sma20_val <= comfort
+        sizing_factor := 1.0
+        sizing_reason := "comfort_zone"
+    else
+        if e25_ver == "v2_atlas_informed"
+            if dist_sma20_val <= valley
+                ratio = (dist_sma20_val - comfort) / (valley - comfort)
+                sizing_factor := math.round(1.0 - (ratio * (1.0 - 0.3)), 2)
+                sizing_reason := "v2_valley"
+            else if dist_sma20_val <= mid
+                ratio = (dist_sma20_val - valley) / (mid - valley)
+                sizing_factor := math.round(0.3 + (ratio * (0.5 - 0.3)), 2)
+                sizing_reason := "v2_sweetspot"
+            else if dist_sma20_val <= high
+                ratio = (dist_sma20_val - mid) / (high - mid)
+                sizing_factor := math.round(0.5 - (ratio * (0.5 - 0.3)), 2)
+                sizing_reason := "v2_high_ext"
+            else if dist_sma20_val <= extreme_cutoff
+                ratio = (dist_sma20_val - high) / (extreme_cutoff - high)
+                sizing_factor := math.round(0.3 - (ratio * (0.3 - 0.1)), 2)
+                sizing_reason := "v2_extreme"
+            else
+                if adr_val > adr_exc and dist_sma20_val <= max_pct
+                    sizing_factor := 0.15
+                    sizing_reason := "adr_exc"
+                else
+                    sizing_factor := 0.0
+                    sizing_reason := "blocked_ext"
+        else // v1_monotonic
+            if dist_sma20_val <= mid
+                ratio = (dist_sma20_val - comfort) / (mid - comfort)
+                sizing_factor := math.round(1.0 - (ratio * (1.0 - 0.5)), 2)
+                sizing_reason := "v1_mid"
+            else if dist_sma20_val <= high
+                ratio = (dist_sma20_val - mid) / (high - mid)
+                sizing_factor := math.round(0.5 - (ratio * (0.5 - 0.2)), 2)
+                sizing_reason := "v1_high"
+            else
+                if adr_val > adr_exc and dist_sma20_val <= max_pct
+                    sizing_factor := 0.15
+                    sizing_reason := "adr_exc"
+                else
+                    sizing_factor := 0.0
+                    sizing_reason := "blocked_ext"
+else
+    sizing_factor := 1.0
+    sizing_reason := "disabled"
 
 // --- Dollar Volume (avg 20d, in $) ---
 dollar_vol_raw = close * volume
@@ -203,13 +270,14 @@ screener_active = strategy_mode == "Mode A (Qullamaggie)" ? screener_ok :
                   strategy_mode == "Mode A_AND_B (Both)" ? (screener_ok and minervini_ok) :
                   false
 
-signal_long = screener_active and tier2_ok and is_breakout and regime_ok and sector_ok
+signal_long = screener_active and tier2_ok and is_breakout and regime_ok and sector_ok and not sector_blacklisted
 
 // First bar where signal fires
 signal_new = signal_long and not signal_long[1]
 
 // Determine block reason (first failing filter depending on the active strategy)
 block_reason = 
+     sector_blacklisted ? "Sector XLV Excluido" :
      strategy_mode == "Mode B (Minervini)" and not minervini_ok ? "Minervini Stage 2 roto (" + str.tostring(minervini_n) + "/7)" :
      strategy_mode == "Mode A (Qullamaggie)" and not ma_stack_ok ? "MA Stack roto" :
      strategy_mode == "Mode A (Qullamaggie)" and not na(rs_pct) and not rs_ok ? "RS bajo (" + str.tostring(rs_pct, "#.#") + ")" :
@@ -246,7 +314,8 @@ stop_dist = math.max(stop_dist_cap, close * 0.005)
 stop_px  = close - stop_dist
 tp1_px   = close + stop_dist * tp1_r_input
 tp2_px   = close + stop_dist * tp2_r_input
-shares_n = stop_dist > 0 ? math.floor(risk_dollars_input / stop_dist) : 0
+effective_risk_dollars = risk_dollars_input * sizing_factor
+shares_n = stop_dist > 0 ? math.floor(effective_risk_dollars / stop_dist) : 0
 
 // --- Signal Zone (persists until stop or TP2 hit) ---
 var bool   in_signal   = false
@@ -317,7 +386,7 @@ f_clean(t) =>
 
 if barstate.islast and show_dashboard
     // Table dimensions
-    tbl_rows = show_minervini ? 19 : 18
+    tbl_rows = 20 + (show_minervini ? 1 : 0) + (use_e25 ? 1 : 0)
     tbl_cols = 2
 
     // Position
@@ -464,9 +533,16 @@ if barstate.islast and show_dashboard
     table.cell(tbl, 1, r, "$" + str.tostring(tp2_px, "#.##"), text_color = c_pass, bgcolor = c_bg, text_halign = text.align_right, text_size = txt_sz)
     r += 1
 
+    // E25 Factor
+    if use_e25
+        table.cell(tbl, 0, r, "E25 Factor", text_color = c_txt, bgcolor = c_bg, text_halign = text.align_left, text_size = txt_sz)
+        e25_color = sizing_factor == 1.0 ? c_pass : sizing_factor > 0.0 ? c_warn : c_fail
+        table.cell(tbl, 1, r, str.tostring(sizing_factor, "#.##") + " (" + sizing_reason + ")", text_color = e25_color, bgcolor = c_bg, text_halign = text.align_right, text_size = txt_sz)
+        r += 1
+
     // Shares
     table.cell(tbl, 0, r, "Shares", text_color = c_txt, bgcolor = c_bg, text_halign = text.align_left, text_size = txt_sz)
-    table.cell(tbl, 1, r, str.tostring(shares_n) + " ($" + str.tostring(risk_dollars_input, "#") + ")", text_color = c_txt, bgcolor = c_bg, text_halign = text.align_right, text_size = txt_sz)
+    table.cell(tbl, 1, r, str.tostring(shares_n) + " ($" + str.tostring(effective_risk_dollars, "#") + ")", text_color = c_txt, bgcolor = c_bg, text_halign = text.align_right, text_size = txt_sz)
     r += 1
 
     // --- SIGNAL ROW ---
@@ -497,7 +573,8 @@ if signal_new
          "\n🛑 Stop: $" + str.tostring(stop_px, "#.##") + " (2×ATR)" +
          "\n🎯 TP1: $" + str.tostring(tp1_px, "#.##") + " (" + str.tostring(tp1_r_input, "#.##") + "R)" +
          "\n🎯 TP2: $" + str.tostring(tp2_px, "#.##") + " (" + str.tostring(tp2_r_input, "#.#") + "R)" +
-         "\n📊 Shares: " + str.tostring(shares_n) + " | Risk: $" + str.tostring(risk_dollars_input, "#") +
+         "\n📊 Shares: " + str.tostring(shares_n) + " | Risk: $" + str.tostring(effective_risk_dollars, "#") + " (Base: $" + str.tostring(risk_dollars_input, "#") + ")" +
+         "\n⚖️ E25: " + (use_e25 ? str.tostring(sizing_factor, "#.##") + " (" + sizing_reason + ")" : "Disabled") +
          "\n📈 Score: " + str.tostring(qulla_score, "#.#") +
          " | RVOL: " + str.tostring(rvol_val, "#.##") +
          " | RS: " + str.tostring(rs_pct, "#.#") + "%" +
