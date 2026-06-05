@@ -144,6 +144,7 @@ def run_backtest(
     use_pit: bool = True,
     ticker_cap: float | None = None,
     sector_cap: float | None = None,
+    universe_source: str = "pit",
 ):
     # Support both space-separated (--exclude-tickers NVDA AMD) and
     # comma-separated (--exclude-tickers NVDA,AMD) formats.
@@ -247,21 +248,33 @@ def run_backtest(
     cache_updated = False
 
     for d_str in tqdm(dates_str, desc="Universe Building"):
-        if d_str in universe_cache:
-            snap_tickers = universe_cache[d_str]
+        if universe_source == "shadow_finviz":
+            setups_path = PROJECT_ROOT / "outputs" / "shadow_sandbox" / "finviz_runs" / d_str / "setups.csv"
+            if setups_path.exists():
+                try:
+                    df_setups = pd.read_csv(setups_path)
+                    snap_tickers = df_setups["ticker"].dropna().unique().tolist()
+                except Exception as e:
+                    logger.warning(f"Error loading setups for {d_str}: {e}")
+                    snap_tickers = []
+            else:
+                snap_tickers = []
         else:
-            u_start = (pd.to_datetime(d_str) - timedelta(days=730)).strftime("%Y-%m-%d")
-            snap = build_universe_for_fold(
-                DB_PATH,
-                d_str,
-                u_start,
-                max_tickers=max_tickers,
-                index_name=index_name,
-                use_pit=use_pit,
-            )
-            snap_tickers = snap.tickers
-            universe_cache[d_str] = snap_tickers
-            cache_updated = True
+            if d_str in universe_cache:
+                snap_tickers = universe_cache[d_str]
+            else:
+                u_start = (pd.to_datetime(d_str) - timedelta(days=730)).strftime("%Y-%m-%d")
+                snap = build_universe_for_fold(
+                    DB_PATH,
+                    d_str,
+                    u_start,
+                    max_tickers=max_tickers,
+                    index_name=index_name,
+                    use_pit=use_pit,
+                )
+                snap_tickers = snap.tickers
+                universe_cache[d_str] = snap_tickers
+                cache_updated = True
 
         filtered_tickers = [
             t for t in snap_tickers 
@@ -822,6 +835,12 @@ if __name__ == "__main__":
         default=None,
         help="Maximum total position value for any single sector as a percentage of total portfolio equity (e.g. 0.40 for 40%%)",
     )
+    parser.add_argument(
+        "--universe-source",
+        default="pit",
+        choices=["pit", "shadow_finviz"],
+        help="Source of the backtest universe (pit for index constituents, shadow_finviz for daily setups)",
+    )
     args = parser.parse_args()
     run_backtest(
         args.start,
@@ -838,4 +857,5 @@ if __name__ == "__main__":
         use_pit=args.use_pit,
         ticker_cap=args.ticker_cap,
         sector_cap=args.sector_cap,
+        universe_source=args.universe_source,
     )
