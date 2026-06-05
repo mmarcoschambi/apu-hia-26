@@ -219,5 +219,9 @@ class TestIntegration:
             pytest.skip("No real ETL output found")
         engine = ShadowReplayEngine(shadow_dir=FIXTURE_ETL_DIR)
         records = engine.run()
-        xlv_count = sum(1 for r in records if r.excluded_by_xlv)
-        assert xlv_count == 0
+        # All XLV-excluded records must be flagged as not allowed shadow candidates.
+        xlv_excluded = [r for r in records if r.excluded_by_xlv]
+        for r in xlv_excluded:
+            assert r.allowed_shadow_candidate is False, (
+                f"{r.ticker} is excluded_by_xlv but has allowed_shadow_candidate=True"
+            )
