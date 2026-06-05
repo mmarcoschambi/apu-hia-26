@@ -569,7 +569,7 @@ class TickerCache:
             if getattr(df.index, 'tz', None) is not None:
                 df.index = df.index.tz_localize(None)
 
-            # Tickers con historia insuficiente
+            # Tickers con historia mínima
             if len(df) < 10:
                 logger.warning(f"Ticker {ticker} tiene historia mínima ({len(df)} días). Guardando para evitar re-descarga.")
 
@@ -606,9 +606,53 @@ class TickerCache:
                 return None
 
             if df.index.duplicated().any():
-                dupe_count = df.index.duplicated().sum()
-                logger.debug(f"Deduplicating {ticker}: {dupe_count} duplicate dates removed (keeping last)")
                 df = df[~df.index.duplicated(keep="last")]
+
+            # Intentar cargar la historia existente del ticker para evitar calcular SMAs sobre datos truncados
+            old_df = None
+            if parquet_path.exists():
+                try:
+                    old_df = pd.read_parquet(parquet_path)
+                except Exception as e:
+                    logger.warning(f"Failed to read parquet for {ticker}: {e}")
+            elif pkl_path.exists():
+                try:
+                    import pickle
+                    with open(pkl_path, "rb") as f:
+                        old_df = pickle.load(f)
+                except Exception:
+                    pass
+            
+            if old_df is None:
+                # Intentar cargar de SQLite
+                try:
+                    with self.lock:
+                        cursor = self.conn.execute(
+                            "SELECT date, open, high, low, close, volume FROM ohlcv_cache WHERE ticker = ? ORDER BY date",
+                            (ticker,)
+                        )
+                        rows = cursor.fetchall()
+                        if rows:
+                            old_df = pd.DataFrame(rows, columns=["date", "Open", "High", "Low", "Close", "Volume"])
+                            old_df["date"] = pd.to_datetime(old_df["date"])
+                            old_df.set_index("date", inplace=True)
+                except Exception as e:
+                    logger.warning(f"Failed to load from SQLite for {ticker}: {e}")
+
+            if old_df is not None and not old_df.empty:
+                old_df.rename(
+                    columns={
+                        "open": "Open", "high": "High", "low": "Low", "close": "Close", "volume": "Volume"
+                    },
+                    inplace=True
+                )
+                base_cols = ["Open", "High", "Low", "Close", "Volume"]
+                old_df_base = old_df[[c for c in base_cols if c in old_df.columns]].copy()
+                df_base = df[[c for c in base_cols if c in df.columns]].copy()
+                
+                combined_df = pd.concat([old_df_base, df_base])
+                combined_df = combined_df[~combined_df.index.duplicated(keep="last")].sort_index()
+                df = combined_df
 
             close_s = df["Close"]
             volume_s = df["Volume"]
@@ -632,9 +676,15 @@ class TickerCache:
             df['daily_range_pct'] = ((high_s - low_s) / low_s) * 100
             df['adr_pct_20'] = df['daily_range_pct'].rolling(window=20).mean()
 
-            # BULK INSERT
+            # Guardar únicamente las filas correspondientes al rango de descarga original
+            start_dt = pd.to_datetime(start_date)
+            end_dt = pd.to_datetime(end_date)
+            df_to_save = df[(df.index >= start_dt) & (df.index <= end_dt)]
+            if df_to_save.empty:
+                df_to_save = df.tail(len(df) if old_df is None else max(1, len(df) - len(old_df)))
+
             records = []
-            for date, row in df.iterrows():
+            for date, row in df_to_save.iterrows():
                 try:
                     open_val = row["Open"].iloc[0] if hasattr(row["Open"], "iloc") else row["Open"]
                     high_val = row["High"].iloc[0] if hasattr(row["High"], "iloc") else row["High"]
@@ -685,18 +735,8 @@ class TickerCache:
                 """, records)
                 self.conn.commit()
 
-            # Guardar en Parquet
             try:
                 df.index.name = "date"
-                if parquet_path.exists():
-                    try:
-                        old_df = pd.read_parquet(parquet_path)
-                        combined = pd.concat([old_df, df])
-                        combined = combined[~combined.index.duplicated(keep="last")].sort_index()
-                        df = combined
-                    except Exception as e:
-                        logger.warning(f"Failed to merge existing parquet for {ticker}: {e}")
-
                 df.to_parquet(parquet_path, engine="pyarrow", compression="snappy")
                 if pkl_path.exists():
                     pkl_path.unlink()
@@ -704,7 +744,6 @@ class TickerCache:
             except Exception as e:
                 try:
                     import pickle
-
                     with open(pkl_path, "wb") as f:
                         pickle.dump(df, f)
                 except Exception as e2:
@@ -868,7 +907,15 @@ class TickerCache:
                 },
                 inplace=True,
             )
-            return df
+            if offline:
+                return df
+
+            if not df.empty:
+                last_date = df.index[-1].date()
+                yesterday = (datetime.now() - timedelta(days=1)).date()
+                req_end = pd.to_datetime(end_date).date()
+                if last_date >= req_end or last_date >= yesterday:
+                    return df
 
         if offline:
             return None
