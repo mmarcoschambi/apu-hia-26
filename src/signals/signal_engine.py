@@ -199,9 +199,15 @@ def calculate_dynamic_sizing_factor(dist_sma20: float, adr_pct: float, combo_cfg
     comfort = float(sizing_cfg.get("comfort_pct", 6.76))
     valley = float(sizing_cfg.get("valley_pct", 10.0))
     mid = float(sizing_cfg.get("mid_pct", 15.0))
-    high = float(sizing_cfg.get("high_pct", 25.0))  # default alineado con production_config
-    extreme_cutoff = float(sizing_cfg.get("extreme_pct", 35.0))
     max_pct = float(sizing_cfg.get("max_pct", 50.0))
+    
+    # Enforce version-specific defaults and bounds to ensure alignment with comments and specs
+    if version == "v2_atlas_informed":
+        high = float(sizing_cfg.get("high_pct", 25.0))
+        extreme_cutoff = float(sizing_cfg.get("extreme_pct", 35.0))
+    else:  # v1_monotonic
+        high = float(sizing_cfg.get("high_pct", 30.0))
+        extreme_cutoff = float(sizing_cfg.get("extreme_pct", 35.0))
     
     min_factor = float(sizing_cfg.get("min_factor", 0.5))
     extreme_factor = float(sizing_cfg.get("extreme_factor", 0.2))
