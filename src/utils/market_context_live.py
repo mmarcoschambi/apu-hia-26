@@ -68,12 +68,14 @@ def _fetch_last_close_cache(
     db_path: Path, ticker: str, days: int = 10, as_of: Optional[str | pd.Timestamp] = None
 ) -> Tuple[Optional[float], Optional[str]]:
     """Descarga último close desde cache local (ticker_cache.db)."""
+    if not db_path or not db_path.exists() or db_path.stat().st_size == 0:
+        return None, f"{ticker}: cache DB not found or empty at {db_path}"
     try:
         ref_dt = pd.Timestamp(as_of) if as_of else datetime.now()
         cutoff = (ref_dt - timedelta(days=days)).strftime("%Y-%m-%d")
         as_of_str = ref_dt.strftime("%Y-%m-%d")
 
-        conn = sqlite3.connect(str(db_path))
+        conn = sqlite3.connect(str(db_path), timeout=30)
         row = conn.execute(
             "SELECT close FROM ohlcv_cache WHERE ticker=? AND date>=? AND date<=? ORDER BY date DESC LIMIT 1",
             (ticker, cutoff, as_of_str),
@@ -90,8 +92,10 @@ def _fetch_close_series_cache(
     db_path: Path, ticker: str, days: int = 365
 ) -> Tuple[pd.Series, Optional[str]]:
     """Descarga serie de close desde cache local."""
+    if not db_path or not db_path.exists() or db_path.stat().st_size == 0:
+        return pd.Series(dtype=float), f"{ticker}: cache DB not found or empty at {db_path}"
     try:
-        conn = sqlite3.connect(str(db_path))
+        conn = sqlite3.connect(str(db_path), timeout=30)
         cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
         rows = conn.execute(
             "SELECT date, close FROM ohlcv_cache WHERE ticker=? AND date>=? ORDER BY date",

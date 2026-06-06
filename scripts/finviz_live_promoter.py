@@ -84,7 +84,7 @@ def is_rth() -> bool:
 
 
 def fetch_live_data(tickers: list[str]) -> pd.DataFrame:
-    """Obtiene precio actual y volumen acumulado usando yfinance."""
+    """Obtiene precio actual y volumen acumulado usando yfinance con fallbacks robustos."""
     if not tickers:
         return pd.DataFrame()
 
@@ -96,29 +96,82 @@ def fetch_live_data(tickers: list[str]) -> pd.DataFrame:
             progress=False,
             group_by="ticker",
             threads=False,
+            timeout=15,
         )
-        results = []
-        for ticker in tickers:
-            try:
-                df = data if len(tickers) == 1 else data[ticker]
-                if df.empty:
-                    results.append({"ticker": ticker, "live_price": None, "live_vol": None})
-                    continue
-
-                last_row = df.iloc[-1]
-                results.append(
-                    {
-                        "ticker": ticker,
-                        "live_price": float(last_row["Close"]),
-                        "live_vol": float(df["Volume"].sum()),
-                    }
-                )
-            except Exception:
-                results.append({"ticker": ticker, "live_price": None, "live_vol": None})
-        return pd.DataFrame(results)
     except Exception as e:
-        logger.error(f"Error fetching live data: {e}")
-        return pd.DataFrame()
+        logger.warning(f"Batch download failed: {e}. Retrying tickers individually.")
+        data = pd.DataFrame()
+
+    results = []
+    for ticker in tickers:
+        try:
+            df = pd.DataFrame()
+            if not data.empty:
+                df = data if len(tickers) == 1 else data.get(ticker, pd.DataFrame())
+
+            # 1. Verificar si el batch download funcionó para este ticker
+            has_valid_data = (
+                not df.empty 
+                and "Close" in df.columns 
+                and not df["Close"].dropna().empty
+            )
+
+            # Fallback 1: Intento individual a 1m
+            if not has_valid_data:
+                logger.info(f"Retrying individual 1m download for {ticker}...")
+                with suppress(Exception):
+                    df = yf.download(ticker, period="1d", interval="1m", progress=False, timeout=10)
+                has_valid_data = (
+                    not df.empty 
+                    and "Close" in df.columns 
+                    and not df["Close"].dropna().empty
+                )
+
+            # Fallback 2: Intento individual diario (muy robusto frente a rate limits)
+            if not has_valid_data:
+                logger.info(f"Retrying individual daily download for {ticker}...")
+                with suppress(Exception):
+                    df = yf.download(ticker, period="1d", progress=False, timeout=10)
+                has_valid_data = (
+                    not df.empty 
+                    and "Close" in df.columns 
+                    and not df["Close"].dropna().empty
+                )
+
+            # Fallback 3: Ticker.history diario
+            if not has_valid_data:
+                logger.info(f"Retrying Ticker.history daily for {ticker}...")
+                with suppress(Exception):
+                    t_obj = yf.Ticker(ticker)
+                    df = t_obj.history(period="1d")
+                has_valid_data = (
+                    not df.empty 
+                    and "Close" in df.columns 
+                    and not df["Close"].dropna().empty
+                )
+
+            if not has_valid_data:
+                logger.error(f"Failed to fetch live data for {ticker} after all fallbacks.")
+                results.append({"ticker": ticker, "live_price": None, "live_vol": None})
+                continue
+
+            df_clean = df.dropna(subset=["Close"])
+            last_row = df_clean.iloc[-1]
+            live_price = float(last_row["Close"])
+            live_vol = float(df_clean["Volume"].sum()) if "Volume" in df_clean.columns else 0.0
+
+            results.append(
+                {
+                    "ticker": ticker,
+                    "live_price": live_price,
+                    "live_vol": live_vol,
+                }
+            )
+        except Exception as ex:
+            logger.error(f"Unexpected error processing ticker {ticker}: {ex}")
+            results.append({"ticker": ticker, "live_price": None, "live_vol": None})
+
+    return pd.DataFrame(results)
 
 
 from src.utils.sector_rotation import get_ticker_sector_mapping
@@ -132,11 +185,11 @@ DB_PATH = PROJECT_ROOT / "data" / "ticker_cache.db"
 
 def load_historical_ohlcv(ticker: str, days: int = 150) -> pd.DataFrame:
     """Loads up to 'days' of daily bars for a ticker from SQLite database."""
-    if not DB_PATH.exists():
-        logger.debug(f"Database not found at {DB_PATH}")
+    if not DB_PATH.exists() or DB_PATH.stat().st_size == 0:
+        logger.debug(f"Database not found or empty at {DB_PATH}")
         return pd.DataFrame()
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(DB_PATH, timeout=30)
         query = """
             SELECT date, open, high, low, close, volume
             FROM ohlcv_cache
