@@ -7,6 +7,7 @@ import pytest
 # Add project root to sys.path to find daily_workflow module
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
+sys.path.insert(0, str(project_root / "scripts"))
 
 from daily_workflow import DailyWorkflow
 

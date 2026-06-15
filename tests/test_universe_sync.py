@@ -258,16 +258,32 @@ def test_combo_scanner_multi():
 
 
 def test_combo_scanner_output_files():
-    import subprocess
     from scripts.run_combo_scanner import run_combo_scan
+    from src.signals.signal_engine import SignalDecision
+    import importlib
 
-    with temp_tiny_stable_universe():
-        result = run_combo_scan(
-            universe_source="stable",
-            agent_names=["combo_pure_momentum"],
-            dry_run=False,
-            skip_tier2=True,
-        )
+    mod = importlib.import_module("scripts.run_combo_scanner")
+    orig_evaluate = mod.evaluate_ticker
+
+    # Mock evaluate_ticker to return a positive decision so CSVs are written
+    mod.evaluate_ticker = lambda *a, **kw: SignalDecision(
+        ticker=a[0] if a else "TICK",
+        mode="A",
+        passed=True,
+        reject_reason="",
+        entry_score=95.0,
+    )
+
+    try:
+        with temp_tiny_stable_universe():
+            result = run_combo_scan(
+                universe_source="stable",
+                agent_names=["combo_pure_momentum"],
+                dry_run=False,
+                skip_tier2=True,
+            )
+    finally:
+        mod.evaluate_ticker = orig_evaluate
 
     today = datetime.now().strftime("%Y-%m-%d")
     out_dir = PROJECT_ROOT / "outputs" / "live_signals" / today

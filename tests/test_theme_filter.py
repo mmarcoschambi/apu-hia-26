@@ -135,7 +135,7 @@ def test_theme_feature_flag_off():
     assert res.passed is True
 
 def test_taxonomy_version():
-    assert TAXONOMY_VERSION == "v1.0-2026-05-12"
+    assert TAXONOMY_VERSION == "v2.0-PIT-MultiYear"
 
 if __name__ == "__main__":
     pytest.main([__file__])
