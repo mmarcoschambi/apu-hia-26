@@ -71,6 +71,7 @@ _TRADES_COL_ALIASES: Dict[str, str] = {
     "exit_dt": "exit_date",
     "hold": "hold_days",
     "r_mult": "r_multiple",
+    "initial_size": "shares",
 }
 
 # Defaults de Tier 1
