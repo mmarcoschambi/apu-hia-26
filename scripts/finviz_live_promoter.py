@@ -178,7 +178,7 @@ from src.utils.sector_rotation import get_ticker_sector_mapping
 import sqlite3
 from src.config.dynamic_config import load_production_config
 from src.integration.combo_loader import load_combo_merged
-from src.signals.signal_engine import evaluate_ticker
+from src.signals.signal_engine import evaluate_ticker, Tier2Metrics, resolve_canonical_risk
 
 DB_PATH = PROJECT_ROOT / "data" / "ticker_cache.db"
 
@@ -239,7 +239,9 @@ def check_snapshot_gate_partial(detail: dict, config: dict) -> tuple[bool, str]:
         return False, f"tier2_fail:dollar_volume:{dv_val/1e6:.1f}M<{min_dv/1e6:.1f}M"
         
     # 4. Distance to SMA20
-    max_dist = t2.get("max_dist_sma20", 6.768)
+    t3 = config.get("tier3_fixed", config.get("tier3_risk", {}))
+    use_dyn = t3.get("use_dynamic_extension_sizing", False)
+    max_dist = 50.0 if use_dyn else t2.get("max_dist_sma20", 6.768)
     dist_val = detail.get("dist_sma20_pct")
     if dist_val is None:
         return False, "missing_dist_sma20"
@@ -392,11 +394,13 @@ def promote_candidates(date: str, min_rvol: float = 1.5, send_telegram: bool = F
     combined_dir = OUT_DIR / date
     combined_dir.mkdir(parents=True, exist_ok=True)
     combined_path = combined_dir / "combined.csv"
-    existing_tickers = set()
+    existing_signals = set()
     if combined_path.exists():
         try:
             df_existing = pd.read_csv(combined_path)
-            existing_tickers = set(df_existing["ticker"].tolist())
+            if not df_existing.empty and "ticker" in df_existing.columns and "agent_name" in df_existing.columns:
+                for _, r in df_existing.iterrows():
+                    existing_signals.add((str(r["ticker"]).upper(), str(r["agent_name"])))
         except Exception as e:
             logger.warning(f"No se pudo leer combined.csv existente {combined_path}: {e}")
 
@@ -405,18 +409,6 @@ def promote_candidates(date: str, min_rvol: float = 1.5, send_telegram: bool = F
         ticker = row["ticker"]
         # Skip SPY from being evaluated as a candidate
         if ticker == "SPY":
-            continue
-
-        if ticker in existing_tickers:
-            stats["already_sent"] += 1
-            audit_rows.append(
-                {
-                    "ticker": ticker,
-                    "status": "existing",
-                    "eligible": False,
-                    "reason": "already_sent",
-                }
-            )
             continue
 
         price = row["live_price"]
@@ -463,7 +455,6 @@ def promote_candidates(date: str, min_rvol: float = 1.5, send_telegram: bool = F
             logger.info(
                 f"🚀 PROMOVIENDO TRIGGER {ticker}: Price={price:.2f} (Break={breakout_lvl}), RVOL={live_rvol:.1f} [{status}]"
             )
-            stats["promoted"] += 1
 
             # Metadata extra
             sec = sector_map.get(ticker, "OTHER")
@@ -488,68 +479,78 @@ def promote_candidates(date: str, min_rvol: float = 1.5, send_telegram: bool = F
             if sector_etf_dist is not None:
                 sector_etf_dist = sector_etf_dist / 100.0
 
-            # Dual-Gate Evaluation
-            entry_gate_status = "UNKNOWN"
-            entry_gate_reason = "not_evaluated"
-            entry_gate_source = "none"
-            passed_combo_name = None
             premarket_combos = detail.get("combos", [])
-            
-            gate_rs_percentile = rs_pct
-            gate_adr_pct = detail.get("adr")
-            gate_dollar_vol_M = detail.get("dollar_volume_m")
-            gate_dist_sma20 = detail.get("dist_sma20_pct")
-            gate_sector_etf_dist = detail.get("sector_etf_dist_pct")
+            combos_to_eval = []
+            for combo_name, mode in ACTIVE_COMBOS:
+                lbl = "Qulla" if combo_name == "combo_pure_momentum" else "Minervini"
+                if not premarket_combos or lbl in premarket_combos:
+                    combos_to_eval.append((combo_name, mode))
+            if not combos_to_eval:
+                combos_to_eval = ACTIVE_COMBOS
 
-            if DB_PATH.exists():
-                # Laboratory Environment: Run canonical evaluate_ticker
-                hist_df = load_historical_ohlcv(ticker, days=150)
-                spy_hist_df = load_historical_ohlcv("SPY", days=150)
-                today_dt = pd.to_datetime(date).normalize()
+            for combo_name, mode in combos_to_eval:
+                if (ticker.upper(), combo_name) in existing_signals:
+                    stats["already_sent"] += 1
+                    audit_rows.append(
+                        {
+                            "ticker": ticker,
+                            "status": "existing",
+                            "eligible": False,
+                            "reason": f"already_sent:{combo_name}",
+                        }
+                    )
+                    continue
 
-                # Hydrate latest row with live intraday data
-                if not hist_df.empty:
-                    if today_dt in hist_df.index:
-                        hist_df.loc[today_dt, "close"] = price
-                        hist_df.loc[today_dt, "high"] = max(hist_df.loc[today_dt, "high"], price)
-                        hist_df.loc[today_dt, "low"] = min(hist_df.loc[today_dt, "low"], price)
-                        hist_df.loc[today_dt, "volume"] = vol
-                    else:
-                        new_row = pd.DataFrame(
-                            {"open": price, "high": price, "low": price, "close": price, "volume": vol},
-                            index=[today_dt]
-                        )
-                        hist_df = pd.concat([hist_df, new_row])
+                passed_eval = False
+                reject_reason = ""
+                risk_info = {}
+                decision = None
+                
+                # Dual-Gate Evaluation
+                entry_gate_status = "UNKNOWN"
+                entry_gate_reason = "not_evaluated"
+                entry_gate_source = "none"
+                
+                gate_rs_percentile = rs_pct
+                gate_adr_pct = detail.get("adr")
+                gate_dollar_vol_M = detail.get("dollar_volume_m")
+                gate_dist_sma20 = detail.get("dist_sma20_pct")
+                gate_sector_etf_dist = detail.get("sector_etf_dist_pct")
 
-                if not spy_hist_df.empty and spy_price is not None:
-                    if today_dt in spy_hist_df.index:
-                        spy_hist_df.loc[today_dt, "close"] = spy_price
-                        spy_hist_df.loc[today_dt, "high"] = max(spy_hist_df.loc[today_dt, "high"], spy_price)
-                        spy_hist_df.loc[today_dt, "low"] = min(spy_hist_df.loc[today_dt, "low"], spy_price)
-                        spy_hist_df.loc[today_dt, "volume"] = spy_vol or 0.0
-                    else:
-                        new_row = pd.DataFrame(
-                            {"open": spy_price, "high": spy_price, "low": spy_price, "close": spy_price, "volume": spy_vol or 0.0},
-                            index=[today_dt]
-                        )
-                        spy_hist_df = pd.concat([spy_hist_df, new_row])
+                if DB_PATH.exists():
+                    # Laboratory Environment: Run canonical evaluate_ticker
+                    hist_df = load_historical_ohlcv(ticker, days=150)
+                    spy_hist_df = load_historical_ohlcv("SPY", days=150)
+                    today_dt = pd.to_datetime(date).normalize()
 
-                if len(hist_df) >= 65:
-                    best_decision = None
-                    passed_combo_name = None
-                    passed_mode = None
-                    reasons_list = []
+                    # Hydrate latest row with live intraday data
+                    if not hist_df.empty:
+                        if today_dt in hist_df.index:
+                            hist_df.loc[today_dt, "close"] = price
+                            hist_df.loc[today_dt, "high"] = max(hist_df.loc[today_dt, "high"], price)
+                            hist_df.loc[today_dt, "low"] = min(hist_df.loc[today_dt, "low"], price)
+                            hist_df.loc[today_dt, "volume"] = vol
+                        else:
+                            new_row = pd.DataFrame(
+                                {"open": price, "high": price, "low": price, "close": price, "volume": vol},
+                                index=[today_dt]
+                            )
+                            hist_df = pd.concat([hist_df, new_row])
 
-                    # Pure cascaded fallback: evaluate combos in order filtered by premarket combos (Qulla -> Minervini)
-                    combos_to_eval = []
-                    for combo_name, mode in ACTIVE_COMBOS:
-                        lbl = "Qulla" if combo_name == "combo_pure_momentum" else "Minervini"
-                        if not premarket_combos or lbl in premarket_combos:
-                            combos_to_eval.append((combo_name, mode))
-                    if not combos_to_eval:
-                        combos_to_eval = ACTIVE_COMBOS
-                    
-                    for combo_name, mode in combos_to_eval:
+                    if not spy_hist_df.empty and spy_price is not None:
+                        if today_dt in spy_hist_df.index:
+                            spy_hist_df.loc[today_dt, "close"] = spy_price
+                            spy_hist_df.loc[today_dt, "high"] = max(spy_hist_df.loc[today_dt, "high"], spy_price)
+                            spy_hist_df.loc[today_dt, "low"] = min(spy_hist_df.loc[today_dt, "low"], spy_price)
+                            spy_hist_df.loc[today_dt, "volume"] = spy_vol or 0.0
+                        else:
+                            new_row = pd.DataFrame(
+                                {"open": spy_price, "high": spy_price, "low": spy_price, "close": spy_price, "volume": spy_vol or 0.0},
+                                index=[today_dt]
+                            )
+                            spy_hist_df = pd.concat([spy_hist_df, new_row])
+
+                    if len(hist_df) >= 65:
                         try:
                             # Load combo_cfg
                             combo_cfg, _ = load_combo_merged(combo_name)
@@ -563,11 +564,14 @@ def promote_candidates(date: str, min_rvol: float = 1.5, send_telegram: bool = F
                             
                             if combo_name == "combo_pure_momentum":
                                 prod_t2 = prod_config.get("tier2_filters", {}).copy()
-                                # If the combo doesn't have use_rs_percentile enabled, do not force it to True
                                 if not combo_cfg["tier2_filters"].get("use_rs_percentile", False):
                                     prod_t2["use_rs_percentile"] = False
-                                
                                 combo_cfg["tier2_filters"].update(prod_t2)
+                            
+                            if combo_name == "combo_stage2_breakout":
+                                if "tier3_fixed" not in combo_cfg:
+                                    combo_cfg["tier3_fixed"] = {}
+                                combo_cfg["tier3_fixed"].update(prod_config.get("tier3_fixed", {}))
                             
                             decision = evaluate_ticker(
                                 ticker=ticker,
@@ -579,204 +583,240 @@ def promote_candidates(date: str, min_rvol: float = 1.5, send_telegram: bool = F
                                 scan_date=date,
                                 sector_etf_dist=sector_etf_dist
                             )
-                            if decision.passed:
-                                best_decision = decision
-                                passed_combo_name = combo_name
-                                passed_mode = mode
-                                break
-                            else:
-                                lbl = "Qulla" if combo_name == "combo_pure_momentum" else "Minervini" if combo_name == "combo_stage2_breakout" else combo_name
-                                reasons_list.append(f"{lbl}:{decision.reject_reason}")
-                                if best_decision is None:
-                                    best_decision = decision
+                            passed_eval = decision.passed
+                            reject_reason = decision.reject_reason if not passed_eval else "passed"
+                            if passed_eval:
+                                risk_info = {
+                                    "stop_price": decision.stop_price,
+                                    "tp1_price": decision.tp1_price,
+                                    "tp2_price": decision.tp2_price,
+                                    "shares": decision.shares,
+                                    "risk_budget_usd": decision.risk_budget_usd,
+                                    "sizing_factor": decision.sizing_factor,
+                                    "sizing_reason": decision.sizing_reason,
+                                }
                         except Exception as e:
                             logger.error(f"Error calling canonical evaluate_ticker for {ticker} with {combo_name}: {e}")
-                            lbl = "Qulla" if combo_name == "combo_pure_momentum" else "Minervini" if combo_name == "combo_stage2_breakout" else combo_name
-                            reasons_list.append(f"{lbl}:error:{e}")
-                    
-                    if passed_combo_name:
-                        entry_gate_status = "PASS"
-                        entry_gate_reason = "passed"
-                        entry_gate_source = f"canonical_signal_engine:{passed_combo_name}"
-                    elif best_decision:
-                        entry_gate_status = "BLOCKED"
-                        entry_gate_reason = "; ".join(reasons_list) if reasons_list else best_decision.reject_reason
-                        entry_gate_source = "canonical_signal_engine:A+B_rejected"
+                            passed_eval = False
+                            reject_reason = f"error:{e}"
+                        
+                        entry_gate_status = "PASS" if passed_eval else "BLOCKED"
+                        entry_gate_reason = reject_reason
+                        entry_gate_source = f"canonical_signal_engine:{combo_name}"
+
+                        if decision:
+                            if decision.tier2_metrics and decision.tier2_metrics.adr_pct > 0:
+                                gate_rs_percentile = decision.tier2_metrics.rs_percentile
+                                gate_adr_pct = decision.tier2_metrics.adr_pct
+                                gate_dollar_vol_M = decision.tier2_metrics.dollar_vol_M
+                                gate_dist_sma20 = decision.tier2_metrics.dist_sma20
+                                gate_sector_etf_dist = (
+                                    decision.tier2_metrics.sector_etf_dist * 100.0 
+                                    if decision.tier2_metrics.sector_etf_dist is not None else None
+                                )
                     else:
                         entry_gate_status = "UNKNOWN"
-                        entry_gate_reason = "all_combos_evaluation_failed"
-
-                    if best_decision:
-                        # Retrieve evaluated metrics
-                        if best_decision.tier2_metrics and best_decision.tier2_metrics.adr_pct > 0:
-                            gate_rs_percentile = best_decision.tier2_metrics.rs_percentile
-                            gate_adr_pct = best_decision.tier2_metrics.adr_pct
-                            gate_dollar_vol_M = best_decision.tier2_metrics.dollar_vol_M
-                            gate_dist_sma20 = best_decision.tier2_metrics.dist_sma20
-                            gate_sector_etf_dist = (
-                                best_decision.tier2_metrics.sector_etf_dist * 100.0 
-                                if best_decision.tier2_metrics.sector_etf_dist is not None else None
+                        entry_gate_reason = "insufficient_historical_bars"
+                else:
+                    # VPS fallback: evaluar combos filtrados por premarket_combos con sus configs nativas
+                    try:
+                        combo_cfg_vps, _ = load_combo_merged(combo_name)
+                        if combo_name == "combo_pure_momentum":
+                            combo_cfg_vps["tier2_filters"].update(prod_config.get("tier2_filters", {}))
+                        if combo_name == "combo_stage2_breakout":
+                            if "tier3_fixed" not in combo_cfg_vps:
+                                combo_cfg_vps["tier3_fixed"] = {}
+                            combo_cfg_vps["tier3_fixed"].update(prod_config.get("tier3_fixed", {}))
+                            
+                        passed_eval, reject_reason = check_snapshot_gate_partial(detail, combo_cfg_vps)
+                        if passed_eval:
+                            metrics_vps = Tier2Metrics(
+                                rvol=live_rvol,
+                                adr_pct=detail.get("adr", 0.0),
+                                atr=detail.get("atr", 0.0),
+                                dist_sma20=detail.get("dist_sma20_pct", 0.0),
+                                dollar_vol_M=detail.get("dollar_volume_m", 0.0),
+                                rs_percentile=rs_pct,
+                                sector_etf_dist=sector_etf_dist
                             )
-                else:
-                    entry_gate_status = "UNKNOWN"
-                    entry_gate_reason = "insufficient_historical_bars"
-            else:
-                # VPS fallback: evaluar combos filtrados por premarket_combos con sus configs nativas
-                vps_passed = False
-                vps_reasons = []
-                combos_to_eval = []
-                for combo_name, mode in ACTIVE_COMBOS:
-                    lbl = "Qulla" if combo_name == "combo_pure_momentum" else "Minervini"
-                    if not premarket_combos or lbl in premarket_combos:
-                        combos_to_eval.append((combo_name, mode))
-                if not combos_to_eval:
-                    combos_to_eval = ACTIVE_COMBOS
-
-                for combo_name, _ in combos_to_eval:
-                    combo_cfg_vps, _ = load_combo_merged(combo_name)
-                    if combo_name == "combo_pure_momentum":
-                        combo_cfg_vps["tier2_filters"].update(prod_config.get("tier2_filters", {}))
-                    check_passed, check_reason = check_snapshot_gate_partial(detail, combo_cfg_vps)
-                    lbl = "Qulla" if combo_name == "combo_pure_momentum" else "Minervini"
-                    if check_passed:
-                        vps_passed = True
-                        passed_combo_name = combo_name
-                        entry_gate_source = f"snapshot_partial:{combo_name}"
-                        break
-                    vps_reasons.append(f"{lbl}:{check_reason}")
-                entry_gate_status = "PASS" if vps_passed else "BLOCKED"
-                entry_gate_reason = "; ".join(vps_reasons) if not vps_passed else "passed"
-                entry_gate_source = entry_gate_source if vps_passed else "snapshot_partial:A+B_rejected"
-
-            premarket_combos = detail.get("combos", [])
-            combo_label = "finviz_live"
-            if len(premarket_combos) > 1:
-                combo_label = "Ambos"
-            elif len(premarket_combos) == 1:
-                combo_label = premarket_combos[0]
-
-            signal = {
-                "ticker": ticker,
-                "agent_name": passed_combo_name or combo_label,
-                "entry_score": detail.get("score", 0.5),
-                "proximity_score": detail.get("proximity_score", 0.0),
-                "entry_price": price,
-                "breakout_level": breakout_lvl,
-                "rvol": round(live_rvol, 2),
-                "live_volume": int(vol),
-                "signal_date": date,
-                "source_universe": "finviz",
-                "decision_source": f"finviz_live_promoter:{passed_combo_name or 'none'}",
-                "data_quality_status": status,
-                "sector_etf": sec,
-                "dollar_vol_M": dv,
-                "dist_sma20": dist_sma20,
-                "waiting_for": waiting,
-                "primary_reason": blocker,
-                
-                # New telegram entry gate fields
-                "live_trigger_status": "PASS",
-                "entry_gate_status": entry_gate_status,
-                "entry_gate_reason": entry_gate_reason,
-                "entry_gate_source": entry_gate_source,
-                "gate_rs_percentile": gate_rs_percentile,
-                "gate_adr_pct": gate_adr_pct,
-                "gate_dollar_vol_M": gate_dollar_vol_M,
-                "gate_dist_sma20": gate_dist_sma20,
-                "gate_sector_etf_dist": gate_sector_etf_dist,
-            }
-            new_signals.append(signal)
-            audit_rows.append(
-                {
-                    "ticker": ticker,
-                    "status": status,
-                    "eligible": True,
-                    "reason": f"promoted price>={breakout_lvl:.4f} rvol>={min_rvol:.2f}",
-                    "price": price,
-                    "breakout_level": breakout_lvl,
-                    "live_rvol": round(live_rvol, 2),
-                    "entry_gate_status": entry_gate_status,
-                    "entry_gate_reason": entry_gate_reason,
-                }
-            )
-
-            if send_telegram:
-                safe_ticker = html.escape(str(ticker), quote=False)
-                safe_sector = html.escape(str(sec), quote=False)
-                
-                # Check watchlist presence
-                in_watchlist = ticker.upper() in watchlist_tickers
-                watchlist_badge = "📋 <b>EN WATCHLIST</b>" if in_watchlist else "🆕 <b>NUEVO TICKER</b>"
-
-                # Determine icon and instruction for gate status
-                if entry_gate_status == "PASS":
-                    gate_icon = "🟢"
-                    action_text = "🟢 Trigger validado. Elegible para entrada swing manual."
-                elif entry_gate_status == "BLOCKED":
-                    gate_icon = "🔴"
-                    blockers = []
-                    reason_lower = entry_gate_reason.lower()
-                    if "adr" in reason_lower:
-                        blockers.append("ADR bajo")
-                    if "dist_sma20" in reason_lower or "dist_sma" in reason_lower:
-                        blockers.append("Extendido de SMA20")
-                    if "rs_percentile" in reason_lower or "rs_pct" in reason_lower:
-                        blockers.append("RS bajo")
-                    if "dollar_volume" in reason_lower or "dollar_vol" in reason_lower:
-                        blockers.append("DVol bajo")
-                    if "sector_etf" in reason_lower:
-                        blockers.append("Sector ETF bajista")
-                    if "stage2" in reason_lower or "minervini_stage2" in reason_lower:
-                        blockers.append("Falla Stage 2")
-                    if "ma_stack" in reason_lower:
-                        blockers.append("Medias desalineadas")
-                    if "trend_intensity" in reason_lower:
-                        blockers.append("Trend Intensity bajo")
+                            t1_cfg = combo_cfg_vps.get("tier1_strategy", {})
+                            risk_res = resolve_canonical_risk(
+                                entry_price=price,
+                                metrics=metrics_vps,
+                                combo_cfg=combo_cfg_vps,
+                                risk_dollars=float(t1_cfg.get("risk_dollars", 2878.0)),
+                            )
+                            risk_info = {
+                                "stop_price": risk_res["stop_price"],
+                                "tp1_price": risk_res["tp1_price"],
+                                "tp2_price": risk_res["tp2_price"],
+                                "shares": risk_res["shares"],
+                                "risk_budget_usd": risk_res["risk_budget_usd"],
+                                "sizing_factor": risk_res["sizing_factor"],
+                                "sizing_reason": risk_res["sizing_reason"],
+                            }
+                    except Exception as e:
+                        logger.error(f"Error calculating risk for {ticker} (VPS fallback) with {combo_name}: {e}")
+                        passed_eval = False
+                        reject_reason = f"risk_calc_error:{e}"
                     
-                    if blockers:
-                        action_text = f"🔴 Evitar entrada: bloqueado por {', '.join(blockers)}."
-                    else:
-                        action_text = "🔴 Evitar entrada: no cumple criterios de validación cascada."
+                    entry_gate_status = "PASS" if passed_eval else "BLOCKED"
+                    entry_gate_reason = reject_reason
+                    entry_gate_source = f"snapshot_partial:{combo_name}"
+                    
+                    gate_rs_percentile = rs_pct
+                    gate_adr_pct = detail.get("adr")
+                    gate_dollar_vol_M = detail.get("dollar_volume_m")
+                    gate_dist_sma20 = detail.get("dist_sma20_pct")
+                    gate_sector_etf_dist = detail.get("sector_etf_dist_pct")
+
+                if passed_eval:
+                    stats["promoted"] += 1
+                    signal = {
+                        "ticker": ticker,
+                        "agent_name": combo_name,
+                        "entry_score": detail.get("score", 0.5),
+                        "proximity_score": detail.get("proximity_score", 0.0),
+                        "entry_price": price,
+                        "breakout_level": breakout_lvl,
+                        "rvol": round(live_rvol, 2),
+                        "live_volume": int(vol),
+                        "signal_date": date,
+                        "source_universe": "finviz",
+                        "decision_source": f"finviz_live_promoter:{combo_name}",
+                        "data_quality_status": status,
+                        "sector_etf": sec,
+                        "dollar_vol_M": dv,
+                        "dist_sma20": dist_sma20,
+                        "waiting_for": waiting,
+                        "primary_reason": blocker,
+                        
+                        # Risk parameters
+                        "stop_price": risk_info.get("stop_price"),
+                        "tp1_price": risk_info.get("tp1_price"),
+                        "tp2_price": risk_info.get("tp2_price"),
+                        "shares": risk_info.get("shares"),
+                        "risk_budget_usd": risk_info.get("risk_budget_usd"),
+                        "sizing_factor": risk_info.get("sizing_factor"),
+                        "sizing_reason": risk_info.get("sizing_reason"),
+                        
+                        # Telegram fields
+                        "live_trigger_status": "PASS",
+                        "entry_gate_status": entry_gate_status,
+                        "entry_gate_reason": entry_gate_reason,
+                        "entry_gate_source": entry_gate_source,
+                        "gate_rs_percentile": gate_rs_percentile,
+                        "gate_adr_pct": gate_adr_pct,
+                        "gate_dollar_vol_M": gate_dollar_vol_M,
+                        "gate_dist_sma20": gate_dist_sma20,
+                        "gate_sector_etf_dist": gate_sector_etf_dist,
+                    }
+                    new_signals.append(signal)
+                    
+                    audit_rows.append(
+                        {
+                            "ticker": ticker,
+                            "status": status,
+                            "eligible": True,
+                            "reason": f"promoted:{combo_name} price>={breakout_lvl:.4f} rvol>={min_rvol:.2f}",
+                            "price": price,
+                            "breakout_level": breakout_lvl,
+                            "live_rvol": round(live_rvol, 2),
+                            "entry_gate_status": entry_gate_status,
+                            "entry_gate_reason": entry_gate_reason,
+                        }
+                    )
+
+                    if send_telegram:
+                        safe_ticker = html.escape(str(ticker), quote=False)
+                        safe_sector = html.escape(str(sec), quote=False)
+                        
+                        in_watchlist = ticker.upper() in watchlist_tickers
+                        watchlist_badge = "📋 <b>EN WATCHLIST</b>" if in_watchlist else "🆕 <b>NUEVO TICKER</b>"
+
+                        # Determine icon and instruction for gate status
+                        if entry_gate_status == "PASS":
+                            gate_icon = "🟢"
+                            action_text = "🟢 Trigger validado. Elegible para entrada swing manual."
+                        elif entry_gate_status == "BLOCKED":
+                            gate_icon = "🔴"
+                            blockers = []
+                            reason_lower = entry_gate_reason.lower()
+                            if "adr" in reason_lower:
+                                blockers.append("ADR bajo")
+                            if "dist_sma20" in reason_lower or "dist_sma" in reason_lower:
+                                blockers.append("Extendido de SMA20")
+                            if "rs_percentile" in reason_lower or "rs_pct" in reason_lower:
+                                blockers.append("RS bajo")
+                            if "dollar_volume" in reason_lower or "dollar_vol" in reason_lower:
+                                blockers.append("DVol bajo")
+                            if "sector_etf" in reason_lower:
+                                blockers.append("Sector ETF bajista")
+                            
+                            if blockers:
+                                action_text = f"🔴 Evitar entrada: bloqueado por {', '.join(blockers)}."
+                            else:
+                                action_text = "🔴 Evitar entrada: no cumple criterios de validación cascada."
+                        else:
+                            gate_icon = "🟡"
+                            action_text = "🟡 Requiere verificación manual de filtros."
+                        
+                        rs_str = f"{gate_rs_percentile:.1f}%" if gate_rs_percentile is not None else "N/A"
+                        adr_str = f"{gate_adr_pct:.2f}%" if gate_adr_pct is not None else "N/A"
+                        dv_str = f"${gate_dollar_vol_M:.1f}M" if gate_dollar_vol_M is not None else "N/A"
+                        dist20_str = f"{gate_dist_sma20:.2f}%" if gate_dist_sma20 is not None else "N/A"
+                        sec_dist_str = f"{gate_sector_etf_dist:.2f}%" if gate_sector_etf_dist is not None else "N/A"
+                        
+                        if sec == "XLK":
+                            header_title = f"⚡ <b>[SHADOW: XLK-Only] {safe_ticker}</b>"
+                        elif sec == "XLC":
+                            header_title = f"👁️ <b>[OBSERVATION: XLC] {safe_ticker}</b>"
+                        else:
+                            header_title = f"🧭 <b>LIVE SIGNAL: {safe_ticker}</b> ({safe_sector})"
+                        
+                        prefix = "<b>[SISTEMA A]</b> " if combo_name == "combo_pure_momentum" else "<b>[SISTEMA B]</b> "
+                        header_title = prefix + header_title
+                        
+                        msg = (
+                            f"{header_title}\n"
+                            f"{watchlist_badge}\n\n"
+                            f"⚡ <b>TRIGGER DETAILS:</b>\n"
+                            f"• Live Trigger: <b>PASS</b>\n"
+                            f"• Price: <b>${price:.2f}</b>{price_flag} (Break: ${breakout_lvl:.2f})\n"
+                            f"• Live RVOL: <b>{live_rvol:.2f}x</b>\n\n"
+                            f"{gate_icon} <b>ENTRY GATE STATUS: {entry_gate_status}</b>\n"
+                            f"• Gate Reason: <code>{html.escape(entry_gate_reason, quote=False)}</code>\n"
+                            f"• Source: <i>{entry_gate_source}</i>\n\n"
+                            f"📊 <b>GATE METRICS:</b>\n"
+                            f"• RS Percentile: <b>{rs_str}</b>\n"
+                            f"• ADR %: <b>{adr_str}</b>\n"
+                            f"• Dollar Volume: <b>{dv_str}</b>\n"
+                            f"• Dist SMA20: <b>{dist20_str}</b>\n"
+                            f"• Sector ETF Dist: <b>{sec_dist_str}</b>\n\n"
+                            f"📈 <a href=\"https://www.tradingview.com/symbols/{safe_ticker}/\">Ver en TradingView</a>\n\n"
+                            f"📢 <b>ACTION:</b>\n"
+                            f"<b>{action_text}</b>"
+                        )
+                        
+                        chat_id_to_send = os.getenv("TELEGRAM_CHAT_ID_SYSTEM_B") if combo_name == "combo_stage2_breakout" else None
+                        if not chat_id_to_send:
+                            chat_id_to_send = os.getenv("TELEGRAM_CHAT_ID")
+                            
+                        shared_telegram_send(msg, chat_id=chat_id_to_send)
                 else:
-                    gate_icon = "🟡"
-                    action_text = "🟡 Requiere verificación manual de filtros."
-                
-                # Format metrics values cleanly
-                rs_str = f"{gate_rs_percentile:.1f}%" if gate_rs_percentile is not None else "N/A"
-                adr_str = f"{gate_adr_pct:.2f}%" if gate_adr_pct is not None else "N/A"
-                dv_str = f"${gate_dollar_vol_M:.1f}M" if gate_dollar_vol_M is not None else "N/A"
-                dist20_str = f"{gate_dist_sma20:.2f}%" if gate_dist_sma20 is not None else "N/A"
-                sec_dist_str = f"{gate_sector_etf_dist:.2f}%" if gate_sector_etf_dist is not None else "N/A"
-                
-                # Formatting shadow vs observation labels
-                if sec == "XLK":
-                    header_title = f"⚡ <b>[SHADOW: XLK-Only] {safe_ticker}</b>"
-                elif sec == "XLC":
-                    header_title = f"👁️ <b>[OBSERVATION: XLC] {safe_ticker}</b>"
-                else:
-                    header_title = f"🧭 <b>LIVE SIGNAL: {safe_ticker}</b> ({safe_sector})"
-                
-                msg = (
-                    f"{header_title}\n"
-                    f"{watchlist_badge}\n\n"
-                    f"⚡ <b>TRIGGER DETAILS:</b>\n"
-                    f"• Live Trigger: <b>PASS</b>\n"
-                    f"• Price: <b>${price:.2f}</b>{price_flag} (Break: ${breakout_lvl:.2f})\n"
-                    f"• Live RVOL: <b>{live_rvol:.2f}x</b>\n\n"
-                    f"{gate_icon} <b>ENTRY GATE STATUS: {entry_gate_status}</b>\n"
-                    f"• Gate Reason: <code>{html.escape(entry_gate_reason, quote=False)}</code>\n"
-                    f"• Source: <i>{entry_gate_source}</i>\n\n"
-                    f"📊 <b>GATE METRICS:</b>\n"
-                    f"• RS Percentile: <b>{rs_str}</b>\n"
-                    f"• ADR %: <b>{adr_str}</b>\n"
-                    f"• Dollar Volume: <b>{dv_str}</b>\n"
-                    f"• Dist SMA20: <b>{dist20_str}</b>\n"
-                    f"• Sector ETF Dist: <b>{sec_dist_str}</b>\n\n"
-                    f"📈 <a href=\"https://www.tradingview.com/symbols/{safe_ticker}/\">Ver en TradingView</a>\n\n"
-                    f"📢 <b>ACTION:</b>\n"
-                    f"<b>{action_text}</b>"
-                )
-                shared_telegram_send(msg)
+                    audit_rows.append(
+                        {
+                            "ticker": ticker,
+                            "status": status,
+                            "eligible": False,
+                            "reason": f"rejected:{combo_name} {entry_gate_reason}",
+                            "price": price,
+                            "breakout_level": breakout_lvl,
+                            "live_rvol": round(live_rvol, 2),
+                            "entry_gate_status": entry_gate_status,
+                            "entry_gate_reason": entry_gate_reason,
+                        }
+                    )
         else:
             reason = []
             if price < breakout_lvl:

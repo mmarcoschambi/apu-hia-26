@@ -264,6 +264,7 @@ def _map_premarket_detail_to_signal(ticker: str, detail: dict, date: str) -> dic
         "gate_dollar_vol_M": detail.get("dollar_volume_m", 0.0),
         "gate_dist_sma20": detail.get("dist_sma20_pct", 0.0),
         "gate_sector_etf_dist": detail.get("sector_etf_dist_pct"),
+        "combos": detail.get("combos", []),
     }
 
 
@@ -623,15 +624,30 @@ def _build_grouped_signals_lines(signals: list, date: str, limit: int = 15) -> l
             
     return lines
 
-def build_watchlist_message(date: str | None = None, page: int = 1) -> tuple[str, list]:
+def build_watchlist_message(date: str | None = None, page: int = 1, system: str | None = None) -> tuple[str, list]:
     """Build paginated watchlist message. Returns (text, buttons)."""
     resolved, signals = load_watchlist_signals(date)
     if not resolved:
         return "⚠️ <b>WATCHLIST</b>\nNo signal data available yet.", []
 
+    if system is not None:
+        filtered_signals = []
+        for s in signals:
+            combos = s.get("combos") or []
+            agent_name = s.get("agent_name") or ""
+            combos_str = str(combos)
+            if system == "A":
+                if "Qulla" in combos_str or "combo_pure_momentum" in agent_name or agent_name == "A":
+                    filtered_signals.append(s)
+            elif system == "B":
+                if "Minervini" in combos_str or "combo_stage2_breakout" in agent_name or agent_name == "B":
+                    filtered_signals.append(s)
+        signals = filtered_signals
+
     if not signals:
+        sys_prefix = "[SISTEMA A] " if system == "A" else "[SISTEMA B] " if system == "B" else ""
         return (
-            f"🧭 <b>WATCHLIST | {resolved}</b>\n"
+            f"🧭 <b>{sys_prefix}WATCHLIST | {resolved}</b>\n"
             f"<i>(Manual Review)</i>\n\n"
             f"No watchlist candidates for this date.",
             [],
@@ -668,8 +684,9 @@ def build_watchlist_message(date: str | None = None, page: int = 1) -> tuple[str
     page_signals = signals[start_idx:end_idx]
 
     # Header enriquecido con conteo por tier
+    sys_prefix = "[SISTEMA A] " if system == "A" else "[SISTEMA B] " if system == "B" else ""
     lines = [
-        f"🧭 <b>WATCHLIST | {resolved}</b>",
+        f"🧭 <b>{sys_prefix}WATCHLIST | {resolved}</b>",
         f"<i>Grouped by Sector · Page {page}/{total_pages}</i>\n",
         f"🔍 Candidates: <code>{total}</code>  "
         f"🟢<code>{cnt['A']}</code> 🟡<code>{cnt['B']}</code> 🔴<code>{cnt['C']}</code>\n",

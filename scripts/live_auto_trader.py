@@ -172,8 +172,8 @@ def auto_approve_signals(date: str):
             
         # Stop Loss logic
         stop_source = "signal"
-        stop = float(row.get("stop_loss", row.get("stop_price", 0)) or 0)
-        if stop <= 0:
+        stop = float(row.get("stop_price", row.get("stop_loss", 0)) or 0)
+        if stop <= 0 or stop >= entry:
             stop = entry * (1 - max_stop_hard)
             stop_source = "fallback_hard"
         
@@ -182,10 +182,15 @@ def auto_approve_signals(date: str):
             logger.warning(f"Skipping {ticker}: Invalid risk per share (Entry: {entry}, Stop: {stop})")
             continue
             
-        # Sizing (min entre riesgo y exposición máxima)
-        qty_risk = risk_dollars / risk_per_share
-        qty_cap = max_pos_val / entry
-        qty = int(min(qty_risk, qty_cap))
+        # Sizing (read shares from row if present and valid)
+        qty = int(row.get("shares", 0) or 0)
+        if qty <= 0:
+            qty_risk = risk_dollars / risk_per_share
+            qty_cap = max_pos_val / entry
+            qty = int(min(qty_risk, qty_cap))
+            sizing_source = "calculated_fallback"
+        else:
+            sizing_source = "signal_shares"
         
         if qty <= 0:
             logger.warning(f"Skipping {ticker}: Calculated Qty is 0 for {ticker}")
@@ -193,11 +198,11 @@ def auto_approve_signals(date: str):
 
         # TPs
         tp1 = float(row.get("tp1_price", 0) or 0)
-        if tp1 <= 0:
+        if tp1 <= 0 or tp1 <= entry:
             tp1 = entry + (tp1_r_mult * risk_per_share)
             
         tp2 = float(row.get("tp2_price", 0) or 0)
-        if tp2 <= 0:
+        if tp2 <= 0 or tp2 <= entry:
             tp2 = entry + (tp2_r_mult * risk_per_share)
             
         new_rows.append({
@@ -219,7 +224,7 @@ def auto_approve_signals(date: str):
             "risk_per_share": risk_per_share,
             "stop_source": stop_source
         })
-        log_action("AUTO", date, "ENTER", ticker, entry, f"from live_signals ({stop_source} stop)")
+        log_action("AUTO", date, "ENTER", ticker, entry, f"from live_signals ({stop_source} stop, {sizing_source} sizing)")
 
     if new_rows:
         df = pd.DataFrame(new_rows)

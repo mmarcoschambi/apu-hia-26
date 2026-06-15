@@ -597,57 +597,84 @@ def main():
             print(f"  Snapshot saved: {snapshot_path}")
             return
 
-        top_score = float(filtered["entry_score"].max())
         sent_any = False
-
-        if not args.no_auto and top_score >= args.auto_threshold:
-            if _is_already_sent(date, "auto"):
-                print(f"  Telegram auto: already sent (idempotent skip)")
-            else:
-                auto_html = build_telegram_html(
-                    filtered,
-                    date,
-                    min_score=args.auto_threshold,
-                    top_n=3,
-                    summary_only=False,
-                    show_disclaimer=False,
-                )
-                auto_html = auto_html.replace(
-                    "🚀 <b>SIGNAL ALERTS |", "🚀 <b>PRE-MARKET AUTO |"
-                )
-                ok = shared_telegram_send(auto_html)
-                sent_any = sent_any or ok
-                if ok:
-                    _mark_sent(date, "auto", len(filtered))
-                    print(f"  Telegram auto: ✓ enviado")
+        
+        # Split signals into System A and System B
+        systems = [
+            {
+                "name": "SISTEMA A",
+                "df": filtered[filtered["agent_name"].apply(lambda x: "pure" in str(x).lower() or str(x).lower() in ("a", "qulla"))] if not filtered.empty else filtered,
+                "chat_id": os.getenv("TELEGRAM_CHAT_ID"),
+                "suffix": "A"
+            },
+            {
+                "name": "SISTEMA B",
+                "df": filtered[filtered["agent_name"].apply(lambda x: "breakout" in str(x).lower() or str(x).lower() in ("b", "minervini"))] if not filtered.empty else filtered,
+                "chat_id": os.getenv("TELEGRAM_CHAT_ID_SYSTEM_B") or os.getenv("TELEGRAM_CHAT_ID"),
+                "suffix": "B"
+            }
+        ]
+        
+        for sys_info in systems:
+            sys_name = sys_info["name"]
+            sys_df = sys_info["df"]
+            sys_chat = sys_info["chat_id"]
+            sys_suffix = sys_info["suffix"]
+            
+            if sys_df.empty:
+                print(f"  No signals for {sys_name} on {date}")
+                continue
+                
+            top_score = float(sys_df["entry_score"].max())
+            
+            # Auto Summary
+            if not args.no_auto and top_score >= args.auto_threshold:
+                sent_key = f"auto_{sys_suffix}"
+                if _is_already_sent(date, sent_key):
+                    print(f"  Telegram auto ({sys_name}): already sent (idempotent skip)")
                 else:
-                    print(f"  Telegram auto: ✗ error")
-        elif not args.no_auto:
-            print(
-                f"  Telegram auto: skipped (top_score={top_score:.3f} < {args.auto_threshold:.2f})"
-            )
-
-        if not args.no_manual:
-            if _is_already_sent(date, "manual"):
-                print(f"  Telegram manual: already sent (idempotent skip)")
-            else:
-                manual_html = build_telegram_html(
-                    filtered,
-                    date,
-                    min_score=args.min_score,
-                    top_n=args.top if args.top > 0 else 15,
-                    summary_only=False,
-                )
-                manual_html = manual_html.replace(
-                    "🚀 <b>SIGNAL ALERTS |", "🧭 <b>MANUAL REVIEW |"
-                )
-                ok = shared_telegram_send(manual_html)
-                sent_any = sent_any or ok
-                if ok:
-                    _mark_sent(date, "manual", len(filtered))
-                    print(f"  Telegram manual: ✓ enviado")
+                    auto_html = build_telegram_html(
+                        sys_df,
+                        date,
+                        min_score=args.auto_threshold,
+                        top_n=3,
+                        summary_only=False,
+                        show_disclaimer=False,
+                    )
+                    auto_html = auto_html.replace(
+                        "🚀 <b>SIGNAL ALERTS |", f"🚀 <b>[{sys_name}] PRE-MARKET AUTO |"
+                    )
+                    ok = shared_telegram_send(auto_html, chat_id=sys_chat)
+                    sent_any = sent_any or ok
+                    if ok:
+                        _mark_sent(date, sent_key, len(sys_df))
+                        print(f"  Telegram auto ({sys_name}): ✓ enviado")
+                    else:
+                        print(f"  Telegram auto ({sys_name}): ✗ error")
+                        
+            # Manual Review
+            if not args.no_manual:
+                sent_key = f"manual_{sys_suffix}"
+                if _is_already_sent(date, sent_key):
+                    print(f"  Telegram manual ({sys_name}): already sent (idempotent skip)")
                 else:
-                    print(f"  Telegram manual: ✗ error")
+                    manual_html = build_telegram_html(
+                        sys_df,
+                        date,
+                        min_score=args.min_score,
+                        top_n=args.top if args.top > 0 else 15,
+                        summary_only=False,
+                    )
+                    manual_html = manual_html.replace(
+                        "🚀 <b>SIGNAL ALERTS |", f"🧭 <b>[{sys_name}] MANUAL REVIEW |"
+                    )
+                    ok = shared_telegram_send(manual_html, chat_id=sys_chat)
+                    sent_any = sent_any or ok
+                    if ok:
+                        _mark_sent(date, sent_key, len(sys_df))
+                        print(f"  Telegram manual ({sys_name}): ✓ enviado")
+                    else:
+                        print(f"  Telegram manual ({sys_name}): ✗ error")
 
         if not sent_any and not args.no_auto and not args.no_manual:
             print("  Telegram: no new messages sent")

@@ -16,15 +16,30 @@ from src.paper.telegram_views import build_watchlist_message
 from src.utils.telegram_client import send_message_with_buttons
 
 def main():
+    import os
     print("⏳ Generando y enviando watchlist del día...")
-    # build_watchlist_message resolves the latest available date if not specified
-    text, buttons = build_watchlist_message()
     
-    success = send_message_with_buttons(text, buttons)
-    if success:
-        print("✅ Watchlist enviada con éxito a Telegram.")
+    # 1. System A watchlist
+    print("Sending System A (Qulla) watchlist...")
+    text_a, buttons_a = build_watchlist_message(system="A")
+    chat_a = os.getenv("TELEGRAM_CHAT_ID")
+    success_a = send_message_with_buttons(text_a, buttons_a, chat_id=chat_a)
+    if success_a:
+        print("✅ Watchlist Sistema A enviada con éxito a Telegram.")
     else:
-        print("❌ Error: No se pudo enviar la watchlist a Telegram.")
+        print("❌ Error: No se pudo enviar la watchlist del Sistema A.")
+
+    # 2. System B watchlist
+    print("Sending System B (Minervini) watchlist...")
+    text_b, buttons_b = build_watchlist_message(system="B")
+    chat_b = os.getenv("TELEGRAM_CHAT_ID_SYSTEM_B") or chat_a
+    success_b = send_message_with_buttons(text_b, buttons_b, chat_id=chat_b)
+    if success_b:
+        print("✅ Watchlist Sistema B enviada con éxito a Telegram.")
+    else:
+        print("❌ Error: No se pudo enviar la watchlist del Sistema B.")
+
+    if not success_a and not success_b:
         sys.exit(1)
 
 if __name__ == "__main__":
