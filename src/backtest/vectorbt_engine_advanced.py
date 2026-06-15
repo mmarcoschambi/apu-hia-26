@@ -28,7 +28,7 @@ from src.utils.sector_rotation import (
     integrate_sector_filter_in_backtest,
     SECTOR_MAP,
 )
-from src.utils.rvol_context_v2 import integrate_with_unified_position_size
+from src.utils.rvol_context import integrate_with_unified_position_size
 from src.utils.market_regime import MarketRegimeClassifier, load_spy_vix_data
 from src.utils.adaptive_filter_engine import AdaptiveFilterEngine
 from src.indicators.technical import TechnicalIndicators
@@ -1851,11 +1851,11 @@ class AdvancedVectorBTEngine:
         # FASE 2: Inyección de señales pre-calculadas (A+B Parity)
         # ──────────────────────────────────────────────────────────────────────
         try:
-            from src.backtest.signal_engine import inject_precomputed_signals
+            from src.backtest.backtest_signal_loader import inject_precomputed_signals
 
             inject_precomputed_signals(self)
         except ImportError:
-            logger.warning("⚠️ signal_engine.py no encontrado. Saltando inyección de señales.")
+            logger.warning("⚠️ backtest_signal_loader.py no encontrado. Saltando inyección de señales.")
         except Exception as e:
             logger.error(f"⚠️ Error durante la inyección de señales: {e}")
 
