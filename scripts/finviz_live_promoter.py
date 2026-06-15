@@ -798,7 +798,11 @@ def promote_candidates(date: str, min_rvol: float = 1.5, send_telegram: bool = F
                             f"<b>{action_text}</b>"
                         )
                         
-                        chat_id_to_send = os.getenv("TELEGRAM_CHAT_ID_SYSTEM_B") if combo_name == "combo_stage2_breakout" else None
+                        # Si está definido el canal live unificado, enviamos allí.
+                        # De lo contrario, se envía al canal específico de cada sistema.
+                        chat_id_to_send = os.getenv("TELEGRAM_CHAT_ID_LIVE")
+                        if not chat_id_to_send:
+                            chat_id_to_send = os.getenv("TELEGRAM_CHAT_ID_SYSTEM_B") if combo_name == "combo_stage2_breakout" else None
                         if not chat_id_to_send:
                             chat_id_to_send = os.getenv("TELEGRAM_CHAT_ID")
                             
