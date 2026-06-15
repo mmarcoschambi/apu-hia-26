@@ -662,6 +662,29 @@ class AdvancedVectorBTEngine:
         slippage_rate: float = 0.001,
         **kwargs,
     ):
+        """
+        Inicializa el motor de backtesting vectorbt avanzado.
+
+        Args:
+            universe: Lista de tickers que componen el universo inicial a evaluar.
+            start_date: Fecha de inicio del período de backtesting (formato YYYY-MM-DD).
+            end_date: Fecha de fin del período de backtesting (formato YYYY-MM-DD).
+            initial_capital: Capital inicial en USD para la simulación de cartera.
+            risk_pct: Porcentaje de capital a arriesgar por posición en modo 'production'.
+            risk_dollars: Riesgo fijo en USD por posición (si está definido).
+            max_exposure_pct: Límite nominal máximo de exposición para un solo activo (cap duro).
+            min_rvol: Multiplicador mínimo de volumen relativo (RVOL) para la señal técnica.
+            min_adr: Rango diario promedio mínimo (ADR%) para asegurar volatilidad adecuada.
+            tp1_r: Target de salida parcial 1 expresado en múltiplos de R (riesgo).
+            tp2_r: Target de salida parcial 2 expresado en múltiplos de R (riesgo).
+            min_volume: Umbral mínimo de volumen diario en número de acciones.
+            min_dollar_volume: Umbral mínimo de volumen en dólares diarios (ADV).
+            use_pit_universe: Si es True, filtra el universo usando Point-in-Time para evitar sesgo de supervivencia.
+            use_ml_filter: Si es True, filtra las entradas usando las predicciones probabilísticas de LightGBM.
+            mode: Modo de operación ('production' o 'convergence' para simular riesgos fijos tipo THOR).
+            fee_rate: Tasa de comisión por transacción (e.g. 0.001 para 0.1%).
+            slippage_rate: Deslizamiento (slippage) asumido por transacción.
+        """
         self.universe = universe
         self.raw_universe = list(universe)
         self.start_date = pd.to_datetime(start_date)
@@ -3015,7 +3038,19 @@ class AdvancedVectorBTEngine:
             return pd.DataFrame(False, index=entries.index, columns=entries.columns)
 
     def run_backtest(self) -> Dict:
-        """Execute backtest with partial exits"""
+        """
+        Ejecuta el pipeline completo del backtesting vectorizado con salidas parciales.
+
+        El flujo operativo comprende:
+        1. Carga e indexación de datos históricos (precios, volumen, ADR, etc.).
+        2. Generación de señales técnicas de entrada en base a los criterios del módulo (breakout, VCP, flat base, etc.).
+        3. Aplicación de filtros avanzados del Tier 2 y del régimen de mercado.
+        4. Simulación detallada de las posiciones de trading considerando las salidas parciales escalonadas (TP1 en 1.25R, TP2 en 3.0R, y Runner).
+        5. Consolidación de métricas de rendimiento del portafolio (Retornos, Drawdowns, Sharpe, Calmar, y estadísticas de rechazos).
+
+        Returns:
+            Dict: Diccionario con todas las métricas de rendimiento y estadísticas consolidadas.
+        """
         logger.info("🎯 Starting advanced backtest with partial exits...")
         self.trades_df = None
 
@@ -5016,6 +5051,15 @@ class AdvancedVectorBTEngine:
         return base_risk_dollars * multiplier
 
     def _empty_results(self):
+        """
+        Retorna una estructura de resultados vacía pero compatible con el pipeline.
+
+        Se utiliza como fallback de seguridad cuando el universo de activos está vacío
+        o no se logran cargar datos válidos para la simulación.
+
+        Returns:
+            Dict: Estructura vacía con métricas en cero y DataFrames vacíos con las columnas requeridas.
+        """
         # Create empty trades DataFrame with expected columns for compatibility
         empty_trades = pd.DataFrame(
             columns=[
@@ -5406,7 +5450,11 @@ class AdvancedVectorBTEngine:
         return combined_equity, combined_trades
 
     def cleanup(self):
-        """Libera memoria del engine después del backtest."""
+        """
+        Libera la memoria del motor eliminando los DataFrames pesados de precios
+        y cerrando las conexiones de bases de datos persistentes.
+        Fuerza la recolección de basura (garbage collection) al finalizar.
+        """
         import gc
 
         # Close cache connection

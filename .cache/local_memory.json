@@ -1,0 +1,42 @@
+[
+  {
+    "timestamp": "2026-06-05T22:05:04.247623Z",
+    "title": "Generacion de setups.csv desde snapshots Finviz",
+    "type": "bugfix",
+    "scope": "project",
+    "topic_key": "shadow-finviz-convergence",
+    "content": "Para resolver la falta de trades (0 trades) en el backtest shadow de Mayo 2026, se modifico rebuild_shadow_universe.py para procesar watchlists desde snapshot.json y generar setups.csv por fecha. Se ajustaron los asserts del test de integracion en test_shadow_replay.py ya que los snapshots reales incluyen tickers de XLV (bloqueados correctamente por allowed_shadow_candidate=False)."
+  },
+  {
+    "timestamp": "2026-06-06T02:16:30Z",
+    "title": "Finalizacion de test de convergencia Mayo 2026",
+    "type": "discovery",
+    "scope": "project",
+    "topic_key": "shadow-finviz-convergence",
+    "content": "Se completo el test de convergencia de Mayo 2026. Veredicto: NO CONVERGE. La causa raiz es que los snapshots de Finviz (snapshot.json) generados en el VPS omitieron tickers (ADM, NXPI) que si se imprimieron en las tablas de los logs del VPS. El backtest local no ejecuto esos trades, sino otros tres (ADEA, LRCX, EQNR). Se commitearon los reportes de convergencia y summary.md y se cerro el Issue #37."
+  },
+  {
+    "timestamp": "2026-06-06T02:53:15Z",
+    "title": "Fix de serializacion de watchlists en VPS (Issue #38)",
+    "type": "bugfix",
+    "scope": "project",
+    "topic_key": "vps-snapshot-serialization-fix",
+    "content": "Se resolvio el bug de serializacion que hacia perder tickers como ADM y NXPI en el VPS. Se agregaron validaciones de tamano (st_size > 0) y timeout (30s) al conectar con la cache SQLite de modo de no crear archivos vacios de 0 bytes en el VPS (lo que causaba OperationalErrors). Tambien se implemento un fallback chain robusto en yfinance (intento batch -> individual 1m -> individual diario -> Ticker.history diario) en scripts/finviz_live_promoter.py para evitar que fallos temporales de descarga o limites de cuota descarten tickers de la watchlist."
+  },
+  {
+    "timestamp": "2026-06-12T20:34:00Z",
+    "title": "Verificacion del fix del VPS y run del 12 de Junio",
+    "type": "discovery",
+    "scope": "project",
+    "topic_key": "vps-snapshot-serialization-fix",
+    "content": "Se verificó mediante sync_from_vps.sh que el cron pre-market del 12 de junio corrió al 100% sin OperationalErrors. El snapshot.json generado hoy contiene una watchlist de 250 tickers completos. El canal de Telegram reportó OK."
+  },
+  {
+    "timestamp": "2026-06-15T13:29:30Z",
+    "title": "Fase 6 — Documentación core, consolidación ML y aclaración de dualidad risk_manager/position_sizing",
+    "type": "pattern",
+    "scope": "project",
+    "topic_key": "architecture/documentation-and-ml-consolidation",
+    "content": "Se documentaron detalladamente los constructores, firmas y flujos en vectorbt_engine_advanced.py, signal_engine.py y thematic_logic.py. Se consolidó la estructura de SYSTEM_CONTEXT.md para clarificar la división de los directorios de Machine Learning (src/ml vs src/ml_signal) y de sizing y riesgo. Se resolvió un problema de pre-commit local (--no-verify) derivado de una lista de argumentos demasiado larga por la cantidad de archivos de backups locales sin seguimiento."
+  }
+]

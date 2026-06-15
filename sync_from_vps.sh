@@ -133,7 +133,7 @@ rsync $RSYNC_FLAGS \
 
 # =============================================================================
 # 7. CONFIG ACTIVA DEL VPS (sin .env, sin secretos)
-#    Para detectar drift entre laboratorio y torre de control.
+#    Para detectar drift entre laboratorio y tubo de control.
 # =============================================================================
 echo ""
 echo "▶ Sincronizando: config/ (configuración activa VPS)"

@@ -208,6 +208,13 @@ def _decision_to_row(d: SignalDecision) -> dict:
         "spy_above_sma200": d.tier2_metrics.spy_above_sma200,
         "reject_contract": d.reject_contract,
         "mode": d.mode,
+        "shares": d.shares,
+        "initial_size": d.shares,
+        "risk_budget_usd": d.risk_budget_usd,
+        "raw_risk_budget_usd": d.raw_risk_budget_usd,
+        "risk_per_share": d.risk_per_share,
+        "sizing_factor": d.sizing_factor,
+        "sizing_reason": d.sizing_reason,
     }
 
 

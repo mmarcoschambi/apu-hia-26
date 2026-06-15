@@ -34,11 +34,18 @@ _pipeline_cache = {}
 
 
 class RejectReason(str):
+    """
+    Representa el motivo específico de rechazo de una señal técnica (ej: bajo RVOL, RS insuficiente, etc.).
+    """
     pass
 
 
 @dataclass
 class Tier2Metrics:
+    """
+    Contenedor de métricas avanzadas del Tier 2 utilizadas para evaluar la fuerza relativa,
+    volatilidad, consolidación y el alineamiento temático/sectorial de un activo.
+    """
     rvol: float = 0.0
     adr_pct: float = 0.0
     atr: float = 0.0

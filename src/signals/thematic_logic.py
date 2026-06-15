@@ -1,3 +1,10 @@
+"""
+QUÉ HACE: Filtra y evalúa la fuerza relativa de grupos temáticos y sectores ETF.
+POR QUÉ EXISTE: Para implementar la Divergencia Temática (Variante E) que valida si un trade tiene momentum relativo genuino a nivel sectorial/temático.
+DEPENDE DE: pandas, numpy, y la taxonomía de tickers/temas provista por el entorno.
+PRODUCE: Índices de precios equiponderados para temas y la máscara de confirmación de la Variante E.
+DECISIONES IMPORTANTES: Variante E confirma el setup si el Tema está en tendencia alcista y el Sector NO está en tendencia alcista, lo que indica divergencia y alfa potencial (horizonte swing >= 10 días).
+"""
 import pandas as pd
 import numpy as np
 from typing import List, Dict, Optional
