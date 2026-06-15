@@ -1,227 +1,131 @@
-# 🚀 Getting Started - Triad Momentum System
+# 🎯 EMPIEZA AQUÍ - Mapa del Sistema Quant v2
 
-## Installation (5 minutos)
+Este documento sirve como el **punto de entrada unificado y mapa de arquitectura** del sistema **Momentum v2**. Está diseñado para que tanto desarrolladores humanos como agentes de inteligencia artificial comprendan de inmediato la estructura, los comandos reales de ejecución y las reglas de negocio vigentes.
 
+---
+
+## 🚀 Entry Points Reales (Quick Path)
+
+Ejecutá el sistema utilizando únicamente los comandos oficiales según tu objetivo:
+
+### 1. Simulación y Backtesting (Local / WSL2)
 ```bash
-# 1. Navigate to the project
-cd /home/marcos/trade/momentum-v2
+# Ejecutar el simulador canónico (Verdad Canónica de simulación)
+python3 scripts/backtest_via_signal_engine.py --start 2023-01-01 --end 2024-12-31
 
-# 2. Install dependencies
-pip3 install -r requirements.txt
-
-# 3. Test the system
-python3 test_system.py
+# Ejecutar suite de pruebas completa
+PYTHONPATH=. pytest tests/
 ```
 
-✅ Si ves "System working!" - estás listo.
-
----
-
-## Your First Scan (2 minutos)
-
-### 1. Edit your watchlist
-
-Abre `example_scan.py` y personaliza:
-
-```python
-watchlist = [
-    'RDDT',   # Tus símbolos aquí
-    'NVDA',
-    'TSLA',
-]
-```
-
-### 2. Run the scanner
-
+### 2. Live Trading & Interface (VPS / Local)
 ```bash
-python3 example_scan.py
+# Iniciar la interfaz gráfica de Streamlit
+streamlit run app.py
+
+# Ejecutar el scanner de mercado en vivo
+python3 live_trading_scanner.py
+
+# Verificar la salud general del mercado (SPX, VIX, sectores)
+python3 market_health_check.py
 ```
 
-### 3. Interpret results
-
-Busca la sección **ACTIONABLE SETUPS**.
-
----
-
-## Understanding Your First Signal
-
-### Ejemplo de Output:
-
-```
-RDDT - BLUE_SKY
-  Action: BUY_STOP
-  Entry: $100.05
-  Stop: $95.20
-  Risk: 4.85%
-  Size: 100%
-```
-
-**Esto significa:**
-
-1. **RDDT** tiene un setup de **Camino 1** (Blue Sky Breakout)
-2. **Coloca una orden:**
-   - Type: Buy Stop Limit
-   - Stop Price: $100.05
-   - Limit Price: $100.50 (un poco arriba)
-3. **Stop Loss:** $95.20
-4. **Position Size:** Calcula con 0.5% de riesgo
-
----
-
-## Position Sizing (CRÍTICO)
-
-### Opción 1: Calculadora Automática
-
+### 3. Sincronización y Deployment (VPS Link)
 ```bash
-python3 quick_analysis.py RDDT 100000
-```
-(100000 = tu tamaño de cuenta)
+# Desplegar lógica, taxonomías y cronjobs al VPS
+./deploy_vps.sh
 
-Te dará:
-```
-📊 POSITION SIZING ($100,000 account)
-  Shares: 103
-  Capital: $10,305.15
-  Risk Amount: $499.55
-  Risk %: 0.50%
-```
-
-### Opción 2: Manual
-
-```
-Riesgo_Deseado = $500 (0.5% de $100k)
-Entry = $100.05
-Stop = $95.20
-Riesgo_Por_Acción = $100.05 - $95.20 = $4.85
-
-Acciones = $500 / $4.85 = 103 shares
+# Descargar logs y reportes generados en el VPS para investigación local
+./sync_from_vps.sh
 ```
 
 ---
 
-## Daily Workflow (10 minutos/día)
+## 🏛️ Estructura del Sistema y Fuentes de Verdad
 
-### Pre-Market (9:00 AM ET)
+Para evitar alucinaciones de código y mantener el contexto liviano, consultá los archivos específicos según el área de interés:
 
+```mermaid
+graph TD
+    A[Signal Engine <br>src/signals/signal_engine.py] --> B[Backtest Engine <br>scripts/backtest_via_signal_engine.py]
+    A --> C[Live Scanner <br>live_trading_scanner.py]
+    D[Configuración <br>configs/ / config/production_config.json] --> B
+    D --> C
+    E[Base de datos local <br>data/ticker_cache.db] -->|Hybrid Mode| B
+    F[Finviz Live] -->|Shadow Observation| C
+```
+
+| Componente | Archivo / Directorio | Regla de Oro / Fuente de Verdad |
+| :--- | :--- | :--- |
+| **Lógica de Señales** | [signal_engine.py](file:///home/marcos/trade/momentum-v2/src/signals/signal_engine.py) | **Canónica.** Cualquier cambio en indicadores o filtros de entrada debe realizarse únicamente aquí. |
+| **Estrategia Core** | [production_config.json](file:///home/marcos/trade/momentum-v2/config/production_config.json) | Parámetros del sistema: stops (2xATR), sizing y exclusiones de sector. |
+| **Simulación** | [backtest_via_signal_engine.py](file:///home/marcos/trade/momentum-v2/scripts/backtest_via_signal_engine.py) | **Simulación oficial.** Soporta fusiones A/B, Point-In-Time (PIT) y portafolio de 6 posiciones. |
+| **Tests de QA** | [tests/](file:///home/marcos/trade/momentum-v2/tests/) | **Strict TDD.** Se ejecutan antes de consolidar cualquier cambio de código en producción. |
+
+---
+
+## ⚙️ Detección de Entorno (Auto-Awareness)
+
+El sistema se adapta automáticamente al entorno donde se ejecuta mediante la presencia o ausencia de la base de datos local:
+
+*   **Laboratory (Local / WSL2):**
+    *   **Indicador:** Presencia de `data/ticker_cache.db` (excluido de git).
+    *   **Comportamiento:** Corre en **Modo Híbrido**. Utiliza el universo Point-In-Time (PIT) basado en volumen de dólares (ADV Top 200) para las decisiones principales, y Finviz para observación en auditoría.
+*   **Torre de Control (VPS):**
+    *   **Indicador:** Ausencia de base de datos local (filtrada por `deploy_vps.sh`).
+    *   **Comportamiento:** Promueve la watchlist de **Finviz Live** como la fuente de verdad primaria para el escaneo 24/7 y alertas en tiempo real.
+
+---
+
+## 📈 Baselines de Performance y Candidates Activos
+
+El sistema se optimiza y mide contra estas métricas verificadas:
+
+1.  **Gold Standard Baseline:**
+    *   **Estrategia:** Russell 1000 + E25 Dynamic Extension Sizing + ex-XLV.
+    *   **Performance Histórica:** +96.12% Return, -35.09% MDD.
+    *   **Performance Reciente (2023-2024 PIT):** +2.5% Return, -16.1% MDD, 0.45 Sharpe.
+2.  **Shadow Candidates (En observación):**
+    *   **ex-XLV Exclusion:** Validado en el período 2019-2025 (Net PnL $77,105.43, MDD -16.26%). Activo en auditorías de live trading.
+    *   **Divergencia Temática (Variante E):** Setup Swing (horizonte >= 10 días). Válido cuando el **Tema** del activo tiene momentum alcista pero su **Sector** es neutral/bajista. Pendiente de acumular ~30-40 señales en producción para evaluación.
+
+---
+
+## 🛠️ Flujo de Trabajo Scrumban + SDD (Spec-Driven Development)
+
+Para asegurar la estabilidad del sistema, todo desarrollo sigue este proceso rígido:
+
+### 1. Inicialización de Tarea
+*   Buscar issues abiertos: `gh issue list --state open`
+*   Ver criterios del ticket: `gh issue view <ID>`
+*   Crear rama de trabajo: `git checkout -b feat/<ID>-<nombre-corto>` o usar `/sdd-new`.
+
+### 2. Ciclo de Desarrollo
+*   **Strict TDD Mode:** Escribir pruebas unitarias primero en `tests/` (Fase Red), y luego modificar `src/` hasta que pasen (Fase Green).
+*   **Contexto Ligero:** El orquestador delega tareas complejas a subagentes (`sdd-explore`, `sdd-apply`, `sdd-verify`) para evitar saturar la ventana de contexto.
+
+### 3. Cierre de Ticket
+*   Escribir aprendizajes clave en la memoria de Engram (`mem_save`).
+*   Formato de commit convencional: `[Módulo] Descripción breve. Fixes #<ID>`.
+*   Comentar y cerrar el issue:
+    ```bash
+    gh issue comment <ID> --body "✅ Build completado. Veredicto: ..."
+    gh issue close <ID>
+    ```
+
+---
+
+## 📋 Checklist de Calidad para el Desarrollador (Humano o IA)
+
+- [ ] ¿Modifiqué la lógica de señales? Si es así, ¿lo hice únicamente dentro de `src/signals/signal_engine.py`?
+- [ ] ¿Escribí las pruebas unitarias antes de implementar el código de producción (TDD)?
+- [ ] ¿Corrí `pytest` y pasó al 100% sin warnings de regresión?
+- [ ] ¿Guardé en la memoria persistente de Engram cualquier decisión de arquitectura o bugfix relevante?
+- [ ] ¿El commit de cierre utiliza el formato convencional y vincula el issue ID?
+
+---
+
+**🎯 PRÓXIMO PASO SUGERIDO:**
+Corré el backtest de referencia para validar que tu entorno local está 100% operativo:
 ```bash
-# Scan watchlist
-python3 example_scan.py
-```
-
-**Para cada señal BUY_STOP:**
-1. Coloca la orden en tu broker
-2. Configura el stop loss
-3. Calcula y anota el position size
-
-**Para cada señal MANUAL_WATCH:**
-1. Abre el gráfico M5/M15
-2. Añade el indicador VWAP
-3. Prepárate para entrar manualmente
-
-### During Market (9:30 - 10:30 AM)
-
-**Camino 1 (BUY_STOP):**
-- Deja que la orden ejecute sola
-- Si no ejecuta al mediodía → Cancela
-
-**Camino 2 (MANUAL_WATCH):**
-- Espera el flush matutino
-- Cuando precio cruce VWAP → Compra
-- Stop en LOD inmediatamente
-
-### After Market (4:00 PM+)
-
-**Si tienes posición:**
-- Revisa el movimiento del día
-- Ajusta mental stops (no físicos aún)
-- Planifica salida para mañana
-
-**Si no entraste:**
-- Revisa por qué no hubo setups
-- Actualiza watchlist si es necesario
-
----
-
-## Common Questions
-
-### ¿Cuántos símbolos debo escanear?
-**10-20 máximo.** Calidad > Cantidad.
-
-### ¿Qué pasa si no hay setups?
-**Normal.** El sistema es disciplinado. Algunos días no hay nada.
-
-### ¿Puedo modificar los parámetros?
-**Sí,** pero primero entiende el sistema. Edit `config/settings.py`.
-
-### ¿Funciona en bear market?
-**Mejor en bull market.** Momentum requiere tendencia alcista general.
-
-### ¿Dónde coloco take profit?
-**No hay regla fija.** Usa trailing stop o objectives técnicos (R:R 2:1 mínimo).
-
----
-
-## Week 1 Challenge
-
-**Objetivo:** Familiarizarte sin arriesgar dinero.
-
-1. **Día 1-2:** Run `example_scan.py` cada mañana. Solo observa.
-
-2. **Día 3-4:** Usa `quick_analysis.py` para estudiar cada setup a fondo.
-
-3. **Día 5:** Paper trade (simulador) tu primer setup de Camino 1.
-
-4. **Fin de semana:** Revisa logs y tus notas. ¿Entiendes los 3 Caminos?
-
----
-
-## Next Steps
-
-Una vez domines lo básico:
-
-- [ ] Paper trade por 2 semanas
-- [ ] Real trade con size pequeño (0.1% risk)
-- [ ] Incrementa gradualmente a 0.5%
-- [ ] Estudia `USAGE.md` para detalles avanzados
-- [ ] Lee `QUICKREF.md` para referencia rápida
-
----
-
-## Need Help?
-
-1. **Check logs:** `tail -f logs/triad_YYYYMMDD.log`
-2. **Re-read docs:** README.md, USAGE.md, QUICKREF.md
-3. **Test components:** Individual indicators in `src/indicators/triad.py`
-
----
-
-## Important Reminders
-
-⚠️ **Este es un sistema mecánico** - No uses discreción
-⚠️ **Size correcto = Sobrevivir** - No skippees el position sizing
-⚠️ **Los stops son sagrados** - Especialmente LOD en Camino 2
-⚠️ **Práctica primero** - Paper trade hasta que domines
-
----
-
-## Success Metrics
-
-Después de 1 mes, deberías poder:
-
-✅ Identificar los 3 Caminos sin pensar
-✅ Calcular position size en < 30 segundos
-✅ Saber si un setup es válido en < 1 minuto
-✅ Ejecutar sin dudar cuando hay señal
-✅ NO ejecutar cuando no hay señal
-
----
-
-🎯 **"Disciplina > Predicción"**
-
-El sistema no predice el futuro. Captura probabilidad cuando la estructura lo permite.
-
-**¡Ahora empieza tu Week 1 Challenge!**
-
-```bash
-python3 example_scan.py
+python3 scripts/backtest_via_signal_engine.py --start 2023-01-01 --end 2024-12-31
 ```
