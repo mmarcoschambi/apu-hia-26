@@ -91,6 +91,10 @@ def _is_shared_chat(chat_id: str) -> bool:
     return bool(chat_id and monitor_id and demo_id and monitor_id == demo_id == chat_id)
 
 
+def _is_live_chat(chat_id: str) -> bool:
+    return chat_id == os.getenv("TELEGRAM_CHAT_ID_LIVE")
+
+
 def _log_action(
     chat_id: str, user_id: str, action: str, payload: dict, status: str = "received"
 ) -> None:
@@ -215,8 +219,12 @@ def _handle_message(update: dict) -> None:
     shared_chat = _is_shared_chat(chat_id)
     monitor_chat = _is_monitor_chat(chat_id)
     demo_chat = _is_demo_chat(chat_id)
+    live_chat = _is_live_chat(chat_id)
 
-    if monitor_chat and not shared_chat:
+    if not (monitor_chat or demo_chat or shared_chat or live_chat):
+        return
+
+    if (monitor_chat or live_chat) and not shared_chat:
         if command == "signals":
             send_message_with_buttons(
                 build_monitor_signals_message(arg or None),
@@ -313,8 +321,9 @@ def _handle_callback(update: dict) -> None:
     shared_chat = _is_shared_chat(chat_id)
     monitor_chat = _is_monitor_chat(chat_id)
     demo_chat = _is_demo_chat(chat_id)
+    live_chat = _is_live_chat(chat_id)
 
-    if not (monitor_chat or demo_chat):
+    if not (monitor_chat or demo_chat or live_chat):
         answer_callback(callback_id, "Chat not allowed")
         return
 
@@ -357,7 +366,7 @@ def _handle_callback(update: dict) -> None:
             _log_action(chat_id, user_id, "refresh", {"target": target, "page": page}, status="applied")
             answer_callback(callback_id, "Watchlist refreshed")
             return
-        if monitor_chat and not shared_chat and target == "signals":
+        if (monitor_chat or live_chat) and not shared_chat and target == "signals":
             send_message_with_buttons(
                 build_monitor_signals_message(),
                 buttons=REFRESH_BUTTONS["signals"],
