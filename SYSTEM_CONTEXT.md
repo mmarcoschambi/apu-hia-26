@@ -23,7 +23,7 @@ El sistema es auto-consciente de su entorno (**Auto-Aware**):
 | **Divergencia Temática** | [thematic_logic.py](file:///home/marcos/trade/momentum-v2/src/signals/thematic_logic.py) | **Variante E (Shadow Mode):** Setup válido si el Tema es alcista pero el Sector es neutral/bajista. Acumulando señales en `rejection_audit.csv`. |
 | **Sizing y Riesgo** | [risk_manager.py](file:///home/marcos/trade/momentum-v2/src/utils/risk_manager.py) | **E25 Dynamic Extension Sizing:** $2,878 de riesgo por trade leídos desde config. Salidas con stops a **2xATR** estrictos. |
 | **Simulador** | [backtest_via_signal_engine.py](file:///home/marcos/trade/momentum-v2/scripts/backtest_via_signal_engine.py) | **Verdad Canónica de simulación.** A/B merge, PIT y Portafolio Manager (6 posiciones max, 2 por sector). |
-| **Live Scanner** | [live_trading_scanner.py](file:///home/marcos/trade/momentum-v2/live_trading_scanner.py) | Escaneo en vivo. Generación diaria de alertas en `outputs/live_signals/`. |
+| **Live Scanner** | [live_trading_scanner.py](file:///home/marcos/trade/momentum-v2/scripts/live_trading_scanner.py) | Escaneo en vivo. Generación diaria de alertas en `outputs/live_signals/`. |
 
 ---
 
