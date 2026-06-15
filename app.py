@@ -2280,9 +2280,9 @@ with st.sidebar:
     st.subheader("Dashboard")
     dashboard_view = st.radio(
         "Workspace",
-        ["Integrated 2.0", "Legacy"],
+        ["Integrated 2.0", "Legacy", "Agent Playbook"],
         index=0,
-        help="Integrated 2.0 reads live/historical pipeline artifacts. Legacy keeps the backtest-centric workspace.",
+        help="Integrated 2.0 reads live/historical pipeline artifacts. Legacy keeps the backtest-centric workspace. Agent Playbook teaches how to use agents in this repo.",
     )
     dashboard_mode = st.radio(
         "Mode",
@@ -2920,6 +2920,11 @@ with st.sidebar:
     _dash_cache.render_timing_sidebar()
 
 # --- MAIN PAGE ---
+if dashboard_view == "Agent Playbook":
+    from src.ui.agent_playbook_ui import render_agent_playbook
+    render_agent_playbook()
+    st.stop()
+
 if dashboard_view == "Integrated 2.0":
     _render_dashboard_v2(
         mode=dashboard_mode.lower(),
