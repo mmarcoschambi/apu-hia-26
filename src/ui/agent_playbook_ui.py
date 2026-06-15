@@ -48,7 +48,7 @@ def render_agent_playbook():
                 
                 # Reordenar columnas para visualización amigable
                 if not df.empty:
-                    df["timestamp"] = pd.to_datetime(df["timestamp"])
+                    df["timestamp"] = pd.to_datetime(df["timestamp"], format="mixed", errors="coerce")
                     df = df.sort_values(by="timestamp", ascending=False)
                     
                     # Filtros interactivos en Streamlit
