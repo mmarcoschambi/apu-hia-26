@@ -229,5 +229,58 @@ class TestWatchlistView(unittest.TestCase):
         self.assertFalse(arm["_near_breakout"])
         self.assertEqual(arm["_dist_trend_5d"], 0.0)
 
+    @patch("src.paper.telegram_views.load_watchlist_signals")
+    @patch("src.paper.telegram_views._get_sector_status")
+    @patch("src.paper.telegram_views._get_theme_rs_vs_etf")
+    @patch("src.paper.telegram_views.get_themes")
+    def test_build_watchlist_message_system_filtering(self, mock_get_themes, mock_theme_rs, mock_sector_status, mock_load):
+        # Mocks para probar filtrado por sistema
+        mock_load.return_value = ("2026-05-21", [
+            {"ticker": "NVDA", "entry_score": 87.0, "entry_price": 135.20, "gate_adr_pct": 3.2, "sector_etf": "XLK", "entry_gate_status": "PASS", "combos": ["Qulla"]},
+            {"ticker": "AVGO", "entry_score": 74.0, "entry_price": 198.00, "gate_adr_pct": 2.8, "sector_etf": "XLK", "entry_gate_status": "PASS", "combos": ["Minervini"]},
+        ])
+        mock_get_themes.return_value = ["AI/ML"]
+        mock_theme_rs.return_value = 0.021
+        mock_sector_status.return_value = (True, 0.012)
+        
+        # Filtro Sistema A -> Solo NVDA
+        msg_text_a, _ = build_watchlist_message("2026-05-21", page=1, system="A")
+        self.assertIn("[SISTEMA A] WATCHLIST", msg_text_a)
+        self.assertIn("NVDA", msg_text_a)
+        self.assertNotIn("AVGO", msg_text_a)
+        
+        # Filtro Sistema B -> Solo AVGO
+        msg_text_b, _ = build_watchlist_message("2026-05-21", page=1, system="B")
+        self.assertIn("[SISTEMA B] WATCHLIST", msg_text_b)
+        self.assertIn("AVGO", msg_text_b)
+        self.assertNotIn("NVDA", msg_text_b)
+
+    @patch("scripts.telegram_bot_listener.os.getenv")
+    def test_get_system_for_chat(self, mock_getenv):
+        from scripts.telegram_bot_listener import _get_system_for_chat
+        
+        def side_effect(key, default=None):
+            env = {
+                "TELEGRAM_CHAT_ID_LIVE": "-1003901048156",
+                "TELEGRAM_CHAT_ID_SYSTEM_B": "-1002222222222",
+                "TELEGRAM_CHAT_ID_MONITOR": "-1003961012390",
+                "TELEGRAM_CHAT_ID_DEMO": "-1003961012390",
+                "TELEGRAM_CHAT_ID": "1324857342",
+            }
+            return env.get(key, default)
+            
+        mock_getenv.side_effect = side_effect
+        
+        # System B
+        self.assertEqual(_get_system_for_chat("-1003901048156"), "B")
+        self.assertEqual(_get_system_for_chat("-1002222222222"), "B")
+        
+        # System A
+        self.assertEqual(_get_system_for_chat("-1003961012390"), "A")
+        self.assertEqual(_get_system_for_chat("1324857342"), "A")
+        
+        # None
+        self.assertIsNone(_get_system_for_chat("-1009999999999"))
+
 if __name__ == "__main__":
     unittest.main()

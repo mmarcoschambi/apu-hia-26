@@ -20,11 +20,12 @@ def render_agent_playbook():
     )
 
     # Tabs principales
-    tab_memory, tab_workflow, tab_tdd, tab_prompts = st.tabs([
+    tab_memory, tab_workflow, tab_tdd, tab_research, tab_prompts = st.tabs([
         "🧠 Memory Board (ScrumBan)", 
         "🔄 Ciclo de Vida del Ticket", 
         "🧪 Test Harness & TDD", 
-        "💬 Copiar Prompts Oficiales"
+        "🔬 Ciclo de Investigación (Hipótesis)",
+        "💬 Cheat Sheet de Prompts"
     ])
 
     # ──────────────────────────────────────────────────────────────────────
@@ -93,6 +94,25 @@ def render_agent_playbook():
         else:
             st.warning("⚠️ No se encontró el archivo `.cache/local_memory.json` en el repositorio.")
 
+        # PROMPT MOCK PARA ESTE TAB
+        st.markdown("---")
+        st.markdown("#### 💬 Prompt para pedir al Agente que registre una Decisión/Avance:")
+        st.code(
+            """
+Completamos esta tarea. Por favor, agregá un nuevo registro a nuestro archivo `.cache/local_memory.json`.
+El registro debe seguir este formato JSON exacto:
+{
+  "timestamp": "<fecha_utc_actual>",
+  "title": "<Título descriptivo de la decisión, bugfix o pattern>",
+  "type": "bugfix | discovery | pattern | decision | architecture",
+  "scope": "project",
+  "topic_key": "<identificador-estable-del-tema>",
+  "content": "<Descripción detallada de qué se hizo, por qué y qué aprendimos en esta sesión>"
+}
+""",
+            language="markdown"
+        )
+
     # ──────────────────────────────────────────────────────────────────────
     # TAB 2: CICLO DE VIDA DEL TICKET (VISUAL)
     # ──────────────────────────────────────────────────────────────────────
@@ -138,6 +158,46 @@ def render_agent_playbook():
             """
         )
 
+        # PROMPTS MOCKS PARA CADA FASE
+        st.markdown("---")
+        st.markdown("#### 💬 Prompts Listos para Copiar según cada Fase:")
+        
+        with st.expander("Fase 1: Contexto e Inicio (Prompt de Inicialización)"):
+            st.code(
+                """
+Hola. Vamos a iniciar el desarrollo del Issue #<ID>. 
+Por favor, seguí este protocolo:
+1. Leé `SYSTEM_CONTEXT.md` para entender el roadmap y los módulos activos.
+2. Leé `AGENTS.md` para alinear tu comportamiento con nuestras restricciones.
+3. Creá o muévete a la rama `feat/<ID>-<nombre-corto>`.
+4. Analizá los archivos afectados y presentame una propuesta paso a paso antes de programar.
+""",
+                language="markdown"
+            )
+
+        with st.expander("Fase 2: Desarrollo e Implementación (Prompt de Control)"):
+            st.code(
+                """
+Procedé con la propuesta técnica aprobada.
+Recordá las siguientes restricciones de directorios:
+- El código de producción nuevo va en un subdirectorio bajo `src/`.
+- Cualquier script temporal o debug debe guardarse únicamente en `scratch/` para que no se agregue a Git.
+- Los tests unitarios deben estar en la carpeta `tests/`.
+""",
+                language="markdown"
+            )
+
+        with st.expander("Fase 3: Cierre y Commits (Prompt de Finalización)"):
+            st.code(
+                """
+El desarrollo está completo. Por favor:
+1. Agregá el registro correspondiente en `.cache/local_memory.json` con los detalles técnicos (timestamp, title, type, scope, topic_key, content).
+2. Hace el commit convencional indicando `[Módulo] Breve descripción. Fixes #<ID>`.
+3. Si el pre-commit hook falla localmente por argumentos muy largos, usá la bandera `--no-verify` al commitear y pushear.
+""",
+                language="markdown"
+            )
+
     # ──────────────────────────────────────────────────────────────────────
     # TAB 3: TEST HARNESS & TDD
     # ──────────────────────────────────────────────────────────────────────
@@ -168,14 +228,80 @@ def render_agent_playbook():
             """
         )
 
+        # PROMPT MOCK PARA TDD
+        st.markdown("---")
+        st.markdown("#### 💬 Prompt para guiar al Agente en Strict TDD Mode:")
+        st.code(
+            """
+Quiero que implementemos este feature siguiendo estrictamente la metodología TDD (Test-Driven Development):
+1. **Red**: Escribí primero los tests unitarios en la carpeta `tests/` y verifiquemos que fallen.
+2. **Green**: Escribí el mínimo código de producción necesario en `src/` para que los tests pasen.
+3. **Refactor**: Limpiá y optimizá el código asegurando que la suite de tests siga en 100% verde.
+Ejecutá `pytest` en cada paso para validar el estado.
+""",
+            language="markdown"
+        )
+
     # ──────────────────────────────────────────────────────────────────────
-    # TAB 4: COPIAR PROMPTS OFICIALES
+    # TAB 4: CICLO DE INVESTIGACIÓN (HIPÓTESIS)
+    # ──────────────────────────────────────────────────────────────────────
+    with tab_research:
+        st.subheader("🔬 El Pipeline Cuantitativo Profesional (QUANT-FEATURE.md)")
+        st.markdown(
+            "Este es el flujo de trabajo metodológico para validar y evaluar nuevas "
+            "hipótesis cuantitativas sin comprometer el motor ni la estabilidad del sistema en vivo."
+        )
+
+        st.markdown(
+            """
+            ### Las 4 Etapas del Ciclo de Investigación:
+
+            #### 1. La Sandbox (Investigación y Ablación)
+            *   **Dónde ocurre:** En `experiments/` (usando Jupyter notebooks o scripts aislados como `run_walkforward_hybrid.py`).
+            *   **Objetivo:** Probar si la hipótesis (ej. *'¿Un filtro de distancia mínima a la SMA20 aporta alfa?'*) tiene ventaja estadística cruda.
+            *   **Regla de Oro:** Si el concepto no sobrevive a salidas simples fijas (ej. holding de 10 días), **se descarta de inmediato**. No intentes arreglar una mala hipótesis optimizándola.
+
+            #### 2. Integración al Core (El Enchufe)
+            *   **Dónde ocurre:** En `src/backtest/vectorbt_engine_advanced.py` y `config/defaults.py`.
+            *   **Objetivo:** Traducir la hipótesis ganadora a código oficial a través de un **Feature Flag** (e.g. `use_new_filter = True/False`).
+            *   **Regla de Oro:** **NUNCA dupliques el motor completo** para probar una idea. Mantener un solo código es mandatorio.
+
+            #### 3. Optimización y La Guillotina (ResearchGate)
+            *   **Dónde ocurre:** Ejecutando `optimize_3tier.py` y el walk-forward stress testing.
+            *   **Objetivo:** Optuna busca la gestión de salidas ideal (TP1, TP2, Runner). El ResearchGate somete la estrategia a comisiones dobles, slippage y stress testing para calcular el PBO (Probability of Backtest Overfitting).
+            *   **Regla de Oro:** Si el PBO > 50% (REJECTED), la estrategia se descarta. Solo se confía en lo **APPROVED**.
+
+            #### 4. Producción (Live Trading)
+            *   **Dónde ocurre:** `live_trading_scanner.py` leyendo `production_config.json`.
+            *   **Objetivo:** El Live Scanner ejecuta como robot tonto las reglas matemáticas validadas y congeladas de la Etapa 3. No se altera la lógica en producción.
+            """
+        )
+
+        # PROMPT MOCK PARA INVESTIGACIÓN DE HIPÓTESIS
+        st.markdown("---")
+        st.markdown("#### 💬 Prompt para guiar al Agente en la Sandbox (Etapa 1 - Hipótesis):")
+        st.code(
+            """
+Quiero investigar la siguiente hipótesis cuantitativa:
+Hipótesis: <Describir la hipótesis, ej. 'Penalizar activos a menos del 1% de su SMA20 en el Sistema B'>
+
+Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
+1. Creá un script aislado en el directorio `experiments/` (ej. `experiments/shadow_sma20_research.py`).
+2. Utilizá los datos de `data/ticker_cache.db` e implementá la lógica de forma simplificada (sin tocar archivos de `src/`).
+3. Corré una simulación con un holding fijo de 10 días para evaluar si la idea tiene edge real (Win Rate y Profit Factor OOS comparado con el baseline).
+4. Mostrame los resultados y decime si la idea califica para pasar a la Etapa 2 (Integración al Core).
+""",
+            language="markdown"
+        )
+
+    # ──────────────────────────────────────────────────────────────────────
+    # TAB 5: CHEAT SHEET GENERAL DE PROMPTS
     # ──────────────────────────────────────────────────────────────────────
     with tab_prompts:
-        st.subheader("💬 Plantillas de Prompts para usar con Agentes")
+        st.subheader("💬 Cheat Sheet de Prompts Rápidos")
         st.markdown(
-            "Copiá y pegá estas plantillas didácticas al iniciar un chat o al abrir un issue "
-            "para alinear al agente con las reglas del repositorio."
+            "Una recopilación rápida de plantillas didácticas para alinear a cualquier "
+            "agente en una sesión de desarrollo."
         )
 
         st.markdown("#### 1. Iniciar un nuevo ticket de desarrollo:")

@@ -95,6 +95,28 @@ def _is_live_chat(chat_id: str) -> bool:
     return chat_id == os.getenv("TELEGRAM_CHAT_ID_LIVE")
 
 
+def _get_system_for_chat(chat_id: str) -> str | None:
+    # Resuelve qué sistema filtrar según el chat ID.
+    chat_id = str(chat_id)
+    chat_live = os.getenv("TELEGRAM_CHAT_ID_LIVE")
+    chat_sys_b = os.getenv("TELEGRAM_CHAT_ID_SYSTEM_B")
+    chat_monitor = os.getenv("TELEGRAM_CHAT_ID_MONITOR")
+    chat_demo = os.getenv("TELEGRAM_CHAT_ID_DEMO")
+    chat_sys_a = os.getenv("TELEGRAM_CHAT_ID")
+
+    if chat_live and chat_id == chat_live:
+        return "B"
+    if chat_sys_b and chat_id == chat_sys_b:
+        return "B"
+    if chat_monitor and chat_id == chat_monitor:
+        return "A"
+    if chat_demo and chat_id == chat_demo:
+        return "A"
+    if chat_sys_a and chat_id == chat_sys_a:
+        return "A"
+    return None
+
+
 def _log_action(
     chat_id: str, user_id: str, action: str, payload: dict, status: str = "received"
 ) -> None:
@@ -158,7 +180,8 @@ def _send_view(chat_id: str, view: str, arg: str = "", interactive: bool = False
             elif arg.isdigit():
                 page = int(arg)
 
-        msg_text, msg_buttons = build_watchlist_message(date=date_str, page=page)
+        system = _get_system_for_chat(chat_id)
+        msg_text, msg_buttons = build_watchlist_message(date=date_str, page=page, system=system)
         send_message_with_buttons(
             msg_text,
             buttons=msg_buttons if msg_buttons else REFRESH_BUTTONS["watchlist"],
@@ -356,7 +379,8 @@ def _handle_callback(update: dict) -> None:
                     page = int(m.group(1))
                 except:
                     pass
-            resolved_text, resolved_buttons = build_watchlist_message(page=page)
+            system = _get_system_for_chat(chat_id)
+            resolved_text, resolved_buttons = build_watchlist_message(page=page, system=system)
             edit_message(
                 chat_id=chat_id,
                 message_id=message.get("message_id"),
@@ -390,7 +414,8 @@ def _handle_callback(update: dict) -> None:
             page = int(payload)
         except ValueError:
             page = 1
-        resolved_text, resolved_buttons = build_watchlist_message(page=page)
+        system = _get_system_for_chat(chat_id)
+        resolved_text, resolved_buttons = build_watchlist_message(page=page, system=system)
         edit_message(
             chat_id=chat_id,
             message_id=message.get("message_id"),
