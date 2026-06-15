@@ -1,6 +1,6 @@
 # AGENTS.md — momentum-v2 · Sistema Quant v2
 > System Prompt persistente del agente. Leer completo antes de actuar.
-> Subordina a: este archivo. AI_RULES.md y DEVELOPER_RULES.md son complementarios.
+> Para el estado operativo actual del sistema, consultar `SYSTEM_CONTEXT.md` en la raíz.
 
 ---
 
@@ -19,6 +19,7 @@ Stack: Python 3.10+ · vectorbt · LightGBM · Optuna · pandas · Streamlit · 
 
 ## 2. FUENTES DE VERDAD
 
+- **Estado del sistema, módulos activos y roadmap:** `SYSTEM_CONTEXT.md` (raíz)
 - Usar CodeGraph para preguntas estructurales: definiciones, callers, callees, impacto de cambios.
 - Confiar en config ejecutable sobre prosa. Si hay conflicto entre docs y `pyproject.toml` / `requirements.txt`, seguir el config.
 - Baseline de referencia: **Russell + E25 Sizing → 96.12% Return, -35.09% MDD**
@@ -66,6 +67,7 @@ momentum-v2/
 ├── tests/                  # Suite formal pytest
 ├── scratch/                # Scripts descartables / debug
 ├── configs/                # Archivos de configuración YAML
+├── config/                 # Configuración JSON de producción
 ├── data/                   # Datos locales (NO commitear)
 ├── docs/                   # Documentación técnica
 ├── outputs/                # Outputs generados (reportes, CSVs)
@@ -121,7 +123,7 @@ Un issue está CERRADO cuando:
 
 ---
 
-## 7. PYTHON TOOLING
+## 7. PYTHON TOOLING Y CONVENCIONES
 
 - Python target: **3.10+**
 - Linter: **Ruff** — line length 100, checks `E/F/I/W`, ignora `E501`
@@ -130,6 +132,12 @@ Un issue está CERRADO cuando:
 - Docstrings con: propósito, parámetros, retorno
 - Idioma comentarios: **español** / Idioma código y variables: **inglés**
 - `data/` y `*.db` son locales — NO commitear
+- Sin copias de backup dentro de `src/` — usar historial de Git
+
+### Módulos Sensibles (requieren autorización explícita para modificar)
+
+- `src/backtest/` — motor core del backtester
+- `src/data/`     — mapeo de símbolos y fuentes históricas
 
 ---
 
