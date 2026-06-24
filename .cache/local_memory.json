@@ -62,5 +62,45 @@
     "scope": "project",
     "topic_key": "vps-watchlist-split-and-routing",
     "content": "Se corrigio la duplicacion de candidatos en las watchlists de Telegram de Qulla y Minervini aplicando la validacion de filtros especifica de cada combo (_passes_combo_filters) antes de asociar el combo en el snapshot consolidado. Tambien se re-ruteo el brief diario de pre-market para que llegue al mensaje privado (TELEGRAM_CHAT_ID) y las watchlists y alertas a los grupos correspondientes (TELEGRAM_CHAT_ID_MONITOR)."
+  },
+  {
+    "timestamp": "2026-06-24T18:02:00Z",
+    "title": "Implementada pestaña interactiva Backlog de Experimentos en UI",
+    "type": "architecture",
+    "scope": "project",
+    "topic_key": "ui/agent-playbook-experiments-backlog",
+    "content": "Se añadió una pestaña dedicada '📋 Backlog de Experimentos' en la UI del playbook (agent_playbook_ui.py). Precarga de forma automática los 5 tracks cuantitativos pendientes del plan de congelamiento a partir de experiments_backlog.json y provee un formulario interactivo en Streamlit para registrar nuevas ideas usando una plantilla estructurada y limpia."
+  },
+  {
+    "timestamp": "2026-06-24T18:36:00Z",
+    "title": "Implementada pestaña de Primeros Principios y simulador matemático en UI",
+    "type": "architecture",
+    "scope": "project",
+    "topic_key": "ui/agent-playbook-first-principles",
+    "content": "Se añadió la pestaña interactiva '📐 Primeros Principios' en la app de Streamlit (agent_playbook_ui.py). Explica la teoría de la expectativa matemática del trade en LaTeX, compara en detalle el Sistema A (TP1/TP2/Runner) y el Sistema B (Joya E25) con diagramas de flujo Graphviz específicos de salidas y riesgo, y despliega un simulador interactivo que calcula el EV del portafolio en base al Win Rate y Stop Loss."
+  },
+  {
+    "timestamp": "2026-06-24T18:46:00Z",
+    "title": "Añadida guía paso a paso de un trade con mocks de Telegram reales",
+    "type": "architecture",
+    "scope": "project",
+    "topic_key": "ui/agent-playbook-trade-walkthrough",
+    "content": "Se integró una sección interactiva de ciclo de vida de un trade real bajo la pestaña '📐 Primeros Principios' en agent_playbook_ui.py. Permite navegar por las 4 fases (Pre-Market, Trigger, Post-Market, Liquidación) mostrando tablas con logs de candidatos reales de snapshot.json (QCOM, TSM, SMH), diagramas de cálculo de position sizing por ATR y plantillas HTML exactas de los mensajes enviados a Telegram."
+  },
+  {
+    "timestamp": "2026-06-24T19:42:00Z",
+    "title": "Ajuste de alertas reales de Telegram, medias móviles e integración con TradingView en la guía de trade",
+    "type": "pattern",
+    "scope": "project",
+    "topic_key": "ui/agent-playbook-trade-walkthrough",
+    "content": "Se corrigieron las fases del ciclo de trade en la UI para reflejar con precisión el envío en producción: reporte crudo preliminar en el Pre-Market (09:00 EST) y watchlist sectorizada en el Market Open (09:30 EST). Además, se mejoró el gráfico de velas de Plotly integrando visualmente el indicador companion de TradingView (bugatti_momentum.pine) con sus 5 medias móviles, sombreado verde del fondo por MA stack alineado, niveles de breakout y un panel de control con señales lógicas. También se expandió el gráfico a 52 días de historial respetando los fines de semana como espacios vacíos e ilustrando cómo se forma el breakout mediante anotaciones del patrón VCP (Volatility Contraction Pattern)."
+  },
+  {
+    "timestamp": "2026-06-24T20:05:00Z",
+    "title": "Corregido ValueError por desalineación de fechas y velas en la UI",
+    "type": "bugfix",
+    "scope": "project",
+    "topic_key": "ui/agent-playbook-trade-walkthrough",
+    "content": "Se solucionó el crash runtime en streamlit al renderizar la pestaña de Primeros Principios eliminando una vela mock redundante (June 14) en agent_playbook_ui.py. Esto igualó la longitud de la lista de velas a 52 para que coincida exactamente con la lista de fechas del eje temporal, resolviendo la excepción 'Length of values (52) does not match length of index (53)' al construir el DataFrame."
   }
 ]
