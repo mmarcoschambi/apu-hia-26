@@ -1,0 +1,1 @@
+{"event_id": "evt_20260526084844973333", "chat_id": "-1003961012390", "user_id": "1324857342", "action": "watchlist", "payload": {"text": "/watchlist", "arg": ""}, "status": "received", "created_at": "2026-05-26T08:48:45.097422", "applied_at": null, "metadata": {"listener": "telegram_bot_listener"}}

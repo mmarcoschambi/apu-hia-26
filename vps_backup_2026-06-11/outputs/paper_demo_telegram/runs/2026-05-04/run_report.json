@@ -1,0 +1,28 @@
+{
+  "date": "2026-05-04",
+  "generated_at": "2026-05-04T21:47:11.659927",
+  "status": "candidates_ready",
+  "kill_switch": false,
+  "entries_paused": false,
+  "metrics": {
+    "open_positions": 0,
+    "closed_positions": 0,
+    "pending_intents": 1,
+    "snoozed_intents": 0,
+    "approved_intents": 0,
+    "rejected_intents": 0,
+    "expired_intents": 1,
+    "orders": 0,
+    "fills": 0,
+    "realized_pnl": 0,
+    "kill_switch": false,
+    "entries_paused": false
+  },
+  "open_positions": 0,
+  "closed_positions": 0,
+  "pending_intents": 1,
+  "snoozed_intents": 0,
+  "approved_intents": 0,
+  "rejected_intents": 0,
+  "expired_intents": 1
+}

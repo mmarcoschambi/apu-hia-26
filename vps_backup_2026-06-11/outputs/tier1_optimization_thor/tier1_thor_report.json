@@ -1,0 +1,60 @@
+{
+  "timestamp": "2026-02-08T02:45:00.000000",
+  "method": "Tier1_THOR_Optimization",
+  "trials": 100,
+  "ticker_source": "config/db_tickers.txt (38 tickers)",
+  "tier1_optimized": {
+    "tp1_r": 2.5,
+    "tp2_r": 5.0,
+    "tp1_pct": 0.5,
+    "tp2_pct": 0.25,
+    "max_stop_pct": 0.03,
+    "risk_dollars": 150,
+    "runner_pct": 0.25
+  },
+  "tier2_fixed": {
+    "min_rvol": 1.55,
+    "max_dist_sma20": 7.1,
+    "min_consolidation_days": 10,
+    "min_adr": 1.6,
+    "min_dollar_volume": 3000000,
+    "require_sector_strength": true,
+    "sector_top_percentile": 0.4,
+    "analysis_metadata": {
+      "trades_analyzed": 479,
+      "winners": 166,
+      "losers": 313,
+      "original_win_rate": 34.7
+    }
+  },
+  "tier3_fixed": {
+    "rvol_danger": 3.0,
+    "rvol_warning": 2.0,
+    "rvol_danger_size": 0.3,
+    "rvol_warning_size": 0.65,
+    "adr_high": 6.0,
+    "adr_med": 5.0,
+    "adr_high_size": 0.25,
+    "adr_med_size": 0.4,
+    "max_exposure_pct": 0.35,
+    "max_position_pct": 0.25,
+    "earnings_days": 5,
+    "earnings_cushion": 2,
+    "max_stop_pct_hard": 0.08,
+    "risk_fraction": 0.005
+  },
+  "in_sample": {
+    "metric": "sharpe",
+    "value": 1.3111,
+    "period": "2021-01-01 to 2024-06-30"
+  },
+  "validation": {
+    "sharpe": 1.4226,
+    "total_return_pct": 28.69,
+    "max_drawdown_pct": 4.61,
+    "win_rate_pct": 55.67,
+    "total_trades": 503,
+    "degradation_pct": 8.5,
+    "period": "2024-07-01 to 2025-12-31"
+  }
+}

@@ -1,0 +1,23 @@
+{
+    "best_params": {
+        "min_rvol": 2.5,
+        "min_adr": 2.4,
+        "max_dist_sma20": 9.0,
+        "signal_type": "any",
+        "max_stop_pct": 3.0,
+        "tp1_r": 1.9,
+        "tp2_r": 2.5,
+        "use_market_regime_filter": false,
+        "require_spy_above_sma50": false
+    },
+    "best_value": 299.7,
+    "validation": {
+        "approved": false,
+        "pbo": 1.0,
+        "p5_oos": -100.0,
+        "reasons": [
+            "Discovery phase failed: Invalid strategy structure"
+        ]
+    },
+    "optimized_at": "2026-02-11 05:02:05"
+}

@@ -604,13 +604,13 @@ def main():
             {
                 "name": "SISTEMA A",
                 "df": filtered[filtered["agent_name"].apply(lambda x: "pure" in str(x).lower() or str(x).lower() in ("a", "qulla"))] if not filtered.empty else filtered,
-                "chat_id": os.getenv("TELEGRAM_CHAT_ID"),
+                "chat_id": os.getenv("TELEGRAM_CHAT_ID_MONITOR"),
                 "suffix": "A"
             },
             {
                 "name": "SISTEMA B",
                 "df": filtered[filtered["agent_name"].apply(lambda x: "breakout" in str(x).lower() or str(x).lower() in ("b", "minervini"))] if not filtered.empty else filtered,
-                "chat_id": os.getenv("TELEGRAM_CHAT_ID_SYSTEM_B") or os.getenv("TELEGRAM_CHAT_ID"),
+                "chat_id": os.getenv("TELEGRAM_CHAT_ID_SYSTEM_B") or os.getenv("TELEGRAM_CHAT_ID_MONITOR"),
                 "suffix": "B"
             }
         ]

@@ -1,0 +1,66 @@
+{
+  "scan_date": "2026-04-25",
+  "universe_source": "stable",
+  "universe_count": 400,
+  "agents": {
+    "combo_aggressive_momentum": 0,
+    "combo_ideal_setup": 1,
+    "combo_pullback_entry": 30,
+    "combo_pure_momentum": 0,
+    "combo_stage2_breakout": 0,
+    "combo_universal_any": 17
+  },
+  "total_signals": 48,
+  "top_signals": [
+    {
+      "ticker": "AMAT",
+      "agent": "combo_ideal_setup",
+      "score": 1.0
+    },
+    {
+      "ticker": "D",
+      "agent": "combo_pullback_entry",
+      "score": 0.994
+    },
+    {
+      "ticker": "AHR",
+      "agent": "combo_pullback_entry",
+      "score": 0.982
+    },
+    {
+      "ticker": "CLMT",
+      "agent": "combo_pullback_entry",
+      "score": 0.964
+    },
+    {
+      "ticker": "BTU",
+      "agent": "combo_pullback_entry",
+      "score": 0.959
+    },
+    {
+      "ticker": "AA",
+      "agent": "combo_pullback_entry",
+      "score": 0.907
+    },
+    {
+      "ticker": "CB",
+      "agent": "combo_pullback_entry",
+      "score": 0.889
+    },
+    {
+      "ticker": "CCI",
+      "agent": "combo_pullback_entry",
+      "score": 0.838
+    },
+    {
+      "ticker": "DFTX",
+      "agent": "combo_pullback_entry",
+      "score": 0.835
+    },
+    {
+      "ticker": "CRWV",
+      "agent": "combo_pullback_entry",
+      "score": 0.815
+    }
+  ]
+}

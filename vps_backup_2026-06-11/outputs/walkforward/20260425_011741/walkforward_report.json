@@ -1,0 +1,255 @@
+{
+  "generated_at": "2026-04-25T01:17:41.166326",
+  "start": "2020-01-01",
+  "end": "2025-12-31",
+  "folds": 6,
+  "modes": [
+    "A",
+    "B"
+  ],
+  "universe_count": 100,
+  "results": [
+    {
+      "mode": "A",
+      "folds": [
+        {
+          "fold": 0,
+          "mode": "A",
+          "is_start": "2020-01-01",
+          "is_end": "2020-12-30",
+          "oos_start": "2020-12-31",
+          "oos_end": "2021-12-31",
+          "is_metrics": {
+            "trades": 0
+          },
+          "oos_metrics": {
+            "trades": 0
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "dry_run"
+            ]
+          }
+        },
+        {
+          "fold": 1,
+          "mode": "A",
+          "is_start": "2020-01-01",
+          "is_end": "2021-12-30",
+          "oos_start": "2021-12-31",
+          "oos_end": "2022-12-31",
+          "is_metrics": {
+            "trades": 0
+          },
+          "oos_metrics": {
+            "trades": 0
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "dry_run"
+            ]
+          }
+        },
+        {
+          "fold": 2,
+          "mode": "A",
+          "is_start": "2020-01-01",
+          "is_end": "2022-12-30",
+          "oos_start": "2022-12-31",
+          "oos_end": "2023-12-31",
+          "is_metrics": {
+            "trades": 0
+          },
+          "oos_metrics": {
+            "trades": 0
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "dry_run"
+            ]
+          }
+        },
+        {
+          "fold": 3,
+          "mode": "A",
+          "is_start": "2020-01-01",
+          "is_end": "2023-12-30",
+          "oos_start": "2023-12-31",
+          "oos_end": "2024-12-30",
+          "is_metrics": {
+            "trades": 0
+          },
+          "oos_metrics": {
+            "trades": 0
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "dry_run"
+            ]
+          }
+        },
+        {
+          "fold": 4,
+          "mode": "A",
+          "is_start": "2020-01-01",
+          "is_end": "2024-12-29",
+          "oos_start": "2024-12-30",
+          "oos_end": "2025-12-30",
+          "is_metrics": {
+            "trades": 0
+          },
+          "oos_metrics": {
+            "trades": 0
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "dry_run"
+            ]
+          }
+        }
+      ],
+      "stress": {
+        "mode": "A",
+        "stress_metrics": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "total_pnl": 0.0,
+          "profit_factor": 0.0,
+          "sharpe": 0.0,
+          "max_drawdown": 0.0,
+          "expectancy": 0.0
+        },
+        "signals": 0
+      }
+    },
+    {
+      "mode": "B",
+      "folds": [
+        {
+          "fold": 0,
+          "mode": "B",
+          "is_start": "2020-01-01",
+          "is_end": "2020-12-30",
+          "oos_start": "2020-12-31",
+          "oos_end": "2021-12-31",
+          "is_metrics": {
+            "trades": 0
+          },
+          "oos_metrics": {
+            "trades": 0
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "dry_run"
+            ]
+          }
+        },
+        {
+          "fold": 1,
+          "mode": "B",
+          "is_start": "2020-01-01",
+          "is_end": "2021-12-30",
+          "oos_start": "2021-12-31",
+          "oos_end": "2022-12-31",
+          "is_metrics": {
+            "trades": 0
+          },
+          "oos_metrics": {
+            "trades": 0
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "dry_run"
+            ]
+          }
+        },
+        {
+          "fold": 2,
+          "mode": "B",
+          "is_start": "2020-01-01",
+          "is_end": "2022-12-30",
+          "oos_start": "2022-12-31",
+          "oos_end": "2023-12-31",
+          "is_metrics": {
+            "trades": 0
+          },
+          "oos_metrics": {
+            "trades": 0
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "dry_run"
+            ]
+          }
+        },
+        {
+          "fold": 3,
+          "mode": "B",
+          "is_start": "2020-01-01",
+          "is_end": "2023-12-30",
+          "oos_start": "2023-12-31",
+          "oos_end": "2024-12-30",
+          "is_metrics": {
+            "trades": 0
+          },
+          "oos_metrics": {
+            "trades": 0
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "dry_run"
+            ]
+          }
+        },
+        {
+          "fold": 4,
+          "mode": "B",
+          "is_start": "2020-01-01",
+          "is_end": "2024-12-29",
+          "oos_start": "2024-12-30",
+          "oos_end": "2025-12-30",
+          "is_metrics": {
+            "trades": 0
+          },
+          "oos_metrics": {
+            "trades": 0
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "dry_run"
+            ]
+          }
+        }
+      ],
+      "stress": {
+        "mode": "B",
+        "stress_metrics": {
+          "trades": 3,
+          "wins": 2,
+          "losses": 1,
+          "win_rate": 0.667,
+          "total_pnl": -1376.14,
+          "profit_factor": 0.683,
+          "sharpe": -2.56,
+          "max_drawdown": 1.4649,
+          "expectancy": -458.7133,
+          "avg_win": 1480.0,
+          "avg_loss": 4336.15
+        },
+        "signals": 3
+      }
+    }
+  ]
+}

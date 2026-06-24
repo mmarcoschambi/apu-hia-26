@@ -1,0 +1,23 @@
+{
+  "generated_at": "2026-04-29T11:28:27.718195",
+  "starting_capital": 100000.0,
+  "ending_capital": 99991.79,
+  "total_pnl": -8.21,
+  "total_trades": 6,
+  "wins": 0,
+  "losses": 0,
+  "win_rate_pct": 0.0,
+  "profit_factor": 0.0,
+  "max_drawdown_pct": -76.18,
+  "equity_curve": [
+    100000.0,
+    99991.79
+  ],
+  "trade_dates": [],
+  "wf_min_profit_factor": 1.4,
+  "wf_max_drawdown_pct": 33.0,
+  "dd_alert_triggered": false,
+  "since": null,
+  "source": "scripts/paper_report.py",
+  "report_date": "2026-04-24"
+}

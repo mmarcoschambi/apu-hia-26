@@ -1,0 +1,21 @@
+{
+  "run_at": "2026-05-02T21:35:40.723595",
+  "total_trades": 142,
+  "mapped_trades": 141,
+  "results": {
+    "sector_ok": {
+      "trades": 107,
+      "PF": 0.666,
+      "Sharpe": -2.376,
+      "win_rate": 41.1,
+      "r_multiple_mean": -0.14
+    },
+    "sector_no_ok": {
+      "trades": 35,
+      "PF": 0.855,
+      "Sharpe": -1.026,
+      "win_rate": 45.7,
+      "r_multiple_mean": -0.059
+    }
+  }
+}

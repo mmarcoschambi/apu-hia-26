@@ -1,0 +1,136 @@
+{
+  "study_name": "smoke_v4",
+  "source_file": "/home/marcos/trade/momentum-v2/outputs/optuna_s4/results_smoke_v4_20260410_165248.json",
+  "generated_at": "2026-04-10T17:15:02.148211",
+  "period": {
+    "start": "2023-01-01",
+    "end": "2024-06-30"
+  },
+  "splits": {
+    "is": [
+      "2023-01-02",
+      "2023-11-24"
+    ],
+    "val": [
+      "2023-11-25",
+      "2024-03-13"
+    ],
+    "oos": [
+      "2024-03-14",
+      "2024-06-28"
+    ]
+  },
+  "universe_size": 80,
+  "n_candidates_validated": 9,
+  "top_oos_sharpe": 3.756,
+  "oos_bootstrap_ci": {
+    "mean": 0.9461351981278335,
+    "ci_lower": -0.2093278825664111,
+    "ci_upper": 2.1269840241808584
+  },
+  "deflated_sharpe": 0,
+  "lcl": 0.212,
+  "pbo_proxy": 0.28,
+  "interpretation": "MODERATE_OVERFITTING_RISK",
+  "candidates": [
+    {
+      "trial_id": 10,
+      "is_sharpe": 1.259,
+      "val_sharpe": -2.165,
+      "oos_sharpe": 3.756,
+      "oos_pf": 999.0,
+      "oos_calmar": 18.141,
+      "oos_mdd": 0.0382,
+      "oos_trades": 41,
+      "degradation_is_val": 2.719
+    },
+    {
+      "trial_id": 2,
+      "is_sharpe": 1.104,
+      "val_sharpe": 1.299,
+      "oos_sharpe": 0.95,
+      "oos_pf": 0.742,
+      "oos_calmar": 2.229,
+      "oos_mdd": 0.0272,
+      "oos_trades": 53,
+      "degradation_is_val": -0.176
+    },
+    {
+      "trial_id": 11,
+      "is_sharpe": 1.301,
+      "val_sharpe": -1.099,
+      "oos_sharpe": 2.635,
+      "oos_pf": 3.64,
+      "oos_calmar": 8.997,
+      "oos_mdd": 0.0644,
+      "oos_trades": 51,
+      "degradation_is_val": 1.845
+    },
+    {
+      "trial_id": 18,
+      "is_sharpe": 0.746,
+      "val_sharpe": 1.288,
+      "oos_sharpe": -0.507,
+      "oos_pf": 0.484,
+      "oos_calmar": -1.311,
+      "oos_mdd": 0.0405,
+      "oos_trades": 89,
+      "degradation_is_val": -0.726
+    },
+    {
+      "trial_id": 16,
+      "is_sharpe": 0.481,
+      "val_sharpe": 2.862,
+      "oos_sharpe": 2.878,
+      "oos_pf": 3.549,
+      "oos_calmar": 14.322,
+      "oos_mdd": 0.0254,
+      "oos_trades": 31,
+      "degradation_is_val": -4.957
+    },
+    {
+      "trial_id": 14,
+      "is_sharpe": 0.664,
+      "val_sharpe": 0.87,
+      "oos_sharpe": -1.024,
+      "oos_pf": 0.309,
+      "oos_calmar": -1.789,
+      "oos_mdd": 0.0582,
+      "oos_trades": 75,
+      "degradation_is_val": -0.311
+    },
+    {
+      "trial_id": 1,
+      "is_sharpe": 0.14,
+      "val_sharpe": -1.903,
+      "oos_sharpe": -1.46,
+      "oos_pf": 0.119,
+      "oos_calmar": -2.108,
+      "oos_mdd": 0.0437,
+      "oos_trades": 20,
+      "degradation_is_val": 14.553
+    },
+    {
+      "trial_id": 12,
+      "is_sharpe": 0.607,
+      "val_sharpe": 1.788,
+      "oos_sharpe": 1.845,
+      "oos_pf": 3.664,
+      "oos_calmar": 5.346,
+      "oos_mdd": 0.042,
+      "oos_trades": 30,
+      "degradation_is_val": -1.945
+    },
+    {
+      "trial_id": 19,
+      "is_sharpe": 0.642,
+      "val_sharpe": 2.601,
+      "oos_sharpe": -0.588,
+      "oos_pf": 0.175,
+      "oos_calmar": -0.92,
+      "oos_mdd": 0.0542,
+      "oos_trades": 58,
+      "degradation_is_val": -3.051
+    }
+  ]
+}

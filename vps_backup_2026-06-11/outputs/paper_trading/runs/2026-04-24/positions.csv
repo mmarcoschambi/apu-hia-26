@@ -1,0 +1,7 @@
+ticker,agent,size,entry_price,stop_price,tp1_price,tp2_price,position_value,unrealized_pnl,exited,exit_reason,exit_price,exit_fee,realized_pnl,rvol,adr_pct
+AMAT,combo_ideal_setup,73,341.8715,314.2076,375.683,423.4972,24956.62,0.0,True,no_data,341.8715,0.0,0.0,0.7,4.01
+D,combo_pullback_entry,296,63.2732,58.1532,69.531,78.3804,18728.87,0.0,True,no_data,63.2732,0.0,0.0,0.7,2.06
+AHR,combo_pullback_entry,269,52.2122,47.9872,57.376,64.6784,14045.07,0.0,True,no_data,52.2122,0.0,0.0,0.94,2.33
+CLMT,combo_pullback_entry,369,28.6186,26.3028,31.449,35.4516,10560.26,0.0,True,no_data,28.6186,0.0,0.0,0.53,5.2
+BTU,combo_pullback_entry,228,34.6746,31.8688,38.104,42.9536,7905.82,0.0,True,no_data,34.6746,0.0,0.0,0.66,5.53
+AA,combo_pullback_entry,93,63.6536,58.5028,69.949,78.8516,5919.78,0.0,True,no_data,63.6536,0.0,0.0,0.83,6.21

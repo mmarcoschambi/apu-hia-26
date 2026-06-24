@@ -1,0 +1,74 @@
+{
+  "timestamp": "20260115_220926",
+  "config": {
+    "k_folds": 5,
+    "fold_size": 200,
+    "l1_trials": 100,
+    "l2_trials": 50,
+    "in_start": "2020-01-01",
+    "in_end": "2022-12-31",
+    "val_start": "2023-01-01",
+    "val_end": "2023-12-31",
+    "oos_start": "2024-01-01",
+    "oos_end": "2025-12-31",
+    "equity": 100000,
+    "seed": 42,
+    "run_oos": true
+  },
+  "consensus_params": {
+    "require_positive_rs": "False",
+    "use_phases": "True",
+    "min_adr": "1.0",
+    "risk_dollars": "150",
+    "max_stop_pct": "0.08",
+    "max_consolidation_range": "15.0",
+    "min_consolidation_days": "10",
+    "max_vix": "50.0",
+    "rvol_warning_size": "0.6",
+    "signal_type": "any",
+    "tp1_r": "2.0",
+    "require_bullish_spy": "False",
+    "rvol_danger": "3.5",
+    "max_exposure_pct": "0.25",
+    "rvol_warning": "2.0",
+    "require_sma_trend": "False",
+    "min_volume": "150000",
+    "rvol_danger_size": "0.3",
+    "max_dist_sma20": "25.0",
+    "min_dollar_volume": "2000000.0",
+    "tp2_r": "4.0",
+    "min_rvol": "1.0"
+  },
+  "stability": {
+    "cv_mean": 0.3246164464496823,
+    "cv_std": 0.1018388536808546,
+    "stability_score": 68.6279439028237
+  },
+  "validation": {
+    "sharpe": 0.3923243905925936,
+    "degradation": 20.857829257707216,
+    "robustness": "MODERATE",
+    "metrics": {
+      "profit_factor": 1.2794730415877715,
+      "total_trades": 1131,
+      "unique_entries": 377,
+      "total_return_pct": 2.626068577846552,
+      "sharpe_ratio": 0.3923243905925936,
+      "max_drawdown_pct": 5.110104586841242,
+      "win_rate_pct": 40.05305039787798,
+      "final_value": 20525213.71556931
+    }
+  },
+  "oos": {
+    "metrics": {
+      "profit_factor": 1.330558527492068,
+      "total_trades": 1358,
+      "unique_entries": 452,
+      "total_return_pct": 3.30507483710909,
+      "sharpe_ratio": 0.42940251970562726,
+      "max_drawdown_pct": 3.3133846225005024,
+      "win_rate_pct": 31.66421207658321,
+      "final_value": 20661014.96742182
+    }
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "combo": "combo_stage2_breakout",
+  "run_at": "2026-04-15T16:14:11.440352",
+  "folds": [
+    {
+      "fold": 1,
+      "oos_start": "2022-01-01",
+      "oos_end": "2022-12-31",
+      "trades": 99,
+      "sharpe": -0.891,
+      "pf": 0.467,
+      "win_rate": 40.0,
+      "max_dd": 9.96,
+      "total_return": -6.89,
+      "status": "ok"
+    },
+    {
+      "fold": 2,
+      "oos_start": "2023-01-01",
+      "oos_end": "2023-12-31",
+      "trades": 558,
+      "sharpe": 0.85,
+      "pf": 1.278,
+      "win_rate": 58.5,
+      "max_dd": 9.27,
+      "total_return": 11.17,
+      "status": "ok"
+    },
+    {
+      "fold": 3,
+      "oos_start": "2024-01-01",
+      "oos_end": "2024-12-31",
+      "trades": 507,
+      "sharpe": 0.406,
+      "pf": 1.221,
+      "win_rate": 54.0,
+      "max_dd": 8.8,
+      "total_return": 3.89,
+      "status": "ok"
+    },
+    {
+      "fold": 4,
+      "oos_start": "2025-01-01",
+      "oos_end": "2025-12-31",
+      "trades": 1177,
+      "sharpe": 0.816,
+      "pf": 1.366,
+      "win_rate": 55.8,
+      "max_dd": 7.87,
+      "total_return": 7.39,
+      "status": "ok"
+    }
+  ],
+  "aggregate": {
+    "sharpe_mean": 0.295,
+    "sharpe_min": -0.891,
+    "sharpe_positive_folds": 3,
+    "pf_mean": 1.083,
+    "pf_consistent": false,
+    "trades_total": 2341,
+    "trades_per_fold": 585.2,
+    "folds_valid": 4,
+    "folds_ignored_low_sample": 0,
+    "verdict": "NO-GO",
+    "gate_rules": {
+      "min_valid_folds": 2,
+      "min_positive_folds": 2,
+      "min_sharpe_mean": 0.75,
+      "min_sharpe_min": 0.25,
+      "min_pf_mean": 1.2,
+      "min_pf_min": 1.0,
+      "min_trades_per_fold": 50
+    }
+  }
+}

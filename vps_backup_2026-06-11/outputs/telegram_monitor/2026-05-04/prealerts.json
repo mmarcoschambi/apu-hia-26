@@ -1,0 +1,19 @@
+{
+  "date": "2026-05-04",
+  "signals": [
+    {
+      "combo": "combo_pure_momentum",
+      "ticker": "FERG",
+      "signal_date": "2026-02-12",
+      "entry_price": 263.15951010131835,
+      "stop_loss": 241.37217712402344,
+      "tp1_price": 290.393676322937,
+      "tp2_price": 328.5215090332031,
+      "position_size": 135.0,
+      "rs_mode": "spy_fallback",
+      "source": "backtest_trade"
+    }
+  ],
+  "signals_count": 1,
+  "generated_at": "2026-05-05T10:01:47.145076"
+}

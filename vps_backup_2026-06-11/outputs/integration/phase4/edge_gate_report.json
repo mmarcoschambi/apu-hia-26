@@ -1,0 +1,16 @@
+{
+  "preflight": {
+    "passed": false,
+    "hydrated_rate_A": 0.0,
+    "hydrated_rate_B": 0.0,
+    "common_date_start": null,
+    "common_date_end": null,
+    "common_sessions": 0,
+    "errors": [
+      "hydrated_rate_B=0.00% < 80% threshold",
+      "common_sessions=0 < 60 minimum"
+    ]
+  },
+  "status": "BLOCKED_PRE_FLIGHT",
+  "message": "F4/F5 blocked until hydration and overlap thresholds are met. Run refresh_ticker_cache.py then retry."
+}

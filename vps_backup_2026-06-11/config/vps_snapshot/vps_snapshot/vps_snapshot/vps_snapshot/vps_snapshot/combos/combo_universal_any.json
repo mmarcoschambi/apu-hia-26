@@ -1,0 +1,59 @@
+{
+  "name": "combo_universal_any",
+  "description": "Universal benchmark: universal_any screener + any pattern. Competes directly with specialized combos.",
+  "version": "1.0",
+  "screener": {
+    "name": "universal_any",
+    "mode": "all"
+  },
+  "pattern": {
+    "signal_type": "any",
+    "description": "Universal benchmark signal (legacy any)"
+  },
+  "tier2_filters": {
+    "min_screener_score": 0.0,
+    "min_rvol": 0.91,
+    "min_adr": 1.97,
+    "max_dist_sma20": 8.94,
+    "min_consolidation_days": 5,
+    "min_volume": 100000,
+    "min_dollar_volume": 20000000,
+    "require_positive_rs": true,
+    "use_rs_percentile": true,
+    "min_rs_percentile": 70.0,
+    "rs_lookback_days": 60
+  },
+  "tier1_optuna_space": {
+    "tp1_r": {
+      "min": 1.25,
+      "max": 2.25,
+      "step": 0.25
+    },
+    "tp2_r": {
+      "min": 2.75,
+      "max": 5.5,
+      "step": 0.25
+    },
+    "tp1_pct": {
+      "min": 0.3,
+      "max": 0.5,
+      "step": 0.05
+    },
+    "tp2_pct": {
+      "min": 0.2,
+      "max": 0.4,
+      "step": 0.05
+    }
+  },
+  "tier3_fixed": {
+    "max_loss_pct": 8.0,
+    "max_positions": 5,
+    "position_size_method": "equal_weight",
+    "risk_fraction": 0.005
+  },
+  "validation": {
+    "min_win_rate": 0.4,
+    "min_profit_factor": 1.5,
+    "min_trades": 30
+  }
+}

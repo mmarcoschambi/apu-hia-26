@@ -416,18 +416,38 @@ def _get_latest_ohlcv_date(db_path: Path) -> str | None:
 
 
 def load_combo_params(name):
-    """Carga parametros desde config/production_config.json (Source of Truth)"""
+    """Carga parametros fusionados para el combo específico."""
     try:
-        config = load_production_config()
+        from src.integration.combo_loader import load_combo_merged
+        combo_cfg, _ = load_combo_merged(name)
+        
+        # Si es combo_pure_momentum, fundir con production_config.json (System A/Bugatti)
+        if name == "combo_pure_momentum":
+            prod_config = load_production_config()
+            if "tier1_strategy" not in combo_cfg:
+                combo_cfg["tier1_strategy"] = {}
+            combo_cfg["tier1_strategy"].update(prod_config.get("tier1_strategy", {}))
+            
+            if "tier2_filters" not in combo_cfg:
+                combo_cfg["tier2_filters"] = {}
+            prod_t2 = prod_config.get("tier2_filters", {}).copy()
+            if not combo_cfg["tier2_filters"].get("use_rs_percentile", False):
+                prod_t2["use_rs_percentile"] = False
+            combo_cfg["tier2_filters"].update(prod_t2)
+            
+            if "tier3_fixed" not in combo_cfg:
+                combo_cfg["tier3_fixed"] = {}
+            combo_cfg["tier3_fixed"].update(prod_config.get("tier3_fixed", {}))
+            
         params = {
-            "tier1_strategy": config.get("tier1_strategy", {}),
-            "tier2_filters": config.get("tier2_filters", {}),
-            "tier3_risk": config.get("tier3_risk", {}),
+            "tier1_strategy": combo_cfg.get("tier1_strategy", {}),
+            "tier2_filters": combo_cfg.get("tier2_filters", {}),
+            "tier3_risk": combo_cfg.get("tier3_fixed", combo_cfg.get("tier3_risk", {})),
         }
-        logger.info(f"    [Config] Cargados parametros de produccion para {name}")
+        logger.info(f"    [Config] Cargados parametros fusionados para {name}")
         return params
     except Exception as e:
-        logger.warning(f"    [Config] Fallo carga production_config.json, usando fallback: {e}")
+        logger.warning(f"    [Config] Fallo carga de parametros fusionados para {name}, usando fallback: {e}")
         f = RESULTS_DIR / f"{name}_config.json"
         if not f.exists():
             raise FileNotFoundError(f"Config no encontrado: {f}")
@@ -1077,6 +1097,33 @@ def scan_signals(
         engine.cleanup()
 
 
+def _passes_combo_filters(detail: dict, t2_filters: dict) -> bool:
+    """Checks if a watchlist ticker detail passes hard combo Tier 2 filters."""
+    # 1. RS Percentile check
+    if t2_filters.get("use_rs_percentile", True):
+        rs_val = detail.get("rs_pct")
+        min_rs = t2_filters.get("min_rs_percentile")
+        if rs_val is not None and min_rs is not None:
+            if rs_val < min_rs:
+                return False
+                
+    # 2. ADR check
+    min_adr = t2_filters.get("min_adr")
+    adr_val = detail.get("adr")
+    if adr_val is not None and min_adr is not None:
+        if adr_val < min_adr:
+            return False
+            
+    # 3. Dollar Volume check
+    min_dv = t2_filters.get("min_dollar_volume")
+    dv_val = detail.get("dollar_volume_m", 0) * 1e6
+    if min_dv is not None:
+        if dv_val < min_dv:
+            return False
+            
+    return True
+
+
 def run_pre(trade_date, drift_override, rs_min_pct=RS_FINVIZ_MIN_PCT_DEFAULT, top_n=5, hq_n=5):
     finviz_result = fetch_finviz_universe(FINVIZ_CFG)
     universe = finviz_result.tickers if finviz_result.ok else []
@@ -1188,7 +1235,15 @@ def run_pre(trade_date, drift_override, rs_min_pct=RS_FINVIZ_MIN_PCT_DEFAULT, to
             for t, score in res.get("watchlist", {}).items():
                 if t not in watchlist_scores or score > watchlist_scores[t]:
                     watchlist_scores[t] = score
+            # Load combo-specific parameters to check filter compliance
+            combo_params = load_combo_params(combo_name)
+            t2_filters = combo_params.get("tier2_filters", {})
+
             for t, detail in res.get("watchlist_detail", {}).items():
+                # Only associate this combo label if the candidate passes the combo-specific filters
+                if not _passes_combo_filters(detail, t2_filters):
+                    continue
+
                 combo_lbl = (
                     "Qulla"
                     if combo_name == "combo_pure_momentum"

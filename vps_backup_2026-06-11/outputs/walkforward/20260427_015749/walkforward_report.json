@@ -1,0 +1,90 @@
+{
+  "generated_at": "2026-04-27T01:57:49.637947",
+  "results": [
+    {
+      "mode": "A",
+      "folds": [
+        {
+          "fold": 0,
+          "mode": "A",
+          "is_start": "2020-01-01",
+          "oos_start": "2022-12-31",
+          "is_signals": 0,
+          "oos_signals": 0,
+          "is_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0,
+            "profit_factor_defined": false,
+            "sharpe_defined": false,
+            "low_sample": true
+          },
+          "oos_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0,
+            "profit_factor_defined": false,
+            "sharpe_defined": false,
+            "low_sample": true
+          },
+          "gate": {
+            "verdict": "HOLD"
+          },
+          "funnel": {
+            "is": {
+              "n_evaluations": 13012,
+              "n_min_data_fail": 448,
+              "n_screener_fail": 12018,
+              "n_tier2_fail": 994,
+              "n_passed": 0
+            },
+            "oos": {
+              "n_evaluations": 12014,
+              "n_min_data_fail": 0,
+              "n_screener_fail": 10860,
+              "n_tier2_fail": 1154,
+              "n_passed": 0
+            }
+          },
+          "universe": {
+            "n_tickers": 20,
+            "tickers": [
+              "SPY",
+              "TSLA",
+              "HTN",
+              "QQQ",
+              "AAPL",
+              "MSFT",
+              "AMZN",
+              "NVDA",
+              "IWM",
+              "META",
+              "ACL",
+              "AMD",
+              "GOOGL",
+              "NFLX",
+              "DHA",
+              "DHAI",
+              "GOOG",
+              "BABA",
+              "XOM",
+              "CRM"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,236 @@
+{
+  "generated_at": "2026-04-25T01:58:22.665712",
+  "start": "2020-01-01",
+  "end": "2025-12-31",
+  "folds": 6,
+  "modes": [
+    "A_BOTH"
+  ],
+  "universe_count": 100,
+  "results": [
+    {
+      "mode": "A_BOTH",
+      "folds": [
+        {
+          "fold": 0,
+          "mode": "A_BOTH",
+          "is_start": "2020-01-01",
+          "is_end": "2020-12-30",
+          "oos_start": "2020-12-31",
+          "oos_end": "2021-12-31",
+          "is_signals": 2,
+          "oos_signals": 2,
+          "is_metrics": {
+            "trades": 2,
+            "wins": 0,
+            "losses": 2,
+            "win_rate": 0.0,
+            "total_pnl": -7002.24,
+            "profit_factor": 0.0,
+            "sharpe": -29.174,
+            "max_drawdown": 7002239999999.999,
+            "expectancy": -3501.12,
+            "avg_win": 0.0,
+            "avg_loss": 3501.12
+          },
+          "oos_metrics": {
+            "trades": 2,
+            "wins": 0,
+            "losses": 2,
+            "win_rate": 0.0,
+            "total_pnl": -10259.81,
+            "profit_factor": 0.0,
+            "sharpe": -44.388,
+            "max_drawdown": 10259809999999.998,
+            "expectancy": -5129.905,
+            "avg_win": 0.0,
+            "avg_loss": 5129.9
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "insufficient_oos_trades=2<10"
+            ]
+          }
+        },
+        {
+          "fold": 1,
+          "mode": "A_BOTH",
+          "is_start": "2020-01-01",
+          "is_end": "2021-12-30",
+          "oos_start": "2021-12-31",
+          "oos_end": "2022-12-31",
+          "is_signals": 2,
+          "oos_signals": 0,
+          "is_metrics": {
+            "trades": 2,
+            "wins": 0,
+            "losses": 2,
+            "win_rate": 0.0,
+            "total_pnl": -12668.48,
+            "profit_factor": 0.0,
+            "sharpe": -59.042,
+            "max_drawdown": 12668479999999.998,
+            "expectancy": -6334.24,
+            "avg_win": 0.0,
+            "avg_loss": 6334.24
+          },
+          "oos_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "insufficient_oos_trades=0<10"
+            ]
+          }
+        },
+        {
+          "fold": 2,
+          "mode": "A_BOTH",
+          "is_start": "2020-01-01",
+          "is_end": "2022-12-30",
+          "oos_start": "2022-12-31",
+          "oos_end": "2023-12-31",
+          "is_signals": 0,
+          "oos_signals": 2,
+          "is_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0
+          },
+          "oos_metrics": {
+            "trades": 2,
+            "wins": 0,
+            "losses": 2,
+            "win_rate": 0.0,
+            "total_pnl": -1766.1,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 1766099999999.9998,
+            "expectancy": -883.05,
+            "avg_win": 0.0,
+            "avg_loss": 883.05
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "insufficient_oos_trades=2<10"
+            ]
+          }
+        },
+        {
+          "fold": 3,
+          "mode": "A_BOTH",
+          "is_start": "2020-01-01",
+          "is_end": "2023-12-30",
+          "oos_start": "2023-12-31",
+          "oos_end": "2024-12-30",
+          "is_signals": 2,
+          "oos_signals": 0,
+          "is_metrics": {
+            "trades": 2,
+            "wins": 0,
+            "losses": 2,
+            "win_rate": 0.0,
+            "total_pnl": -1487.42,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 1487420000000.0,
+            "expectancy": -743.71,
+            "avg_win": 0.0,
+            "avg_loss": 743.71
+          },
+          "oos_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "insufficient_oos_trades=0<10"
+            ]
+          }
+        },
+        {
+          "fold": 4,
+          "mode": "A_BOTH",
+          "is_start": "2020-01-01",
+          "is_end": "2024-12-29",
+          "oos_start": "2024-12-30",
+          "oos_end": "2025-12-30",
+          "is_signals": 0,
+          "oos_signals": 2,
+          "is_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0
+          },
+          "oos_metrics": {
+            "trades": 2,
+            "wins": 0,
+            "losses": 2,
+            "win_rate": 0.0,
+            "total_pnl": -4462.18,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 4462180000000.0,
+            "expectancy": -2231.09,
+            "avg_win": 0.0,
+            "avg_loss": 2231.09
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "insufficient_oos_trades=2<10"
+            ]
+          }
+        }
+      ],
+      "stress": {
+        "mode": "A_BOTH",
+        "stress_metrics": {
+          "trades": 2,
+          "wins": 0,
+          "losses": 2,
+          "win_rate": 0.0,
+          "total_pnl": -5469.48,
+          "profit_factor": 0.0,
+          "sharpe": 0.0,
+          "max_drawdown": 5469479999999.999,
+          "expectancy": -2734.74,
+          "avg_win": 0.0,
+          "avg_loss": 2734.74
+        },
+        "signals": 2
+      }
+    }
+  ]
+}

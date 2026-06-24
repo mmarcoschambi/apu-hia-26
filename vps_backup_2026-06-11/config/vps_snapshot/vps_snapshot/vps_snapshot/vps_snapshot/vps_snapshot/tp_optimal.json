@@ -1,0 +1,9 @@
+{
+  "timestamp": "2026-02-07T19:38:00.226273",
+  "tp1_pct": 0.2,
+  "tp2_pct": 0.2,
+  "runner_pct": 0.6000000000000001,
+  "sharpe": -999.0,
+  "trades": 0,
+  "source": "optimize_tp_distributions"
+}

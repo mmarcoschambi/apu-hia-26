@@ -22,7 +22,7 @@ def main():
     # 1. System A watchlist
     print("Sending System A (Qulla) watchlist...")
     text_a, buttons_a = build_watchlist_message(system="A")
-    chat_a = os.getenv("TELEGRAM_CHAT_ID")
+    chat_a = os.getenv("TELEGRAM_CHAT_ID_MONITOR")
     success_a = send_message_with_buttons(text_a, buttons_a, chat_id=chat_a)
     if success_a:
         print("✅ Watchlist Sistema A enviada con éxito a Telegram.")

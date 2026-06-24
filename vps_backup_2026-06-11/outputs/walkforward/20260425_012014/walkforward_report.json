@@ -1,0 +1,129 @@
+{
+  "generated_at": "2026-04-25T01:20:14.745892",
+  "start": "2023-01-01",
+  "end": "2024-12-31",
+  "folds": 2,
+  "modes": [
+    "A",
+    "B"
+  ],
+  "universe_count": 30,
+  "results": [
+    {
+      "mode": "A",
+      "folds": [
+        {
+          "fold": 0,
+          "mode": "A",
+          "is_start": "2023-01-01",
+          "is_end": "2023-12-31",
+          "oos_start": "2024-01-01",
+          "oos_end": "2024-12-31",
+          "is_signals": 0,
+          "oos_signals": 0,
+          "is_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0
+          },
+          "oos_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "insufficient_oos_trades=0<10"
+            ]
+          }
+        }
+      ],
+      "stress": {
+        "mode": "A",
+        "stress_metrics": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "total_pnl": 0.0,
+          "profit_factor": 0.0,
+          "sharpe": 0.0,
+          "max_drawdown": 0.0,
+          "expectancy": 0.0
+        },
+        "signals": 0
+      }
+    },
+    {
+      "mode": "B",
+      "folds": [
+        {
+          "fold": 0,
+          "mode": "B",
+          "is_start": "2023-01-01",
+          "is_end": "2023-12-31",
+          "oos_start": "2024-01-01",
+          "oos_end": "2024-12-31",
+          "is_signals": 0,
+          "oos_signals": 0,
+          "is_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0
+          },
+          "oos_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "insufficient_oos_trades=0<10"
+            ]
+          }
+        }
+      ],
+      "stress": {
+        "mode": "B",
+        "stress_metrics": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "total_pnl": 0.0,
+          "profit_factor": 0.0,
+          "sharpe": 0.0,
+          "max_drawdown": 0.0,
+          "expectancy": 0.0
+        },
+        "signals": 0
+      }
+    }
+  ]
+}

@@ -168,7 +168,7 @@ def main() -> None:
         },
     )
 
-    monitor_chat_id = os.getenv("TELEGRAM_CHAT_ID_MONITOR")
+    monitor_chat_id = os.getenv("TELEGRAM_CHAT_ID")
     if monitor_chat_id:
         send_message_with_buttons(
             brief,

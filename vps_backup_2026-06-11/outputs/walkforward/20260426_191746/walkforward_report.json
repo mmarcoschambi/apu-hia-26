@@ -1,0 +1,74 @@
+{
+  "generated_at": "2026-04-26T19:17:46.604190",
+  "start": "2020-01-01",
+  "end": "2025-12-31",
+  "folds": 2,
+  "modes": [
+    "A_BOTH"
+  ],
+  "universe_count": 50,
+  "results": [
+    {
+      "mode": "A_BOTH",
+      "folds": [
+        {
+          "fold": 0,
+          "mode": "A_BOTH",
+          "is_start": "2020-01-01",
+          "is_end": "2022-12-30",
+          "oos_start": "2022-12-31",
+          "oos_end": "2025-12-30",
+          "oos_days": 1096,
+          "is_signals": 0,
+          "oos_signals": 1,
+          "is_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0
+          },
+          "oos_metrics": {
+            "trades": 1,
+            "wins": 1,
+            "losses": 0,
+            "win_rate": 1.0,
+            "total_pnl": 130.95,
+            "profit_factor": 130950000000.0,
+            "sharpe": 15.875,
+            "max_drawdown": 0.0,
+            "expectancy": 130.95,
+            "avg_win": 130.95,
+            "avg_loss": 0.0
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "insufficient_oos_trades=1<15"
+            ]
+          }
+        }
+      ],
+      "stress": {
+        "mode": "A_BOTH",
+        "stress_metrics": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "total_pnl": 0.0,
+          "profit_factor": 0.0,
+          "sharpe": 0.0,
+          "max_drawdown": 0.0,
+          "expectancy": 0.0
+        },
+        "signals": 0
+      },
+      "combo_config_meta": {}
+    }
+  ]
+}

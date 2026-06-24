@@ -1,0 +1,6 @@
+run_date,sector_etf,rank,rank_prev,rank_curr,performance_pct,rs_pct,strength,status
+2026-05-13,XLK,1,,,,192.69,STRONG,
+2026-05-13,XLP,2,,,,-42.09,VERY_WEAK,
+2026-05-13,XLE,3,,,,-54.01,VERY_WEAK,
+2026-05-13,XLRE,4,,,,-57.94,VERY_WEAK,
+2026-05-13,XLY,5,,,,-74.76,VERY_WEAK,

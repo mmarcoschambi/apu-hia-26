@@ -1,0 +1,2 @@
+position_id,ticker,status,entry_price,stop_price,tp1_price,tp2_price,qty,qty_remaining,tp1_hit,tp2_hit,realized_pnl
+pos_auto_SNDR_2026-05-04,SNDR,open,28.16189438247681,28.100000381469727,,,416.0,416.0,False,False,0.0

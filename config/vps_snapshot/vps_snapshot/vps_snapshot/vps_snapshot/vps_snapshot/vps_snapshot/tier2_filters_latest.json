@@ -1,0 +1,19 @@
+{
+  "min_rvol": 1.54,
+  "max_dist_sma20": 5.3,
+  "min_consolidation_days": 10,
+  "min_adr": 2.5,
+  "min_dollar_volume": 3000000,
+  "require_sector_strength": true,
+  "sector_top_percentile": 0.4,
+  "analysis_metadata": {
+    "trades_analyzed": 368,
+    "winners": 191,
+    "losers": 177,
+    "original_win_rate": 51.902173913043484,
+    "rvol_winners_avg": 1.8409871274888203,
+    "rvol_losers_avg": 1.8601436365795674,
+    "dist_sma20_winners_avg": 3.1807102883205363,
+    "dist_sma20_losers_avg": 3.1210568559140306
+  }
+}

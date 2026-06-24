@@ -1,0 +1,29 @@
+[
+  {
+    "name": "S0_Baseline",
+    "total_return": -0.01776754818242509,
+    "sharpe": -0.11861303194219483,
+    "max_drawdown": -0.10999922284368893,
+    "trades": 1400,
+    "win_rate": 0.47368421052631576,
+    "profit_factor": 0.6301986497416131
+  },
+  {
+    "name": "S1_BinaryFilter",
+    "total_return": -0.0005814931385230739,
+    "sharpe": 0.03527631062615924,
+    "max_drawdown": -0.08589831165094564,
+    "trades": 1348,
+    "win_rate": 0.47368421052631576,
+    "profit_factor": 0.7061641858646487
+  },
+  {
+    "name": "S2_DynamicSizing",
+    "total_return": 0.001617239798051014,
+    "sharpe": 0.05513156049289709,
+    "max_drawdown": -0.07322335522860043,
+    "trades": 1348,
+    "win_rate": 0.4888888888888889,
+    "profit_factor": 0.8519660624456643
+  }
+]

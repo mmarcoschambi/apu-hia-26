@@ -1,0 +1,117 @@
+{
+  "date": "2024-06-17",
+  "source": "local_db",
+  "universe_size": 50,
+  "universe_sample": [
+    "AAPL",
+    "ADBE",
+    "ADP",
+    "AMAT",
+    "AMD",
+    "AMZN",
+    "AVGO",
+    "BKNG",
+    "CDNS",
+    "COST",
+    "CSCO",
+    "FTNT",
+    "INTC",
+    "INTU",
+    "KLAC",
+    "LRCX",
+    "MAR",
+    "MELI",
+    "META",
+    "MSFT"
+  ],
+  "regime": {
+    "spy_ok": true,
+    "vix_ok": true,
+    "pass": true
+  },
+  "signals": [
+    {
+      "combo": "A_BOTH_PRO",
+      "ticker": "GOOG",
+      "signal_date": "2024-06-17",
+      "entry_price": 177.65103149414062,
+      "stop_loss": 163.4389489746094,
+      "position_size": 70.0,
+      "source": "local_db"
+    },
+    {
+      "combo": "A_BOTH_PRO",
+      "ticker": "TSM",
+      "signal_date": "2024-06-17",
+      "entry_price": 173.68890380859375,
+      "stop_loss": 159.79379150390625,
+      "position_size": 71.0,
+      "source": "local_db"
+    },
+    {
+      "combo": "A_BOTH_PRO",
+      "ticker": "MU",
+      "signal_date": "2024-06-17",
+      "entry_price": 146.8619384765625,
+      "stop_loss": 135.1129833984375,
+      "position_size": 85.0,
+      "source": "local_db"
+    },
+    {
+      "combo": "A_BOTH_PRO",
+      "ticker": "CRWD",
+      "signal_date": "2024-06-17",
+      "entry_price": 390.42999267578125,
+      "stop_loss": 359.1955932617188,
+      "position_size": 32.0,
+      "source": "local_db"
+    },
+    {
+      "combo": "A_BOTH_PRO",
+      "ticker": "SMH",
+      "signal_date": "2024-06-17",
+      "entry_price": 270.4361572265625,
+      "stop_loss": 248.80126464843752,
+      "position_size": 46.0,
+      "source": "local_db"
+    },
+    {
+      "combo": "A_BOTH_PRO",
+      "ticker": "QCOM",
+      "signal_date": "2024-06-17",
+      "entry_price": 215.11181640625,
+      "stop_loss": 197.90287109375,
+      "position_size": 58.0,
+      "source": "local_db"
+    },
+    {
+      "combo": "A_BOTH_PRO",
+      "ticker": "NFLX",
+      "signal_date": "2024-06-17",
+      "entry_price": 67.58300018310547,
+      "stop_loss": 62.17636016845704,
+      "position_size": 184.0,
+      "source": "local_db"
+    },
+    {
+      "combo": "A_BOTH_PRO",
+      "ticker": "TMUS",
+      "signal_date": "2024-06-17",
+      "entry_price": 173.46217346191406,
+      "stop_loss": 159.58519958496095,
+      "position_size": 72.0,
+      "source": "local_db"
+    },
+    {
+      "combo": "A_BOTH_PRO",
+      "ticker": "AMAT",
+      "signal_date": "2024-06-17",
+      "entry_price": 239.43003845214844,
+      "stop_loss": 220.27563537597658,
+      "position_size": 52.0,
+      "source": "local_db"
+    }
+  ],
+  "signals_count": 9,
+  "generated_at": "2026-04-29T15:10:06.880030"
+}

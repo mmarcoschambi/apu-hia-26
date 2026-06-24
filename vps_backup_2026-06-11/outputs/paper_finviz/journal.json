@@ -1,0 +1,659 @@
+[
+  {
+    "date": "2026-04-18",
+    "universe_size": 400,
+    "regime_ok": true,
+    "signals": []
+  },
+  {
+    "date": "2026-04-21",
+    "universe_size": 400,
+    "regime_ok": true,
+    "signals": []
+  },
+  {
+    "date": "2024-06-17",
+    "universe_size": 400,
+    "regime_ok": true,
+    "signals": []
+  },
+  {
+    "date": "2026-03-13",
+    "universe_size": 400,
+    "regime_ok": true,
+    "signals": []
+  },
+  {
+    "date": "2026-04-29",
+    "universe_size": 600,
+    "regime_ok": true,
+    "signals": []
+  },
+  {
+    "date": "2026-04-30",
+    "universe_size": 600,
+    "regime_ok": true,
+    "signals": []
+  },
+  {
+    "date": "2026-05-01",
+    "universe_size": 596,
+    "regime_ok": true,
+    "signals": [
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "AMD",
+        "signal_date": "2026-05-01",
+        "entry_price": 354.489990234375,
+        "stop_loss": 319.78,
+        "position_size": 14,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "CARR",
+        "signal_date": "2026-05-01",
+        "entry_price": 67.16999816894531,
+        "stop_loss": 61.7,
+        "position_size": 91,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "CAT",
+        "signal_date": "2026-05-01",
+        "entry_price": 890.1099853515625,
+        "stop_loss": 838.68,
+        "position_size": 9,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "CTRA",
+        "signal_date": "2026-05-01",
+        "entry_price": 35.90999984741211,
+        "stop_loss": 33.67,
+        "position_size": 223,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "DVN",
+        "signal_date": "2026-05-01",
+        "entry_price": 51.369998931884766,
+        "stop_loss": 48.16,
+        "position_size": 155,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "EPD",
+        "signal_date": "2026-05-01",
+        "entry_price": 38.70000076293945,
+        "stop_loss": 37.43,
+        "position_size": 393,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "ET",
+        "signal_date": "2026-05-01",
+        "entry_price": 20.190000534057617,
+        "stop_loss": 19.5,
+        "position_size": 724,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "ETN",
+        "signal_date": "2026-05-01",
+        "entry_price": 433.010009765625,
+        "stop_loss": 408.29,
+        "position_size": 20,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "GOOG",
+        "signal_date": "2026-05-01",
+        "entry_price": 381.94000244140625,
+        "stop_loss": 362.93,
+        "position_size": 26,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "GOOGL",
+        "signal_date": "2026-05-01",
+        "entry_price": 384.79998779296875,
+        "stop_loss": 365.25,
+        "position_size": 25,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "HAL",
+        "signal_date": "2026-05-01",
+        "entry_price": 42.29999923706055,
+        "stop_loss": 39.71,
+        "position_size": 193,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "INDV",
+        "signal_date": "2026-05-01",
+        "entry_price": 36.779998779296875,
+        "stop_loss": 33.79,
+        "position_size": 167,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "IRM",
+        "signal_date": "2026-05-01",
+        "entry_price": 125.98999786376953,
+        "stop_loss": 118.73,
+        "position_size": 68,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "MO",
+        "signal_date": "2026-05-01",
+        "entry_price": 72.6500015258789,
+        "stop_loss": 69.39,
+        "position_size": 153,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "MPC",
+        "signal_date": "2026-05-01",
+        "entry_price": 248.2899932861328,
+        "stop_loss": 233.4,
+        "position_size": 33,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "NVO",
+        "signal_date": "2026-05-01",
+        "entry_price": 42.220001220703125,
+        "stop_loss": 39.5,
+        "position_size": 183,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "NXPI",
+        "signal_date": "2026-05-01",
+        "entry_price": 293.5899963378906,
+        "stop_loss": 269.19,
+        "position_size": 20,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "ORLY",
+        "signal_date": "2026-05-01",
+        "entry_price": 99.4000015258789,
+        "stop_loss": 95.08,
+        "position_size": 115,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "PWR",
+        "signal_date": "2026-05-01",
+        "entry_price": 727.77001953125,
+        "stop_loss": 684.0,
+        "position_size": 11,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "QCOM",
+        "signal_date": "2026-05-01",
+        "entry_price": 179.5800018310547,
+        "stop_loss": 164.58,
+        "position_size": 33,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "SU",
+        "signal_date": "2026-05-01",
+        "entry_price": 68.45999908447266,
+        "stop_loss": 65.38,
+        "position_size": 162,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "SWKS",
+        "signal_date": "2026-05-01",
+        "entry_price": 70.16999816894531,
+        "stop_loss": 65.5,
+        "position_size": 107,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "TROW",
+        "signal_date": "2026-05-01",
+        "entry_price": 102.87999725341797,
+        "stop_loss": 98.74,
+        "position_size": 120,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "TRP",
+        "signal_date": "2026-05-01",
+        "entry_price": 66.93000030517578,
+        "stop_loss": 64.04,
+        "position_size": 173,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "TXT",
+        "signal_date": "2026-05-01",
+        "entry_price": 95.95999908447266,
+        "stop_loss": 91.03,
+        "position_size": 101,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "UL",
+        "signal_date": "2026-05-01",
+        "entry_price": 58.97999954223633,
+        "stop_loss": 57.15,
+        "position_size": 273,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "WULF",
+        "signal_date": "2026-05-01",
+        "entry_price": 21.729999542236328,
+        "stop_loss": 19.12,
+        "position_size": 191,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      }
+    ]
+  },
+  {
+    "date": "2026-05-02",
+    "universe_size": 593,
+    "regime_ok": true,
+    "signals": [
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "AAPL",
+        "signal_date": "2026-05-02",
+        "entry_price": 280.1400146484375,
+        "stop_loss": 266.6,
+        "position_size": 36,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "AMD",
+        "signal_date": "2026-05-02",
+        "entry_price": 360.5400085449219,
+        "stop_loss": 324.65,
+        "position_size": 13,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "CL",
+        "signal_date": "2026-05-02",
+        "entry_price": 87.26000213623047,
+        "stop_loss": 83.55,
+        "position_size": 134,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "DDOG",
+        "signal_date": "2026-05-02",
+        "entry_price": 140.52999877929688,
+        "stop_loss": 127.06,
+        "position_size": 37,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "EL",
+        "signal_date": "2026-05-02",
+        "entry_price": 79.30000305175781,
+        "stop_loss": 73.49,
+        "position_size": 86,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "EMN",
+        "signal_date": "2026-05-02",
+        "entry_price": 77.52999877929688,
+        "stop_loss": 72.74,
+        "position_size": 104,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "FANG",
+        "signal_date": "2026-05-02",
+        "entry_price": 207.64999389648438,
+        "stop_loss": 195.54,
+        "position_size": 41,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "FSLR",
+        "signal_date": "2026-05-02",
+        "entry_price": 211.7100067138672,
+        "stop_loss": 192.5,
+        "position_size": 26,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "GOOG",
+        "signal_date": "2026-05-02",
+        "entry_price": 383.2200012207031,
+        "stop_loss": 363.87,
+        "position_size": 25,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "HIMX",
+        "signal_date": "2026-05-02",
+        "entry_price": 12.3100004196167,
+        "stop_loss": 10.83,
+        "position_size": 337,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "INTC",
+        "signal_date": "2026-05-02",
+        "entry_price": 99.62000274658203,
+        "stop_loss": 88.73,
+        "position_size": 45,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "IRM",
+        "signal_date": "2026-05-02",
+        "entry_price": 127.19000244140625,
+        "stop_loss": 119.97,
+        "position_size": 69,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "LNT",
+        "signal_date": "2026-05-02",
+        "entry_price": 74.05999755859375,
+        "stop_loss": 71.32,
+        "position_size": 182,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "LWLG",
+        "signal_date": "2026-05-02",
+        "entry_price": 16.270000457763672,
+        "stop_loss": 14.32,
+        "position_size": 256,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "MCHP",
+        "signal_date": "2026-05-02",
+        "entry_price": 93.94999694824219,
+        "stop_loss": 86.84,
+        "position_size": 70,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "MO",
+        "signal_date": "2026-05-02",
+        "entry_price": 74.55000305175781,
+        "stop_loss": 71.18,
+        "position_size": 148,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "MTCH",
+        "signal_date": "2026-05-02",
+        "entry_price": 38.66999816894531,
+        "stop_loss": 36.75,
+        "position_size": 260,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "MU",
+        "signal_date": "2026-05-02",
+        "entry_price": 542.2100219726562,
+        "stop_loss": 484.33,
+        "position_size": 8,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "NVO",
+        "signal_date": "2026-05-02",
+        "entry_price": 43.880001068115234,
+        "stop_loss": 41.05,
+        "position_size": 176,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "NXPI",
+        "signal_date": "2026-05-02",
+        "entry_price": 295.239990234375,
+        "stop_loss": 270.64,
+        "position_size": 20,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "ON",
+        "signal_date": "2026-05-02",
+        "entry_price": 103.02999877929688,
+        "stop_loss": 94.09,
+        "position_size": 55,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "PWR",
+        "signal_date": "2026-05-02",
+        "entry_price": 742.2100219726562,
+        "stop_loss": 696.87,
+        "position_size": 11,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "ROKU",
+        "signal_date": "2026-05-02",
+        "entry_price": 123.58000183105469,
+        "stop_loss": 113.48,
+        "position_size": 49,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "STX",
+        "signal_date": "2026-05-02",
+        "entry_price": 726.9299926757812,
+        "stop_loss": 649.93,
+        "position_size": 6,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "TEAM",
+        "signal_date": "2026-05-02",
+        "entry_price": 88.87999725341797,
+        "stop_loss": 78.21,
+        "position_size": 46,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "TROW",
+        "signal_date": "2026-05-02",
+        "entry_price": 103.41999816894531,
+        "stop_loss": 99.47,
+        "position_size": 126,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "TVTX",
+        "signal_date": "2026-05-02",
+        "entry_price": 44.119998931884766,
+        "stop_loss": 38.83,
+        "position_size": 94,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "TWLO",
+        "signal_date": "2026-05-02",
+        "entry_price": 183.33999633789062,
+        "stop_loss": 166.24,
+        "position_size": 29,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "UL",
+        "signal_date": "2026-05-02",
+        "entry_price": 59.7599983215332,
+        "stop_loss": 57.74,
+        "position_size": 247,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      },
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "VOD",
+        "signal_date": "2026-05-02",
+        "entry_price": 16.149999618530273,
+        "stop_loss": 15.54,
+        "position_size": 819,
+        "rs_mode": "spy_fallback",
+        "source": "finviz_setup"
+      }
+    ]
+  },
+  {
+    "date": "2026-05-04",
+    "universe_size": 589,
+    "regime_ok": true,
+    "signals": [
+      {
+        "combo": "combo_pure_momentum",
+        "ticker": "FERG",
+        "signal_date": "2026-02-12",
+        "entry_price": 263.15951010131835,
+        "stop_loss": 241.37217712402344,
+        "tp1_price": 290.393676322937,
+        "tp2_price": 328.5215090332031,
+        "position_size": 135.0,
+        "rs_mode": "spy_fallback",
+        "source": "backtest_trade"
+      }
+    ]
+  },
+  {
+    "date": "2026-05-05",
+    "universe_size": 581,
+    "regime_ok": true,
+    "signals": []
+  },
+  {
+    "date": "2026-05-06",
+    "universe_size": 588,
+    "regime_ok": true,
+    "signals": []
+  },
+  {
+    "date": "2026-05-07",
+    "universe_size": 588,
+    "regime_ok": true,
+    "signals": []
+  }
+]

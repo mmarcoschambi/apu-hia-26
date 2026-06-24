@@ -1,0 +1,94 @@
+{
+  "generated_at": "2026-04-27T01:59:04.930351",
+  "results": [
+    {
+      "mode": "A",
+      "folds": [
+        {
+          "fold": 0,
+          "mode": "A",
+          "is_start": "2020-01-01",
+          "oos_start": "2022-12-31",
+          "is_signals": 994,
+          "oos_signals": 1154,
+          "is_metrics": {
+            "trades": 125,
+            "wins": 65,
+            "losses": 60,
+            "win_rate": 0.52,
+            "total_pnl": 14212.31,
+            "profit_factor": 1.3457273007684072,
+            "sharpe": 1.386,
+            "max_drawdown": 0.8095,
+            "expectancy": 113.6985,
+            "avg_win": 851.09,
+            "avg_loss": 685.14,
+            "profit_factor_defined": true,
+            "sharpe_defined": "True",
+            "low_sample": false
+          },
+          "oos_metrics": {
+            "trades": 139,
+            "wins": 82,
+            "losses": 57,
+            "win_rate": 0.59,
+            "total_pnl": 44780.42,
+            "profit_factor": 1.9891789957607953,
+            "sharpe": 3.433,
+            "max_drawdown": 15.1048,
+            "expectancy": 322.1613,
+            "avg_win": 1098.18,
+            "avg_loss": 794.22,
+            "profit_factor_defined": true,
+            "sharpe_defined": "True",
+            "low_sample": false
+          },
+          "gate": {
+            "verdict": "PROMOTE"
+          },
+          "funnel": {
+            "is": {
+              "n_evaluations": 13012,
+              "n_min_data_fail": 448,
+              "n_screener_fail": 12018,
+              "n_tier2_fail": 0,
+              "n_passed": 994
+            },
+            "oos": {
+              "n_evaluations": 12014,
+              "n_min_data_fail": 0,
+              "n_screener_fail": 10860,
+              "n_tier2_fail": 0,
+              "n_passed": 1154
+            }
+          },
+          "universe": {
+            "n_tickers": 20,
+            "tickers": [
+              "SPY",
+              "TSLA",
+              "HTN",
+              "QQQ",
+              "AAPL",
+              "MSFT",
+              "AMZN",
+              "NVDA",
+              "IWM",
+              "META",
+              "ACL",
+              "AMD",
+              "GOOGL",
+              "NFLX",
+              "DHA",
+              "DHAI",
+              "GOOG",
+              "BABA",
+              "XOM",
+              "CRM"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

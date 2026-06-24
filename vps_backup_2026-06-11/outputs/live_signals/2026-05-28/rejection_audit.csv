@@ -1,0 +1,537 @@
+ticker,status,eligible,reason,price,breakout_level,live_rvol
+HST,ok,True,eligible,,,
+FE,ok,True,eligible,,,
+UMC,ok,True,eligible,,,
+FDX,ok,True,eligible,,,
+MDLZ,ok,True,eligible,,,
+EW,ok,True,eligible,,,
+EXC,ok,True,eligible,,,
+RGTI,ok,True,eligible,,,
+CPB,ok,True,eligible,,,
+KVUE,ok,True,eligible,,,
+GM,ok,True,eligible,,,
+RCL,ok,True,eligible,,,
+VST,ok,True,eligible,,,
+NVTS,ok,True,eligible,,,
+GXO,ok,True,eligible,,,
+NOW,ok,True,eligible,,,
+VSAT,ok,True,eligible,,,
+EVRG,ok,True,eligible,,,
+ELF,ok,True,eligible,,,
+JHX,ok,True,eligible,,,
+WEC,ok,True,eligible,,,
+EXEL,ok,True,eligible,,,
+MRVL,ok,True,eligible,,,
+WERN,ok,True,eligible,,,
+PK,ok,True,eligible,,,
+NKE,ok,True,eligible,,,
+IRT,ok,True,eligible,,,
+LQDA,ok,True,eligible,,,
+LUNR,ok,True,eligible,,,
+COF,ok,True,eligible,,,
+HPQ,ok,True,eligible,,,
+GS,ok,True,eligible,,,
+HD,ok,True,eligible,,,
+IREN,ok,True,eligible,,,
+PL,ok,True,eligible,,,
+PSO,ok,True,eligible,,,
+MXL,ok,True,eligible,,,
+ASX,ok,True,eligible,,,
+SWKS,ok,True,eligible,,,
+INOD,ok,True,eligible,,,
+JOBY,ok,True,eligible,,,
+FITB,ok,True,eligible,,,
+XPEV,ok,True,eligible,,,
+GFS,ok,True,eligible,,,
+LION,ok,True,eligible,,,
+RF,ok,True,eligible,,,
+TIGO,ok,True,eligible,,,
+ECL,ok,True,eligible,,,
+LEVI,ok,True,eligible,,,
+CELH,ok,True,eligible,,,
+NCLH,ok,True,eligible,,,
+WULF,ok,True,eligible,,,
+QGEN,ok,True,eligible,,,
+VIK,ok,True,eligible,,,
+CCI,ok,True,eligible,,,
+GPK,ok,True,eligible,,,
+WBD,ok,True,eligible,,,
+DKNG,warn,True,rvol_1.0_default,,,
+ACMR,ok,True,eligible,,,
+SOLV,ok,True,eligible,,,
+STLD,ok,True,eligible,,,
+CIFR,ok,True,eligible,,,
+MTSI,ok,True,eligible,,,
+RPRX,ok,True,eligible,,,
+CSCO,ok,True,eligible,,,
+ESTC,ok,True,eligible,,,
+TWST,ok,True,eligible,,,
+FND,ok,True,eligible,,,
+MCHP,ok,True,eligible,,,
+GSAT,ok,True,eligible,,,
+USAR,ok,True,eligible,,,
+BCE,ok,True,eligible,,,
+VSCO,ok,True,eligible,,,
+NTAP,ok,True,eligible,,,
+CDNS,ok,True,eligible,,,
+HLT,ok,True,eligible,,,
+CPRX,ok,True,eligible,,,
+META,ok,True,eligible,,,
+W,ok,True,eligible,,,
+QCOM,ok,True,eligible,,,
+TJX,ok,True,eligible,,,
+SOFI,ok,True,eligible,,,
+IRDM,ok,True,eligible,,,
+BANC,ok,True,eligible,,,
+MLYS,ok,True,eligible,,,
+SN,ok,True,eligible,,,
+DAL,ok,True,eligible,,,
+LNT,ok,True,eligible,,,
+WMG,ok,True,eligible,,,
+ES,ok,True,eligible,,,
+DRH,ok,True,eligible,,,
+FBIN,ok,True,eligible,,,
+APP,ok,True,eligible,,,
+AFRM,ok,True,eligible,,,
+NWSA,ok,True,eligible,,,
+NOK,ok,True,eligible,,,
+UPS,ok,True,eligible,,,
+CHKP,ok,True,eligible,,,
+ADI,ok,True,eligible,,,
+RBRK,ok,True,eligible,,,
+TXN,ok,True,eligible,,,
+HRL,ok,True,eligible,,,
+PANW,ok,True,eligible,,,
+LINE,ok,True,eligible,,,
+AMKR,ok,True,eligible,,,
+AEE,ok,True,eligible,,,
+ROST,ok,True,eligible,,,
+MU,ok,True,eligible,,,
+SNPS,ok,True,eligible,,,
+COLD,ok,True,eligible,,,
+WSM,ok,True,eligible,,,
+HR,ok,True,eligible,,,
+CRWD,ok,True,eligible,,,
+HOOD,ok,True,eligible,,,
+CNP,ok,True,eligible,,,
+EQR,ok,True,eligible,,,
+CALY,ok,True,eligible,,,
+SMTC,ok,True,eligible,,,
+KNX,ok,True,eligible,,,
+BAX,ok,True,eligible,,,
+HPE,ok,True,eligible,,,
+RKLB,warn,True,rvol_1.0_default,,,
+DFTX,ok,True,eligible,,,
+TXRH,ok,True,eligible,,,
+STM,ok,True,eligible,,,
+CPT,ok,True,eligible,,,
+DELL,ok,True,eligible,,,
+ETN,ok,True,eligible,,,
+CGNX,ok,True,eligible,,,
+RYAAY,ok,True,eligible,,,
+TVTX,ok,True,eligible,,,
+RMBS,ok,True,eligible,,,
+PFE,ok,True,eligible,,,
+SMCI,ok,True,eligible,,,
+ZETA,ok,True,eligible,,,
+NTRS,ok,True,eligible,,,
+TSM,ok,True,eligible,,,
+CRSP,ok,True,eligible,,,
+FTNT,ok,True,eligible,,,
+ELAN,ok,True,eligible,,,
+CORZ,ok,True,eligible,,,
+NTRA,ok,True,eligible,,,
+BTDR,ok,True,eligible,,,
+HIW,ok,True,eligible,,,
+SLB,ok,True,eligible,,,
+SW,ok,True,eligible,,,
+NTNX,ok,True,eligible,,,
+MAR,ok,True,eligible,,,
+WING,ok,True,eligible,,,
+PSN,ok,True,eligible,,,
+BRZE,ok,True,eligible,,,
+UAL,ok,True,eligible,,,
+TTMI,ok,True,eligible,,,
+WPC,warn,True,rvol_1.0_default,,,
+BDX,ok,True,eligible,,,
+GH,ok,True,eligible,,,
+SNOW,ok,True,eligible,,,
+VRTX,ok,True,eligible,,,
+BBY,ok,True,eligible,,,
+IBM,ok,True,eligible,,,
+CTAS,ok,True,eligible,,,
+ALAB,ok,True,eligible,,,
+COHU,ok,True,eligible,,,
+CDW,ok,True,eligible,,,
+GEN,ok,True,eligible,,,
+KMB,ok,True,eligible,,,
+NNN,ok,True,eligible,,,
+APTV,ok,True,eligible,,,
+P,ok,True,eligible,,,
+VSH,ok,True,eligible,,,
+LSCC,ok,True,eligible,,,
+D,ok,True,eligible,,,
+CAT,ok,True,eligible,,,
+IONQ,ok,True,eligible,,,
+NUE,ok,True,eligible,,,
+FAST,ok,True,eligible,,,
+PTCT,ok,True,eligible,,,
+TER,ok,True,eligible,,,
+ENPH,ok,True,eligible,,,
+PENG,ok,True,eligible,,,
+CLX,ok,True,eligible,,,
+CLSK,ok,True,eligible,,,
+SYK,ok,True,eligible,,,
+AXTA,ok,True,eligible,,,
+GPN,ok,True,eligible,,,
+PPG,ok,True,eligible,,,
+NXPI,ok,True,eligible,,,
+MT,ok,True,eligible,,,
+PM,ok,True,eligible,,,
+MOD,ok,True,eligible,,,
+PRIM,ok,True,eligible,,,
+MPLX,ok,True,eligible,,,
+F,ok,True,eligible,,,
+BROS,ok,True,eligible,,,
+AZN,ok,True,eligible,,,
+HBM,ok,True,eligible,,,
+TXG,ok,True,eligible,,,
+MOS,ok,True,eligible,,,
+AMT,ok,True,eligible,,,
+AEHR,ok,True,eligible,,,
+COLB,ok,True,eligible,,,
+PATH,ok,True,eligible,,,
+ASTS,ok,True,eligible,,,
+BLDR,ok,True,eligible,,,
+ARM,ok,True,eligible,,,
+MGM,ok,True,eligible,,,
+KDP,warn,True,rvol_1.0_default,,,
+AAPL,ok,True,eligible,,,
+MS,ok,True,eligible,,,
+UDR,ok,True,eligible,,,
+DXCM,ok,True,eligible,,,
+FUN,ok,True,eligible,,,
+WYNN,ok,True,eligible,,,
+WTTR,ok,True,eligible,,,
+PHM,ok,True,eligible,,,
+CTSH,ok,True,eligible,,,
+CP,ok,True,eligible,,,
+HSBC,ok,True,eligible,,,
+CCL,ok,True,eligible,,,
+APH,ok,True,eligible,,,
+MNST,ok,True,eligible,,,
+PG,ok,True,eligible,,,
+KMX,ok,True,eligible,,,
+INVH,ok,True,eligible,,,
+ALGM,ok,True,eligible,,,
+NWS,ok,True,eligible,,,
+BRKR,ok,True,eligible,,,
+GTX,ok,True,eligible,,,
+BTU,ok,True,eligible,,,
+ADM,ok,True,eligible,,,
+ERIC,ok,True,eligible,,,
+LULU,ok,True,eligible,,,
+FSLR,ok,True,eligible,,,
+UNP,ok,True,eligible,,,
+LUV,ok,True,eligible,,,
+RUN,ok,True,eligible,,,
+QBTS,ok,True,eligible,,,
+IFF,ok,True,eligible,,,
+PHG,ok,True,eligible,,,
+PRMB,ok,True,eligible,,,
+MNDY,ok,True,eligible,,,
+ON,ok,True,eligible,,,
+EL,ok,True,eligible,,,
+HSY,ok,True,eligible,,,
+XEL,ok,True,eligible,,,
+CMBT,ok,True,eligible,,,
+DLTR,ok,True,eligible,,,
+CZR,ok,True,eligible,,,
+RIOT,ok,True,eligible,,,
+APLD,ok,True,eligible,,,
+DB,ok,True,eligible,,,
+ED,ok,True,eligible,,,
+HSIC,ok,True,eligible,,,
+PAA,ok,True,eligible,,,
+SBLK,ok,True,eligible,,,
+XYZ,ok,True,eligible,,,
+HON,ok,True,eligible,,,
+AMZN,ok,True,eligible,,,
+TGT,warn,True,rvol_1.0_default,,,
+LRCX,ok,True,eligible,,,
+BKNG,ok,True,eligible,,,
+DECK,ok,True,eligible,,,
+NVT,ok,True,eligible,,,
+A,ok,True,eligible,,,
+STX,ok,True,eligible,,,
+FLEX,ok,True,eligible,,,
+SGI,ok,True,eligible,,,
+SYM,ok,True,eligible,,,
+WMG,ok,False,rvol<1.50,,35.23,1.05
+PHM,ok,False,rvol<1.50,,129.43,0.99
+WBD,ok,False,rvol<1.50,,27.44,1.26
+BTU,ok,False,rvol<1.50,,27.65,0.98
+TER,ok,False,rvol<1.50,,396.19,0.74
+DXCM,ok,False,rvol<1.50,,73.1,0.81
+INOD,ok,False,rvol<1.50,,114.77,0.52
+DAL,existing,False,already_sent,,,
+CSCO,ok,False,rvol<1.50,,120.79,0.8
+TVTX,ok,False,rvol<1.50,,48.61,1.23
+LION,ok,False,rvol<1.50,,15.01,0.91
+HLT,ok,False,rvol<1.50,,336.64,1.48
+BRZE,ok,False,not_promoted,,25.7,1.8
+SNPS,ok,False,not_promoted,,539.48,1.54
+LUV,ok,False,rvol<1.50,,42.91,1.22
+VSCO,ok,False,rvol<1.50,,55.97,1.34
+GFS,ok,False,not_promoted,,92.55,3.31
+SN,ok,False,rvol<1.50,,121.28,0.84
+EXC,ok,False,rvol<1.50,,47.68,0.87
+CDNS,ok,False,rvol<1.50,,383.24,1.11
+UPS,ok,False,rvol<1.50,,108.02,0.99
+RYAAY,ok,False,rvol<1.50,,61.81,1.14
+KMB,ok,False,rvol<1.50,,100.49,1.16
+AMZN,ok,False,rvol<1.50,,278.56,0.92
+BKNG,ok,False,rvol<1.50,,178.94,1.26
+IBM,ok,False,rvol<1.50,,264.38,1.18
+TJX,ok,False,rvol<1.50,,160.59,0.94
+NTNX,existing,False,already_sent,,,
+GSAT,ok,False,rvol<1.50,,84.22,1.27
+PM,ok,False,rvol<1.50,,193.05,0.97
+BRKR,ok,False,rvol<1.50,,47.3,1.02
+BCE,ok,False,rvol<1.50,,24.97,1.18
+BAX,ok,False,rvol<1.50,,19.67,1.04
+GPN,ok,False,rvol<1.50,,74.2,0.97
+UDR,ok,False,rvol<1.50,,38.41,0.8
+MAR,ok,False,rvol<1.50,,374.57,1.19
+SMCI,ok,False,rvol<1.50,,37.91,0.9
+MU,ok,False,rvol<1.50,,916.8,1.33
+HST,ok,False,rvol<1.50,,23.17,0.93
+LRCX,ok,False,rvol<1.50,,323.98,0.96
+ESTC,ok,False,rvol<1.50,,56.3,1.14
+TIGO,ok,False,rvol<1.50,,87.05,1.2
+UMC,existing,False,already_sent,,,
+AXTA,existing,False,already_sent,,,
+KVUE,ok,False,rvol<1.50,,17.68,1.25
+RKLB,warn,False,missing_avg_volume_20d,,,
+VST,ok,False,rvol<1.50,,168.39,0.82
+QGEN,ok,False,rvol<1.50,,35.58,0.95
+TWST,ok,False,rvol<1.50,,65.6,0.84
+DRH,ok,False,rvol<1.50,,11.09,1.19
+LULU,ok,False,not_promoted,,148.67,1.5
+FTNT,ok,False,rvol<1.50,,134.91,1.08
+ASX,ok,False,rvol<1.50,,39.57,1.38
+IONQ,ok,False,rvol<1.50,,65.8,0.85
+CCL,ok,False,rvol<1.50,,27.88,1.02
+FUN,ok,False,not_promoted,,23.81,1.84
+MCHP,ok,False,rvol<1.50,,105.38,1.1
+ELAN,ok,False,rvol<1.50,,26.29,1.13
+TGT,warn,False,missing_avg_volume_20d,,,
+FE,ok,False,rvol<1.50,,49.46,0.87
+AEHR,ok,False,price<111.5700; rvol<1.50,100.33000183105469,111.57,1.04
+MRVL,ok,False,price<217.4500,205.08999633789062,217.45,2.1
+MXL,ok,False,price<106.2800; rvol<1.50,97.93000030517578,106.28,0.73
+HPE,ok,False,rvol<1.50,,38.58,1.07
+GXO,ok,False,rvol<1.50,,57.52,1.16
+SOFI,ok,False,price<18.8700; rvol<1.50,16.975000381469727,18.87,0.94
+ROST,ok,False,price<236.2900; rvol<1.50,227.3300018310547,236.29,0.97
+GEN,ok,False,price<25.2500; rvol<1.50,24.579999923706055,25.25,0.87
+FND,ok,False,rvol<1.50,,52.8,0.87
+AZN,ok,False,rvol<1.50,,191.5,1.07
+SMTC,existing,False,already_sent,,,
+LNT,ok,False,price<75.7600; rvol<1.50,72.16500091552734,75.76,0.8
+META,ok,False,price<678.1800; rvol<1.50,635.489990234375,678.18,1.37
+SYK,ok,False,rvol<1.50,,332.27,1.17
+BLDR,ok,False,rvol<1.50,,90.82,0.85
+LINE,existing,False,already_sent,,,
+PFE,ok,False,rvol<1.50,,27.13,1.1
+STM,ok,False,rvol<1.50,,71.07,1.12
+ARM,ok,False,rvol<1.50,335.1700134277344,325.0,0.8
+WTTR,ok,False,rvol<1.50,,20.48,0.91
+GTX,ok,False,price<34.3400; rvol<1.50,33.349998474121094,34.34,0.88
+NTRA,ok,False,price<221.5600; rvol<1.50,213.75999450683594,221.56,0.75
+IREN,existing,False,already_sent,,,
+CELH,ok,False,price<35.7500; rvol<1.50,33.23500061035156,35.75,1.07
+MDLZ,ok,False,price<62.5900; rvol<1.50,62.38999938964844,62.59,1.23
+TSM,ok,False,rvol<1.50,,421.97,1.12
+MNDY,ok,False,price<88.4800; rvol<1.50,77.45999908447266,88.48,0.83
+ED,ok,False,rvol<1.50,,111.5,1.29
+FAST,ok,False,price<45.6400; rvol<1.50,44.73500061035156,45.64,1.14
+RCL,ok,False,rvol<1.50,,288.86,1.04
+HR,ok,False,rvol<1.50,,20.6,1.03
+EXEL,ok,False,price<51.6300; rvol<1.50,51.44499969482422,51.63,0.86
+AAPL,ok,False,rvol<1.50,312.489990234375,311.82,1.02
+ON,ok,False,price<129.1300; rvol<1.50,123.87999725341797,129.13,1.03
+FDX,ok,False,rvol<1.50,,404.03,1.14
+ALGM,ok,False,price<51.4000; rvol<1.50,51.04999923706055,51.4,0.71
+HSY,ok,False,rvol<1.50,,196.08,0.98
+PL,existing,False,already_sent,,,
+PTCT,ok,False,price<79.9100; rvol<1.50,71.01499938964844,79.91,1.08
+JOBY,ok,False,rvol<1.50,12.3149995803833,11.79,0.89
+STX,ok,False,rvol<1.50,881.1699829101562,862.65,0.8
+CRSP,ok,False,rvol<1.50,56.3849983215332,56.16,1.12
+MNST,ok,False,price<88.7700; rvol<1.50,88.0,88.77,1.03
+NKE,ok,False,rvol<1.50,47.404998779296875,45.71,1.18
+PATH,ok,False,rvol<1.50,11.609999656677246,11.4,1.2
+APTV,ok,False,rvol<1.50,63.665000915527344,61.03,0.95
+WULF,ok,False,rvol<1.50,26.3799991607666,25.93,1.25
+CLX,ok,False,price<98.1700; rvol<1.50,96.18000030517578,98.17,0.67
+ADM,ok,False,price<82.5600; rvol<1.50,79.94999694824219,82.56,0.92
+PAA,ok,False,price<24.2600; rvol<1.50,22.825000762939453,24.26,1.04
+KNX,ok,False,rvol<1.50,75.1050033569336,73.36,0.78
+SYM,ok,False,price<62.8300; rvol<1.50,48.84000015258789,62.83,0.86
+LQDA,ok,False,price<62.3000; rvol<1.50,62.01499938964844,62.3,0.79
+MGM,existing,False,already_sent,,,
+TXRH,ok,False,price<185.1000; rvol<1.50,180.3000030517578,185.1,0.79
+ASTS,existing,False,already_sent,,,
+FSLR,ok,False,rvol<1.50,303.42999267578125,276.4,0.74
+EQR,ok,False,price<66.9500; rvol<1.50,66.31500244140625,66.95,1.12
+COHU,existing,False,already_sent,,,
+APLD,ok,False,rvol<1.50,49.64500045776367,48.85,1.11
+CPB,ok,False,price<21.4700; rvol<1.50,20.795000076293945,21.47,1.18
+RBRK,ok,False,rvol<1.50,70.30000305175781,69.53,1.24
+RGTI,ok,False,price<27.7800; rvol<1.50,27.059999465942383,27.78,1.18
+IRDM,ok,False,price<51.6400; rvol<1.50,51.2599983215332,51.64,1.14
+CCI,ok,False,price<93.7900; rvol<1.50,91.20500183105469,93.79,0.88
+VRTX,ok,False,price<456.6800; rvol<1.50,447.8599853515625,456.68,0.92
+STLD,ok,False,rvol<1.50,260.7099914550781,250.68,1.28
+AEE,ok,False,price<115.5900; rvol<1.50,108.93000030517578,115.59,0.82
+PHG,ok,False,price<27.2800; rvol<1.50,26.459999084472656,27.28,0.73
+GPK,ok,False,rvol<1.50,11.510000228881836,11.38,0.88
+PPG,ok,False,price<113.1200; rvol<1.50,112.87000274658203,113.12,1.24
+NWSA,ok,False,price<27.7300; rvol<1.50,26.510000228881836,27.73,1.01
+BTDR,existing,False,already_sent,,,
+IFF,ok,False,rvol<1.50,,83.89,1.28
+NOW,ok,False,rvol<1.50,,110.83,1.03
+HOOD,ok,False,rvol<1.50,,83.14,1.01
+HD,ok,False,rvol<1.50,,335.93,1.12
+ENPH,ok,False,rvol<1.50,,68.9,1.11
+WYNN,ok,False,rvol<1.50,,108.71,1.12
+RMBS,ok,False,rvol<1.50,,158.75,1.09
+ETN,ok,False,rvol<1.50,,434.23,0.95
+HBM,ok,False,rvol<1.50,,28.42,1.3
+CHKP,ok,False,rvol<1.50,,141.46,0.63
+SLB,ok,False,rvol<1.50,,58.82,1.38
+BDX,ok,False,rvol<1.50,,155.28,0.86
+LUNR,existing,False,already_sent,,,
+DKNG,warn,False,missing_avg_volume_20d,,,
+LSCC,ok,False,rvol<1.50,,150.87,0.71
+NXPI,ok,False,rvol<1.50,,334.9,0.88
+HSIC,ok,False,rvol<1.50,,77.56,1.01
+EL,ok,False,rvol<1.50,,90.57,1.1
+CIFR,ok,False,rvol<1.50,,24.65,1.29
+XPEV,ok,False,rvol<1.50,,16.88,1.37
+APP,existing,False,already_sent,,,
+APH,ok,False,rvol<1.50,,154.92,0.83
+DECK,ok,False,rvol<1.50,,111.49,1.07
+SW,ok,False,rvol<1.50,,42.22,1.1
+FLEX,ok,False,price<147.3400; rvol<1.50,144.8800048828125,147.34,0.78
+CAT,ok,False,rvol<1.50,,931.35,0.94
+PRMB,ok,False,rvol<1.50,,24.17,1.25
+BBY,existing,False,already_sent,,,
+WERN,ok,False,rvol<1.50,41.51499938964844,41.16,0.79
+DLTR,existing,False,already_sent,,,
+F,ok,False,rvol<1.50,,15.55,1.17
+NTRS,ok,False,price<170.2400; rvol<1.50,168.33999633789062,170.24,1.03
+INVH,ok,False,rvol<1.50,,29.54,1.18
+NWS,ok,False,price<31.9200; rvol<1.50,30.34000015258789,31.92,1.15
+COF,ok,False,rvol<1.50,,195.16,1.09
+QCOM,ok,False,price<258.0000; rvol<1.50,243.22000122070312,258.0,0.81
+CPRX,ok,False,price<31.3600; rvol<1.50,31.299999237060547,31.36,1.16
+A,ok,False,rvol<1.50,,120.28,1.29
+ADI,ok,False,price<435.7200; rvol<1.50,419.05999755859375,435.72,0.94
+WSM,ok,False,rvol<1.50,,199.55,0.92
+AMKR,ok,False,price<78.9600; rvol<1.50,70.58999633789062,78.96,1.02
+MOS,ok,False,rvol<1.50,,23.63,1.1
+NCLH,ok,False,rvol<1.50,,19.12,1.15
+P,ok,False,not_promoted,,93.92,1.69
+VIK,existing,False,already_sent,,,
+NVTS,ok,False,price<33.8200; rvol<1.50,28.475000381469727,33.82,0.96
+PG,ok,False,rvol<1.50,,151.19,1.25
+ALAB,ok,False,rvol<1.50,349.0799865722656,321.99,0.81
+SOLV,ok,False,not_promoted,,77.5,1.58
+COLB,ok,False,price<30.4600; rvol<1.50,29.649999618530273,30.46,1.19
+QBTS,ok,False,rvol<1.50,,31.55,0.87
+CGNX,ok,False,price<71.8000; rvol<1.50,66.0199966430664,71.8,0.86
+CPT,ok,False,rvol<1.50,,108.48,1.02
+PENG,ok,False,price<55.6500; rvol<1.50,54.025001525878906,55.65,0.6
+RIOT,ok,False,rvol<1.50,27.729999542236328,26.3,0.89
+VSH,ok,False,rvol<1.50,,50.74,0.96
+PANW,ok,False,price<261.4100; rvol<1.50,257.6700134277344,261.41,1.05
+USAR,ok,False,price<28.6900; rvol<1.50,28.170000076293945,28.69,0.79
+AFRM,ok,False,rvol<1.50,72.98999786376953,71.29,1.07
+MOD,ok,False,not_promoted,,323.25,2.05
+HON,ok,False,price<235.9200; rvol<1.50,232.97000122070312,235.92,1.07
+HSBC,ok,False,rvol<1.50,,94.33,1.09
+UAL,existing,False,already_sent,,,
+TTMI,ok,False,price<200.6800,187.6699981689453,200.68,1.87
+MTSI,ok,False,price<413.7500; rvol<1.50,390.6400146484375,413.75,0.79
+NOK,ok,False,rvol<1.50,,16.63,1.02
+NUE,ok,False,rvol<1.50,,240.43,1.03
+ZETA,ok,False,rvol<1.50,,19.88,0.96
+W,ok,False,rvol<1.50,,76.49,0.91
+HRL,ok,False,rvol<1.50,,21.96,1.41
+VSAT,existing,False,already_sent,,,
+DELL,ok,False,rvol<1.50,,308.64,1.18
+CTAS,ok,False,price<176.3800; rvol<1.50,173.1199951171875,176.38,1.4
+RF,ok,False,rvol<1.50,,28.73,1.23
+GH,ok,False,rvol<1.50,133.125,121.01,1.48
+D,ok,False,rvol<1.50,,68.97,0.86
+EW,ok,False,not_promoted,,87.93,1.55
+RPRX,ok,False,price<54.7400; rvol<1.50,54.470001220703125,54.74,0.86
+ELF,ok,False,rvol<1.50,,64.47,1.23
+BANC,ok,False,rvol<1.50,,19.59,1.43
+HIW,ok,False,rvol<1.50,,26.4,0.9
+SBLK,ok,False,price<28.2800,27.190000534057617,28.28,1.57
+SNOW,existing,False,already_sent,,,
+HPQ,existing,False,already_sent,,,
+ACMR,ok,False,rvol<1.50,93.05000305175781,86.5,1.28
+ES,ok,False,price<70.9200; rvol<1.50,69.08000183105469,70.92,0.86
+MS,ok,False,rvol<1.50,,203.92,1.26
+MPLX,ok,False,price<57.1500; rvol<1.50,55.47999954223633,57.15,0.76
+CORZ,ok,False,rvol<1.50,27.7549991607666,26.83,1.02
+PK,ok,False,rvol<1.50,12.180000305175781,12.02,0.85
+NVT,ok,False,price<175.0000; rvol<1.50,164.9600067138672,175.0,0.94
+GM,ok,False,rvol<1.50,84.33999633789062,80.17,1.47
+CDW,ok,False,price<137.9900; rvol<1.50,116.30999755859375,137.99,0.77
+JHX,existing,False,already_sent,,,
+TXG,ok,False,rvol<1.50,27.979999542236328,25.23,1.24
+WEC,ok,False,price<118.2000; rvol<1.50,111.68000030517578,118.2,0.84
+CLSK,ok,False,rvol<1.50,18.1299991607666,17.48,1.19
+COLD,ok,False,rvol<1.50,15.805000305175781,15.2,1.07
+SGI,ok,False,price<79.8900; rvol<1.50,71.36000061035156,79.89,1.45
+AMT,ok,False,price<186.9900; rvol<1.50,186.69000244140625,186.99,0.95
+IRT,ok,False,price<16.9400; rvol<1.50,16.43000030517578,16.94,1.33
+ECL,ok,False,price<269.1400,260.2200012207031,269.14,1.56
+RUN,ok,False,rvol<1.50,15.885000228881836,15.79,1.03
+TXN,ok,False,price<326.4200; rvol<1.50,315.9949951171875,326.42,0.91
+CMBT,ok,False,price<17.7200; rvol<1.50,15.529999732971191,17.72,1.06
+PRIM,ok,False,price<205.5000; rvol<1.50,126.54000091552734,205.5,0.91
+WPC,warn,False,missing_avg_volume_20d,,,
+CTSH,ok,False,price<55.8400; rvol<1.50,53.8849983215332,55.84,1.13
+LEVI,ok,False,rvol<1.50,23.719999313354492,23.41,0.91
+UNP,ok,False,price<276.4000; rvol<1.50,266.989990234375,276.4,1.47
+FITB,ok,False,price<51.2500; rvol<1.50,49.880001068115234,51.25,1.45
+PSO,ok,False,price<15.4800; rvol<1.50,15.015000343322754,15.48,1.03
+PSN,ok,False,rvol<1.50,58.810001373291016,56.87,1.13
+MLYS,ok,False,rvol<1.50,31.510000228881836,30.86,0.98
+FBIN,ok,False,price<42.0600; rvol<1.50,39.400001525878906,42.06,0.85
+NNN,ok,False,price<45.4800; rvol<1.50,44.85499954223633,45.48,0.74
+CZR,ok,False,rvol<1.50,29.059999465942383,28.72,1.08
+ERIC,ok,False,price<13.7300; rvol<1.50,12.744999885559082,13.73,1.17
+SWKS,ok,False,price<84.7900; rvol<1.50,81.41999816894531,84.79,0.95
+CNP,ok,False,price<43.8200; rvol<1.50,42.220001220703125,43.82,1.12
+XYZ,ok,False,price<77.1600; rvol<1.50,74.37000274658203,77.16,1.05
+MT,ok,False,rvol<1.50,69.5199966430664,68.61,0.82
+DFTX,ok,False,price<23.5200; rvol<1.50,23.489999771118164,23.52,1.21
+KMX,existing,False,already_sent,,,
+CRWD,ok,False,price<677.5000; rvol<1.50,671.0,677.5,1.06
+EVRG,ok,False,price<84.4900; rvol<1.50,82.83000183105469,84.49,0.86
+CALY,ok,False,price<18.0000; rvol<1.50,15.739999771118164,18.0,1.13
+BROS,ok,False,price<59.7400; rvol<1.50,56.599998474121094,59.74,0.83
+DB,ok,False,price<33.9400; rvol<1.50,33.10900115966797,33.94,1.15
+CP,ok,False,rvol<1.50,90.58999633789062,89.15,1.41
+GS,ok,False,price<1016.5400; rvol<1.50,1008.1950073242188,1016.54,1.11
+XEL,ok,False,price<83.8500; rvol<1.50,79.2300033569336,83.85,0.89
+WING,ok,False,price<178.6500; rvol<1.50,157.61000061035156,178.65,1.09
+KDP,warn,False,missing_avg_volume_20d,,,
+NTAP,existing,False,already_sent,,,

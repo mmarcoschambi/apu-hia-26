@@ -1,0 +1,40 @@
+{
+  "study_name": "smoke_v3",
+  "generated_at": "2026-04-10T13:51:18.145964",
+  "top_trial_id": 15,
+  "top_sharpe": 2.216,
+  "bootstrap_ci": {
+    "mean": 1.4756179772406692,
+    "std": 0.1359816251997391,
+    "ci_lower": 1.2056899538418702,
+    "ci_upper": 1.7396027272505201,
+    "median": 1.4808373925080565
+  },
+  "deflated_sharpe": {
+    "deflated_sharpe": 1.675,
+    "adjustment_factor": 0.541,
+    "lcl": 1.055,
+    "n_trials": 14,
+    "n_params": 6
+  },
+  "pbo_proxy": {
+    "pbo_score": 0.256,
+    "interpretation": "MODERATE_OVERFITTING_RISK",
+    "top_sharpe": 2.216,
+    "mean_sharpe": 1.472,
+    "std_sharpe": 0.519,
+    "z_score": 1.44
+  },
+  "overfitting_metrics": {
+    "n_trials": 14,
+    "n_valid_sharpes": 14,
+    "top_sharpe": 2.216,
+    "mean_sharpe": 1.472,
+    "median_sharpe": 1.425,
+    "std_sharpe": 0.519,
+    "avg_non_top_sharpe": 1.415,
+    "decay_from_top_pct": 36.2,
+    "top_pf": 6.38,
+    "avg_trades": 37.0
+  }
+}

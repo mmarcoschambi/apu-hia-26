@@ -1,0 +1,20 @@
+{
+  "parameters": {
+    "start": null,
+    "end": null,
+    "last_n": 3
+  },
+  "global_metrics": {
+    "days_scanned": 3,
+    "files_found": 3,
+    "files_used": 1,
+    "skipped_legacy_format": 0,
+    "counterfactual_candidates_total": 0,
+    "blocked_by_sector_total": 0,
+    "blocked_by_sector_pct": 0.0,
+    "passed_with_sector_total": 0,
+    "net_signal_reduction": 0
+  },
+  "top_blocked_sectors": {},
+  "timestamp": "2026-05-03T22:35:14.745157"
+}

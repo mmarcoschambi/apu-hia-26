@@ -1,0 +1,20 @@
+{
+  "run_at": "2026-05-02T20:16:32.590079",
+  "journal_used": "outputs/paper_finviz/journal.json",
+  "total_signals": 57,
+  "mapped_signals": 57,
+  "results": {
+    "sector_ok": {
+      "trades": 51,
+      "PF": 1.027,
+      "Sharpe": 0.136,
+      "win_rate": 35.3
+    },
+    "sector_no_ok": {
+      "trades": 6,
+      "PF": 99.9,
+      "Sharpe": 13.381,
+      "win_rate": 50.0
+    }
+  }
+}

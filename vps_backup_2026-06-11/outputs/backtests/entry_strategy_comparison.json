@@ -1,0 +1,25 @@
+{
+  "immediate": {
+    "total_trades": 6,
+    "winners": 3,
+    "losers": 3,
+    "win_rate": 50.0,
+    "total_pnl": 1530.7264341016398,
+    "avg_win": 1360.4068320143888,
+    "avg_loss": -850.1646873138421,
+    "final_equity": 101530.72643410164,
+    "return_pct": 1.5307264341016398
+  },
+  "green_candle": {
+    "total_trades": 3,
+    "winners": 2,
+    "losers": 1,
+    "win_rate": 66.66666666666666,
+    "total_pnl": 38785.74056413547,
+    "avg_win": 19508.87003792711,
+    "avg_loss": -231.99951171875,
+    "final_equity": 138785.74056413549,
+    "return_pct": 38.78574056413547,
+    "missed_entries": 2
+  }
+}

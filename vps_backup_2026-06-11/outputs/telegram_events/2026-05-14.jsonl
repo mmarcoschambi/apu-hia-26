@@ -1,0 +1,2 @@
+{"event_id": "evt_20260514012634048564", "chat_id": "-1003961012390", "user_id": "1324857342", "action": "regenerate", "payload": {"target": "market"}, "status": "applied", "created_at": "2026-05-14T01:26:35.146280", "applied_at": null, "metadata": {"listener": "telegram_bot_listener"}}
+{"event_id": "evt_20260514012638449977", "chat_id": "-1003961012390", "user_id": "1324857342", "action": "regenerate", "payload": {"target": "market"}, "status": "applied", "created_at": "2026-05-14T01:26:39.828340", "applied_at": null, "metadata": {"listener": "telegram_bot_listener"}}

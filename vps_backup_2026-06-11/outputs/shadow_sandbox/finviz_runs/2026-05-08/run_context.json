@@ -1,0 +1,30 @@
+{
+  "run_date": "2026-05-08",
+  "timestamp": "2026-05-08 08:30:30,740",
+  "mode": "PRODUCTION",
+  "universe_size": 590,
+  "period_start": "2025-07-11",
+  "period_end": "2026-05-07",
+  "risk_type": "FIXED DOLLAR",
+  "risk_value": "$2878",
+  "filters": {
+    "min_vol_k": 100,
+    "min_dollar_vol_M": 20,
+    "min_adr_pct": 1.8714,
+    "min_rvol": 1.1048
+  },
+  "position_size": {
+    "rvol_danger": 3.0,
+    "rvol_danger_size_pct": 50,
+    "rvol_warning": 2.0,
+    "rvol_warning_size_pct": 75
+  },
+  "no_auto_entry": false,
+  "exit_distribution": {
+    "run_date": "2026-05-08",
+    "stop": 7,
+    "tp1": 4,
+    "tp2": 0,
+    "runner": 0
+  }
+}

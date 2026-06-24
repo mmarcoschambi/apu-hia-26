@@ -1,0 +1,90 @@
+{
+  "timestamp": "2026-01-09T21:39:49.790888",
+  "method": "Bugatti_BOLIDE_WalkForward",
+  "engine": "DIVO (memory-optimized)",
+  "periods": {
+    "in_sample": "2022-01-01 to 2022-12-31",
+    "validation": "2023-01-01 to 2023-06-30",
+    "out_of_sample": "2023-07-01 to 2023-12-31"
+  },
+  "layer1": {
+    "trials": 20,
+    "tickers": 30,
+    "best_value": -999.0,
+    "best_params": {
+      "risk_dollars": 200,
+      "max_exposure_pct": 0.2,
+      "min_rvol": 2.0,
+      "min_adr": 2.0,
+      "signal_type": "vcp",
+      "tp1_r": 2.0,
+      "tp2_r": 4.0,
+      "rvol_danger_size": 0.25
+    }
+  },
+  "layer2": {
+    "trials": 10,
+    "tickers": 20,
+    "best_value": -999.0,
+    "best_params": {
+      "min_consolidation_days": 10,
+      "max_consolidation_range": 20.0,
+      "min_volume": 300000,
+      "min_dollar_volume": 10000000.0,
+      "max_dist_sma20": 20.0,
+      "max_stop_pct": 0.08,
+      "rvol_danger": 3.5,
+      "rvol_warning": 2.0,
+      "rvol_warning_size": 0.7,
+      "require_bullish_spy": false,
+      "max_vix": 35.0
+    },
+    "improvement_pct": 0.0
+  },
+  "validation": {
+    "sharpe": 0,
+    "degradation_pct": -100,
+    "robustness": "FAILED",
+    "stats": {}
+  },
+  "out_of_sample": {
+    "run": true,
+    "stats": {
+      "profit_factor": 0.0,
+      "total_trades": 0.0,
+      "total_return_pct": 0.0,
+      "sharpe_ratio": 0.0,
+      "max_drawdown_pct": 0.0,
+      "win_rate_pct": 0.0,
+      "final_value": 100000.0,
+      "phase_breakdown": {
+        "tp1_trades": 0,
+        "tp2_trades": 0,
+        "runner_trades": 0
+      }
+    }
+  },
+  "final_params": {
+    "risk_dollars": 200,
+    "max_exposure_pct": 0.2,
+    "min_rvol": 2.0,
+    "min_adr": 2.0,
+    "signal_type": "vcp",
+    "tp1_r": 2.0,
+    "tp2_r": 4.0,
+    "rvol_danger_size": 0.25,
+    "min_consolidation_days": 10,
+    "max_consolidation_range": 20.0,
+    "min_volume": 300000,
+    "min_dollar_volume": 10000000.0,
+    "max_dist_sma20": 20.0,
+    "max_stop_pct": 0.08,
+    "rvol_danger": 3.5,
+    "rvol_warning": 2.0,
+    "rvol_warning_size": 0.7,
+    "require_bullish_spy": false,
+    "max_vix": 35.0,
+    "use_phases": true,
+    "require_positive_rs": false
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "combo_name": "combo_pullback_entry",
+  "description": "Pullback Entry: EMA21 Pullback + Pocket Pivot. Buy the pullback in high momentum stocks.",
+  "optimized_at": "2026-04-20T14:30:28.099254",
+  "validation_passed": false,
+  "optimization_score": -61.816,
+  "screener": "ema21_pullback",
+  "pattern": "pocket_pivot",
+  "tier1_exits": {
+    "tp1_r": 1.75,
+    "tp2_r": 4.0,
+    "tp1_pct": 0.45,
+    "tp2_pct": 0.30000000000000004,
+    "pp_vol_lookback": 11,
+    "pp_vol_mult": 1.2000000000000002,
+    "runner_pct": 0.25
+  },
+  "tier2_filters": {
+    "min_screener_score": 70.0,
+    "max_r_from_ema21": 0.5,
+    "min_adr_pct": 3.5,
+    "pp_vol_lookback": 10,
+    "min_dollar_volume": 20000000,
+    "min_rvol": 1.02,
+    "min_adr": 2.05,
+    "max_dist_sma20": 9.15,
+    "min_consolidation_days": 5,
+    "min_volume": 100000
+  },
+  "tier3_fixed": {
+    "max_loss_pct": 2.0,
+    "max_positions": 3,
+    "position_size_method": "ATR_adjusted",
+    "risk_fraction": 0.005
+  },
+  "validation_thresholds": {
+    "min_win_rate": 0.38,
+    "min_profit_factor": 1.2,
+    "min_trades": 20
+  },
+  "validation": {
+    "sharpe_ratio": -0.107,
+    "pbo_score": 0.5997,
+    "profit_factor": 0.8644,
+    "max_drawdown_pct": 16.19,
+    "total_trades": 511,
+    "win_rate_pct": 39.69
+  }
+}

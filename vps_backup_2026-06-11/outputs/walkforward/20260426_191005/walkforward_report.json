@@ -1,0 +1,32 @@
+{
+  "generated_at": "2026-04-26T19:10:05.466105",
+  "start": "2020-01-01",
+  "end": "2025-12-31",
+  "folds": 1,
+  "modes": [
+    "A"
+  ],
+  "universe_count": 5,
+  "results": [
+    {
+      "mode": "A",
+      "folds": [],
+      "stress": {
+        "mode": "A",
+        "stress_metrics": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "total_pnl": 0.0,
+          "profit_factor": 0.0,
+          "sharpe": 0.0,
+          "max_drawdown": 0.0,
+          "expectancy": 0.0
+        },
+        "signals": 0
+      },
+      "combo_config_meta": {}
+    }
+  ]
+}

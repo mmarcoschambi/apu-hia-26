@@ -1,0 +1,107 @@
+{
+  "date": "2026-05-02",
+  "signals": [
+    {
+      "combo": "combo_pure_momentum",
+      "ticker": "AAPL",
+      "signal_date": "2026-05-02",
+      "entry_price": 280.1400146484375,
+      "stop_loss": 266.6,
+      "position_size": 0,
+      "rs_mode": "spy_fallback",
+      "source": "finviz_setup"
+    },
+    {
+      "combo": "combo_pure_momentum",
+      "ticker": "AMD",
+      "signal_date": "2026-05-02",
+      "entry_price": 360.5400085449219,
+      "stop_loss": 324.65,
+      "position_size": 0,
+      "rs_mode": "spy_fallback",
+      "source": "finviz_setup"
+    },
+    {
+      "combo": "combo_pure_momentum",
+      "ticker": "CL",
+      "signal_date": "2026-05-02",
+      "entry_price": 87.26000213623047,
+      "stop_loss": 83.55,
+      "position_size": 0,
+      "rs_mode": "spy_fallback",
+      "source": "finviz_setup"
+    },
+    {
+      "combo": "combo_pure_momentum",
+      "ticker": "DDOG",
+      "signal_date": "2026-05-02",
+      "entry_price": 140.52999877929688,
+      "stop_loss": 127.06,
+      "position_size": 0,
+      "rs_mode": "spy_fallback",
+      "source": "finviz_setup"
+    },
+    {
+      "combo": "combo_pure_momentum",
+      "ticker": "EL",
+      "signal_date": "2026-05-02",
+      "entry_price": 79.30000305175781,
+      "stop_loss": 73.49,
+      "position_size": 0,
+      "rs_mode": "spy_fallback",
+      "source": "finviz_setup"
+    },
+    {
+      "combo": "combo_pure_momentum",
+      "ticker": "EMN",
+      "signal_date": "2026-05-02",
+      "entry_price": 77.52999877929688,
+      "stop_loss": 72.74,
+      "position_size": 0,
+      "rs_mode": "spy_fallback",
+      "source": "finviz_setup"
+    },
+    {
+      "combo": "combo_pure_momentum",
+      "ticker": "FANG",
+      "signal_date": "2026-05-02",
+      "entry_price": 207.64999389648438,
+      "stop_loss": 195.54,
+      "position_size": 0,
+      "rs_mode": "spy_fallback",
+      "source": "finviz_setup"
+    },
+    {
+      "combo": "combo_pure_momentum",
+      "ticker": "FSLR",
+      "signal_date": "2026-05-02",
+      "entry_price": 211.7100067138672,
+      "stop_loss": 192.5,
+      "position_size": 0,
+      "rs_mode": "spy_fallback",
+      "source": "finviz_setup"
+    },
+    {
+      "combo": "combo_pure_momentum",
+      "ticker": "GOOG",
+      "signal_date": "2026-05-02",
+      "entry_price": 383.2200012207031,
+      "stop_loss": 363.87,
+      "position_size": 0,
+      "rs_mode": "spy_fallback",
+      "source": "finviz_setup"
+    },
+    {
+      "combo": "combo_pure_momentum",
+      "ticker": "HIMX",
+      "signal_date": "2026-05-02",
+      "entry_price": 12.3100004196167,
+      "stop_loss": 10.83,
+      "position_size": 0,
+      "rs_mode": "spy_fallback",
+      "source": "finviz_setup"
+    }
+  ],
+  "signals_count": 30,
+  "generated_at": "2026-05-02T03:16:56.278257"
+}

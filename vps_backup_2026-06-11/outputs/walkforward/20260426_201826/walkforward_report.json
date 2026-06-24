@@ -1,0 +1,76 @@
+{
+  "generated_at": "2026-04-26T20:18:26.968948",
+  "start": "2020-01-01",
+  "end": "2025-12-31",
+  "folds": 2,
+  "modes": [
+    "A"
+  ],
+  "universe_config": {
+    "max_tickers": 50,
+    "min_bars": 252,
+    "min_adv20": 5000000,
+    "recent_bars": 60,
+    "max_gap_pct": 0.15,
+    "etf_allowed": true
+  },
+  "results": [
+    {
+      "mode": "A",
+      "folds": [
+        {
+          "fold": 0,
+          "mode": "A",
+          "is_start": "2020-01-01",
+          "is_end": "2022-12-30",
+          "oos_start": "2022-12-31",
+          "oos_end": "2025-12-30",
+          "is_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0
+          },
+          "oos_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "dry_run"
+            ]
+          }
+        }
+      ],
+      "stress": {
+        "mode": "A",
+        "stress_metrics": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "total_pnl": 0.0,
+          "profit_factor": 0.0,
+          "sharpe": 0.0,
+          "max_drawdown": 0.0,
+          "expectancy": 0.0
+        },
+        "signals": 0
+      },
+      "combo_config_meta": {}
+    }
+  ]
+}

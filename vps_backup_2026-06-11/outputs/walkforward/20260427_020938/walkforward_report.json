@@ -1,0 +1,69 @@
+{
+  "generated_at": "2026-04-27T02:09:38.354222",
+  "results": [
+    {
+      "mode": "A",
+      "folds": [
+        {
+          "fold": 0,
+          "mode": "A",
+          "is_start": "2022-01-01",
+          "oos_start": "2022-04-01",
+          "is_signals": 0,
+          "oos_signals": 0,
+          "is_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0,
+            "profit_factor_defined": false,
+            "sharpe_defined": false,
+            "low_sample": true
+          },
+          "oos_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0,
+            "profit_factor_defined": false,
+            "sharpe_defined": false,
+            "low_sample": true
+          },
+          "gate": {
+            "verdict": "HOLD"
+          },
+          "funnel": {
+            "is": {
+              "n_evaluations": 0,
+              "n_min_data_fail": 0,
+              "n_screener_fail": 0,
+              "n_tier2_fail": 0,
+              "n_passed": 0
+            },
+            "oos": {
+              "n_evaluations": 0,
+              "n_min_data_fail": 0,
+              "n_screener_fail": 0,
+              "n_tier2_fail": 0,
+              "n_passed": 0
+            }
+          },
+          "universe": {
+            "n_tickers": 0,
+            "tickers": []
+          }
+        }
+      ]
+    }
+  ]
+}

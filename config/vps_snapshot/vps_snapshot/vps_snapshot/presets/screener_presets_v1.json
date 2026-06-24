@@ -1,0 +1,57 @@
+﻿{
+  "version": 1,
+  "name": "screener_preset_pack_v1",
+  "owner": "system_b_ablation",
+  "notes": "Presets formalizados para backtest modular. Diseñado para ejecutar Fase 1/2 sin tocar el sistema A estable.",
+  "priority_order": {
+    "first": ["preset_05", "preset_06", "preset_07", "preset_08"],
+    "second": ["preset_09", "preset_10", "preset_11", "preset_12"],
+    "third": ["preset_01", "preset_02", "preset_03", "preset_04"]
+  },
+  "filter_defaults": {
+    "market_cap_min": {"minimum": 500000000},
+    "avg_volume_50_min": {"minimum": 500000},
+    "adr_50_min": {"minimum_pct": 2.0},
+    "rs_1m_percentile_min": {"minimum_pct": 70.0},
+    "trend_base": {"sma_period": 50, "wma_short": 10, "wma_long": 30},
+    "rel_volume_min": {"minimum": 1.2, "period": 50},
+    "power_play": {"window": 10},
+    "power_play_cluster_20d_min3": {},
+    "vcs_score_min": {"minimum": 55.0},
+    "near_52w_high_band": {"min_pct": -20.0, "max_pct": 0.0},
+    "weekly_return_min": {"minimum_pct": 20.0},
+    "ll_hl_confirmed": {"pivot_left": 3, "pivot_right": 3},
+    "fib_0618_break_between_hl_and_swing_high": {"pivot_left": 3, "pivot_right": 3, "fib_ratio": 0.618},
+    "second_pivot_break_swing_high": {"pivot_left": 3, "pivot_right": 3},
+    "downtrend_line_break": {"pivot_left": 3, "pivot_right": 3, "highs_window": 5, "min_negative_slope": 0.02}
+  },
+  "backtest_defaults": {
+    "stop_pct": 0.05,
+    "target_pct": 0.1,
+    "timeout_bars": 20,
+    "slippage_bps": 5,
+    "fee_bps": 5,
+    "initial_capital": 100000
+  },
+  "promotion_gate": {
+    "min_trades": 30,
+    "min_expectancy": 0.0,
+    "min_profit_factor": 1.2,
+    "min_sharpe": 0.5,
+    "max_dd": 0.25
+  },
+  "presets": [
+    {"id":"preset_01","name":"LL_HL_FIB_0618_BREAK","stage":"third","direction":"long","requires":["ll_hl_confirmed","fib_0618_break_between_hl_and_swing_high","rel_volume_min"],"complexity":"high","status":"ready"},
+    {"id":"preset_02","name":"LL_HL_DUAL_PIVOT_BREAK","stage":"third","direction":"long","requires":["ll_hl_confirmed","fib_0618_break_between_hl_and_swing_high","second_pivot_break_swing_high"],"complexity":"high","status":"ready"},
+    {"id":"preset_03","name":"CT_BREAK_TRENDLINE","stage":"third","direction":"long","requires":["downtrend_line_break","rel_volume_min"],"complexity":"high","status":"ready"},
+    {"id":"preset_04","name":"CT_BREAK_PLUS_PP","stage":"third","direction":"long","requires":["downtrend_line_break","power_play"],"complexity":"high","status":"ready"},
+    {"id":"preset_05","name":"MC_VOL_ADR_BASELINE","stage":"first","direction":"both","requires":["market_cap_min","avg_volume_50_min","adr_50_min"],"complexity":"low","status":"ready"},
+    {"id":"preset_06","name":"RS_1M_TREND_BASE","stage":"first","direction":"long","requires":["rs_1m_percentile_min","trend_base"],"complexity":"low","status":"ready"},
+    {"id":"preset_07","name":"REL_VOL_PLUS_PP","stage":"first","direction":"long","requires":["rel_volume_min","power_play"],"complexity":"low","status":"ready"},
+    {"id":"preset_08","name":"POWER_PLAY_CLUSTER","stage":"first","direction":"long","requires":["power_play_cluster_20d_min3"],"complexity":"low","status":"ready"},
+    {"id":"preset_09","name":"VCS_BINARY_GATE","stage":"second","direction":"long","requires":["vcs_score_min","near_52w_high_band"],"complexity":"medium","status":"ready"},
+    {"id":"preset_10","name":"VCS_55_WITH_DISTANCE","stage":"second","direction":"long","requires":["vcs_score_min","near_52w_high_band"],"params":{"vcs_min":55,"high_distance_min_pct":-20,"high_distance_max_pct":0},"complexity":"medium","status":"ready"},
+    {"id":"preset_11","name":"VCS_PLUS_VOLUME_CONFIRM","stage":"second","direction":"long","requires":["vcs_score_min","rel_volume_min","avg_volume_50_min"],"complexity":"medium","status":"ready"},
+    {"id":"preset_12","name":"WEEKLY_GAINERS_FILTER","stage":"second","direction":"long","requires":["weekly_return_min","trend_base"],"complexity":"medium","status":"ready"}
+  ]
+}

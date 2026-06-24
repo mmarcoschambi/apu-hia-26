@@ -1,0 +1,65 @@
+{
+  "timestamp": "2026-01-09T17:58:33.260670",
+  "method": "Optuna_TPESampler",
+  "trials": 400,
+  "best_parameters": {
+    "signal_type": "breakout",
+    "min_adr": 1.5,
+    "min_rvol": 3.5,
+    "max_exposure_pct": 0.4,
+    "risk_dollars": 100,
+    "max_stop_pct": 0.08,
+    "require_sector_strength": true,
+    "sector_top_percentile": 0.4,
+    "min_consolidation_days": 5,
+    "max_consolidation_range": 20.0,
+    "max_dist_sma20": 7.5,
+    "min_volume": 200000,
+    "min_dollar_volume": 10000000.0,
+    "rvol_danger": 4.0,
+    "rvol_warning": 1.5,
+    "rvol_danger_size": 0.2,
+    "rvol_warning_size": 0.5,
+    "adr_high": 6.5,
+    "adr_med": 4.5,
+    "adr_high_size": 0.25,
+    "adr_med_size": 0.3,
+    "use_earnings_filter": false,
+    "earnings_days": 7,
+    "require_positive_rs": true,
+    "min_rs": 40.0,
+    "rs_lookback": "21d",
+    "require_bullish_spy": true,
+    "max_vix": 35.0,
+    "use_phases": true,
+    "tp1_r": 1.0,
+    "tp2_r": 3.5
+  },
+  "in_sample": {
+    "period": "2006-01-01 to 2016-12-31",
+    "metric": "sharpe",
+    "value": 0.6170904006663606
+  },
+  "validation": {
+    "period": "2017-01-01 to 2021-12-31",
+    "sharpe": -0.48419386390794866,
+    "degradation_pct": -178.46400841515205
+  },
+  "out_of_sample": {
+    "period": "2022-01-01 to 2025-12-31",
+    "stats": {
+      "profit_factor": 0.2517464714620013,
+      "total_trades": 39,
+      "total_return_pct": -0.18400278083630095,
+      "sharpe_ratio": -0.9505295662549961,
+      "max_drawdown_pct": 0.21636014149413754,
+      "win_rate_pct": 25.64102564102564,
+      "final_value": 14972399.582874555,
+      "phase_breakdown": {
+        "tp1_trades": 13,
+        "tp2_trades": 13,
+        "runner_trades": 13
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "min_rvol": 1.55,
+  "min_adr": 1.6,
+  "max_dist_sma20": 7.1,
+  "min_consolidation_days": 10,
+  "min_volume": 200000,
+  "min_dollar_volume": 3000000,
+  "max_consolidation_range": 15.0,
+  "require_sector_strength": true,
+  "sector_top_percentile": 0.4,
+  "require_positive_rs": false,
+  "analysis_metadata": {
+    "trades_analyzed": 479,
+    "winners": 166,
+    "losers": 313,
+    "original_win_rate": 34.7,
+    "source": "2013-2026 full backtest, 38 DB tickers"
+  }
+}

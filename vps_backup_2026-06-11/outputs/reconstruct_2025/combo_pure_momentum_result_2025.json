@@ -1,0 +1,28 @@
+{
+  "combo": "combo_pure_momentum",
+  "oos_start": "2025-01-01",
+  "oos_end": "2025-12-31",
+  "universe_size": 200,
+  "params_source": "best_combos_run (fixed, no re-opt)",
+  "run_at": "2026-04-18T00:39:35.095157",
+  "metrics": {
+    "trades": 1118,
+    "sharpe": 0.818,
+    "profit_factor": 1.247,
+    "win_rate": 53.2,
+    "total_return_pct": 7.9,
+    "max_drawdown_pct": 7.87
+  },
+  "gate": {
+    "rules": {
+      "min_trades": 50,
+      "min_sharpe": 0.75,
+      "min_pf": 1.2,
+      "max_dd_pct": 25.0
+    },
+    "passed": true,
+    "verdict": "GO"
+  },
+  "status": "ok",
+  "trades_csv": "/home/marcos/trade/momentum-v2/outputs/reconstruct_2025/combo_pure_momentum_trades_2025.csv"
+}

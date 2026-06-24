@@ -1,0 +1,28 @@
+{
+  "combo": "combo_pullback_entry",
+  "oos_start": "2025-01-01",
+  "oos_end": "2025-12-31",
+  "universe_size": 200,
+  "params_source": "best_combos_run (fixed, no re-opt)",
+  "run_at": "2026-04-18T01:10:28.057015",
+  "metrics": {
+    "trades": 1635,
+    "sharpe": -0.404,
+    "profit_factor": 0.329,
+    "win_rate": 21.4,
+    "total_return_pct": -3.67,
+    "max_drawdown_pct": 12.15
+  },
+  "gate": {
+    "rules": {
+      "min_trades": 50,
+      "min_sharpe": 0.75,
+      "min_pf": 1.2,
+      "max_dd_pct": 25.0
+    },
+    "passed": false,
+    "verdict": "NO-GO"
+  },
+  "status": "ok",
+  "trades_csv": "/home/marcos/trade/momentum-v2/outputs/reconstruct_2025/combo_pullback_entry_trades_2025.csv"
+}

@@ -1,0 +1,42 @@
+{
+  "date": "2026-05-14",
+  "brief": "\ud83d\ude80 <b>MOMENTUM V2 | 2026-05-14</b> (Data: 2026-05-13)\n\u2022 Regime: <b>PASS</b>\n\u2022 Universe: <code>583</code>\n\u2022 Signals: <code>0</code>\n\n\ud83d\udcca <b>BREADTH HEALTH: \u26aa N/A</b>\n\u2022 VIX: <code>17.87</code> \ud83d\udfe2\n\u2022 Status: <code>DATA STALE (0/0)</code> \u26a0\ufe0f\n\n\ud83d\udc8e <b>MARKET ALPHA (Gamma/DIX)</b>\n\u2022 DIX: <code>45.4%</code> \ud83d\udd25 (Dark Pool Buy %)\n\u2022 GEX: <code>$8.6B</code> \u2705 (Gamma Exposure)\n\n\n\ud83d\udd25 <b>HOT SECTORS</b>\n\u2022 <b>XLK Tecnolog\u00eda</b> | RS 191.8% | S1 \u2713\n\u2022 <b>XLP Consumo defensivo</b> | RS -25.4% | S1 \u2717\n\u2022 <b>XLE Energ\u00eda</b> | RS -44.6% | S1 \u2717\n\u2022 <b>XLRE Real Estate</b> | RS -69.6% | S1 \u2717\n\u2022 <b>XLI Industriales</b> | RS -76.5% | S1 \u2717\n\n\ud83c\udfc6 <b>TOP GLOBAL (TOTAL RANKING)</b>\n\u2022 <code>VTR</code> (XLRE) | Prox: <b>100</b> | RS: <b>67</b>\n\u2022 <code>WELL</code> (XLRE) | Prox: <b>100</b> | RS: <b>63</b>\n\u2022 <code>AAPL</code> (XLK) | Prox: <b>98</b> | RS: <b>77</b>\n\u2022 <code>MT</code> (XLB) | Prox: <b>98</b> | RS: <b>64</b>\n\u2022 <code>BIIB</code> (XLV) | Prox: <b>96</b> | RS: <b>79</b>\n\n\ud83c\udfaf <b>SECTORES CON CANDIDATOS</b>\n<b>[XLK Tecnolog\u00eda | RS 191.8% \ud83d\udd25]</b>\n\u2022 \u2b07\ufe0f <code>AAPL</code> [Tema: HARDWARE, PHONES, CONSUMER TECH]\n  RS: <b>77</b> | Prox: <b>98</b> | <a href=\"https://www.tradingview.com/symbols/AAPL/\">TradingView</a>\n  Estado: <b>\ud83d\udcc9 Consolidar</b>\n  Dist SMA20: 7.47% / max 6.77%\n  RVOL: 1.07 | Break: <code>295.27</code>\n  Bloqueos: RVOL bajo, Extendido de SMA20 | Live: <code>RVOL &gt;= 1.10</code>\n\n\u2022 \ud83c\udd95 <code>HPE</code>\n  RS: <b>89</b> | Prox: <b>90</b> | <a href=\"https://www.tradingview.com/symbols/HPE/\">TradingView</a>\n  Estado: <b>\ud83d\udcc9 Consolidar</b>\n  Dist SMA20: 10.77% / max 6.77%\n  RVOL: 1.85 | Break: <code>31.64</code>\n  Bloqueos: Extendido de SMA20 | Live: <code>Dist SMA20 &lt;= 6.77%</code>\n\n\u2022 \ud83c\udd95 <code>MRVL</code> \ud83d\udd25 HTF\n  RS: <b>90</b> | Prox: <b>89</b> | <a href=\"https://www.tradingview.com/symbols/MRVL/\">TradingView</a>\n  Estado: <b>\ud83d\udcc9 Consolidar</b>\n  Dist SMA20: 11.03% / max 6.77%\n  RVOL: 1.23 | Break: <code>175.80</code>\n  Bloqueos: MA stack roto, Extendido de SMA20 | Live: <code>SMA100/SMA200 N/A</code>\n\n\u2022 \u2b07\ufe0f <code>CSCO</code>\n  RS: <b>85</b> | Prox: <b>89</b> | <a href=\"https://www.tradingview.com/symbols/CSCO/\">TradingView</a>\n  Estado: <b>\ud83d\udcc9 Consolidar</b>\n  Dist SMA20: 11.29% / max 6.77%\n  RVOL: 2.12 | Break: <code>99.93</code>\n  Bloqueos: Extendido de SMA20 | Live: <code>Dist SMA20 &lt;= 6.77%</code>\n\n\u2022 \u2b06\ufe0f <code>OUST</code>\n  RS: <b>92</b> | Prox: <b>80</b> | <a href=\"https://www.tradingview.com/symbols/OUST/\">TradingView</a>\n  Estado: <b>\ud83d\udcc9 Consolidar</b>\n  Dist SMA20: 26.21% / max 6.77%\n  RVOL: 3.68 | Break: <code>30.49</code>\n  Bloqueos: MA stack roto, Extendido de SMA20 | Live: <code>SMA100/SMA200 N/A</code>\n\n\n\ud83d\udce1 <b>DATA INCOMPLETE RADAR</b>\n\u2022 <b>WMB</b> (XLE) | RS 68 | RVOL premarket no confiable\n\u2022 <b>EQR</b> (XLRE) | RS 70 | RVOL premarket no confiable\n\u2022 <b>SNOW</b> (XLK) | RS 65 | RVOL premarket no confiable\n\n\ud83d\udea8 <b>ALERTA TOP: Sector XLK</b>\nCandidatos: <code>AAPL / HPE / MRVL</code>\nBlocker: <b>RVOL bajo</b>\nAcci\u00f3n: <b>Esperar Dist SMA20 &lt;= 6.77%; AAPL adem\u00e1s RVOL &gt;= 1.10</b>\n\n\ud83c\udfdb\ufe0f <b>SECTOR MONEY FLOW</b>\n\u2022 <b>XLK Tecnolog\u00eda</b> | \u27a1\ufe0f | RS =\n\u2022 <b>XLP Consumo defensivo</b> | \u27a1\ufe0f | RS =\n\u2022 <b>XLE Energ\u00eda</b> | \u27a1\ufe0f | RS =\n\u2022 <b>XLRE Real Estate</b> | \u27a1\ufe0f | RS =\n\u2022 <b>XLI Industriales</b> | \u27a1\ufe0f | RS =\n\n\ud83d\udd2d <b>TOP WATCHLIST POR FLOW</b>\n<i>Top por score sectorial; no necesariamente listos para trigger.</i>\n\u2022 XLK: <code>AKAM</code> (80), <code>ON</code> (80), <code>PENG</code> (80)\n\u2022 XLP: <code>ADM</code> (87), <code>SJM</code> (70), <code>CHD</code> (30)\n\u2022 XLE: <code>TRP</code> (60), <code>MPC</code> (60), <code>ENB</code> (30)\n\u2022 XLRE: <code>VTR</code> (100), <code>WELL</code> (100), <code>UDR</code> (70)\n\u2022 XLI: <code>LUNR</code> (80), <code>JCI</code> (60), <code>AAON</code> (40)\n\n\ud83d\udd01 <b>NEAREST FLOW 2026-05-13 \u2192 2026-05-14</b>\n\u2022 \u2b07\ufe0f-10 <b>CSCO</b> (Prev R1) | Sigue top | Wait: <code>Dist SMA20 &lt;= 6.77%</code>\n\u2022 \u2b07\ufe0f-1 <b>AAPL</b> (Prev R2) | Sigue top | Wait: <code>RVOL &gt;= 1.10</code>\n\u2022 \u2b07\ufe0f-4 <b>RIO</b> (Prev R3) | Sigue top | Wait: <code>SMA100/SMA200 N/A</code>\n\u2022 \u2b07\ufe0f-18 <b>CVS</b> (Prev R4) | Sigue top | Wait: <code>Dist SMA20 &lt;= 6.77%</code>\n\u2022 \u2b07\ufe0f-10 <b>LQDA</b> (Prev R5) | Sigue top | Wait: <code>SMA100/SMA200 N/A</code>\n------------------------------\n\ud83e\udded Radar Rotation: No data available for today.",
+  "buttons": [
+    [
+      {
+        "text": "\ud83d\udd0e AAPL",
+        "callback_data": "detail:AAPL"
+      },
+      {
+        "text": "\ud83d\udd0e HPE",
+        "callback_data": "detail:HPE"
+      }
+    ],
+    [
+      {
+        "text": "\ud83d\udd0e MRVL",
+        "callback_data": "detail:MRVL"
+      },
+      {
+        "text": "\ud83d\udd0e CSCO",
+        "callback_data": "detail:CSCO"
+      }
+    ],
+    [
+      {
+        "text": "\ud83d\udd0e OUST",
+        "callback_data": "detail:OUST"
+      }
+    ],
+    [
+      {
+        "text": "\ud83d\udd04 Refresh",
+        "callback_data": "refresh:market"
+      },
+      {
+        "text": "\u26a1 Regen All",
+        "callback_data": "regenerate:market"
+      }
+    ]
+  ]
+}

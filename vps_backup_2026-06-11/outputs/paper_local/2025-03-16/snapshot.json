@@ -1,0 +1,35 @@
+{
+  "date": "2025-03-16",
+  "source": "local_db",
+  "universe_size": 200,
+  "universe_sample": [
+    "AAPL",
+    "ADBE",
+    "ADP",
+    "AMAT",
+    "AMD",
+    "AMZN",
+    "AVGO",
+    "BKNG",
+    "CDNS",
+    "COST",
+    "CSCO",
+    "FTNT",
+    "INTC",
+    "INTU",
+    "KLAC",
+    "LRCX",
+    "MAR",
+    "MELI",
+    "META",
+    "MSFT"
+  ],
+  "regime": {
+    "spy_ok": true,
+    "vix_ok": true,
+    "pass": true
+  },
+  "signals": [],
+  "signals_count": 0,
+  "generated_at": "2026-04-18T00:55:39.659891"
+}

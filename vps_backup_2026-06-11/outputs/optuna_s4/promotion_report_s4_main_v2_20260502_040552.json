@@ -1,0 +1,157 @@
+{
+  "generated_at": "2026-05-02T04:05:52.615970",
+  "study_name": "s4_main_v2",
+  "selection_method": "OOS_SHARPE",
+  "promoted_candidate": {
+    "selected_trial_id": "380",
+    "selection_method": "OOS_SHARPE",
+    "score_composed": 1.3235,
+    "oos_sharpe": 1.527,
+    "oos_calmar": 2.727,
+    "val_sharpe": 0.596,
+    "params": {
+      "min_rs_percentile": 58.01185471172994,
+      "max_dist_sma20": 6.768469291968571,
+      "min_rvol": 1.1047915985168806,
+      "min_adr": 1.8713508674019803,
+      "risk_per_trade_pct": 0.028781363390402694,
+      "max_exposure_pct": 0.29429888839425955,
+      "use_composite_sector_scoring": false,
+      "sector_top_percentile": 0.3189424819088241,
+      "use_atr_stop": false,
+      "atr_stop_multiplier": 1.506561242880806,
+      "atr_trailing_multiplier": 2.9814315298767213
+    },
+    "metrics": {
+      "rank": 5,
+      "trial_id": 380,
+      "score_composed": 1.3235,
+      "params": {
+        "min_rs_percentile": 58.01185471172994,
+        "max_dist_sma20": 6.768469291968571,
+        "min_rvol": 1.1047915985168806,
+        "min_adr": 1.8713508674019803,
+        "risk_per_trade_pct": 0.028781363390402694,
+        "max_exposure_pct": 0.29429888839425955,
+        "use_composite_sector_scoring": false,
+        "sector_top_percentile": 0.3189424819088241,
+        "use_atr_stop": false,
+        "atr_stop_multiplier": 1.506561242880806,
+        "atr_trailing_multiplier": 2.9814315298767213
+      },
+      "is_sharpe": 1.3235404822341945,
+      "trades": 106,
+      "pf": 2.676518298063112,
+      "calmar": 1.064535766412997,
+      "cagr": 0.13248046552945048,
+      "mdd": 0.12444905066538964,
+      "win_rate": 0.6415094339622641,
+      "break_reason": "PASSED",
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0
+    },
+    "gate_results": {
+      "passed": true,
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0,
+      "gate_details": {
+        "pf_gate": {
+          "threshold": 1.3,
+          "passed": true,
+          "value": 2.676518298063112
+        },
+        "calmar_gate": {
+          "threshold": 1.0,
+          "passed": true,
+          "value": 1.064535766412997
+        },
+        "mdd_duration_gate": {
+          "threshold": 126,
+          "passed": true,
+          "value": 74
+        },
+        "hard_ruin_gate": {
+          "threshold": 0.05,
+          "passed": true,
+          "value": 0.0
+        },
+        "degradation_gate": {
+          "threshold": 0.2,
+          "passed": true,
+          "value": null
+        },
+        "cost_robustness_gate": {
+          "passed": true,
+          "value": "ROBUSTO"
+        }
+      }
+    }
+  },
+  "trazability": {
+    "optuna_db": "/home/marcos/trade/momentum-v2/outputs/optuna_s4/s4_main_v2.db",
+    "results_json": "/home/marcos/trade/momentum-v2/outputs/optuna_s4/results_s4_main_v2_20260410_225044.json",
+    "oos_validation_json": "/home/marcos/trade/momentum-v2/outputs/optuna_s4/optuna_validation_oos_s4_main_v2_20260410_231550.json",
+    "gate_results": {
+      "passed": true,
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0,
+      "gate_details": {
+        "pf_gate": {
+          "threshold": 1.3,
+          "passed": true,
+          "value": 2.676518298063112
+        },
+        "calmar_gate": {
+          "threshold": 1.0,
+          "passed": true,
+          "value": 1.064535766412997
+        },
+        "mdd_duration_gate": {
+          "threshold": 126,
+          "passed": true,
+          "value": 74
+        },
+        "hard_ruin_gate": {
+          "threshold": 0.05,
+          "passed": true,
+          "value": 0.0
+        },
+        "degradation_gate": {
+          "threshold": 0.2,
+          "passed": true,
+          "value": null
+        },
+        "cost_robustness_gate": {
+          "passed": true,
+          "value": "ROBUSTO"
+        }
+      }
+    },
+    "params_used": {
+      "min_rs_percentile": 58.01185471172994,
+      "max_dist_sma20": 6.768469291968571,
+      "min_rvol": 1.1047915985168806,
+      "min_adr": 1.8713508674019803,
+      "risk_per_trade_pct": 0.028781363390402694,
+      "max_exposure_pct": 0.29429888839425955,
+      "use_composite_sector_scoring": false,
+      "sector_top_percentile": 0.3189424819088241,
+      "use_atr_stop": false,
+      "atr_stop_multiplier": 1.506561242880806,
+      "atr_trailing_multiplier": 2.9814315298767213
+    }
+  },
+  "oos_summary": {
+    "oos_sharpe": 1.527,
+    "oos_calmar": 2.727,
+    "val_sharpe": 0.596,
+    "pbo_proxy": 0.268,
+    "interpretation": "MODERATE_OVERFITTING_RISK"
+  },
+  "next_steps": [
+    "1. Actualizar production_config.json con params promovidos (tier2_filters + s4_params)",
+    "2. Activar paper trading: python3 scripts/paper_trading_runbook.py --phase pre",
+    "3. Monitorear 30 d\u00edas en paper antes de live",
+    "4. Gate de avance a live: >= 20 trades, Sharpe paper > 0.5, WR > 50%"
+  ]
+}

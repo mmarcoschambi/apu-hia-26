@@ -1,0 +1,70 @@
+{
+  "meta": {
+    "date": "2026-04-09",
+    "generated_at": "2026-04-09T22:51:50.716904",
+    "version": "1.0",
+    "data_quality_flags": [
+      "NO_EQUITY_HISTORY",
+      "NO_ACTUAL_SNAPSHOT",
+      "NO_TRADES_TODAY",
+      "INSUFFICIENT_EQUITY_FOR_RUIN",
+      "INSUFFICIENT_EQUITY_FOR_MC"
+    ]
+  },
+  "position_sizing": {
+    "kelly_tier": "HALF",
+    "kelly_fraction": 0.5,
+    "per_position_risk_usd": 1000.0,
+    "per_position_max_usd": 2000.0,
+    "positions_recommended": 10,
+    "deployed_max_usd": 10000.0,
+    "deployed_pct": 0.1,
+    "cash_reserve_usd": 90000.0
+  },
+  "risk_checks": {
+    "cash_reserve_pct": 0.9,
+    "cash_target_usd": 90000.0,
+    "soft_ruin_30": 0.0,
+    "hard_ruin_50": 0.0
+  },
+  "trade_stats": {
+    "trades": 0,
+    "cagr_r": 0.0,
+    "win_rate": 0.0,
+    "rr": 0.0,
+    "avg_win": 0.0,
+    "avg_loss": 0.0,
+    "gross_profit": 0.0,
+    "gross_loss": 0.0
+  },
+  "overall_quality": {
+    "expectancy": 0.0,
+    "calmar": 0.0,
+    "sharpe": 0.0,
+    "profit_factor": 0.0,
+    "max_drawdown_90d": 0.0,
+    "cagr_pct": 0.0,
+    "cagr_source": "r_multiples"
+  },
+  "simulation": {
+    "expected_growth_1y": 0.0,
+    "median_outcome_1y": 100000,
+    "risk_of_loss_1y": 0.0,
+    "n_sims": 1000,
+    "confidence_5": 0.0,
+    "confidence_95": 0.0,
+    "confidence_low": true
+  },
+  "market": {
+    "market_score": 60.6,
+    "regime_bin": "FAVORABLE"
+  },
+  "system_vs_actual": {
+    "system_value": 100000.0,
+    "actual_value": null,
+    "system_edge": null,
+    "system_return": null,
+    "actual_return": null,
+    "has_actual": false
+  }
+}

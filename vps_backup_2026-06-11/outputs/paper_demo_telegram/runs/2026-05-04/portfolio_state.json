@@ -1,0 +1,56 @@
+{
+  "date": "2026-05-04",
+  "kill_switch": false,
+  "entries_paused": false,
+  "generated_at": "2026-05-04T21:47:11.659927",
+  "status": "candidates_ready",
+  "open_positions": [],
+  "closed_positions": [],
+  "pending_intents": [
+    {
+      "intent_id": "intent_da937eeaabd3e38e",
+      "signal_id": "sig_2b826d0103728533",
+      "source_universe": "finviz",
+      "ticker": "SNDR",
+      "strategy_id": "combo_pure_momentum",
+      "signal_date": "2026-05-04",
+      "side": "long",
+      "entry_type": "next_open",
+      "entry_price_ref": 28.16189438247681,
+      "stop_price": 28.100000381469727,
+      "target_price": 28.34757638549806,
+      "risk_budget_usd": 1000.0,
+      "risk_per_trade_usd": 1000.0,
+      "per_share_risk": 0.0618940010070829,
+      "shares": 416,
+      "notional_usd": 11715.348063110352,
+      "decision_source": "telegram",
+      "tp1_price": 28.239261883735665,
+      "tp2_price": 28.34757638549806,
+      "status": "pending",
+      "status_reason": NaN,
+      "snoozed_until": NaN,
+      "confirmed_by": NaN,
+      "confirmed_at": NaN,
+      "created_at": "2026-05-04T18:30:31.653035",
+      "metadata": {
+        "raw_metadata": "{'combo': 'combo_pure_momentum', 'ticker': 'SNDR', 'signal_date': '2026-05-04', 'entry_price': 28.16189438247681, 'stop_loss': 28.100000381469727, 'tp1_price': 28.239261883735665, 'tp2_price': 28.34757638549806, 'position_size': 416.0, 'rs_mode': 'spy_fallback', 'source': 'backtest_trade', 'combo_name': 'combo_pure_momentum', 'source_universe': 'finviz', 'decision_source': 'telegram'}"
+      }
+    }
+  ],
+  "processed_callbacks": [],
+  "metrics": {
+    "open_positions": 0,
+    "closed_positions": 0,
+    "pending_intents": 1,
+    "snoozed_intents": 0,
+    "approved_intents": 0,
+    "rejected_intents": 0,
+    "expired_intents": 1,
+    "orders": 0,
+    "fills": 0,
+    "realized_pnl": 0,
+    "kill_switch": false,
+    "entries_paused": false
+  }
+}

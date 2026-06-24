@@ -1,0 +1,23 @@
+{
+  "name": "vcp_enhanced",
+  "enabled": true,
+  "min_price": 5.0,
+  "max_price": 1000.0,
+  "min_avg_volume": 100000,
+  "min_adr_pct": 1.5,
+  "max_adr_pct": 15.0,
+  "params": {
+    "min_vcs_score": 60.0,
+    "min_contractions": 2,
+    "require_higher_lows": true,
+    "require_minervini_trend": true,
+    "vcs_short_period": 13,
+    "vcs_long_period": 63,
+    "w_price_compression": 0.35,
+    "w_price_stability": 0.30,
+    "w_volume_contraction": 0.25,
+    "w_structure_bonus": 0.10,
+    "contraction_window": 40,
+    "contraction_threshold": 0.85
+  }
+}

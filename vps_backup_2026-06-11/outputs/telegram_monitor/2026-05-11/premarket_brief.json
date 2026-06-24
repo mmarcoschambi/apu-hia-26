@@ -1,0 +1,42 @@
+{
+  "date": "2026-05-11",
+  "brief": "\ud83d\ude80 <b>MOMENTUM V2 | 2026-05-11</b>\n\u2022 Regime: <b>PASS</b>\n\u2022 Universe: <code>585</code>\n\u2022 Signals: <code>0</code>\n\n\ud83d\udc8e <b>MARKET ALPHA (Gamma/DIX)</b>\n\u2022 DIX: <code>43.0%</code> \u2744\ufe0f (Dark Pool Buy %)\n\u2022 GEX: <code>$21.3B</code> \u2705 (Gamma Exposure)\n\n\n\ud83d\udd25 <b>HOT SECTORS</b>\n\u2022 <b>XLK Tecnolog\u00eda</b> | RS 182.5% | S1 \u2713\n\u2022 <b>XLY Consumo discrecional</b> | RS -46.7% | S1 \u2717\n\u2022 <b>XLRE Real Estate</b> | RS -50.0% | S1 \u2717\n\u2022 <b>XLP Consumo defensivo</b> | RS -71.9% | S1 \u2717\n\u2022 <b>XLC Comunicaciones</b> | RS -85.1% | S1 \u2717\n\n\ud83c\udfaf <b>NEAREST TO SIGNAL</b>\n\u2022 1. \u2b06\ufe0f <code>ADI</code> (Prev R7)\n  RS: <b>76</b> | Proximidad: <b>97</b>\n  Chart: <a href=\"https://www.tradingview.com/symbols/ADI/\">TradingView</a>\n  Estado: \ud83d\udcc9 Consolidar\n  Break: <code>416.00</code> | RVOL: 1.14\n  \ud83d\udee1\ufe0f SL aprox: <code>395.20</code> (-5%)\n  \ud83c\udfaf TP1 aprox: <code>442.00</code> (1.25R)\n  Falta: Extendido de SMA20\n  Live trigger: <code>Dist SMA20 &lt;= 6.77%</code>\n\n\u2022 2. \u2b06\ufe0f <code>CSCO</code> (Prev R28)\n  RS: <b>74</b> | Proximidad: <b>95</b>\n  Chart: <a href=\"https://www.tradingview.com/symbols/CSCO/\">TradingView</a>\n  Estado: \ud83d\udcc9 Consolidar\n  Break: <code>94.72</code> | RVOL: 1.37\n  \ud83d\udee1\ufe0f SL aprox: <code>89.98</code> (-5%)\n  \ud83c\udfaf TP1 aprox: <code>100.64</code> (1.25R)\n  Falta: Extendido de SMA20\n  Live trigger: <code>Dist SMA20 &lt;= 6.77%</code>\n\n\u2022 3. \u2b06\ufe0f <code>AMAT</code> (Prev R9)\n  RS: <b>60</b> | Proximidad: <b>95</b>\n  Chart: <a href=\"https://www.tradingview.com/symbols/AMAT/\">TradingView</a>\n  Estado: \ud83d\udcc9 Consolidar\n  Break: <code>432.81</code> | RVOL: 1.36\n  \ud83d\udee1\ufe0f SL aprox: <code>411.17</code> (-5%)\n  \ud83c\udfaf TP1 aprox: <code>459.86</code> (1.25R)\n  Falta: Extendido de SMA20\n  Live trigger: <code>Dist SMA20 &lt;= 6.77%</code>\n\n\u2022 4. \ud83c\udd95 <code>ASML</code> (Prev R-)\n  RS: <b>58</b> | Proximidad: <b>94</b>\n  Chart: <a href=\"https://www.tradingview.com/symbols/ASML/\">TradingView</a>\n  Estado: \ud83d\udcc9 Consolidar\n  Break: <code>1550.00</code> | RVOL: 1.23\n  \ud83d\udee1\ufe0f SL aprox: <code>1472.50</code> (-5%)\n  \ud83c\udfaf TP1 aprox: <code>1646.88</code> (1.25R)\n  Falta: MA stack roto\n  Live trigger: <code>SMA100/SMA200 N/A</code>\n\n\u2022 5. \ud83c\udd95 <code>TECK</code> (Prev R-)\n  RS: <b>70</b> | Proximidad: <b>92</b>\n  Chart: <a href=\"https://www.tradingview.com/symbols/TECK/\">TradingView</a>\n  Estado: \ud83d\udcc9 Consolidar\n  Break: <code>64.07</code> | RVOL: 1.23\n  \ud83d\udee1\ufe0f SL aprox: <code>60.87</code> (-5%)\n  \ud83c\udfaf TP1 aprox: <code>68.07</code> (1.25R)\n  Falta: MA stack roto\n  Live trigger: <code>SMA100/SMA200 N/A</code>\n\n\n\ud83d\udce1 <b>DATA INCOMPLETE RADAR</b>\n\u2022 <b>BRK-B</b> (RS 36) | RVOL premarket no confiable\n\u2022 <b>CI</b> (RS 54) | RVOL premarket no confiable\n\u2022 <b>HUT</b> (RS 93) | RVOL premarket no confiable\n<i>Nota: Vigila OK+Warn; solo promueve con Breakout+RVOL live</i>\n\n\ud83d\udd01 <b>NEAREST FLOW 2026-05-08 \u2192 2026-05-11</b>\n\u2022 \u274c <b>NET</b> (Prev R1) | Fuera radar | Px N/A\n  Prox 80.00\u2192N/A | Gap break: N/A\n  Espera: <code>N/A</code> | Falla: Salio del universo/watchlist Finviz\n\u2022 \u274c <b>VTRS</b> (Prev R2) | Cayo | Px -1.27%\n  Prox 80.00\u219240.33 | Gap break: -1.60%\n  Espera: <code>Breakout &gt; 17.45</code> | Falla: Falta breakout\n\u2022 \u274c <b>ADSK</b> (Prev R3) | Cayo | Px -2.61%\n  Prox 70.00\u219220.00 | Gap break: -4.17%\n  Espera: <code>Breakout &gt; 255.14</code> | Falla: Falta breakout\n\u2022 \u274c <b>NTRA</b> (Prev R4) | Fuera radar | Px N/A\n  Prox 69.70\u2192N/A | Gap break: N/A\n  Espera: <code>N/A</code> | Falla: Salio del universo/watchlist Finviz\n\u2022 \u274c <b>AXON</b> (Prev R5) | Cayo | Px -5.47%\n  Prox 66.28\u219230.00 | Gap break: -8.07%\n  Espera: <code>Breakout &gt; 438.97</code> | Falla: Falta breakout",
+  "buttons": [
+    [
+      {
+        "text": "\ud83d\udd0e ADI",
+        "callback_data": "detail:ADI"
+      },
+      {
+        "text": "\ud83d\udd0e CSCO",
+        "callback_data": "detail:CSCO"
+      }
+    ],
+    [
+      {
+        "text": "\ud83d\udd0e AMAT",
+        "callback_data": "detail:AMAT"
+      },
+      {
+        "text": "\ud83d\udd0e ASML",
+        "callback_data": "detail:ASML"
+      }
+    ],
+    [
+      {
+        "text": "\ud83d\udd0e TECK",
+        "callback_data": "detail:TECK"
+      }
+    ],
+    [
+      {
+        "text": "\ud83d\udd04 Refresh",
+        "callback_data": "refresh:market"
+      },
+      {
+        "text": "\u26a1 Regen All",
+        "callback_data": "regenerate:market"
+      }
+    ]
+  ]
+}

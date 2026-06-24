@@ -38,5 +38,29 @@
     "scope": "project",
     "topic_key": "architecture/documentation-and-ml-consolidation",
     "content": "Se documentaron detalladamente los constructores, firmas y flujos en vectorbt_engine_advanced.py, signal_engine.py y thematic_logic.py. Se consolidó la estructura de SYSTEM_CONTEXT.md para clarificar la división de los directorios de Machine Learning (src/ml vs src/ml_signal) y de sizing y riesgo. Se resolvió un problema de pre-commit local (--no-verify) derivado de una lista de argumentos demasiado larga por la cantidad de archivos de backups locales sin seguimiento."
+  },
+  {
+    "timestamp": "2026-06-17T13:50:00Z",
+    "title": "Agregar pestaña de Evolución & Arquitectura interactiva en Streamlit UI",
+    "type": "architecture",
+    "scope": "project",
+    "topic_key": "ui/agent-playbook-evolution",
+    "content": "Se integró una pestaña '📈 Evolución & Arquitectura' en la app de Streamlit (agent_playbook_ui.py) que muestra un diagrama dinámico de arquitectura (Graphviz), calcula la cobertura de docstrings de forma dinámica mediante parsing AST de los 6 archivos core prioritarios de Phase 6, e imprime un timeline formateado de Git Log para facilitar la inducción en nuevas sesiones."
+  },
+  {
+    "timestamp": "2026-06-23T16:21:00Z",
+    "title": "Implementado diagrama de flujo interactivo ScrumBan en UI",
+    "type": "architecture",
+    "scope": "project",
+    "topic_key": "ui/agent-playbook-workflow",
+    "content": "Se reemplazó la guía textual estática del ciclo del ticket en agent_playbook_ui.py por un visor de flujo interactivo de dos columnas. Utiliza un select_slider de Streamlit para controlar el estado activo y renderiza dinámicamente el nodo resaltado en Graphviz, mostrando comandos y prompts mocks del ciclo ScrumBan a la derecha."
+  },
+  {
+    "timestamp": "2026-06-24T17:45:00Z",
+    "title": "Bifurcacion de watchlists en pre-market y ajuste de ruteo de Telegram (Issue #48)",
+    "type": "bugfix",
+    "scope": "project",
+    "topic_key": "vps-watchlist-split-and-routing",
+    "content": "Se corrigio la duplicacion de candidatos en las watchlists de Telegram de Qulla y Minervini aplicando la validacion de filtros especifica de cada combo (_passes_combo_filters) antes de asociar el combo en el snapshot consolidado. Tambien se re-ruteo el brief diario de pre-market para que llegue al mensaje privado (TELEGRAM_CHAT_ID) y las watchlists y alertas a los grupos correspondientes (TELEGRAM_CHAT_ID_MONITOR)."
   }
 ]

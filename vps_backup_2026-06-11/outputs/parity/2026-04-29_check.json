@@ -1,0 +1,21 @@
+{
+  "date": "2026-04-29",
+  "generated_at": "2026-04-29T16:42:12.474953",
+  "wf_run_dir": null,
+  "wf_fold": null,
+  "wf_oos_start": null,
+  "wf_oos_end": null,
+  "tickers_live": [],
+  "tickers_wf": [],
+  "common_tickers": [],
+  "common_count": 0,
+  "union_count": 0,
+  "live_count": 0,
+  "wf_count": 0,
+  "match_pct": 0.0,
+  "coverage_pct": 0.0,
+  "min_parity_pct": 80.0,
+  "alert_triggered": true,
+  "source_file": null,
+  "note": null
+}

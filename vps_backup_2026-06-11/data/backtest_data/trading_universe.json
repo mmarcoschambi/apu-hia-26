@@ -1,0 +1,32 @@
+{
+  "etfs": [
+    "SPY",
+    "QQQ",
+    "IWM"
+  ],
+  "qqq_top30": [],
+  "russell_liquid": [
+    "PLTR",
+    "RIVN",
+    "LCID",
+    "SOFI",
+    "OPEN",
+    "COIN",
+    "HOOD",
+    "UPST",
+    "AFRM",
+    "RBLX",
+    "CELH",
+    "EYE",
+    "RELY",
+    "FTAI",
+    "CVNA",
+    "VERV",
+    "SMCI",
+    "SRRK",
+    "DOCS",
+    "ASTS"
+  ],
+  "download_date": "2026-02-11 04:19:45",
+  "data_range": "2010-01-01 to present"
+}

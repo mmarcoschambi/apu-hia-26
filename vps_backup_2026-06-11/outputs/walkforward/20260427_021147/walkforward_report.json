@@ -1,0 +1,99 @@
+{
+  "generated_at": "2026-04-27T02:11:47.350189",
+  "results": [
+    {
+      "mode": "A",
+      "folds": [
+        {
+          "fold": 0,
+          "mode": "A",
+          "is_start": "2021-01-01",
+          "oos_start": "2021-09-30",
+          "is_signals": 0,
+          "oos_signals": 0,
+          "is_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0,
+            "profit_factor_defined": false,
+            "sharpe_defined": false,
+            "low_sample": true
+          },
+          "oos_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0,
+            "profit_factor_defined": false,
+            "sharpe_defined": false,
+            "low_sample": true
+          },
+          "gate": {
+            "verdict": "HOLD"
+          },
+          "funnel": {
+            "is": {
+              "n_evaluations": 5423,
+              "n_min_data_fail": 0,
+              "n_screener_fail": 5423,
+              "n_tier2_fail": 0,
+              "n_passed": 0
+            },
+            "oos": {
+              "n_evaluations": 5452,
+              "n_min_data_fail": 0,
+              "n_screener_fail": 5452,
+              "n_tier2_fail": 0,
+              "n_passed": 0
+            }
+          },
+          "universe": {
+            "n_tickers": 29,
+            "tickers": [
+              "SPY",
+              "TSLA",
+              "AAPL",
+              "AMZN",
+              "MSFT",
+              "META",
+              "NVDA",
+              "AMD",
+              "ADBE",
+              "NFLX",
+              "PYPL",
+              "MU",
+              "INTC",
+              "CSCO",
+              "AMAT",
+              "COST",
+              "QCOM",
+              "AVGO",
+              "LRCX",
+              "BKNG",
+              "TXN",
+              "MELI",
+              "KLAC",
+              "MAR",
+              "FTNT",
+              "SNPS",
+              "VRTX",
+              "ADP",
+              "CDNS"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

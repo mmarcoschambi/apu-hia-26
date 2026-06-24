@@ -1,0 +1,803 @@
+Data Alignment Report - 2026-01-10 17:31:48.414026
+================================================================================
+
+AAEQ: Insufficient data (8 rows) for period since listing on 2025-12-10 (threshold: 20, days since listing: 27)
+AAUM: 6287 gaps (99.0%)
+AAUM: Error - Error binding parameter 1 - probably unsupported t
+ABNG: 6322 gaps (99.5%)
+ABNG: Error - Error binding parameter 1 - probably unsupported t
+ACEI: 6282 gaps (98.9%)
+ACEI: Error - Error binding parameter 1 - probably unsupported t
+ACEP: 6328 gaps (99.6%)
+ACEP: Error - Error binding parameter 1 - probably unsupported t
+ACII: 6282 gaps (98.9%)
+ACII: Error - Error binding parameter 1 - probably unsupported t
+ACKY: 6270 gaps (98.7%)
+ACKY: Error - Error binding parameter 1 - probably unsupported t
+ACSG: 6297 gaps (99.1%)
+ACSG: Error - Error binding parameter 1 - probably unsupported t
+ACSV: 6297 gaps (99.1%)
+ACSV: Error - Error binding parameter 1 - probably unsupported t
+ADACU: Insufficient data (9 rows) for period since listing on 2025-12-18 (threshold: 20, days since listing: 19)
+AEAQU: Insufficient data (19 rows) for period since listing on 2025-12-04 (threshold: 20, days since listing: 33)
+AEXA: 6283 gaps (98.9%)
+AEXA: Error - Error binding parameter 1 - probably unsupported t
+AFRU: 6275 gaps (98.8%)
+AFRU: Error - Error binding parameter 1 - probably unsupported t
+AGCC: 6304 gaps (99.2%)
+AGCC: Error - Error binding parameter 1 - probably unsupported t
+AGIQ: 6266 gaps (98.6%)
+AGIQ: Error - Error binding parameter 1 - probably unsupported t
+AGNCZ: 6274 gaps (98.8%)
+AGNCZ: Error - Error binding parameter 1 - probably unsupported t
+AGRZ: 6289 gaps (99.0%)
+AGRZ: Error - Error binding parameter 1 - probably unsupported t
+AHMA: 6303 gaps (99.2%)
+AHMA: Error - Error binding parameter 1 - probably unsupported t
+AKRE: 6304 gaps (99.2%)
+AKRE: Error - Error binding parameter 1 - probably unsupported t
+ALH: 6292 gaps (99.0%)
+ALH: Error - Error binding parameter 1 - probably unsupported t
+ALIS: 6326 gaps (99.6%)
+ALIS: Error - Error binding parameter 1 - probably unsupported t
+ALISR: 6324 gaps (99.5%)
+ALISR: Error - Error binding parameter 1 - probably unsupported t
+ALISU: 6315 gaps (99.4%)
+ALISU: Error - Error binding parameter 1 - probably unsupported t
+AMDU: 6260 gaps (98.5%)
+AMDU: Error - Error binding parameter 1 - probably unsupported t
+AMUN: 6309 gaps (99.3%)
+AMUN: Error - Error binding parameter 1 - probably unsupported t
+AMYY: 6278 gaps (98.8%)
+AMYY: Error - Error binding parameter 1 - probably unsupported t
+ANEL: 6270 gaps (98.7%)
+ANEL: Error - Error binding parameter 1 - probably unsupported t
+ANGX: 6272 gaps (98.7%)
+ANGX: Error - Error binding parameter 1 - probably unsupported t
+APACR: 6329 gaps (99.6%)
+APACR: Error - Error binding parameter 1 - probably unsupported t
+APAD: 6272 gaps (98.7%)
+APAD: Error - Error binding parameter 1 - probably unsupported t
+APADR: 6271 gaps (98.7%)
+APADR: Error - Error binding parameter 1 - probably unsupported t
+APADU: 6273 gaps (98.7%)
+APADU: Error - Error binding parameter 1 - probably unsupported t
+APLX: 6270 gaps (98.7%)
+APLX: Error - Error binding parameter 1 - probably unsupported t
+APRB: 6295 gaps (99.1%)
+APRB: Error - Error binding parameter 1 - probably unsupported t
+ARKT: 6286 gaps (98.9%)
+ARKT: Error - Error binding parameter 1 - probably unsupported t
+ARMW: 6302 gaps (99.2%)
+ARMW: Error - Error binding parameter 1 - probably unsupported t
+ASCI: 6302 gaps (99.2%)
+ASCI: Error - Error binding parameter 1 - probably unsupported t
+AURU: 6291 gaps (99.0%)
+AURU: Error - Error binding parameter 1 - probably unsupported t
+AVXX: 6306 gaps (99.3%)
+AVXX: Error - Error binding parameter 1 - probably unsupported t
+AXIN: 6255 gaps (98.5%)
+AXIN: Error - Error binding parameter 1 - probably unsupported t
+AXINR: 6266 gaps (98.6%)
+AXINR: Error - Error binding parameter 1 - probably unsupported t
+AXINU: 6265 gaps (98.6%)
+AXINU: Error - Error binding parameter 1 - probably unsupported t
+AXUP: 6275 gaps (98.8%)
+AXUP: Error - Error binding parameter 1 - probably unsupported t
+AZYY: 6278 gaps (98.8%)
+AZYY: Error - Error binding parameter 1 - probably unsupported t
+BABW: 6302 gaps (99.2%)
+BABW: Error - Error binding parameter 1 - probably unsupported t
+BACCR: 6281 gaps (98.9%)
+BACCR: Error - Error binding parameter 1 - probably unsupported t
+BAIG: 6261 gaps (98.6%)
+BAIG: Error - Error binding parameter 1 - probably unsupported t
+BALQ: 6333 gaps (99.7%)
+BALQ: Error - Error binding parameter 1 - probably unsupported t
+BBYY: 6303 gaps (99.2%)
+BBYY: Error - Error binding parameter 1 - probably unsupported t
+BCARU: 6268 gaps (98.7%)
+BCARU: Error - Error binding parameter 1 - probably unsupported t
+BCARW: 6268 gaps (98.7%)
+BCARW: Error - Error binding parameter 1 - probably unsupported t
+BCFN: Insufficient data (12 rows) for period since listing on 2025-12-15 (threshold: 20, days since listing: 22)
+BCTK: Insufficient data (12 rows) for period since listing on 2025-12-15 (threshold: 20, days since listing: 22)
+BDCIU: 6289 gaps (99.0%)
+BDCIU: Error - Error binding parameter 1 - probably unsupported t
+BDCIW: 6317 gaps (99.4%)
+BDCIW: Error - Error binding parameter 1 - probably unsupported t
+BDVL: 6277 gaps (98.8%)
+BDVL: Error - Error binding parameter 1 - probably unsupported t
+BDYN: 6277 gaps (98.8%)
+BDYN: Error - Error binding parameter 1 - probably unsupported t
+BEDY: Insufficient data (17 rows) for period since listing on 2025-12-08 (threshold: 20, days since listing: 29)
+BEG: Insufficient data (11 rows) for period since listing on 2025-12-16 (threshold: 20, days since listing: 21)
+BGIN: 6303 gaps (99.2%)
+BGIN: Error - Error binding parameter 1 - probably unsupported t
+BIDG: Insufficient data (9 rows) for period since listing on 2025-12-18 (threshold: 20, days since listing: 19)
+BIVIW: 6264 gaps (98.6%)
+BIVIW: Error - Error binding parameter 1 - probably unsupported t
+BIXI: Insufficient data (10 rows) for period since listing on 2025-12-17 (threshold: 20, days since listing: 20)
+BIXIU: 6332 gaps (99.7%)
+BIXIU: Error - Error binding parameter 1 - probably unsupported t
+BIXIW: Insufficient data (10 rows) for period since listing on 2025-12-17 (threshold: 20, days since listing: 20)
+BLRKU: Insufficient data (14 rows) for period since listing on 2025-12-11 (threshold: 20, days since listing: 26)
+BLSG: 6307 gaps (99.3%)
+BLSG: Error - Error binding parameter 1 - probably unsupported t
+BLZR: 6318 gaps (99.4%)
+BLZR: Error - Error binding parameter 1 - probably unsupported t
+BLZRU: 6278 gaps (98.8%)
+BLZRU: Error - Error binding parameter 1 - probably unsupported t
+BLZRW: 6326 gaps (99.6%)
+BLZRW: Error - Error binding parameter 1 - probably unsupported t
+BMNG: 6307 gaps (99.3%)
+BMNG: Error - Error binding parameter 1 - probably unsupported t
+BNDP: Insufficient data (19 rows) for period since listing on 2025-12-04 (threshold: 20, days since listing: 33)
+BRCB: 6276 gaps (98.8%)
+BRCB: Error - Error binding parameter 1 - probably unsupported t
+BREM: 6312 gaps (99.4%)
+BREM: Error - Error binding parameter 1 - probably unsupported t
+BRKRP: 6273 gaps (98.7%)
+BRKRP: Error - Error binding parameter 1 - probably unsupported t
+BSAA: 6277 gaps (98.8%)
+BSAA: Error - Error binding parameter 1 - probably unsupported t
+BSAAR: 6296 gaps (99.1%)
+BSAAR: Error - Error binding parameter 1 - probably unsupported t
+BSAAU: 6267 gaps (98.6%)
+BSAAU: Error - Error binding parameter 1 - probably unsupported t
+BSMZ: 6284 gaps (98.9%)
+BSMZ: Error - Error binding parameter 1 - probably unsupported t
+BU: 6324 gaps (99.5%)
+BU: Error - Error binding parameter 1 - probably unsupported t
+BULX: 6269 gaps (98.7%)
+BULX: Error - Error binding parameter 1 - probably unsupported t
+BUUU: 6256 gaps (98.5%)
+BUUU: Error - Error binding parameter 1 - probably unsupported t
+CABR: 6319 gaps (99.5%)
+CABR: Error - Error binding parameter 1 - probably unsupported t
+CAIQ: 6325 gaps (99.6%)
+CAIQ: Error - Error binding parameter 1 - probably unsupported t
+CBK: 6290 gaps (99.0%)
+CBK: Error - Error binding parameter 1 - probably unsupported t
+CCFE: 6272 gaps (98.7%)
+CCFE: Error - Error binding parameter 1 - probably unsupported t
+CCHH: 6291 gaps (99.0%)
+CCHH: Error - Error binding parameter 1 - probably unsupported t
+CCII: 6264 gaps (98.6%)
+CCII: Error - Error binding parameter 1 - probably unsupported t
+CCIIW: 6291 gaps (99.0%)
+CCIIW: Error - Error binding parameter 1 - probably unsupported t
+CCXIU: Insufficient data (10 rows) for period since listing on 2025-12-17 (threshold: 20, days since listing: 20)
+CDIG: 6279 gaps (98.8%)
+CDIG: Error - Error binding parameter 1 - probably unsupported t
+CEPF: 6261 gaps (98.6%)
+CEPF: Error - Error binding parameter 1 - probably unsupported t
+CEPV: 6313 gaps (99.4%)
+CEPV: Error - Error binding parameter 1 - probably unsupported t
+CGCTU: 6306 gaps (99.3%)
+CGCTU: Error - Error binding parameter 1 - probably unsupported t
+CHEC: 6323 gaps (99.5%)
+CHEC: Error - Error binding parameter 1 - probably unsupported t
+CHECU: 6301 gaps (99.2%)
+CHECU: Error - Error binding parameter 1 - probably unsupported t
+CHECW: 6331 gaps (99.7%)
+CHECW: Error - Error binding parameter 1 - probably unsupported t
+CHPGU: 6254 gaps (98.4%)
+CHPGU: Error - Error binding parameter 1 - probably unsupported t
+CHPX: 6289 gaps (99.0%)
+CHPX: Error - Error binding parameter 1 - probably unsupported t
+CIFG: Insufficient data (14 rows) for period since listing on 2025-12-11 (threshold: 20, days since listing: 26)
+CMCSV: Insufficient data (12 rows) for period since listing on 2025-12-15 (threshold: 20, days since listing: 22)
+CMGG: 6322 gaps (99.5%)
+CMGG: Error - Error binding parameter 1 - probably unsupported t
+CNQQ: 6286 gaps (98.9%)
+CNQQ: Error - Error binding parameter 1 - probably unsupported t
+COLAU: Insufficient data (69 rows) for period since listing on 2025-01-23 (threshold: 72, days since listing: 348)
+COTG: 6280 gaps (98.9%)
+COTG: Error - Error binding parameter 1 - probably unsupported t
+CPAG: 6259 gaps (98.5%)
+CPAG: Error - Error binding parameter 1 - probably unsupported t
+CPHY: 6265 gaps (98.6%)
+CPHY: Error - Error binding parameter 1 - probably unsupported t
+CRAC: Insufficient data (16 rows) for period since listing on 2025-12-09 (threshold: 20, days since listing: 28)
+CRACR: Insufficient data (10 rows) for period since listing on 2025-12-09 (threshold: 20, days since listing: 28)
+CRACW: Insufficient data (15 rows) for period since listing on 2025-12-09 (threshold: 20, days since listing: 28)
+CRANU: Insufficient data (11 rows) for period since listing on 2025-12-16 (threshold: 20, days since listing: 21)
+CRAQR: 6270 gaps (98.7%)
+CRAQR: Error - Error binding parameter 1 - probably unsupported t
+CRAQU: 6265 gaps (98.6%)
+CRAQU: Error - Error binding parameter 1 - probably unsupported t
+CSCS: 6256 gaps (98.5%)
+CSCS: Error - Error binding parameter 1 - probably unsupported t
+CURX: 6264 gaps (98.6%)
+CURX: Error - Error binding parameter 1 - probably unsupported t
+DAAQW: 6255 gaps (98.5%)
+DAAQW: Error - Error binding parameter 1 - probably unsupported t
+DAK: 6289 gaps (99.0%)
+DAK: Error - Error binding parameter 1 - probably unsupported t
+DBSC: Insufficient data (11 rows) for period since listing on 2025-12-16 (threshold: 20, days since listing: 21)
+DFDVW: 6315 gaps (99.4%)
+DFDVW: Error - Error binding parameter 1 - probably unsupported t
+DFSCW: 6265 gaps (98.6%)
+DFSCW: Error - Error binding parameter 1 - probably unsupported t
+DGLO: 6277 gaps (98.8%)
+DGLO: Error - Error binding parameter 1 - probably unsupported t
+DIME: 6293 gaps (99.1%)
+DIME: Error - Error binding parameter 1 - probably unsupported t
+DMII: 6333 gaps (99.7%)
+DMII: Error - Error binding parameter 1 - probably unsupported t
+DMIIR: Insufficient data (18 rows) for period since listing on 2025-12-03 (threshold: 20, days since listing: 34)
+DMIIU: 6285 gaps (98.9%)
+DMIIU: Error - Error binding parameter 1 - probably unsupported t
+DNMX: 6326 gaps (99.6%)
+DNMX: Error - Error binding parameter 1 - probably unsupported t
+DNMXU: 6313 gaps (99.4%)
+DNMXU: Error - Error binding parameter 1 - probably unsupported t
+DNMXW: 6331 gaps (99.7%)
+DNMXW: Error - Error binding parameter 1 - probably unsupported t
+DRNZ: 6309 gaps (99.3%)
+DRNZ: Error - Error binding parameter 1 - probably unsupported t
+DUOG: Insufficient data (14 rows) for period since listing on 2025-12-11 (threshold: 20, days since listing: 26)
+DVGR: Insufficient data (18 rows) for period since listing on 2025-12-05 (threshold: 20, days since listing: 32)
+DVIN: Insufficient data (30 rows) for period since listing on 2025-07-23 (threshold: 34, days since listing: 167)
+DVRE: Insufficient data (20 rows) for period since listing on 2025-07-23 (threshold: 34, days since listing: 167)
+DVUT: 6312 gaps (99.4%)
+DVUT: Error - Error binding parameter 1 - probably unsupported t
+DVXB: Insufficient data (19 rows) for period since listing on 2025-07-23 (threshold: 34, days since listing: 167)
+DVXC: Insufficient data (24 rows) for period since listing on 2025-07-23 (threshold: 34, days since listing: 167)
+DVXE: Insufficient data (27 rows) for period since listing on 2025-07-23 (threshold: 34, days since listing: 167)
+DVXF: Insufficient data (16 rows) for period since listing on 2025-07-23 (threshold: 34, days since listing: 167)
+DVXK: 6286 gaps (98.9%)
+DVXK: Error - Error binding parameter 1 - probably unsupported t
+DVXP: Insufficient data (22 rows) for period since listing on 2025-07-23 (threshold: 34, days since listing: 167)
+DVXV: 6319 gaps (99.5%)
+DVXV: Error - Error binding parameter 1 - probably unsupported t
+DVXY: Insufficient data (23 rows) for period since listing on 2025-07-23 (threshold: 34, days since listing: 167)
+DYNB: 6292 gaps (99.0%)
+DYNB: Error - Error binding parameter 1 - probably unsupported t
+DYOR: 6326 gaps (99.6%)
+DYOR: Error - Error binding parameter 1 - probably unsupported t
+DYORU: 6321 gaps (99.5%)
+DYORU: Error - Error binding parameter 1 - probably unsupported t
+DYORW: 6325 gaps (99.6%)
+DYORW: Error - Error binding parameter 1 - probably unsupported t
+EASY: 6292 gaps (99.0%)
+EASY: Error - Error binding parameter 1 - probably unsupported t
+EGHAR: 6264 gaps (98.6%)
+EGHAR: Error - Error binding parameter 1 - probably unsupported t
+EGHAU: 6275 gaps (98.8%)
+EGHAU: Error - Error binding parameter 1 - probably unsupported t
+ELE: 6328 gaps (99.6%)
+ELE: Error - Error binding parameter 1 - probably unsupported t
+ELOG: 6266 gaps (98.6%)
+ELOG: Error - Error binding parameter 1 - probably unsupported t
+ELVR: 6268 gaps (98.7%)
+ELVR: Error - Error binding parameter 1 - probably unsupported t
+ELWT: 6314 gaps (99.4%)
+ELWT: Error - Error binding parameter 1 - probably unsupported t
+EMISR: 6309 gaps (99.3%)
+EMISR: Error - Error binding parameter 1 - probably unsupported t
+ENHU: 6315 gaps (99.4%)
+ENHU: Error - Error binding parameter 1 - probably unsupported t
+ETHI: 6280 gaps (98.9%)
+ETHI: Error - Error binding parameter 1 - probably unsupported t
+ETRL: 6269 gaps (98.7%)
+ETRL: Error - Error binding parameter 1 - probably unsupported t
+ETS: 6261 gaps (98.6%)
+ETS: Error - Error binding parameter 1 - probably unsupported t
+EVOX: Insufficient data (19 rows) for period since listing on 2025-12-03 (threshold: 20, days since listing: 34)
+EVOXU: 6318 gaps (99.4%)
+EVOXU: Error - Error binding parameter 1 - probably unsupported t
+EVOXW: 6333 gaps (99.7%)
+EVOXW: Error - Error binding parameter 1 - probably unsupported t
+EXUS: 6255 gaps (98.5%)
+EXUS: Error - Error binding parameter 1 - probably unsupported t
+EZMO: 6300 gaps (99.2%)
+EZMO: Error - Error binding parameter 1 - probably unsupported t
+EZRO: 6300 gaps (99.2%)
+EZRO: Error - Error binding parameter 1 - probably unsupported t
+FBYY: 6303 gaps (99.2%)
+FBYY: Error - Error binding parameter 1 - probably unsupported t
+FCHL: 6270 gaps (98.7%)
+FCHL: Error - Error binding parameter 1 - probably unsupported t
+FGSI: 6276 gaps (98.8%)
+FGSI: Error - Error binding parameter 1 - probably unsupported t
+FIGG: 6298 gaps (99.1%)
+FIGG: Error - Error binding parameter 1 - probably unsupported t
+FIGX: 6265 gaps (98.6%)
+FIGX: Error - Error binding parameter 1 - probably unsupported t
+FIGXW: 6276 gaps (98.8%)
+FIGXW: Error - Error binding parameter 1 - probably unsupported t
+FOFO: 6276 gaps (98.8%)
+FOFO: Error - Error binding parameter 1 - probably unsupported t
+FRDD: 6274 gaps (98.8%)
+FRDD: Error - Error binding parameter 1 - probably unsupported t
+FRMI: 6289 gaps (99.0%)
+FRMI: Error - Error binding parameter 1 - probably unsupported t
+FUSE: 6305 gaps (99.2%)
+FUSE: Error - Error binding parameter 1 - probably unsupported t
+FUSEW: 6311 gaps (99.3%)
+FUSEW: Error - Error binding parameter 1 - probably unsupported t
+FUTG: 6298 gaps (99.1%)
+FUTG: Error - Error binding parameter 1 - probably unsupported t
+GARY: Insufficient data (7 rows) for period since listing on 2025-12-22 (threshold: 20, days since listing: 15)
+GDFN: 6290 gaps (99.0%)
+GDFN: Error - Error binding parameter 1 - probably unsupported t
+GECCG: 6277 gaps (98.8%)
+GECCG: Error - Error binding parameter 1 - probably unsupported t
+GEMG: 6314 gaps (99.4%)
+GEMG: Error - Error binding parameter 1 - probably unsupported t
+GEMI: 6276 gaps (98.8%)
+GEMI: Error - Error binding parameter 1 - probably unsupported t
+GEVG: Insufficient data (11 rows) for period since listing on 2025-12-16 (threshold: 20, days since listing: 21)
+GIWWR: 6320 gaps (99.5%)
+GIWWR: Error - Error binding parameter 1 - probably unsupported t
+GKAT: 6268 gaps (98.7%)
+GKAT: Error - Error binding parameter 1 - probably unsupported t
+GLDB: 6306 gaps (99.3%)
+GLDB: Error - Error binding parameter 1 - probably unsupported t
+GLGG: 6261 gaps (98.6%)
+GLGG: Error - Error binding parameter 1 - probably unsupported t
+GLOO: 6324 gaps (99.5%)
+GLOO: Error - Error binding parameter 1 - probably unsupported t
+GOU: 6332 gaps (99.7%)
+GOU: Error - Error binding parameter 1 - probably unsupported t
+GRAG: Insufficient data (14 rows) for period since listing on 2025-12-11 (threshold: 20, days since listing: 26)
+GSGO: 6322 gaps (99.5%)
+GSGO: Error - Error binding parameter 1 - probably unsupported t
+GSRF: 6302 gaps (99.2%)
+GSRF: Error - Error binding parameter 1 - probably unsupported t
+GSRFR: 6313 gaps (99.4%)
+GSRFR: Error - Error binding parameter 1 - probably unsupported t
+GSRFU: 6271 gaps (98.7%)
+GSRFU: Error - Error binding parameter 1 - probably unsupported t
+GTENU: 6281 gaps (98.9%)
+GTENU: Error - Error binding parameter 1 - probably unsupported t
+GTERR: 6265 gaps (98.6%)
+GTERR: Error - Error binding parameter 1 - probably unsupported t
+GTERW: 6254 gaps (98.4%)
+GTERW: Error - Error binding parameter 1 - probably unsupported t
+GTPE: 6306 gaps (99.3%)
+GTPE: Error - Error binding parameter 1 - probably unsupported t
+GUSE: 6322 gaps (99.5%)
+GUSE: Error - Error binding parameter 1 - probably unsupported t
+GVLE: 6324 gaps (99.5%)
+GVLE: Error - Error binding parameter 1 - probably unsupported t
+HAVA: Insufficient data (41 rows) for period since listing on 2008-06-13 (threshold: 100, days since listing: 6416)
+HAVAR: Insufficient data (11 rows) for period since listing on 2025-12-15 (threshold: 20, days since listing: 22)
+HAVAU: 6307 gaps (99.3%)
+HAVAU: Error - Error binding parameter 1 - probably unsupported t
+HBR: 6308 gaps (99.3%)
+HBR: Error - Error binding parameter 1 - probably unsupported t
+HIMY: 6259 gaps (98.5%)
+HIMY: Error - Error binding parameter 1 - probably unsupported t
+HMYY: 6332 gaps (99.7%)
+HMYY: Error - Error binding parameter 1 - probably unsupported t
+HODU: 6324 gaps (99.5%)
+HODU: Error - Error binding parameter 1 - probably unsupported t
+HOOI: 6259 gaps (98.5%)
+HOOI: Error - Error binding parameter 1 - probably unsupported t
+HOYY: 6288 gaps (99.0%)
+HOYY: Error - Error binding parameter 1 - probably unsupported t
+HVMC: 6306 gaps (99.3%)
+HVMC: Error - Error binding parameter 1 - probably unsupported t
+HVMCU: 6287 gaps (99.0%)
+HVMCU: Error - Error binding parameter 1 - probably unsupported t
+HVMCW: 6311 gaps (99.3%)
+HVMCW: Error - Error binding parameter 1 - probably unsupported t
+HWSM: Insufficient data (54 rows) for period since listing on 2025-03-31 (threshold: 58, days since listing: 281)
+HYNE: Insufficient data (19 rows) for period since listing on 2025-12-04 (threshold: 20, days since listing: 33)
+IALT: Insufficient data (15 rows) for period since listing on 2025-12-10 (threshold: 20, days since listing: 27)
+IGACR: Insufficient data (5 rows) for period since listing on 2025-12-22 (threshold: 20, days since listing: 15)
+INAC: 6255 gaps (98.5%)
+INAC: Error - Error binding parameter 1 - probably unsupported t
+IOYY: 6313 gaps (99.4%)
+IOYY: Error - Error binding parameter 1 - probably unsupported t
+IPEXU: 6255 gaps (98.5%)
+IPEXU: Error - Error binding parameter 1 - probably unsupported t
+IREG: Insufficient data (11 rows) for period since listing on 2025-12-16 (threshold: 20, days since listing: 21)
+IRHOU: Insufficient data (10 rows) for period since listing on 2025-12-17 (threshold: 20, days since listing: 20)
+ISUL: 6293 gaps (99.1%)
+ISUL: Error - Error binding parameter 1 - probably unsupported t
+ITHAU: Insufficient data (13 rows) for period since listing on 2025-12-12 (threshold: 20, days since listing: 25)
+IVSI: Insufficient data (14 rows) for period since listing on 2025-12-11 (threshold: 20, days since listing: 26)
+IVSS: Insufficient data (19 rows) for period since listing on 2025-12-04 (threshold: 20, days since listing: 33)
+JHAI: 6260 gaps (98.5%)
+JHAI: Error - Error binding parameter 1 - probably unsupported t
+KAT: 6263 gaps (98.6%)
+KAT: Error - Error binding parameter 1 - probably unsupported t
+KBDU: 6325 gaps (99.6%)
+KBDU: Error - Error binding parameter 1 - probably unsupported t
+KBONU: Insufficient data (14 rows) for period since listing on 2025-12-11 (threshold: 20, days since listing: 26)
+KCHVR: 6266 gaps (98.6%)
+KCHVR: Error - Error binding parameter 1 - probably unsupported t
+KDKRW: 6285 gaps (98.9%)
+KDKRW: Error - Error binding parameter 1 - probably unsupported t
+KJD: 6299 gaps (99.2%)
+KJD: Error - Error binding parameter 1 - probably unsupported t
+KLAG: Insufficient data (9 rows) for period since listing on 2025-12-18 (threshold: 20, days since listing: 19)
+KOYN: 6281 gaps (98.9%)
+KOYN: Error - Error binding parameter 1 - probably unsupported t
+KOYNU: 6270 gaps (98.7%)
+KOYNU: Error - Error binding parameter 1 - probably unsupported t
+KOYNW: 6291 gaps (99.0%)
+KOYNW: Error - Error binding parameter 1 - probably unsupported t
+KYIVW: 6257 gaps (98.5%)
+KYIVW: Error - Error binding parameter 1 - probably unsupported t
+LACG: Insufficient data (14 rows) for period since listing on 2025-12-11 (threshold: 20, days since listing: 26)
+LAFA: 6333 gaps (99.7%)
+LAFA: Error - Error binding parameter 1 - probably unsupported t
+LAFAR: 6331 gaps (99.7%)
+LAFAR: Error - Error binding parameter 1 - probably unsupported t
+LAFAU: 6309 gaps (99.3%)
+LAFAU: Error - Error binding parameter 1 - probably unsupported t
+LATA: 6321 gaps (99.5%)
+LATA: Error - Error binding parameter 1 - probably unsupported t
+LATAU: 6292 gaps (99.0%)
+LATAU: Error - Error binding parameter 1 - probably unsupported t
+LATAW: Insufficient data (15 rows) for period since listing on 2025-11-10 (threshold: 20, days since listing: 57)
+LBRX: 6275 gaps (98.8%)
+LBRX: Error - Error binding parameter 1 - probably unsupported t
+LFS: 6295 gaps (99.1%)
+LFS: Error - Error binding parameter 1 - probably unsupported t
+LINT: 6324 gaps (99.5%)
+LINT: Error - Error binding parameter 1 - probably unsupported t
+LKSP: 6318 gaps (99.4%)
+LKSP: Error - Error binding parameter 1 - probably unsupported t
+LKSPR: 6319 gaps (99.5%)
+LKSPR: Error - Error binding parameter 1 - probably unsupported t
+LKSPU: 6303 gaps (99.2%)
+LKSPU: Error - Error binding parameter 1 - probably unsupported t
+LLYZ: 6270 gaps (98.7%)
+LLYZ: Error - Error binding parameter 1 - probably unsupported t
+LMRI: Insufficient data (14 rows) for period since listing on 2025-12-11 (threshold: 20, days since listing: 26)
+LMTS: 6285 gaps (98.9%)
+LMTS: Error - Error binding parameter 1 - probably unsupported t
+LOTI: 6297 gaps (99.1%)
+LOTI: Error - Error binding parameter 1 - probably unsupported t
+LPCVU: Insufficient data (9 rows) for period since listing on 2025-12-18 (threshold: 20, days since listing: 19)
+LTCC: 6308 gaps (99.3%)
+LTCC: Error - Error binding parameter 1 - probably unsupported t
+LULG: 6314 gaps (99.4%)
+LULG: Error - Error binding parameter 1 - probably unsupported t
+MAAY: 6313 gaps (99.4%)
+MAAY: Error - Error binding parameter 1 - probably unsupported t
+MATE: Insufficient data (10 rows) for period since listing on 2025-12-17 (threshold: 20, days since listing: 20)
+MBVI: 6301 gaps (99.2%)
+MBVI: Error - Error binding parameter 1 - probably unsupported t
+MBVIU: 6270 gaps (98.7%)
+MBVIU: Error - Error binding parameter 1 - probably unsupported t
+MBVIW: 6311 gaps (99.3%)
+MBVIW: Error - Error binding parameter 1 - probably unsupported t
+MCTA: 6303 gaps (99.2%)
+MCTA: Error - Error binding parameter 1 - probably unsupported t
+MDLN: Insufficient data (10 rows) for period since listing on 2025-12-17 (threshold: 20, days since listing: 20)
+MEHA: 6314 gaps (99.4%)
+MEHA: Error - Error binding parameter 1 - probably unsupported t
+MEMA: Insufficient data (9 rows) for period since listing on 2025-12-17 (threshold: 20, days since listing: 20)
+MESHU: Insufficient data (15 rows) for period since listing on 2025-12-10 (threshold: 20, days since listing: 27)
+METL: 6274 gaps (98.8%)
+METL: Error - Error binding parameter 1 - probably unsupported t
+MFIG: Insufficient data (16 rows) for period since listing on 2025-12-09 (threshold: 20, days since listing: 28)
+MFMO: Insufficient data (16 rows) for period since listing on 2025-12-09 (threshold: 20, days since listing: 28)
+MFVL: Insufficient data (16 rows) for period since listing on 2025-12-09 (threshold: 20, days since listing: 28)
+MKLY: 6292 gaps (99.0%)
+MKLY: Error - Error binding parameter 1 - probably unsupported t
+MKLYR: 6302 gaps (99.2%)
+MKLYR: Error - Error binding parameter 1 - probably unsupported t
+MKLYU: 6268 gaps (98.7%)
+MKLYU: Error - Error binding parameter 1 - probably unsupported t
+MLCI: 6277 gaps (98.8%)
+MLCI: Error - Error binding parameter 1 - probably unsupported t
+MMTX: Insufficient data (10 rows) for period since listing on 2025-12-15 (threshold: 20, days since listing: 22)
+MMTXU: 6307 gaps (99.3%)
+MMTXU: Error - Error binding parameter 1 - probably unsupported t
+MMTXW: Insufficient data (11 rows) for period since listing on 2025-12-15 (threshold: 20, days since listing: 22)
+MNZL: 6324 gaps (99.5%)
+MNZL: Error - Error binding parameter 1 - probably unsupported t
+MPLT: 6307 gaps (99.3%)
+MPLT: Error - Error binding parameter 1 - probably unsupported t
+MTYY: 6283 gaps (98.9%)
+MTYY: Error - Error binding parameter 1 - probably unsupported t
+MYCO: 6318 gaps (99.4%)
+MYCO: Error - Error binding parameter 1 - probably unsupported t
+MYMK: Insufficient data (18 rows) for period since listing on 2025-09-17 (threshold: 23, days since listing: 111)
+NAVN: 6310 gaps (99.3%)
+NAVN: Error - Error binding parameter 1 - probably unsupported t
+NBIG: 6307 gaps (99.3%)
+NBIG: Error - Error binding parameter 1 - probably unsupported t
+NBIL: 6293 gaps (99.1%)
+NBIL: Error - Error binding parameter 1 - probably unsupported t
+NEMG: 6322 gaps (99.5%)
+NEMG: Error - Error binding parameter 1 - probably unsupported t
+NETG: 6322 gaps (99.5%)
+NETG: Error - Error binding parameter 1 - probably unsupported t
+NEWTP: 6265 gaps (98.6%)
+NEWTP: Error - Error binding parameter 1 - probably unsupported t
+NIOG: Insufficient data (9 rows) for period since listing on 2025-12-18 (threshold: 20, days since listing: 19)
+NMPAR: 6301 gaps (99.2%)
+NMPAR: Error - Error binding parameter 1 - probably unsupported t
+NMPAU: 6258 gaps (98.5%)
+NMPAU: Error - Error binding parameter 1 - probably unsupported t
+NOMA: 6311 gaps (99.3%)
+NOMA: Error - Error binding parameter 1 - probably unsupported t
+NOVTU: 6319 gaps (99.5%)
+NOVTU: Error - Error binding parameter 1 - probably unsupported t
+NTSK: 6280 gaps (98.9%)
+NTSK: Error - Error binding parameter 1 - probably unsupported t
+NUG: 6322 gaps (99.5%)
+NUG: Error - Error binding parameter 1 - probably unsupported t
+NUGY: 6323 gaps (99.5%)
+NUGY: Error - Error binding parameter 1 - probably unsupported t
+OBA: 6276 gaps (98.8%)
+OBA: Error - Error binding parameter 1 - probably unsupported t
+OBAWU: 6266 gaps (98.6%)
+OBAWU: Error - Error binding parameter 1 - probably unsupported t
+OBAWW: 6284 gaps (98.9%)
+OBAWW: Error - Error binding parameter 1 - probably unsupported t
+OKTG: 6323 gaps (99.5%)
+OKTG: Error - Error binding parameter 1 - probably unsupported t
+ONCH: 6276 gaps (98.8%)
+ONCH: Error - Error binding parameter 1 - probably unsupported t
+ONCHW: 6280 gaps (98.9%)
+ONCHW: Error - Error binding parameter 1 - probably unsupported t
+OPEG: Insufficient data (14 rows) for period since listing on 2025-12-11 (threshold: 20, days since listing: 26)
+OPENL: 6327 gaps (99.6%)
+OPENL: Error - Error binding parameter 1 - probably unsupported t
+OPENZ: 6327 gaps (99.6%)
+OPENZ: Error - Error binding parameter 1 - probably unsupported t
+ORCS: 6324 gaps (99.5%)
+ORCS: Error - Error binding parameter 1 - probably unsupported t
+ORCU: 6324 gaps (99.5%)
+ORCU: Error - Error binding parameter 1 - probably unsupported t
+ORIQU: 6325 gaps (99.6%)
+ORIQU: Error - Error binding parameter 1 - probably unsupported t
+ORIQW: 6285 gaps (98.9%)
+ORIQW: Error - Error binding parameter 1 - probably unsupported t
+OSCG: 6314 gaps (99.4%)
+OSCG: Error - Error binding parameter 1 - probably unsupported t
+OSCX: 6285 gaps (98.9%)
+OSCX: Error - Error binding parameter 1 - probably unsupported t
+OTGA: 6312 gaps (99.4%)
+OTGA: Error - Error binding parameter 1 - probably unsupported t
+OTGAU: 6276 gaps (98.8%)
+OTGAU: Error - Error binding parameter 1 - probably unsupported t
+OTGAW: 6318 gaps (99.4%)
+OTGAW: Error - Error binding parameter 1 - probably unsupported t
+OTGL: 6258 gaps (98.5%)
+OTGL: Error - Error binding parameter 1 - probably unsupported t
+OWLS: 6300 gaps (99.2%)
+OWLS: Error - Error binding parameter 1 - probably unsupported t
+OXSQH: 6254 gaps (98.4%)
+OXSQH: Error - Error binding parameter 1 - probably unsupported t
+OYSER: 6266 gaps (98.6%)
+OYSER: Error - Error binding parameter 1 - probably unsupported t
+PACH: 6258 gaps (98.5%)
+PACH: Error - Error binding parameter 1 - probably unsupported t
+PACHW: 6280 gaps (98.9%)
+PACHW: Error - Error binding parameter 1 - probably unsupported t
+PARK: 6333 gaps (99.7%)
+PARK: Error - Error binding parameter 1 - probably unsupported t
+PBEU: Insufficient data (15 rows) for period since listing on 2025-11-25 (threshold: 20, days since listing: 42)
+PBOG: Insufficient data (14 rows) for period since listing on 2025-11-25 (threshold: 20, days since listing: 42)
+PBPH: Insufficient data (66 rows) for period since listing on 2008-06-11 (threshold: 100, days since listing: 6418)
+PBRG: Insufficient data (9 rows) for period since listing on 2025-12-18 (threshold: 20, days since listing: 19)
+PELIU: 6275 gaps (98.8%)
+PELIU: Error - Error binding parameter 1 - probably unsupported t
+PLT: 6259 gaps (98.5%)
+PLT: Error - Error binding parameter 1 - probably unsupported t
+PLTS: 6281 gaps (98.9%)
+PLTS: Error - Error binding parameter 1 - probably unsupported t
+PLYY: 6283 gaps (98.9%)
+PLYY: Error - Error binding parameter 1 - probably unsupported t
+PQOC: Insufficient data (97 rows) for period since listing on 2025-01-06 (threshold: 100, days since listing: 365)
+PRMR: Insufficient data (16 rows) for period since listing on 2025-12-09 (threshold: 20, days since listing: 28)
+PURR: 6333 gaps (99.7%)
+PURR: Error - Error binding parameter 1 - probably unsupported t
+Q: 6312 gaps (99.4%)
+Q: Error - Error binding parameter 1 - probably unsupported t
+QALT: 6263 gaps (98.6%)
+QALT: Error - Error binding parameter 1 - probably unsupported t
+QB: 6260 gaps (98.5%)
+QB: Error - Error binding parameter 1 - probably unsupported t
+QBTZ: 6293 gaps (99.1%)
+QBTZ: Error - Error binding parameter 1 - probably unsupported t
+QBY: 6328 gaps (99.6%)
+QBY: Error - Error binding parameter 1 - probably unsupported t
+QLDY: 6280 gaps (98.9%)
+QLDY: Error - Error binding parameter 1 - probably unsupported t
+QQXL: 6257 gaps (98.5%)
+QQXL: Error - Error binding parameter 1 - probably unsupported t
+QSEAU: 6257 gaps (98.5%)
+QSEAU: Error - Error binding parameter 1 - probably unsupported t
+QUMS: 6293 gaps (99.1%)
+QUMS: Error - Error binding parameter 1 - probably unsupported t
+QUMSR: 6301 gaps (99.2%)
+QUMSR: Error - Error binding parameter 1 - probably unsupported t
+QUMSU: 6261 gaps (98.6%)
+QUMSU: Error - Error binding parameter 1 - probably unsupported t
+RAUS: 6276 gaps (98.8%)
+RAUS: Error - Error binding parameter 1 - probably unsupported t
+RCGE: 6257 gaps (98.5%)
+RCGE: Error - Error binding parameter 1 - probably unsupported t
+RDAGW: 6262 gaps (98.6%)
+RDAGW: Error - Error binding parameter 1 - probably unsupported t
+RGTZ: 6295 gaps (99.1%)
+RGTZ: Error - Error binding parameter 1 - probably unsupported t
+RGYY: 6328 gaps (99.6%)
+RGYY: Error - Error binding parameter 1 - probably unsupported t
+RIBBU: 6263 gaps (98.6%)
+RIBBU: Error - Error binding parameter 1 - probably unsupported t
+RKLZ: 6323 gaps (99.5%)
+RKLZ: Error - Error binding parameter 1 - probably unsupported t
+RNGT: 6330 gaps (99.6%)
+RNGT: Error - Error binding parameter 1 - probably unsupported t
+RNGTU: 6297 gaps (99.1%)
+RNGTU: Error - Error binding parameter 1 - probably unsupported t
+RNGTW: 6332 gaps (99.7%)
+RNGTW: Error - Error binding parameter 1 - probably unsupported t
+RPGL: 6298 gaps (99.1%)
+RPGL: Error - Error binding parameter 1 - probably unsupported t
+RTYY: 6332 gaps (99.7%)
+RTYY: Error - Error binding parameter 1 - probably unsupported t
+RYOJ: 6256 gaps (98.5%)
+RYOJ: Error - Error binding parameter 1 - probably unsupported t
+SATA: 6317 gaps (99.4%)
+SATA: Error - Error binding parameter 1 - probably unsupported t
+SATG: Insufficient data (11 rows) for period since listing on 2025-12-16 (threshold: 20, days since listing: 21)
+SBU: 6322 gaps (99.5%)
+SBU: Error - Error binding parameter 1 - probably unsupported t
+SCAGW: 6268 gaps (98.7%)
+SCAGW: Error - Error binding parameter 1 - probably unsupported t
+SCIIU: 6329 gaps (99.6%)
+SCIIU: Error - Error binding parameter 1 - probably unsupported t
+SCLS: Insufficient data (19 rows) for period since listing on 2025-11-04 (threshold: 20, days since listing: 63)
+SCPQU: Insufficient data (6 rows) for period since listing on 2025-12-23 (threshold: 20, days since listing: 14)
+SDHIR: 6289 gaps (99.0%)
+SDHIR: Error - Error binding parameter 1 - probably unsupported t
+SEMY: 6323 gaps (99.5%)
+SEMY: Error - Error binding parameter 1 - probably unsupported t
+SEV: 6300 gaps (99.2%)
+SEV: Error - Error binding parameter 1 - probably unsupported t
+SJLD: Insufficient data (75 rows) for period since listing on 2024-09-12 (threshold: 100, days since listing: 481)
+SLGB: 6299 gaps (99.2%)
+SLGB: Error - Error binding parameter 1 - probably unsupported t
+SMCC: 6260 gaps (98.5%)
+SMCC: Error - Error binding parameter 1 - probably unsupported t
+SMYY: 6288 gaps (99.0%)
+SMYY: Error - Error binding parameter 1 - probably unsupported t
+SNAG: Insufficient data (9 rows) for period since listing on 2025-12-18 (threshold: 20, days since listing: 19)
+SOCA: 6275 gaps (98.8%)
+SOCA: Error - Error binding parameter 1 - probably unsupported t
+SOCAU: 6285 gaps (98.9%)
+SOCAU: Error - Error binding parameter 1 - probably unsupported t
+SOCAW: 6290 gaps (99.0%)
+SOCAW: Error - Error binding parameter 1 - probably unsupported t
+SOLC: 6325 gaps (99.6%)
+SOLC: Error - Error binding parameter 1 - probably unsupported t
+SOLS: 6302 gaps (99.2%)
+SOLS: Error - Error binding parameter 1 - probably unsupported t
+SPCT: 6292 gaps (99.0%)
+SPCT: Error - Error binding parameter 1 - probably unsupported t
+SPEG: 6273 gaps (98.7%)
+SPEG: Error - Error binding parameter 1 - probably unsupported t
+SPEGR: 6284 gaps (98.9%)
+SPEGR: Error - Error binding parameter 1 - probably unsupported t
+SPEGU: 6272 gaps (98.7%)
+SPEGU: Error - Error binding parameter 1 - probably unsupported t
+SPIT: 6295 gaps (99.1%)
+SPIT: Error - Error binding parameter 1 - probably unsupported t
+SPOG: 6322 gaps (99.5%)
+SPOG: Error - Error binding parameter 1 - probably unsupported t
+SSEA: 6300 gaps (99.2%)
+SSEA: Error - Error binding parameter 1 - probably unsupported t
+SSEAR: 6300 gaps (99.2%)
+SSEAR: Error - Error binding parameter 1 - probably unsupported t
+SSEAU: 6300 gaps (99.2%)
+SSEAU: Error - Error binding parameter 1 - probably unsupported t
+STRRP: 6267 gaps (98.6%)
+STRRP: Error - Error binding parameter 1 - probably unsupported t
+SVAC: 6289 gaps (99.0%)
+SVAC: Error - Error binding parameter 1 - probably unsupported t
+SVAQU: Insufficient data (6 rows) for period since listing on 2025-12-23 (threshold: 20, days since listing: 14)
+SVCCU: 6267 gaps (98.6%)
+SVCCU: Error - Error binding parameter 1 - probably unsupported t
+SYZ: 6277 gaps (98.8%)
+SYZ: Error - Error binding parameter 1 - probably unsupported t
+TAXI: Insufficient data (63 rows) for period since listing on 2016-05-11 (threshold: 100, days since listing: 3527)
+TAXS: 6308 gaps (99.3%)
+TAXS: Error - Error binding parameter 1 - probably unsupported t
+TAXT: 6299 gaps (99.2%)
+TAXT: Error - Error binding parameter 1 - probably unsupported t
+TDWD: Insufficient data (17 rows) for period since listing on 2025-12-08 (threshold: 20, days since listing: 29)
+TDWDR: Insufficient data (12 rows) for period since listing on 2025-12-08 (threshold: 20, days since listing: 29)
+TDWDU: 6316 gaps (99.4%)
+TDWDU: Error - Error binding parameter 1 - probably unsupported t
+TERG: 6322 gaps (99.5%)
+TERG: Error - Error binding parameter 1 - probably unsupported t
+TGHL: 6266 gaps (98.6%)
+TGHL: Error - Error binding parameter 1 - probably unsupported t
+THH: 6266 gaps (98.6%)
+THH: Error - Error binding parameter 1 - probably unsupported t
+THYM: 6331 gaps (99.7%)
+THYM: Error - Error binding parameter 1 - probably unsupported t
+TLNC: 6295 gaps (99.1%)
+TLNC: Error - Error binding parameter 1 - probably unsupported t
+TLNCU: 6282 gaps (98.9%)
+TLNCU: Error - Error binding parameter 1 - probably unsupported t
+TLNCW: 6315 gaps (99.4%)
+TLNCW: Error - Error binding parameter 1 - probably unsupported t
+TMNL: Insufficient data (14 rows) for period since listing on 2025-11-20 (threshold: 20, days since listing: 47)
+TMNS: Insufficient data (14 rows) for period since listing on 2025-11-20 (threshold: 20, days since listing: 47)
+TMSF: 6326 gaps (99.6%)
+TMSF: Error - Error binding parameter 1 - probably unsupported t
+TRBF: 6295 gaps (99.1%)
+TRBF: Error - Error binding parameter 1 - probably unsupported t
+TRUD: 6261 gaps (98.6%)
+TRUD: Error - Error binding parameter 1 - probably unsupported t
+TRUT: 6261 gaps (98.6%)
+TRUT: Error - Error binding parameter 1 - probably unsupported t
+TVAI: 6271 gaps (98.7%)
+TVAI: Error - Error binding parameter 1 - probably unsupported t
+TVAIR: 6286 gaps (98.9%)
+TVAIR: Error - Error binding parameter 1 - probably unsupported t
+TVAIU: 6271 gaps (98.7%)
+TVAIU: Error - Error binding parameter 1 - probably unsupported t
+TXXD: 6325 gaps (99.6%)
+TXXD: Error - Error binding parameter 1 - probably unsupported t
+TXXS: Insufficient data (19 rows) for period since listing on 2025-12-04 (threshold: 20, days since listing: 33)
+UPSG: Insufficient data (14 rows) for period since listing on 2025-12-11 (threshold: 20, days since listing: 26)
+UYSCU: 6258 gaps (98.5%)
+UYSCU: Error - Error binding parameter 1 - probably unsupported t
+VALG: Insufficient data (8 rows) for period since listing on 2025-12-18 (threshold: 20, days since listing: 19)
+VHCPU: Insufficient data (9 rows) for period since listing on 2025-12-18 (threshold: 20, days since listing: 19)
+VIXI: 6258 gaps (98.5%)
+VIXI: Error - Error binding parameter 1 - probably unsupported t
+VNME: 6274 gaps (98.8%)
+VNME: Error - Error binding parameter 1 - probably unsupported t
+VNMEU: 6264 gaps (98.6%)
+VNMEU: Error - Error binding parameter 1 - probably unsupported t
+VNMEW: 6302 gaps (99.2%)
+VNMEW: Error - Error binding parameter 1 - probably unsupported t
+VSNTV: Insufficient data (12 rows) for period since listing on 2025-12-15 (threshold: 20, days since listing: 22)
+VSOL: 6322 gaps (99.5%)
+VSOL: Error - Error binding parameter 1 - probably unsupported t
+WDAF: 6277 gaps (98.8%)
+WDAF: Error - Error binding parameter 1 - probably unsupported t
+WDGF: 6277 gaps (98.8%)
+WDGF: Error - Error binding parameter 1 - probably unsupported t
+WSBCO: 6292 gaps (99.0%)
+WSBCO: Error - Error binding parameter 1 - probably unsupported t
+WSGE: Insufficient data (11 rows) for period since listing on 2025-12-09 (threshold: 20, days since listing: 28)
+WSTNU: 6318 gaps (99.4%)
+WSTNU: Error - Error binding parameter 1 - probably unsupported t
+WTG: 6285 gaps (98.9%)
+WTG: Error - Error binding parameter 1 - probably unsupported t
+WTGUR: 6281 gaps (98.9%)
+WTGUR: Error - Error binding parameter 1 - probably unsupported t
+WTGUU: 6284 gaps (98.9%)
+WTGUU: Error - Error binding parameter 1 - probably unsupported t
+WTMY: 6259 gaps (98.5%)
+WTMY: Error - Error binding parameter 1 - probably unsupported t
+XELLL: 6294 gaps (99.1%)
+XELLL: Error - Error binding parameter 1 - probably unsupported t
+XPM: 6276 gaps (98.8%)
+XPM: Error - Error binding parameter 1 - probably unsupported t
+XRPC: 6320 gaps (99.5%)
+XRPC: Error - Error binding parameter 1 - probably unsupported t
+YBMN: 6328 gaps (99.6%)
+YBMN: Error - Error binding parameter 1 - probably unsupported t
+YBST: Insufficient data (11 rows) for period since listing on 2025-12-16 (threshold: 20, days since listing: 21)
+YBTY: Insufficient data (11 rows) for period since listing on 2025-12-16 (threshold: 20, days since listing: 21)
+YDDL: 6295 gaps (99.1%)
+YDDL: Error - Error binding parameter 1 - probably unsupported t
+YDES: 6267 gaps (98.6%)
+YDES: Error - Error binding parameter 1 - probably unsupported t
+YDESW: 6267 gaps (98.6%)
+YDESW: Error - Error binding parameter 1 - probably unsupported t
+YMT: 6259 gaps (98.5%)
+YMT: Error - Error binding parameter 1 - probably unsupported t
+ZGM: 6273 gaps (98.7%)
+ZGM: Error - Error binding parameter 1 - probably unsupported t
+ZMUN: 6298 gaps (99.1%)
+ZMUN: Error - Error binding parameter 1 - probably unsupported t

@@ -1,0 +1,3 @@
+ticker,mode,passed_with_sector,reject_reason_with_sector,passed_without_sector,reject_reason_without_sector,blocked_by_sector,sector_etf,sector_etf_dist
+AAPL,A,False,screener_fail:qullamaggie_momentum=FAIL,False,screener_fail:qullamaggie_momentum=FAIL,False,XLK,
+MSFT,A,False,screener_fail:qullamaggie_momentum=FAIL,False,screener_fail:qullamaggie_momentum=FAIL,False,XLK,

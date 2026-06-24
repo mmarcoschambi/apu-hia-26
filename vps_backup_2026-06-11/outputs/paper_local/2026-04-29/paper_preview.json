@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "date": "2026-04-29",
+  "starting_capital": 100000.0,
+  "ending_capital": 100000.0,
+  "pnl": 0.0,
+  "pnl_pct": 0.0,
+  "orders_count": 0,
+  "fills_count": 0,
+  "trades_count": 0,
+  "positions_open": 0,
+  "slippage_bps": 10,
+  "fee_bps": 1,
+  "dry_run": true,
+  "orders": [],
+  "fills": [],
+  "positions": [],
+  "equity": [],
+  "error": null
+}

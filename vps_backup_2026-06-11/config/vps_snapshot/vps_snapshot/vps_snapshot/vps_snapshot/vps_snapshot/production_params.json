@@ -1,0 +1,108 @@
+{
+  "generated_from": "walk_forward_analysis",
+  "date": "2026-01-26 11:46:14",
+  "parameters": {
+    "max_dist_sma20": 8.5,
+    "max_stop_pct": 7.0,
+    "min_adr": 2.25,
+    "min_consolidation_days": 10.0,
+    "min_dollar_volume": 5000000.0,
+    "min_rvol": 1.0,
+    "min_volume": 300000.0,
+    "require_spy_above_sma50": 1.0,
+    "risk_dollars": 100.0,
+    "rvol_danger": 3.0,
+    "rvol_danger_size": 30.0,
+    "rvol_warning": 2.0,
+    "rvol_warning_size": 65.0,
+    "tp1_r": 1.75,
+    "tp2_r": 3.5,
+    "use_adaptive_filtering": 0.0,
+    "use_dynamic_thresholds": 0.0,
+    "use_earnings_calendar": 0.0,
+    "use_market_regime_filter": 0.0,
+    "use_trailing_stop": 0.0
+  },
+  "robust_ranges": {
+    "max_dist_sma20": [
+      8.0,
+      9.0
+    ],
+    "max_stop_pct": [
+      7.0,
+      7.0
+    ],
+    "min_adr": [
+      2.0,
+      2.5
+    ],
+    "min_consolidation_days": [
+      10,
+      10
+    ],
+    "min_dollar_volume": [
+      5000000,
+      5000000
+    ],
+    "min_rvol": [
+      1.0,
+      1.0
+    ],
+    "min_volume": [
+      300000,
+      300000
+    ],
+    "require_spy_above_sma50": [
+      true,
+      true
+    ],
+    "risk_dollars": [
+      100,
+      100
+    ],
+    "rvol_danger": [
+      3.0,
+      3.0
+    ],
+    "rvol_danger_size": [
+      30,
+      30
+    ],
+    "rvol_warning": [
+      2.0,
+      2.0
+    ],
+    "rvol_warning_size": [
+      65,
+      65
+    ],
+    "tp1_r": [
+      1.5,
+      2.0
+    ],
+    "tp2_r": [
+      3.0,
+      4.0
+    ],
+    "use_adaptive_filtering": [
+      false,
+      false
+    ],
+    "use_dynamic_thresholds": [
+      false,
+      false
+    ],
+    "use_earnings_calendar": [
+      false,
+      false
+    ],
+    "use_market_regime_filter": [
+      false,
+      false
+    ],
+    "use_trailing_stop": [
+      false,
+      false
+    ]
+  }
+}

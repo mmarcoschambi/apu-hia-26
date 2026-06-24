@@ -1,0 +1,8 @@
+source_system,strategy_id,decision,reasons
+B,preset_02,HOLD,insufficient_trades: 4 < 30|expectancy: -1.0190 <= 0.0|profit_factor: 0.0000 < 1.2|max_drawdown: 4.0760 > 0.15|sharpe: 0.0000 < 0.8
+B,preset_12,HOLD,insufficient_trades: 2 < 30|expectancy: -1.0190 <= 0.0|profit_factor: 0.0000 < 1.2|max_drawdown: 2.0380 > 0.15|sharpe: 0.0000 < 0.8
+B,preset_03,HOLD,insufficient_trades: 2 < 30|expectancy: -1.0190 <= 0.0|profit_factor: 0.0000 < 1.2|max_drawdown: 2.0380 > 0.15|sharpe: 0.0000 < 0.8
+B,preset_06,HOLD,insufficient_trades: 20 < 30|expectancy: -0.2249 <= 0.0|profit_factor: 0.6720 < 1.2|max_drawdown: 5.4571 > 0.15|sharpe: -0.1860 < 0.8
+B,preset_04,HOLD,insufficient_trades: 2 < 30|expectancy: -1.0190 <= 0.0|profit_factor: 0.0000 < 1.2|max_drawdown: 2.0380 > 0.15|sharpe: 0.0000 < 0.8
+B,preset_07,HOLD,insufficient_trades: 16 < 30|expectancy: -0.3009 <= 0.0|profit_factor: 0.4614 < 1.2|max_drawdown: 5.5258 > 0.15|sharpe: -0.3198 < 0.8
+B,preset_01,HOLD,insufficient_trades: 2 < 30|expectancy: -1.0190 <= 0.0|profit_factor: 0.0000 < 1.2|max_drawdown: 2.0380 > 0.15|sharpe: 0.0000 < 0.8

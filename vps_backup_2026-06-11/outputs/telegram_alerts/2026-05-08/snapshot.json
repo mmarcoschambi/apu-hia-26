@@ -1,0 +1,13 @@
+{
+  "date": "2026-05-08",
+  "generated_at": "2026-05-08T16:15:09.164692",
+  "signals_count": 0,
+  "unique_tickers": 0,
+  "agents": [],
+  "filters": {
+    "top_n": 0,
+    "min_score": 0.0
+  },
+  "top_candidates": [],
+  "signals": []
+}

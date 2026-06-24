@@ -1,0 +1,42 @@
+{
+  "name": "combo_pure_momentum",
+  "operational_status": "PAPER_TRADING_ACTIVE",
+  "capital_enabled": false,
+  "paper_trading_capital_usd": 100000,
+  "governance_note": "Promoted to paper trading after passing WF gate with 2025 included. Updated to Fortress Config (RS 85, SMA200).",
+  "description": "Pure Momentum: Qullamaggie RS + Breakout. Top 3% relative strength with clean breakout.",
+  "version": "1.0",
+  "screener": {
+    "name": "qullamaggie_momentum",
+    "config": "config/screeners/qullamaggie_momentum.json",
+    "mode": "all"
+  },
+  "pattern": {
+    "signal_type": "breakout",
+    "description": "Classic breakout on high RS stocks"
+  },
+  "tier2_filters": {
+    "min_rvol": 0.7,
+    "min_adr": 1.2,
+    "max_dist_sma20": 13.5,
+    "min_dollar_volume": 10000000.0,
+    "min_consolidation_days": 5,
+    "min_volume": 100000,
+    "use_rs_percentile": true,
+    "min_rs_percentile": 85.0,
+    "rs_lookback_days": 60,
+    "require_positive_rs": true,
+    "require_spy_above_sma200": true
+  },
+  "tier3_fixed": {
+    "max_loss_pct": 2.0,
+    "max_positions": 4,
+    "position_size_method": "rs_weighted",
+    "risk_fraction": 0.005
+  },
+  "validation": {
+    "min_win_rate": 0.35,
+    "min_profit_factor": 1.2,
+    "min_trades": 15
+  }
+}

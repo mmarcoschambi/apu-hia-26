@@ -1,0 +1,9 @@
+date,mode,universe_size,setups,sectors,alerts,xlv_filtered,shadow_candidates,no_auto_entry,cache_warning,exit_stop,exit_tp1,exit_tp2,exit_runner
+2026-05-08,PRODUCTION,590,0,10,0,0,0,False,True,7,4,0,0
+2026-05-11,PRODUCTION,587,0,10,0,0,0,False,False,4,7,4,4
+2026-05-12,PRODUCTION,586,0,32,0,0,0,False,False,4,6,1,1
+2026-05-13,PRODUCTION,587,0,5,0,0,0,True,False,10,16,0,0
+2026-05-14,PRODUCTION,582,0,32,0,0,0,True,False,9,14,0,0
+2026-05-15,PRODUCTION,585,0,32,0,0,0,True,False,9,25,0,0
+2026-05-18,PRODUCTION,584,1,32,0,0,1,True,False,8,12,0,0
+2026-05-19,PRODUCTION,587,1,30,0,0,1,True,False,7,30,0,0

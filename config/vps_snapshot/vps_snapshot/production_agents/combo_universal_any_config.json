@@ -1,0 +1,109 @@
+{
+  "timestamp": "2026-04-01T13:02:18.480114",
+  "pipeline": "optimize_3tier",
+  "period": {
+    "start": "2019-01-01",
+    "end": "2024-12-31",
+    "initial_capital": 100000
+  },
+  "universe_size": 200,
+  "tier3_risk": {
+    "rvol_danger": 3.0,
+    "rvol_warning": 2.0,
+    "rvol_danger_size": 0.5,
+    "rvol_warning_size": 0.75,
+    "adr_high": 6.0,
+    "adr_med": 5.0,
+    "adr_high_size": 0.75,
+    "adr_med_size": 0.85,
+    "max_exposure_pct": 0.65,
+    "max_position_pct": 0.25,
+    "earnings_days": 5,
+    "earnings_cushion": 2,
+    "max_stop_pct_hard": 0.08,
+    "risk_fraction": 0.01,
+    "compounding_enabled": false
+  },
+  "tier2_filters": {
+    "min_rvol": 0.57,
+    "min_adr": 1.43,
+    "max_dist_sma20": 12.99,
+    "min_dollar_volume": 19213892.45223999,
+    "min_consolidation_days": 5,
+    "min_volume": 100000,
+    "require_positive_rs": true,
+    "use_rs_percentile": true,
+    "min_rs_percentile": 70.0,
+    "rs_lookback_days": 60,
+    "use_pattern_filter": false,
+    "min_pattern_confidence": 0.5,
+    "pattern_cache_path": "data/pattern_matrix.pkl",
+    "_raw_derived": {
+      "rvol_raw": 0.57,
+      "adr_raw": 1.43,
+      "dist_sma20_raw": 12.99,
+      "dollar_volume_raw": 19213892.45223999
+    },
+    "_dollar_volume_stats": {
+      "p10": 56488560.338293076,
+      "p25": 108272219.88220215,
+      "median": 221095570.5991745,
+      "p75": 472242100.55236816,
+      "p90": 1558509510.1547241,
+      "max": 20156288195.983887,
+      "derived_raw": 19213892.45223999
+    },
+    "_rvol_stats": {
+      "p10": 0.67,
+      "median": 0.95,
+      "p90": 1.55,
+      "max": 4.68
+    },
+    "_adr_stats": {
+      "p10": 1.52,
+      "median": 2.39,
+      "p90": 5.57,
+      "max": 8.07
+    },
+    "_dist_sma20_stats": {
+      "p10": -0.81,
+      "median": 2.99,
+      "p90": 9.52,
+      "max": 15.42
+    }
+  },
+  "tier1_strategy": {
+    "tp1_r": 2.25,
+    "tp2_r": 4.75,
+    "tp1_pct": 0.3,
+    "tp2_pct": 0.4,
+    "score_rs_weight": 0.5,
+    "runner_pct": 0.3
+  },
+  "optimization": {
+    "trials": 200,
+    "best_score": -23.720692928131008,
+    "best_trial_metrics": {
+      "total_return": 16.508068458795545,
+      "sharpe": 0.8443305105054089,
+      "max_dd": -8.157173099225155,
+      "win_rate": 0,
+      "trades": 42401,
+      "profit_factor": 0.0
+    }
+  },
+  "validation": {
+    "approved": false,
+    "discovery_passed": true,
+    "validation_passed": false,
+    "production_passed": "True",
+    "pbo_score": 0.5797979797979798,
+    "sharpe_ratio": 0.8217380194272929,
+    "bootstrap_p5": 1.497098439544701,
+    "bootstrap_p10": 3.9372828682772543,
+    "max_drawdown_pct": 20.606768609008334,
+    "rejection_reasons": [
+      "PBO too high: 57.98% > 50.00%"
+    ]
+  }
+}

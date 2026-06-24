@@ -1,0 +1,10 @@
+{
+  "total_input": 9307,
+  "accepted": 9307,
+  "dropped": 0,
+  "blocked": 0,
+  "dropped_by_score": 0,
+  "dropped_opposite_resolved": 0,
+  "blocked_opposite_balanced": 0,
+  "blocked_cooldown": 0
+}

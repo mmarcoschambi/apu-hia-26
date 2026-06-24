@@ -1,0 +1,25 @@
+{
+  "name": "triad_rts",
+  "enabled": true,
+  "min_price": 5.0,
+  "max_price": 1000.0,
+  "min_avg_volume": 100000,
+  "min_dollar_volume": 20000000,
+  "min_adr_pct": 1.5,
+  "max_adr_pct": 15.0,
+  "params": {
+    "min_market_cap": 1000000000,
+    "require_market_cap": false,
+    "min_as_5d_pct": 35.0,
+    "min_as_21d_pct": 35.0,
+    "max_dist_from_52wk_high_pct": 25.0,
+    "min_above_52wk_low_pct": 30.0,
+    "sma200_uptrend_days": 22,
+    "min_rs_percentile": 70.0,
+    "min_rts_pct": 75.0,
+    "require_atr_above_universe": true,
+    "max_sma50_atr_extension": 5.0,
+    "pivot_tolerance_pct": 2.0,
+    "require_green_candle": true
+  }
+}

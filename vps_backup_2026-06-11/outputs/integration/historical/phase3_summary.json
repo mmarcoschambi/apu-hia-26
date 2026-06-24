@@ -1,0 +1,14 @@
+{
+  "input_accepted": 9307,
+  "hydrated": 9307,
+  "planned": 5,
+  "rejected_by_price": 0,
+  "rejected_by_gate": 9302,
+  "total_rejected": 9302,
+  "exposure_A": 37280.479999999996,
+  "exposure_B": 39872.238751,
+  "exposure_total": 77152.718751,
+  "positions_A": 3,
+  "positions_B": 2,
+  "positions_total": 5
+}

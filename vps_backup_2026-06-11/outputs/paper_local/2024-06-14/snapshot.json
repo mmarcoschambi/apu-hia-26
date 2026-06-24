@@ -1,0 +1,162 @@
+{
+  "date": "2024-06-14",
+  "source": "local_db",
+  "universe_size": 200,
+  "universe_sample": [
+    "AAPL",
+    "ADBE",
+    "ADP",
+    "AMAT",
+    "AMD",
+    "AMZN",
+    "AVGO",
+    "BKNG",
+    "CDNS",
+    "COST",
+    "CSCO",
+    "FTNT",
+    "INTC",
+    "INTU",
+    "KLAC",
+    "LRCX",
+    "MAR",
+    "MELI",
+    "META",
+    "MSFT"
+  ],
+  "regime": {
+    "spy_ok": true,
+    "vix_ok": true,
+    "pass": true
+  },
+  "signals": [
+    {
+      "combo": "A_BOTH_PRO",
+      "ticker": "GOOG",
+      "signal_date": "2024-06-14",
+      "entry_price": 177.24362182617188,
+      "stop_loss": 163.06413208007814,
+      "position_size": 70.0,
+      "source": "local_db"
+    },
+    {
+      "combo": "A_BOTH_PRO",
+      "ticker": "GME",
+      "signal_date": "2024-06-14",
+      "entry_price": 28.700000762939453,
+      "stop_loss": 26.404000701904298,
+      "position_size": 435.0,
+      "source": "local_db"
+    },
+    {
+      "combo": "A_BOTH_PRO",
+      "ticker": "MU",
+      "signal_date": "2024-06-14",
+      "entry_price": 140.434326171875,
+      "stop_loss": 129.199580078125,
+      "position_size": 89.0,
+      "source": "local_db"
+    },
+    {
+      "combo": "A_BOTH_PRO",
+      "ticker": "SMH",
+      "signal_date": "2024-06-14",
+      "entry_price": 265.8805847167969,
+      "stop_loss": 244.61013793945312,
+      "position_size": 47.0,
+      "source": "local_db"
+    },
+    {
+      "combo": "A_BOTH_PRO",
+      "ticker": "PDD",
+      "signal_date": "2024-06-14",
+      "entry_price": 148.97999572753906,
+      "stop_loss": 137.06159606933593,
+      "position_size": 83.0,
+      "source": "local_db"
+    },
+    {
+      "combo": "A_BOTH_PRO",
+      "ticker": "NFLX",
+      "signal_date": "2024-06-14",
+      "entry_price": 66.93800354003906,
+      "stop_loss": 61.58296325683594,
+      "position_size": 186.0,
+      "source": "local_db"
+    },
+    {
+      "combo": "A_BOTH_PRO",
+      "ticker": "ANET",
+      "signal_date": "2024-06-14",
+      "entry_price": 82.125,
+      "stop_loss": 75.555,
+      "position_size": 152.0,
+      "source": "local_db"
+    },
+    {
+      "combo": "A_BOTH_PRO",
+      "ticker": "KKR",
+      "signal_date": "2024-06-14",
+      "entry_price": 108.25836181640625,
+      "stop_loss": 99.59769287109376,
+      "position_size": 115.0,
+      "source": "local_db"
+    },
+    {
+      "combo": "A_BOTH_PRO",
+      "ticker": "ISRG",
+      "signal_date": "2024-06-14",
+      "entry_price": 425.7799987792969,
+      "stop_loss": 391.71759887695316,
+      "position_size": 29.0,
+      "source": "local_db"
+    },
+    {
+      "combo": "A_BOTH_PRO",
+      "ticker": "NVO",
+      "signal_date": "2024-06-14",
+      "entry_price": 138.16033935546875,
+      "stop_loss": 127.10751220703125,
+      "position_size": 90.0,
+      "source": "local_db"
+    },
+    {
+      "combo": "A_BOTH_PRO",
+      "ticker": "L",
+      "signal_date": "2024-06-14",
+      "entry_price": 20.629119873046875,
+      "stop_loss": 18.978790283203125,
+      "position_size": 605.0,
+      "source": "local_db"
+    },
+    {
+      "combo": "A_BOTH_PRO",
+      "ticker": "LB",
+      "signal_date": "2024-06-14",
+      "entry_price": 20.629119873046875,
+      "stop_loss": 18.978790283203125,
+      "position_size": 605.0,
+      "source": "local_db"
+    },
+    {
+      "combo": "A_BOTH_PRO",
+      "ticker": "LDOS",
+      "signal_date": "2024-06-14",
+      "entry_price": 20.629119873046875,
+      "stop_loss": 18.978790283203125,
+      "position_size": 605.0,
+      "source": "local_db"
+    },
+    {
+      "combo": "A_BOTH_PRO",
+      "ticker": "HPE",
+      "signal_date": "2024-06-14",
+      "entry_price": 20.629119873046875,
+      "stop_loss": 18.978790283203125,
+      "position_size": 605.0,
+      "source": "local_db"
+    }
+  ],
+  "signals_count": 14,
+  "generated_at": "2026-04-29T00:11:01.146500"
+}

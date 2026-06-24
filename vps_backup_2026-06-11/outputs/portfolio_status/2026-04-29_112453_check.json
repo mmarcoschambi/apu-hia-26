@@ -1,0 +1,29 @@
+{
+  "generated_at": "2026-04-29T11:24:53.167166",
+  "starting_capital": 100000.0,
+  "ending_capital": 100000.0,
+  "total_pnl": 0.0,
+  "total_trades": 6,
+  "wins": 0,
+  "losses": 0,
+  "win_rate_pct": 0.0,
+  "profit_factor": 0.0,
+  "max_drawdown_pct": 0.0,
+  "equity_curve": [
+    100000.0,
+    100000.0,
+    100000.0,
+    100000.0,
+    100000.0,
+    100000.0,
+    100000.0
+  ],
+  "trade_dates": [],
+  "wf_min_profit_factor": 1.4,
+  "wf_max_drawdown_pct": 33.0,
+  "dd_alert_triggered": false,
+  "since": null,
+  "runs_seen": 1,
+  "trades_rows": 6,
+  "source": "outputs/paper_trading/runs"
+}

@@ -1,0 +1,667 @@
+{
+  "study_name": "s4_main_v2",
+  "period": {
+    "start": "2019-01-01",
+    "end": "2024-12-31"
+  },
+  "trials_total": 600,
+  "trials_pilot": 120,
+  "universe_size": 200,
+  "candidates": [
+    {
+      "rank": 1,
+      "trial_id": 431,
+      "score_composed": 1.5022,
+      "params": {
+        "min_rs_percentile": 57.37778765137335,
+        "max_dist_sma20": 6.6495247781116635,
+        "min_rvol": 1.1149016493825001,
+        "min_adr": 1.613213313949042,
+        "risk_per_trade_pct": 0.026805900676805605,
+        "max_exposure_pct": 0.22123548791645659,
+        "use_composite_sector_scoring": false,
+        "sector_top_percentile": 0.29672532058516715,
+        "use_atr_stop": false,
+        "atr_stop_multiplier": 1.4940389842218635,
+        "atr_trailing_multiplier": 2.9820380088803273
+      },
+      "is_sharpe": 1.502172994605297,
+      "trades": 99,
+      "pf": 3.580573311889042,
+      "calmar": 1.3331444880179213,
+      "cagr": 0.140760231881075,
+      "mdd": 0.1055851283534563,
+      "win_rate": 0.6868686868686869,
+      "break_reason": "PASSED",
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0
+    },
+    {
+      "rank": 2,
+      "trial_id": 351,
+      "score_composed": 1.3707,
+      "params": {
+        "min_rs_percentile": 84.65438084696716,
+        "max_dist_sma20": 6.741708937355739,
+        "min_rvol": 1.1772451677845805,
+        "min_adr": 1.6980099809645668,
+        "risk_per_trade_pct": 0.028657551316094022,
+        "max_exposure_pct": 0.2410081017849766,
+        "use_composite_sector_scoring": false,
+        "sector_top_percentile": 0.3112062683089757,
+        "use_atr_stop": false,
+        "atr_stop_multiplier": 1.2622362873183466,
+        "atr_trailing_multiplier": 2.3309493311397587
+      },
+      "is_sharpe": 1.3706650620117742,
+      "trades": 80,
+      "pf": 3.32609549781996,
+      "calmar": 1.7099430376801252,
+      "cagr": 0.12569820715122626,
+      "mdd": 0.07351017219951411,
+      "win_rate": 0.7,
+      "break_reason": "PASSED",
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0
+    },
+    {
+      "rank": 3,
+      "trial_id": 345,
+      "score_composed": 1.3352,
+      "params": {
+        "min_rs_percentile": 72.96812582253017,
+        "max_dist_sma20": 6.7653221040015765,
+        "min_rvol": 1.215350776532974,
+        "min_adr": 1.867547965382452,
+        "risk_per_trade_pct": 0.028848294445731476,
+        "max_exposure_pct": 0.27779694396053817,
+        "use_composite_sector_scoring": false,
+        "sector_top_percentile": 0.30081204199437034,
+        "use_atr_stop": false,
+        "atr_stop_multiplier": 1.2337221246244017,
+        "atr_trailing_multiplier": 1.857007945653474
+      },
+      "is_sharpe": 1.3352341062483242,
+      "trades": 98,
+      "pf": 2.5728332970185788,
+      "calmar": 0.9241068352255019,
+      "cagr": 0.12600995571408213,
+      "mdd": 0.13635864481332724,
+      "win_rate": 0.7040816326530612,
+      "break_reason": "PASSED",
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0
+    },
+    {
+      "rank": 4,
+      "trial_id": 324,
+      "score_composed": 1.3322,
+      "params": {
+        "min_rs_percentile": 59.42116052733228,
+        "max_dist_sma20": 6.741316029820184,
+        "min_rvol": 1.1188265875218684,
+        "min_adr": 1.7571926564476976,
+        "risk_per_trade_pct": 0.02854522765425534,
+        "max_exposure_pct": 0.22024513580644292,
+        "use_composite_sector_scoring": false,
+        "sector_top_percentile": 0.30103043445632954,
+        "use_atr_stop": false,
+        "atr_stop_multiplier": 1.2103868073378812,
+        "atr_trailing_multiplier": 2.4925328013395838
+      },
+      "is_sharpe": 1.3322331659062174,
+      "trades": 96,
+      "pf": 2.973087435379985,
+      "calmar": 1.5535519763182377,
+      "cagr": 0.13160008353576447,
+      "mdd": 0.08470916038975629,
+      "win_rate": 0.65625,
+      "break_reason": "PASSED",
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0
+    },
+    {
+      "rank": 5,
+      "trial_id": 380,
+      "score_composed": 1.3235,
+      "params": {
+        "min_rs_percentile": 58.01185471172994,
+        "max_dist_sma20": 6.768469291968571,
+        "min_rvol": 1.1047915985168806,
+        "min_adr": 1.8713508674019803,
+        "risk_per_trade_pct": 0.028781363390402694,
+        "max_exposure_pct": 0.29429888839425955,
+        "use_composite_sector_scoring": false,
+        "sector_top_percentile": 0.3189424819088241,
+        "use_atr_stop": false,
+        "atr_stop_multiplier": 1.506561242880806,
+        "atr_trailing_multiplier": 2.9814315298767213
+      },
+      "is_sharpe": 1.3235404822341945,
+      "trades": 106,
+      "pf": 2.676518298063112,
+      "calmar": 1.064535766412997,
+      "cagr": 0.13248046552945048,
+      "mdd": 0.12444905066538964,
+      "win_rate": 0.6415094339622641,
+      "break_reason": "PASSED",
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0
+    },
+    {
+      "rank": 6,
+      "trial_id": 473,
+      "score_composed": 1.3234,
+      "params": {
+        "min_rs_percentile": 56.24160497353149,
+        "max_dist_sma20": 10.813848350474759,
+        "min_rvol": 1.0947522244460839,
+        "min_adr": 3.1247937593597657,
+        "risk_per_trade_pct": 0.027218548995830993,
+        "max_exposure_pct": 0.22857255321642303,
+        "use_composite_sector_scoring": true,
+        "sector_top_percentile": 0.2887003819874891,
+        "use_atr_stop": false,
+        "atr_stop_multiplier": 1.3181815159731236,
+        "atr_trailing_multiplier": 2.4783342501150916
+      },
+      "is_sharpe": 1.3234127094837478,
+      "trades": 133,
+      "pf": 2.450458653178785,
+      "calmar": 1.473798839591453,
+      "cagr": 0.174553757939933,
+      "mdd": 0.11843798030694642,
+      "win_rate": 0.631578947368421,
+      "break_reason": "PASSED",
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0
+    },
+    {
+      "rank": 7,
+      "trial_id": 236,
+      "score_composed": 1.304,
+      "params": {
+        "min_rs_percentile": 82.31818505770956,
+        "max_dist_sma20": 6.682499016916747,
+        "min_rvol": 1.1066484003566672,
+        "min_adr": 1.6752937316295444,
+        "risk_per_trade_pct": 0.026214923649499042,
+        "max_exposure_pct": 0.2957204925557604,
+        "use_composite_sector_scoring": true,
+        "sector_top_percentile": 0.2582055020026118,
+        "use_atr_stop": false,
+        "atr_stop_multiplier": 1.2778176025042456,
+        "atr_trailing_multiplier": 2.964725502714016
+      },
+      "is_sharpe": 1.3040458571722031,
+      "trades": 111,
+      "pf": 2.7501772382132663,
+      "calmar": 1.020604125760803,
+      "cagr": 0.13047799402371085,
+      "mdd": 0.1278438825890958,
+      "win_rate": 0.6576576576576577,
+      "break_reason": "PASSED",
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0
+    },
+    {
+      "rank": 8,
+      "trial_id": 421,
+      "score_composed": 1.2923,
+      "params": {
+        "min_rs_percentile": 59.404907828740605,
+        "max_dist_sma20": 6.518187922843117,
+        "min_rvol": 1.0950421810983062,
+        "min_adr": 1.6353234931333873,
+        "risk_per_trade_pct": 0.026651503476116743,
+        "max_exposure_pct": 0.22952047734476222,
+        "use_composite_sector_scoring": true,
+        "sector_top_percentile": 0.3145825137440089,
+        "use_atr_stop": false,
+        "atr_stop_multiplier": 1.5372794082485772,
+        "atr_trailing_multiplier": 3.0238165988713432
+      },
+      "is_sharpe": 1.2923036928810587,
+      "trades": 101,
+      "pf": 2.680023344837454,
+      "calmar": 0.8974938174826481,
+      "cagr": 0.12091824384527783,
+      "mdd": 0.13472877638805086,
+      "win_rate": 0.6435643564356436,
+      "break_reason": "PASSED",
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0
+    },
+    {
+      "rank": 9,
+      "trial_id": 241,
+      "score_composed": 1.283,
+      "params": {
+        "min_rs_percentile": 83.00988051842333,
+        "max_dist_sma20": 6.578841424237659,
+        "min_rvol": 1.122682035621725,
+        "min_adr": 1.6680334097484213,
+        "risk_per_trade_pct": 0.027172732112826156,
+        "max_exposure_pct": 0.2991692739507116,
+        "use_composite_sector_scoring": true,
+        "sector_top_percentile": 0.2594601075469695,
+        "use_atr_stop": false,
+        "atr_stop_multiplier": 1.3499410074931824,
+        "atr_trailing_multiplier": 2.9884786498593745
+      },
+      "is_sharpe": 1.2830180809680258,
+      "trades": 115,
+      "pf": 2.44111924641756,
+      "calmar": 1.2408454135562614,
+      "cagr": 0.13364250743288197,
+      "mdd": 0.1077027855144846,
+      "win_rate": 0.6521739130434783,
+      "break_reason": "PASSED",
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0
+    },
+    {
+      "rank": 10,
+      "trial_id": 319,
+      "score_composed": 1.2714,
+      "params": {
+        "min_rs_percentile": 56.47035723677898,
+        "max_dist_sma20": 6.541863076974272,
+        "min_rvol": 1.123582215148229,
+        "min_adr": 1.6940211953629931,
+        "risk_per_trade_pct": 0.02725635844206405,
+        "max_exposure_pct": 0.2900146858050553,
+        "use_composite_sector_scoring": true,
+        "sector_top_percentile": 0.2925784009837599,
+        "use_atr_stop": false,
+        "atr_stop_multiplier": 1.2921648803241719,
+        "atr_trailing_multiplier": 2.517463987811565
+      },
+      "is_sharpe": 1.2714033950972095,
+      "trades": 110,
+      "pf": 2.32607364798577,
+      "calmar": 1.4031767043443242,
+      "cagr": 0.12696572075838386,
+      "mdd": 0.09048448450240795,
+      "win_rate": 0.6454545454545455,
+      "break_reason": "PASSED",
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0
+    }
+  ],
+  "gate_results": {
+    "431": {
+      "passed": true,
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0,
+      "gate_details": {
+        "pf_gate": {
+          "threshold": 1.3,
+          "passed": true,
+          "value": 3.580573311889042
+        },
+        "calmar_gate": {
+          "threshold": 1.0,
+          "passed": true,
+          "value": 1.3331444880179213
+        },
+        "mdd_duration_gate": {
+          "threshold": 126,
+          "passed": true,
+          "value": 63
+        },
+        "hard_ruin_gate": {
+          "threshold": 0.05,
+          "passed": true,
+          "value": 0.0
+        },
+        "degradation_gate": {
+          "threshold": 0.2,
+          "passed": true,
+          "value": null
+        },
+        "cost_robustness_gate": {
+          "passed": true,
+          "value": "ROBUSTO"
+        }
+      }
+    },
+    "351": {
+      "passed": true,
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0,
+      "gate_details": {
+        "pf_gate": {
+          "threshold": 1.3,
+          "passed": true,
+          "value": 3.32609549781996
+        },
+        "calmar_gate": {
+          "threshold": 1.0,
+          "passed": true,
+          "value": 1.7099430376801252
+        },
+        "mdd_duration_gate": {
+          "threshold": 126,
+          "passed": true,
+          "value": 44
+        },
+        "hard_ruin_gate": {
+          "threshold": 0.05,
+          "passed": true,
+          "value": 0.0
+        },
+        "degradation_gate": {
+          "threshold": 0.2,
+          "passed": true,
+          "value": null
+        },
+        "cost_robustness_gate": {
+          "passed": true,
+          "value": "ROBUSTO"
+        }
+      }
+    },
+    "345": {
+      "passed": false,
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0,
+      "gate_details": {
+        "pf_gate": {
+          "threshold": 1.3,
+          "passed": true,
+          "value": 2.5728332970185788
+        },
+        "calmar_gate": {
+          "threshold": 1.0,
+          "passed": false,
+          "value": 0.9241068352255019
+        },
+        "mdd_duration_gate": {
+          "threshold": 126,
+          "passed": true,
+          "value": 81
+        },
+        "hard_ruin_gate": {
+          "threshold": 0.05,
+          "passed": true,
+          "value": 0.0
+        },
+        "degradation_gate": {
+          "threshold": 0.2,
+          "passed": true,
+          "value": null
+        },
+        "cost_robustness_gate": {
+          "passed": true,
+          "value": "ROBUSTO"
+        }
+      }
+    },
+    "324": {
+      "passed": true,
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0,
+      "gate_details": {
+        "pf_gate": {
+          "threshold": 1.3,
+          "passed": true,
+          "value": 2.973087435379985
+        },
+        "calmar_gate": {
+          "threshold": 1.0,
+          "passed": true,
+          "value": 1.5535519763182377
+        },
+        "mdd_duration_gate": {
+          "threshold": 126,
+          "passed": true,
+          "value": 50
+        },
+        "hard_ruin_gate": {
+          "threshold": 0.05,
+          "passed": true,
+          "value": 0.0
+        },
+        "degradation_gate": {
+          "threshold": 0.2,
+          "passed": true,
+          "value": null
+        },
+        "cost_robustness_gate": {
+          "passed": true,
+          "value": "ROBUSTO"
+        }
+      }
+    },
+    "380": {
+      "passed": true,
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0,
+      "gate_details": {
+        "pf_gate": {
+          "threshold": 1.3,
+          "passed": true,
+          "value": 2.676518298063112
+        },
+        "calmar_gate": {
+          "threshold": 1.0,
+          "passed": true,
+          "value": 1.064535766412997
+        },
+        "mdd_duration_gate": {
+          "threshold": 126,
+          "passed": true,
+          "value": 74
+        },
+        "hard_ruin_gate": {
+          "threshold": 0.05,
+          "passed": true,
+          "value": 0.0
+        },
+        "degradation_gate": {
+          "threshold": 0.2,
+          "passed": true,
+          "value": null
+        },
+        "cost_robustness_gate": {
+          "passed": true,
+          "value": "ROBUSTO"
+        }
+      }
+    },
+    "473": {
+      "passed": true,
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0,
+      "gate_details": {
+        "pf_gate": {
+          "threshold": 1.3,
+          "passed": true,
+          "value": 2.450458653178785
+        },
+        "calmar_gate": {
+          "threshold": 1.0,
+          "passed": true,
+          "value": 1.473798839591453
+        },
+        "mdd_duration_gate": {
+          "threshold": 126,
+          "passed": true,
+          "value": 71
+        },
+        "hard_ruin_gate": {
+          "threshold": 0.05,
+          "passed": true,
+          "value": 0.0
+        },
+        "degradation_gate": {
+          "threshold": 0.2,
+          "passed": true,
+          "value": null
+        },
+        "cost_robustness_gate": {
+          "passed": true,
+          "value": "ROBUSTO"
+        }
+      }
+    },
+    "236": {
+      "passed": true,
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0,
+      "gate_details": {
+        "pf_gate": {
+          "threshold": 1.3,
+          "passed": true,
+          "value": 2.7501772382132663
+        },
+        "calmar_gate": {
+          "threshold": 1.0,
+          "passed": true,
+          "value": 1.020604125760803
+        },
+        "mdd_duration_gate": {
+          "threshold": 126,
+          "passed": true,
+          "value": 76
+        },
+        "hard_ruin_gate": {
+          "threshold": 0.05,
+          "passed": true,
+          "value": 0.0
+        },
+        "degradation_gate": {
+          "threshold": 0.2,
+          "passed": true,
+          "value": null
+        },
+        "cost_robustness_gate": {
+          "passed": true,
+          "value": "ROBUSTO"
+        }
+      }
+    },
+    "421": {
+      "passed": false,
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0,
+      "gate_details": {
+        "pf_gate": {
+          "threshold": 1.3,
+          "passed": true,
+          "value": 2.680023344837454
+        },
+        "calmar_gate": {
+          "threshold": 1.0,
+          "passed": false,
+          "value": 0.8974938174826481
+        },
+        "mdd_duration_gate": {
+          "threshold": 126,
+          "passed": true,
+          "value": 80
+        },
+        "hard_ruin_gate": {
+          "threshold": 0.05,
+          "passed": true,
+          "value": 0.0
+        },
+        "degradation_gate": {
+          "threshold": 0.2,
+          "passed": true,
+          "value": null
+        },
+        "cost_robustness_gate": {
+          "passed": true,
+          "value": "ROBUSTO"
+        }
+      }
+    },
+    "241": {
+      "passed": true,
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0,
+      "gate_details": {
+        "pf_gate": {
+          "threshold": 1.3,
+          "passed": true,
+          "value": 2.44111924641756
+        },
+        "calmar_gate": {
+          "threshold": 1.0,
+          "passed": true,
+          "value": 1.2408454135562614
+        },
+        "mdd_duration_gate": {
+          "threshold": 126,
+          "passed": true,
+          "value": 64
+        },
+        "hard_ruin_gate": {
+          "threshold": 0.05,
+          "passed": true,
+          "value": 0.0
+        },
+        "degradation_gate": {
+          "threshold": 0.2,
+          "passed": true,
+          "value": null
+        },
+        "cost_robustness_gate": {
+          "passed": true,
+          "value": "ROBUSTO"
+        }
+      }
+    },
+    "319": {
+      "passed": true,
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0,
+      "gate_details": {
+        "pf_gate": {
+          "threshold": 1.3,
+          "passed": true,
+          "value": 2.32607364798577
+        },
+        "calmar_gate": {
+          "threshold": 1.0,
+          "passed": true,
+          "value": 1.4031767043443242
+        },
+        "mdd_duration_gate": {
+          "threshold": 126,
+          "passed": true,
+          "value": 54
+        },
+        "hard_ruin_gate": {
+          "threshold": 0.05,
+          "passed": true,
+          "value": 0.0
+        },
+        "degradation_gate": {
+          "threshold": 0.2,
+          "passed": true,
+          "value": null
+        },
+        "cost_robustness_gate": {
+          "passed": true,
+          "value": "ROBUSTO"
+        }
+      }
+    }
+  },
+  "gate_summary": {
+    "total_candidates": 10,
+    "passed": 8,
+    "rejected": 2,
+    "gate_stats": {
+      "pf": "10/10",
+      "calmar": "8/10",
+      "mdd_duration": "10/10",
+      "hard_ruin": "10/10",
+      "degradation": "10/10",
+      "cost_robustness": "10/10"
+    }
+  }
+}

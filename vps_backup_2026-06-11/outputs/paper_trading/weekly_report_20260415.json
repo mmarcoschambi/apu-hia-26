@@ -1,0 +1,57 @@
+{
+  "generated_at": "2026-04-15T19:26:53.746903",
+  "weeks_lookback": 1,
+  "days_covered": 2,
+  "strategies": [
+    {
+      "combo": "combo_pure_momentum",
+      "role": "GO-PAPER",
+      "trades": 0,
+      "win_rate": 0.0,
+      "pf": 0.0,
+      "pnl_r": 0.0,
+      "sample_ready": false,
+      "min_trades_for_validation": 30
+    },
+    {
+      "combo": "combo_pullback_entry",
+      "role": "SHADOW",
+      "trades": 0,
+      "win_rate": 0.0,
+      "pf": 0.0,
+      "pnl_r": 0.0,
+      "sample_ready": false,
+      "min_trades_for_validation": 30
+    },
+    {
+      "combo": "combo_aggressive_momentum",
+      "role": "SHADOW",
+      "trades": 0,
+      "win_rate": 0.0,
+      "pf": 0.0,
+      "pnl_r": 0.0,
+      "sample_ready": false,
+      "min_trades_for_validation": 30
+    },
+    {
+      "combo": "combo_stage2_breakout",
+      "role": "SHADOW",
+      "trades": 0,
+      "win_rate": 0.0,
+      "pf": 0.0,
+      "pnl_r": 0.0,
+      "sample_ready": false,
+      "min_trades_for_validation": 30
+    },
+    {
+      "combo": "combo_universal_any",
+      "role": "SHADOW",
+      "trades": 0,
+      "win_rate": 0.0,
+      "pf": 0.0,
+      "pnl_r": 0.0,
+      "sample_ready": false,
+      "min_trades_for_validation": 30
+    }
+  ]
+}

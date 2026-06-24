@@ -1,0 +1,42 @@
+{
+  "date": "2026-04-17",
+  "regime": {
+    "spy_ok": true,
+    "spy_price": 710.1400146484375,
+    "spy_sma50": 673.8792443847656,
+    "vix": 17.479999542236328,
+    "vix_ok": true,
+    "vix_source": "^VIX",
+    "regime_quality": "OK",
+    "warnings": [],
+    "raw_regime_ok": true,
+    "effective_regime_ok": true
+  },
+  "override": {
+    "mode": "none",
+    "applied": false,
+    "reason": "manual_override"
+  },
+  "universe": {
+    "provider": "finviz_scrape",
+    "snapshot_path": "/home/marcos/trade/momentum-v2/outputs/paper_trading/universe_snapshots/2026-04-17/universe_snapshot.json",
+    "hash": "9c79035f7961a5d8c9daf525da52fb1f6cd702b5d0c8885c5fb832d3afa855f5",
+    "tickers_count": 0,
+    "drift_metrics": {
+      "divergence_pct": 94.37,
+      "live_coverage_pct": 16.0,
+      "live_extra_pct": 92.0,
+      "gate_passed": false,
+      "max_divergence_pct": 15.0,
+      "configured_max_divergence_pct": 15.0
+    },
+    "gate_passed": false,
+    "block_reason": "high_drift:94.37%"
+  },
+  "signals": 0,
+  "top_signals": [],
+  "alerts": {
+    "count": 0,
+    "top_near_threshold": []
+  }
+}

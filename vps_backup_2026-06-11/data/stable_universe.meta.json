@@ -1,0 +1,14 @@
+{
+  "provider": "finviz_scrape",
+  "fetched_at": "2026-04-27T13:19:44.103946",
+  "pages_ok": 20,
+  "raw_rows": 400,
+  "warnings": [],
+  "scan_date": "2026-04-27",
+  "filters": "cap_midover,sh_avgvol_o1000,sh_price_o10",
+  "sort": "relativevolume",
+  "max_pages": 20,
+  "tickers_count": 400,
+  "tickers_hash": "3b03f9c8bcab1fd9fb70aae04e1bb49a7050116ea5cf753bcf46617b484952d8",
+  "persisted_at": "2026-04-27T13:19:44.140640"
+}

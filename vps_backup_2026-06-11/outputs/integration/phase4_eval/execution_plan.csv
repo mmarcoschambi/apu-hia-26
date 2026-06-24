@@ -1,0 +1,6 @@
+source_system,strategy_id,ticker,trade_date,side,entry_type,entry_price_ref,hydrated_price_source,stop_price,target_price,risk_budget_usd,risk_per_trade_usd,per_share_risk,shares,notional_usd,router_reason,collision_key
+B,preset_06,MSFT,2024-12-31,long,next_open,415.01963,input,394.2686485,477.27257449999996,30000.0,1000,20.750981500000023,48,19920.94224,won_by_score,MSFT_2024-12-31_daily
+B,preset_06,NVDA,2024-12-31,long,next_open,89.620849,input,85.13980655,103.06397635,30000.0,1000,4.481042450000004,223,19985.449327000002,won_by_score,NVDA_2024-12-31_daily
+A,unknown,INSM,2024-08-15,long,next_open,74.14,input,68.2088,81.554,70000.0,1000,5.931200000000004,168,12455.52,won_by_score,INSM_2024-08-15_daily
+A,unknown,APP,2024-12-09,long,next_open,342.54,input,315.1368,376.794,70000.0,1000,27.403200000000027,36,12331.44,won_by_score,APP_2024-12-09_daily
+A,unknown,ARQT,2024-03-15,long,next_open,10.66,input,9.8072,11.726,70000.0,1000,0.8528000000000002,1172,12493.52,won_by_score,ARQT_2024-03-15_daily

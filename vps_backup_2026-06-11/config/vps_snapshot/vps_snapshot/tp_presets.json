@@ -1,0 +1,7 @@
+{
+  "classic": {"tp1_pct": 0.50, "tp2_pct": 0.30, "runner_pct": 0.20},
+  "balanced": {"tp1_pct": 0.33, "tp2_pct": 0.33, "runner_pct": 0.34},
+  "aggressive_runner": {"tp1_pct": 0.25, "tp2_pct": 0.30, "runner_pct": 0.45},
+  "conservative": {"tp1_pct": 0.40, "tp2_pct": 0.35, "runner_pct": 0.25},
+  "extreme": {"tp1_pct": 0.20, "tp2_pct": 0.30, "runner_pct": 0.50}
+}

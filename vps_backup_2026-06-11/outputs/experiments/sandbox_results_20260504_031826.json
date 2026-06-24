@@ -1,0 +1,14 @@
+[
+  {
+    "name": "S0_Baseline",
+    "error": "too many values to unpack (expected 3)"
+  },
+  {
+    "name": "S1_BinaryFilter",
+    "error": "too many values to unpack (expected 3)"
+  },
+  {
+    "name": "S2_DynamicSizing",
+    "error": "too many values to unpack (expected 3)"
+  }
+]

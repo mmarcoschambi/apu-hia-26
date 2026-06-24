@@ -1,0 +1,104 @@
+{
+  "timestamp": "2026-01-10T01:07:01.161818",
+  "method": "Bugatti_BOLIDE_WalkForward",
+  "engine": "DIVO (memory-optimized)",
+  "periods": {
+    "in_sample": "2010-01-01 to 2019-12-31",
+    "validation": "2020-01-01 to 2021-12-31",
+    "out_of_sample": "2022-01-01 to 2024-12-31"
+  },
+  "layer1": {
+    "trials": 400,
+    "tickers": 100,
+    "best_value": 0.41005311031611213,
+    "best_params": {
+      "risk_dollars": 250,
+      "max_exposure_pct": 0.2,
+      "min_rvol": 1.5,
+      "min_adr": 1.0,
+      "signal_type": "breakout",
+      "tp1_r": 2.0,
+      "tp2_r": 3.5,
+      "rvol_danger_size": 0.25
+    }
+  },
+  "layer2": {
+    "trials": 250,
+    "tickers": 50,
+    "best_value": 0.30541251470330066,
+    "best_params": {
+      "min_consolidation_days": 5,
+      "max_consolidation_range": 20.0,
+      "min_volume": 200000,
+      "min_dollar_volume": 5000000.0,
+      "max_dist_sma20": 25.0,
+      "max_stop_pct": 0.07,
+      "rvol_danger": 3.0,
+      "rvol_warning": 2.0,
+      "rvol_warning_size": 0.6,
+      "require_bullish_spy": false,
+      "max_vix": 50.0
+    },
+    "improvement_pct": -25.518790854224584
+  },
+  "validation": {
+    "sharpe": 0.29700486489633027,
+    "degradation_pct": -2.752883199674441,
+    "robustness": "EXCELLENT",
+    "stats": {
+      "profit_factor": 1.220777346222619,
+      "total_trades": 970.0,
+      "total_return_pct": 1.267615446160253,
+      "sharpe_ratio": 0.29700486489633027,
+      "max_drawdown_pct": 1.8647966437961339,
+      "win_rate_pct": 39.79381443298969,
+      "final_value": 5063380.7723080125,
+      "phase_breakdown": {
+        "tp1_trades": 322,
+        "tp2_trades": 306,
+        "runner_trades": 342
+      }
+    }
+  },
+  "out_of_sample": {
+    "run": true,
+    "stats": {
+      "profit_factor": 1.024143199441767,
+      "total_trades": 967.0,
+      "total_return_pct": 0.20565794435889462,
+      "sharpe_ratio": 0.04125281086478267,
+      "max_drawdown_pct": 3.5129064514756765,
+      "win_rate_pct": 35.67735263702171,
+      "final_value": 5010282.897217944,
+      "phase_breakdown": {
+        "tp1_trades": 323,
+        "tp2_trades": 299,
+        "runner_trades": 345
+      }
+    }
+  },
+  "final_params": {
+    "risk_dollars": 250,
+    "max_exposure_pct": 0.2,
+    "min_rvol": 1.5,
+    "min_adr": 1.0,
+    "signal_type": "breakout",
+    "tp1_r": 2.0,
+    "tp2_r": 3.5,
+    "rvol_danger_size": 0.25,
+    "min_consolidation_days": 5,
+    "max_consolidation_range": 20.0,
+    "min_volume": 200000,
+    "min_dollar_volume": 5000000.0,
+    "max_dist_sma20": 25.0,
+    "max_stop_pct": 0.07,
+    "rvol_danger": 3.0,
+    "rvol_warning": 2.0,
+    "rvol_warning_size": 0.6,
+    "require_bullish_spy": false,
+    "max_vix": 50.0,
+    "use_phases": true,
+    "require_positive_rs": false,
+    "require_sma_trend": false
+  }
+}

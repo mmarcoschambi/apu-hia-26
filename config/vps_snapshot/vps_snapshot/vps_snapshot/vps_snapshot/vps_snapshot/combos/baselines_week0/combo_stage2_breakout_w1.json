@@ -1,0 +1,56 @@
+{
+  "name": "combo_stage2_breakout_w1",
+  "description": "Stage 2 Breakout: Minervini Trend + Classic Breakout. Ajuste week1: liquidez relajada, stop mas estricto.",
+  "version": "1.1-week1",
+  "screener": {
+    "name": "minervini_trend",
+    "config": "config/screeners/minervini_trend.json",
+    "mode": "all"
+  },
+  "pattern": {
+    "signal_type": "breakout",
+    "description": "Classic 20-day high breakout"
+  },
+  "tier2_filters": {
+    "min_rvol": 0.8,
+    "min_adr": 1.5,
+    "max_dist_sma20": 15.0,
+    "min_dollar_volume": 5000000,
+    "min_consolidation_days": 3,
+    "min_volume": 100000,
+    "min_screener_score": 50.0
+  },
+  "tier1_optuna_space": {
+    "tp1_r": {
+      "min": 1.25,
+      "max": 2.25,
+      "step": 0.25
+    },
+    "tp2_r": {
+      "min": 2.75,
+      "max": 5.5,
+      "step": 0.25
+    },
+    "tp1_pct": {
+      "min": 0.3,
+      "max": 0.5,
+      "step": 0.05
+    },
+    "tp2_pct": {
+      "min": 0.2,
+      "max": 0.4,
+      "step": 0.05
+    }
+  },
+  "tier3_fixed": {
+    "max_loss_pct": 1.5,
+    "max_positions": 3,
+    "position_size_method": "equal_weight",
+    "risk_fraction": 0.005
+  },
+  "validation": {
+    "min_win_rate": 0.35,
+    "min_profit_factor": 1.0,
+    "min_trades": 15
+  }
+}

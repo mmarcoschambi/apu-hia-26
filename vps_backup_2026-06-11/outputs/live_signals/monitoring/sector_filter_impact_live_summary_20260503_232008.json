@@ -1,0 +1,16 @@
+{
+  "metrics": {
+    "source": "live",
+    "window_start": "2026-04-22",
+    "window_end": "2026-04-29",
+    "valid_files_used": 5,
+    "skipped_legacy_format": 1,
+    "counterfactual_candidates_total": 0,
+    "blocked_marginally_by_sector": 0,
+    "blocked_pct": 0.0,
+    "passed_with_sector_total": 0,
+    "net_signal_reduction": 0
+  },
+  "top_blocked_sectors": {},
+  "timestamp": "2026-05-03T23:20:08.246360"
+}

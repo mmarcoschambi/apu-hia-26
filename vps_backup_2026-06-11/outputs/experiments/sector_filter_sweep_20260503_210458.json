@@ -1,0 +1,89 @@
+{
+  "experiment": "Sector Filter Threshold Sweep \u2014 ETF Dist SMA20",
+  "baseline_sharpe": {
+    "5": 0.171,
+    "10": 0.201,
+    "20": 0.292
+  },
+  "sweep": [
+    {
+      "threshold_pct": 0.0,
+      "count": 10176,
+      "sharpe_5d": 0.315,
+      "wr_5d": 52.94,
+      "delta_5d": 0.144,
+      "sharpe_10d": 0.287,
+      "wr_10d": 53.98,
+      "delta_10d": 0.086,
+      "sharpe_20d": 0.417,
+      "wr_20d": 55.29,
+      "delta_20d": 0.125
+    },
+    {
+      "threshold_pct": 0.5,
+      "count": 9353,
+      "sharpe_5d": 0.367,
+      "wr_5d": 53.35,
+      "delta_5d": 0.196,
+      "sharpe_10d": 0.321,
+      "wr_10d": 54.35,
+      "delta_10d": 0.12,
+      "sharpe_20d": 0.457,
+      "wr_20d": 55.56,
+      "delta_20d": 0.165
+    },
+    {
+      "threshold_pct": 1.0,
+      "count": 8316,
+      "sharpe_5d": 0.416,
+      "wr_5d": 54.06,
+      "delta_5d": 0.245,
+      "sharpe_10d": 0.305,
+      "wr_10d": 55.11,
+      "delta_10d": 0.104,
+      "sharpe_20d": 0.474,
+      "wr_20d": 56.36,
+      "delta_20d": 0.182
+    },
+    {
+      "threshold_pct": 1.5,
+      "count": 7202,
+      "sharpe_5d": 0.409,
+      "wr_5d": 54.32,
+      "delta_5d": 0.238,
+      "sharpe_10d": 0.304,
+      "wr_10d": 55.43,
+      "delta_10d": 0.103,
+      "sharpe_20d": 0.507,
+      "wr_20d": 56.09,
+      "delta_20d": 0.215
+    },
+    {
+      "threshold_pct": 2.0,
+      "count": 6165,
+      "sharpe_5d": 0.415,
+      "wr_5d": 54.68,
+      "delta_5d": 0.244,
+      "sharpe_10d": 0.358,
+      "wr_10d": 56.2,
+      "delta_10d": 0.157,
+      "sharpe_20d": 0.526,
+      "wr_20d": 55.57,
+      "delta_20d": 0.234
+    },
+    {
+      "threshold_pct": 3.0,
+      "count": 3975,
+      "sharpe_5d": 0.177,
+      "wr_5d": 54.86,
+      "delta_5d": 0.006,
+      "sharpe_10d": 0.297,
+      "wr_10d": 57.06,
+      "delta_10d": 0.096,
+      "sharpe_20d": 0.402,
+      "wr_20d": 55.04,
+      "delta_20d": 0.11
+    }
+  ],
+  "timestamp": "2026-05-03T21:04:58.758472"
+}

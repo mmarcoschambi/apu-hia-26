@@ -1,0 +1,96 @@
+{
+  "ok": true,
+  "date": "2024-06-11",
+  "starting_capital": 100000.0,
+  "ending_capital": 99858.83,
+  "pnl": -141.17,
+  "pnl_pct": -0.14,
+  "orders_count": 1,
+  "fills_count": 2,
+  "trades_count": 1,
+  "positions_open": 0,
+  "max_positions": 6,
+  "slippage_bps": 10,
+  "fee_bps": 1,
+  "dry_run": true,
+  "orders": [
+    {
+      "order_id": "ord_CRWD_2024-06-11",
+      "ticker": "CRWD",
+      "agent": "A_BOTH",
+      "combo": "A_BOTH_PRO",
+      "signal_date": "2024-06-11",
+      "entry_score": 0.62,
+      "entry_price_signal": 390.25,
+      "stop_price": 357.7059,
+      "tp1_price": 418.2851,
+      "tp2_price": 472.1333,
+      "size_requested": 37,
+      "size_filled": 37,
+      "fill_price": 390.6402,
+      "entry_fee": 1.45,
+      "status": "filled",
+      "filled_at": "2024-06-12 09:30:00",
+      "signal_id": null,
+      "intent_id": null,
+      "source_universe": "local_db",
+      "decision_source": "system",
+      "confirmed_by": null,
+      "confirmed_at": null
+    }
+  ],
+  "fills": [
+    {
+      "fill_id": "fill_CRWD_2024-06-11",
+      "order_id": "ord_CRWD_2024-06-11",
+      "ticker": "CRWD",
+      "side": "BUY",
+      "price": 390.6402,
+      "size": 37,
+      "fee": 1.45,
+      "timestamp": "2024-06-12 09:30:00"
+    },
+    {
+      "fill_id": "fill_CRWD_eod_2024-06-11_2024-06-27",
+      "order_id": "ord_CRWD_2024-06-11",
+      "ticker": "CRWD",
+      "side": "SELL",
+      "price": 386.9027,
+      "size": 37,
+      "fee": 1.43,
+      "timestamp": "2024-06-27 16:00:00",
+      "reason": "EOD"
+    }
+  ],
+  "positions": [
+    {
+      "ticker": "CRWD",
+      "agent": "A_BOTH",
+      "size": 37,
+      "entry_price": 390.6402,
+      "stop_price": 357.7059,
+      "tp1_price": 418.2851,
+      "tp2_price": 472.1333,
+      "position_value": 14453.69,
+      "unrealized_pnl": 0.0,
+      "exited": true,
+      "exit_reason": "EOD",
+      "exit_price": null,
+      "exit_fee": null,
+      "realized_pnl": -139.72,
+      "rvol": 1.41,
+      "adr_pct": 4.13,
+      "signal_id": null,
+      "intent_id": null,
+      "source_universe": "local_db",
+      "decision_source": "system",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "exit_date": "2024-06-27",
+      "remaining_size": 0
+    }
+  ],
+  "equity": [
+    99858.83133584594
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "timestamp": "20260115_204202",
+  "config": {
+    "k_folds": 2,
+    "fold_size": 100,
+    "l1_trials": 30,
+    "l2_trials": 20,
+    "in_start": "2021-01-01",
+    "in_end": "2022-12-31",
+    "val_start": "2023-01-01",
+    "val_end": "2023-06-30",
+    "oos_start": "2023-07-01",
+    "oos_end": "2024-12-31",
+    "equity": 100000,
+    "seed": 42,
+    "run_oos": true
+  },
+  "consensus_params": {
+    "max_stop_pct": "0.1",
+    "max_vix": "50.0",
+    "min_consolidation_days": "15",
+    "require_positive_rs": "False",
+    "min_adr": "1.0",
+    "signal_type": "any",
+    "require_sma_trend": "False",
+    "min_volume": "200000",
+    "min_rvol": "1.0",
+    "require_bullish_spy": "False",
+    "rvol_danger": "3.5",
+    "risk_dollars": "200",
+    "rvol_warning": "2.0",
+    "rvol_warning_size": "0.6",
+    "tp2_r": "4.0",
+    "rvol_danger_size": "0.4",
+    "max_consolidation_range": "20.0",
+    "tp1_r": "2.0",
+    "use_phases": "True",
+    "min_dollar_volume": "5000000.0",
+    "max_exposure_pct": "0.2",
+    "max_dist_sma20": "15.0"
+  },
+  "stability": {
+    "cv_mean": 0.354028985397947,
+    "cv_std": 0.19572266473013444,
+    "stability_score": 44.715638322627186
+  },
+  "validation": {
+    "sharpe": -0.34253828170494083,
+    "degradation": -196.75430426124854,
+    "robustness": "CRITICAL",
+    "metrics": {
+      "profit_factor": 0.7544369293778665,
+      "total_trades": 448,
+      "unique_entries": 149,
+      "total_return_pct": -2.47916419724058,
+      "sharpe_ratio": -0.34253828170494083,
+      "max_drawdown_pct": 6.316937402617298,
+      "win_rate_pct": 36.830357142857146,
+      "final_value": 9752083.580275942
+    }
+  },
+  "oos": {
+    "metrics": {
+      "profit_factor": 2.1277642901994858,
+      "total_trades": 639,
+      "unique_entries": 213,
+      "total_return_pct": 13.117637696452489,
+      "sharpe_ratio": 1.1683818329033462,
+      "max_drawdown_pct": 3.8064660382285265,
+      "win_rate_pct": 38.18466353677621,
+      "final_value": 11311763.76964525
+    }
+  }
+}

@@ -1,0 +1,17 @@
+ticker,combo,signal_date,signal_price,entry_score,rs_percentile,rvol,adr_pct,dist_sma20,dollar_vol_M,consol_days,above_sma50,stop_price,tp1,tp2,risk_$,screener,signal_type
+CE,combo_pure_momentum,2026-03-13,57.74,0.909,90.9,1.03,6.31,9.12,176.73,19,True,53.1208,63.514,71.5976,2878,qullamaggie_momentum,breakout
+ALM,combo_pure_momentum,2026-03-13,19.675,0.894,89.4,1.24,8.53,9.97,95.97,16,True,18.101,21.6425,24.397,2878,qullamaggie_momentum,breakout
+DFTX,combo_pure_momentum,2026-03-13,18.06,0.847,84.7,1.02,5.76,2.88,28.81,19,True,16.6152,19.866,22.3944,2878,qullamaggie_momentum,breakout
+CNQ,combo_pure_momentum,2026-03-13,48.44,0.844,84.4,0.98,2.72,9.75,500.97,19,True,44.5648,53.284,60.0656,2878,qullamaggie_momentum,breakout
+AA,combo_pure_momentum,2026-03-13,63.59,0.829,82.9,0.83,6.21,2.92,440.92,18,True,58.5028,69.949,78.8516,2878,qullamaggie_momentum,breakout
+CVX,combo_pure_momentum,2026-03-13,196.82,0.799,79.9,0.89,2.0,5.08,2334.85,17,True,181.0744,216.502,244.0568,2878,qullamaggie_momentum,breakout
+AM,combo_pure_momentum,2026-03-13,23.14,0.785,78.5,0.89,2.3,3.69,68.38,18,True,21.2888,25.454,28.6936,2878,qullamaggie_momentum,breakout
+COP,combo_pure_momentum,2026-03-13,121.89,0.782,78.2,1.08,2.64,6.81,1231.82,18,True,112.1388,134.079,151.1436,2878,qullamaggie_momentum,breakout
+BP,combo_pure_momentum,2026-03-13,42.67,0.749,74.9,1.19,2.03,8.78,515.89,15,True,39.2564,46.937,52.9108,2878,qullamaggie_momentum,breakout
+CTVA,combo_pure_momentum,2026-03-13,79.21,0.74,74.0,1.05,2.23,2.01,316.26,17,True,72.8732,87.131,98.2204,2878,qullamaggie_momentum,breakout
+ADM,combo_pure_momentum,2026-03-13,71.98,0.735,73.5,1.04,3.04,4.86,250.51,17,True,66.2216,79.178,89.2552,2878,qullamaggie_momentum,breakout
+AEP,combo_pure_momentum,2026-03-13,133.61,0.693,69.3,0.97,1.85,1.53,488.44,18,True,122.9212,146.971,165.6764,2878,qullamaggie_momentum,breakout
+CME,combo_pure_momentum,2026-03-13,311.4,0.664,66.4,0.9,1.95,1.49,777.02,19,True,286.488,342.54,386.136,2878,qullamaggie_momentum,breakout
+DUK,combo_pure_momentum,2026-03-13,133.15,0.661,66.1,0.82,1.72,2.68,648.48,19,True,122.498,146.465,165.106,2878,qullamaggie_momentum,breakout
+BGC,combo_pure_momentum,2026-03-13,9.57,0.59,59.0,2.03,3.55,1.11,23.52,17,True,8.8044,10.527,11.8668,2878,qullamaggie_momentum,breakout
+BGC,combo_pullback_entry,2026-03-13,9.57,0.59,59.0,2.03,3.55,1.11,23.52,17,True,8.8044,10.527,11.8668,2878,ema21_pullback,pocket_pivot

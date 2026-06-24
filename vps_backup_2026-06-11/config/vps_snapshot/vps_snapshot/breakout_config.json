@@ -1,0 +1,46 @@
+{
+  "_description": "Breakout config -- optimize_3tier.py --signal-type breakout",
+  "_last_updated": "2026-03-20",
+  "_note": "signal_type=breakout: close > rolling 20d high. Mas selectivo que any.",
+  "tier1_strategy": {
+    "signal_type": "breakout",
+    "tp1_r": 1.75,
+    "tp2_r": 3.75,
+    "tp1_pct": 0.45,
+    "tp2_pct": 0.35,
+    "runner_pct": 0.2,
+    "risk_dollars": 1000,
+    "max_stop_pct": 0.08,
+    "score_rs_weight": 0.7,
+    "score_proximity_weight": 0.3
+  },
+  "tier2_filters": {
+    "min_rvol": 0.68,
+    "min_adr": 1.59,
+    "max_dist_sma20": 13.07,
+    "min_dollar_volume": 10932895,
+    "use_rs_percentile": true,
+    "min_rs_percentile": 70.0,
+    "use_pattern_filter": false
+  },
+  "market_regime": {
+    "require_spy_above_sma50": true,
+    "max_vix": 25.0
+  },
+  "_oos_validation": {
+    "date": "2026-03-20T21:29:22.300239",
+    "period": "2023-01-01 to 2024-12-31",
+    "tickers": 120,
+    "oos_sharpe": 1.2639,
+    "oos_max_dd": -6.2,
+    "oos_win_rate": 62.5,
+    "oos_trades": 1464,
+    "is_sharpe_comparable": -0.779,
+    "is_period_comparable": "2019-01-01 to 2023-01-01",
+    "is_trades_comparable": 2242,
+    "degradation": 1.0,
+    "passed": "True"
+  },
+  "_oos_sharpe": 1.26,
+  "_oos_stamped": "2026-03-20T21:29:22.300468"
+}

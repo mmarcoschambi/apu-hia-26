@@ -1,0 +1,2 @@
+ticker,signal_type,entry,current,stop_current,stop_original,tp1_done,r_current,pct_from_stop,action,new_stop,reason
+NEM,BREAKOUT,127.0,110.19000244140625,116.84,116.84,False,-1.65,-6.0,TIGHTEN_STOP,121.92,mercado rojo + -1.65R -- apretar stop al 50%

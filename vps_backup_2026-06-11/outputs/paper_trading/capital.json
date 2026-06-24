@@ -1,0 +1,15 @@
+{
+  "cash": 107972.74,
+  "initial_capital": 100000.0,
+  "current": {
+    "date": "2026-03-17",
+    "equity": 107972.74
+  },
+  "history": [
+    {"date": "2026-03-15", "equity": 100000.0},
+    {"date": "2026-03-15", "equity": 101281.06},
+    {"date": "2026-03-17", "equity": 107972.74}
+  ],
+  "last_updated": "2026-03-17T01:46:16.797294",
+  "_note": "history poblado manualmente desde trades conocidos: STX TP1 +$1281, NEM open +$6691 estimado"
+}

@@ -1,0 +1,110 @@
+{
+  "timestamp": "2026-04-01T18:43:55.179759",
+  "pipeline": "optimize_3tier",
+  "period": {
+    "start": "2019-01-01",
+    "end": "2024-12-31",
+    "initial_capital": 100000
+  },
+  "universe_size": 200,
+  "tier3_risk": {
+    "rvol_danger": 3.0,
+    "rvol_warning": 2.0,
+    "rvol_danger_size": 0.5,
+    "rvol_warning_size": 0.75,
+    "adr_high": 6.0,
+    "adr_med": 5.0,
+    "adr_high_size": 0.75,
+    "adr_med_size": 0.85,
+    "max_exposure_pct": 0.65,
+    "max_position_pct": 0.25,
+    "earnings_days": 5,
+    "earnings_cushion": 2,
+    "max_stop_pct_hard": 0.08,
+    "risk_fraction": 0.01,
+    "compounding_enabled": false
+  },
+  "tier2_filters": {
+    "min_rvol": 0.7,
+    "min_adr": 1.34,
+    "max_dist_sma20": 13.56,
+    "min_dollar_volume": 36231343.12286377,
+    "min_consolidation_days": 5,
+    "min_volume": 100000,
+    "require_positive_rs": true,
+    "use_rs_percentile": true,
+    "min_rs_percentile": 70.0,
+    "rs_lookback_days": 60,
+    "use_pattern_filter": false,
+    "min_pattern_confidence": 0.5,
+    "pattern_cache_path": "data/pattern_matrix.pkl",
+    "_raw_derived": {
+      "rvol_raw": 0.7,
+      "adr_raw": 1.34,
+      "dist_sma20_raw": 13.56,
+      "dollar_volume_raw": 36231343.12286377
+    },
+    "_dollar_volume_stats": {
+      "p10": 62838061.36496544,
+      "p25": 108081901.88598633,
+      "median": 209124646.5341568,
+      "p75": 473118424.56970215,
+      "p90": 1732295387.6846313,
+      "max": 20642625218.444824,
+      "derived_raw": 36231343.12286377
+    },
+    "_rvol_stats": {
+      "p10": 0.75,
+      "median": 1.26,
+      "p90": 2.22,
+      "max": 5.38
+    },
+    "_adr_stats": {
+      "p10": 1.46,
+      "median": 2.45,
+      "p90": 4.21,
+      "max": 9.29
+    },
+    "_dist_sma20_stats": {
+      "p10": 2.44,
+      "median": 5.73,
+      "p90": 12.62,
+      "max": 25.16
+    }
+  },
+  "tier1_strategy": {
+    "tp1_r": 1.25,
+    "tp2_r": 3.0,
+    "tp1_pct": 0.5,
+    "tp2_pct": 0.25,
+    "score_rs_weight": 0.9000000000000001,
+    "runner_pct": 0.25
+  },
+  "optimization": {
+    "trials": 200,
+    "best_score": -23.60081607940648,
+    "best_trial_metrics": {
+      "total_return": 15.918865676164625,
+      "sharpe": 0.8546286684651443,
+      "max_dd": -7.234063711206275,
+      "win_rate": 100.0,
+      "trades": 37499,
+      "profit_factor": 999.0
+    }
+  },
+  "validation": {
+    "approved": false,
+    "discovery_passed": true,
+    "validation_passed": false,
+    "production_passed": "True",
+    "pbo_score": 0.693939393939394,
+    "sharpe_ratio": 0.6225593558722358,
+    "bootstrap_p5": -1.3751614890048804,
+    "bootstrap_p10": 0.909098002661293,
+    "max_drawdown_pct": 20.71891556417662,
+    "rejection_reasons": [
+      "PBO too high: 69.39% > 50.00%",
+      "Drawdown duration too long: 510 days > 400 days"
+    ]
+  }
+}

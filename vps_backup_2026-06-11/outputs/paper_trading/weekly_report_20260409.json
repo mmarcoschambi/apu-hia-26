@@ -1,0 +1,47 @@
+{
+  "generated_at": "2026-04-09T15:29:28.591000",
+  "weeks_lookback": 4,
+  "days_covered": 1,
+  "strategies": [
+    {
+      "combo": "combo_pullback_entry",
+      "role": "GO-PAPER",
+      "trades": 0,
+      "win_rate": 0.0,
+      "pf": 0.0,
+      "pnl_r": 0.0
+    },
+    {
+      "combo": "combo_aggressive_momentum",
+      "role": "WATCH-PAPER",
+      "trades": 0,
+      "win_rate": 0.0,
+      "pf": 0.0,
+      "pnl_r": 0.0
+    },
+    {
+      "combo": "combo_pure_momentum",
+      "role": "SHADOW",
+      "trades": 0,
+      "win_rate": 0.0,
+      "pf": 0.0,
+      "pnl_r": 0.0
+    },
+    {
+      "combo": "combo_stage2_breakout",
+      "role": "SHADOW",
+      "trades": 0,
+      "win_rate": 0.0,
+      "pf": 0.0,
+      "pnl_r": 0.0
+    },
+    {
+      "combo": "combo_universal_any",
+      "role": "SHADOW",
+      "trades": 0,
+      "win_rate": 0.0,
+      "pf": 0.0,
+      "pnl_r": 0.0
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+{"event_id": "evt_20260518115736347927", "chat_id": "-1003961012390", "user_id": "1324857342", "action": "regenerate", "payload": {"target": "market"}, "status": "applied", "created_at": "2026-05-18T11:57:36.402445", "applied_at": null, "metadata": {"listener": "telegram_bot_listener"}}

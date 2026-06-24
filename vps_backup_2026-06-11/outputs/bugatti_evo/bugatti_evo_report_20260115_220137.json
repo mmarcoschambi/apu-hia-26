@@ -1,0 +1,74 @@
+{
+  "timestamp": "20260115_220137",
+  "config": {
+    "k_folds": 2,
+    "fold_size": 150,
+    "l1_trials": 5,
+    "l2_trials": 5,
+    "in_start": "2020-01-01",
+    "in_end": "2022-12-31",
+    "val_start": "2023-01-01",
+    "val_end": "2023-12-31",
+    "oos_start": "2024-01-01",
+    "oos_end": "2025-12-31",
+    "equity": 100000,
+    "seed": 42,
+    "run_oos": true
+  },
+  "consensus_params": {
+    "rvol_warning": "2.5",
+    "rvol_danger_size": "0.4",
+    "min_volume": "150000",
+    "max_vix": "50.0",
+    "use_phases": "True",
+    "tp2_r": "4.0",
+    "risk_dollars": "150",
+    "max_exposure_pct": "0.3",
+    "require_positive_rs": "False",
+    "require_sma_trend": "False",
+    "max_dist_sma20": "25.0",
+    "min_consolidation_days": "5",
+    "min_rvol": "1.0",
+    "signal_type": "any",
+    "rvol_danger": "3.5",
+    "min_adr": "1.0",
+    "max_stop_pct": "0.07",
+    "tp1_r": "2.0",
+    "min_dollar_volume": "10000000.0",
+    "max_consolidation_range": "30.0",
+    "require_bullish_spy": "False",
+    "rvol_warning_size": "0.6"
+  },
+  "stability": {
+    "cv_mean": 0.2527500746743807,
+    "cv_std": 0.05145871840814814,
+    "stability_score": 79.64047350947664
+  },
+  "validation": {
+    "sharpe": 0.6155190040477052,
+    "degradation": 143.52871303428165,
+    "robustness": "CRITICAL",
+    "metrics": {
+      "profit_factor": 1.6108887008448642,
+      "total_trades": 966,
+      "unique_entries": 322,
+      "total_return_pct": 5.962150942746414,
+      "sharpe_ratio": 0.6155190040477052,
+      "max_drawdown_pct": 6.104697849359025,
+      "win_rate_pct": 43.2712215320911,
+      "final_value": 15894322.641411962
+    }
+  },
+  "oos": {
+    "metrics": {
+      "profit_factor": 1.508010393252704,
+      "total_trades": 1112,
+      "unique_entries": 370,
+      "total_return_pct": 6.382048008606467,
+      "sharpe_ratio": 0.5998034226549915,
+      "max_drawdown_pct": 4.616506013963032,
+      "win_rate_pct": 35.79136690647482,
+      "final_value": 15957307.201290969
+    }
+  }
+}

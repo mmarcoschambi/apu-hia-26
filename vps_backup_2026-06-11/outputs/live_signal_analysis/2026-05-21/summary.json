@@ -1,0 +1,131 @@
+{
+  "signals": 14,
+  "unique_tickers": 14,
+  "quality_counts": {
+    "ma_stack_broken": 7,
+    "extended": 4,
+    "breakout_resolved": 2,
+    "clean": 1
+  },
+  "blocker_counts": {
+    "MA stack roto": 7,
+    "Extendido de SMA20": 4,
+    "Falta breakout": 2,
+    "OK": 1
+  },
+  "sector_counts": {
+    "OTHER": 13,
+    "XLF": 1
+  },
+  "theme_counts": {
+    "NA": 13,
+    "networking, satellite": 1
+  },
+  "forward_return_1d": {
+    "win_rate": NaN,
+    "avg_return": null,
+    "median_return": null,
+    "positive": 0,
+    "available": 0
+  },
+  "forward_return_3d": {
+    "win_rate": NaN,
+    "avg_return": null,
+    "median_return": null,
+    "positive": 0,
+    "available": 0
+  },
+  "forward_return_5d": {
+    "win_rate": NaN,
+    "avg_return": null,
+    "median_return": null,
+    "positive": 0,
+    "available": 0
+  },
+  "forward_return_10d": {
+    "win_rate": NaN,
+    "avg_return": null,
+    "median_return": null,
+    "positive": 0,
+    "available": 0
+  },
+  "forward_return_20d": {
+    "win_rate": NaN,
+    "avg_return": null,
+    "median_return": null,
+    "positive": 0,
+    "available": 0
+  },
+  "by_quality": {
+    "breakout_resolved": {
+      "signals": 2,
+      "win_rate_5d": NaN,
+      "avg_5d": null,
+      "median_5d": null
+    },
+    "clean": {
+      "signals": 1,
+      "win_rate_5d": NaN,
+      "avg_5d": null,
+      "median_5d": null
+    },
+    "extended": {
+      "signals": 4,
+      "win_rate_5d": NaN,
+      "avg_5d": null,
+      "median_5d": null
+    },
+    "ma_stack_broken": {
+      "signals": 7,
+      "win_rate_5d": NaN,
+      "avg_5d": null,
+      "median_5d": null
+    }
+  },
+  "by_sector_etf": {
+    "OTHER": {
+      "signals": 13,
+      "win_rate_5d": NaN,
+      "avg_5d": null
+    },
+    "XLF": {
+      "signals": 1,
+      "win_rate_5d": NaN,
+      "avg_5d": null
+    }
+  },
+  "by_theme": {
+    "NA": {
+      "signals": 13,
+      "win_rate_5d": NaN,
+      "avg_5d": null
+    },
+    "networking, satellite": {
+      "signals": 1,
+      "win_rate_5d": NaN,
+      "avg_5d": null
+    }
+  },
+  "by_snapshot_blocker": {
+    "Extendido de SMA20": {
+      "signals": 4,
+      "win_rate_5d": NaN,
+      "avg_5d": null
+    },
+    "Falta breakout": {
+      "signals": 2,
+      "win_rate_5d": NaN,
+      "avg_5d": null
+    },
+    "MA stack roto": {
+      "signals": 7,
+      "win_rate_5d": NaN,
+      "avg_5d": null
+    },
+    "OK": {
+      "signals": 1,
+      "win_rate_5d": NaN,
+      "avg_5d": null
+    }
+  }
+}

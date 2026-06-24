@@ -1,0 +1,2 @@
+ticker,mode,sector_etf,sector_etf_dist,passed_with_sector,reject_reason_with_sector,passed_without_sector,reject_reason_without_sector,blocked_by_sector,source
+QSR,combo_pure_momentum,,,True,passed,True,passed,False,finviz_scan

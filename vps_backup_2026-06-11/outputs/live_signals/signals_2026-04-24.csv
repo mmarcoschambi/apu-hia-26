@@ -1,0 +1,2 @@
+ticker,signal_date,signal_price,entry_at,entry_score,rs_percentile,rvol,adr_pct,dist_sma20,dollar_vol_M,consol_days,above_sma50,stop_price,tp1,tp2,risk_$
+MU,2026-03-13,426.13,NEXT_OPEN,1.0,100.0,1.23,5.16,4.23,13482.98,19,True,392.0396,468.743,528.4012,2878

@@ -1,0 +1,240 @@
+{
+  "date": "2026-04-30",
+  "sectors": [
+    {
+      "sector_etf": "XLE",
+      "score_mean": 66.90680928411633,
+      "score_delta_5d": 9.27734854991251,
+      "rank_today": 1,
+      "rank_delta": 3,
+      "ticker_count": 64,
+      "new_entrants": [],
+      "dropped": [
+        "EQT"
+      ]
+    },
+    {
+      "sector_etf": "XLP",
+      "score_mean": 36.331669821602695,
+      "score_delta_5d": 3.410096457829617,
+      "rank_today": 11,
+      "rank_delta": 0,
+      "ticker_count": 39,
+      "new_entrants": [],
+      "dropped": [
+        "CCEP",
+        "AGRO"
+      ]
+    },
+    {
+      "sector_etf": "XLRE",
+      "score_mean": 56.43620303941988,
+      "score_delta_5d": 2.4191045566843883,
+      "rank_today": 3,
+      "rank_delta": 3,
+      "ticker_count": 58,
+      "new_entrants": [],
+      "dropped": [
+        "CTRE"
+      ]
+    },
+    {
+      "sector_etf": "XLF",
+      "score_mean": 49.94915132483633,
+      "score_delta_5d": 1.5808324750388962,
+      "rank_today": 5,
+      "rank_delta": 3,
+      "ticker_count": 109,
+      "new_entrants": [],
+      "dropped": [
+        "ASB"
+      ]
+    },
+    {
+      "sector_etf": "XLK",
+      "score_mean": 58.246935946528346,
+      "score_delta_5d": 1.518404432831339,
+      "rank_today": 2,
+      "rank_delta": 0,
+      "ticker_count": 163,
+      "new_entrants": [],
+      "dropped": [
+        "CVLT",
+        "CDNS",
+        "DBX",
+        "CHYM",
+        "ASX"
+      ]
+    },
+    {
+      "sector_etf": "XLU",
+      "score_mean": 46.99612403100775,
+      "score_delta_5d": 0.2585004073014119,
+      "rank_today": 7,
+      "rank_delta": 3,
+      "ticker_count": 43,
+      "new_entrants": [],
+      "dropped": [
+        "AXIA"
+      ]
+    },
+    {
+      "sector_etf": "XLY",
+      "score_mean": 43.47659395973155,
+      "score_delta_5d": -0.6100722963759111,
+      "rank_today": 9,
+      "rank_delta": 0,
+      "ticker_count": 100,
+      "new_entrants": [],
+      "dropped": [
+        "ASO",
+        "DECK",
+        "DPZ",
+        "BKNG",
+        "ATAT"
+      ]
+    },
+    {
+      "sector_etf": "XLC",
+      "score_mean": 50.556176982351495,
+      "score_delta_5d": -0.6960860846905561,
+      "rank_today": 4,
+      "rank_delta": -1,
+      "ticker_count": 36,
+      "new_entrants": [],
+      "dropped": [
+        "AMX"
+      ]
+    },
+    {
+      "sector_etf": "XLI",
+      "score_mean": 47.8682212693678,
+      "score_delta_5d": -2.697016751429409,
+      "rank_today": 6,
+      "rank_delta": -1,
+      "ticker_count": 108,
+      "new_entrants": [],
+      "dropped": [
+        "ACM",
+        "CNM",
+        "AXON",
+        "BA"
+      ]
+    },
+    {
+      "sector_etf": "XLV",
+      "score_mean": 41.47956498035454,
+      "score_delta_5d": -4.907613828125896,
+      "rank_today": 10,
+      "rank_delta": -3,
+      "ticker_count": 119,
+      "new_entrants": [],
+      "dropped": [
+        "ELV",
+        "ALKS",
+        "GMAB",
+        "BBIO",
+        "BEAM"
+      ]
+    },
+    {
+      "sector_etf": "XLB",
+      "score_mean": 44.55964290236798,
+      "score_delta_5d": -7.1024792791911935,
+      "rank_today": 8,
+      "rank_delta": -7,
+      "ticker_count": 53,
+      "new_entrants": [],
+      "dropped": [
+        "ECL",
+        "GFI",
+        "AU"
+      ]
+    }
+  ],
+  "candidates": [
+    {
+      "ticker": "MXL",
+      "sector_etf": "XLK",
+      "score": 99.94407158836688,
+      "breakout_gap": -0.7435448770669901,
+      "rvol": null,
+      "themes": []
+    },
+    {
+      "ticker": "BE",
+      "sector_etf": "XLI",
+      "score": 99.10514541387025,
+      "breakout_gap": -2.457836367792599,
+      "rvol": null,
+      "themes": []
+    },
+    {
+      "ticker": "INTC",
+      "sector_etf": "XLK",
+      "score": 99.04362416107382,
+      "breakout_gap": -0.49499063340127336,
+      "rvol": null,
+      "themes": []
+    },
+    {
+      "ticker": "AMSC",
+      "sector_etf": "XLI",
+      "score": 98.50111856823267,
+      "breakout_gap": 2.1950783341794255,
+      "rvol": null,
+      "themes": []
+    },
+    {
+      "ticker": "OGN",
+      "sector_etf": "XLV",
+      "score": 98.17114093959731,
+      "breakout_gap": -0.9419886404672889,
+      "rvol": null,
+      "themes": []
+    },
+    {
+      "ticker": "SNDK",
+      "sector_etf": "XLK",
+      "score": 98.05369127516778,
+      "breakout_gap": -0.5883944002153219,
+      "rvol": null,
+      "themes": []
+    },
+    {
+      "ticker": "AMD",
+      "sector_etf": "XLK",
+      "score": 98.03691275167785,
+      "breakout_gap": 0.4249412282212433,
+      "rvol": null,
+      "themes": [
+        "AI infra",
+        "semis"
+      ]
+    },
+    {
+      "ticker": "NOK",
+      "sector_etf": "XLK",
+      "score": 97.93624161073825,
+      "breakout_gap": 2.4603131472780393,
+      "rvol": null,
+      "themes": []
+    },
+    {
+      "ticker": "SYRE",
+      "sector_etf": "XLV",
+      "score": 97.36577181208054,
+      "breakout_gap": -0.73333740234375,
+      "rvol": null,
+      "themes": []
+    },
+    {
+      "ticker": "OSCR",
+      "sector_etf": "XLV",
+      "score": 95.9731543624161,
+      "breakout_gap": 1.76405570888181,
+      "rvol": null,
+      "themes": []
+    }
+  ]
+}

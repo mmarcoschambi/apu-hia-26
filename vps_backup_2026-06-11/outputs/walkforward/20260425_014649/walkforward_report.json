@@ -1,0 +1,222 @@
+{
+  "generated_at": "2026-04-25T01:46:49.270377",
+  "start": "2020-01-01",
+  "end": "2025-12-31",
+  "folds": 6,
+  "modes": [
+    "A"
+  ],
+  "universe_count": 10,
+  "results": [
+    {
+      "mode": "A",
+      "folds": [
+        {
+          "fold": 0,
+          "mode": "A",
+          "is_start": "2020-01-01",
+          "is_end": "2020-12-30",
+          "oos_start": "2020-12-31",
+          "oos_end": "2021-12-31",
+          "is_signals": 0,
+          "oos_signals": 0,
+          "is_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0
+          },
+          "oos_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "insufficient_oos_trades=0<10"
+            ]
+          }
+        },
+        {
+          "fold": 1,
+          "mode": "A",
+          "is_start": "2020-01-01",
+          "is_end": "2021-12-30",
+          "oos_start": "2021-12-31",
+          "oos_end": "2022-12-31",
+          "is_signals": 0,
+          "oos_signals": 0,
+          "is_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0
+          },
+          "oos_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "insufficient_oos_trades=0<10"
+            ]
+          }
+        },
+        {
+          "fold": 2,
+          "mode": "A",
+          "is_start": "2020-01-01",
+          "is_end": "2022-12-30",
+          "oos_start": "2022-12-31",
+          "oos_end": "2023-12-31",
+          "is_signals": 0,
+          "oos_signals": 0,
+          "is_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0
+          },
+          "oos_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "insufficient_oos_trades=0<10"
+            ]
+          }
+        },
+        {
+          "fold": 3,
+          "mode": "A",
+          "is_start": "2020-01-01",
+          "is_end": "2023-12-30",
+          "oos_start": "2023-12-31",
+          "oos_end": "2024-12-30",
+          "is_signals": 0,
+          "oos_signals": 0,
+          "is_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0
+          },
+          "oos_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "insufficient_oos_trades=0<10"
+            ]
+          }
+        },
+        {
+          "fold": 4,
+          "mode": "A",
+          "is_start": "2020-01-01",
+          "is_end": "2024-12-29",
+          "oos_start": "2024-12-30",
+          "oos_end": "2025-12-30",
+          "is_signals": 0,
+          "oos_signals": 0,
+          "is_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0
+          },
+          "oos_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "insufficient_oos_trades=0<10"
+            ]
+          }
+        }
+      ],
+      "stress": {
+        "mode": "A",
+        "stress_metrics": {
+          "trades": 0,
+          "wins": 0,
+          "losses": 0,
+          "win_rate": 0.0,
+          "total_pnl": 0.0,
+          "profit_factor": 0.0,
+          "sharpe": 0.0,
+          "max_drawdown": 0.0,
+          "expectancy": 0.0
+        },
+        "signals": 0
+      }
+    }
+  ]
+}

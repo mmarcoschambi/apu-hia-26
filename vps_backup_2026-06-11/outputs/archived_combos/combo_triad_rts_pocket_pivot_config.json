@@ -1,0 +1,57 @@
+{
+  "timestamp": "2026-04-23T18:15:46.021585",
+  "pipeline": "optimize_combo",
+  "period": {
+    "start": "N/A",
+    "end": "N/A",
+    "initial_capital": 100000
+  },
+  "universe_size": 39,
+  "tier1_strategy": {
+    "tp1_r": 1.75,
+    "tp2_r": 4.25,
+    "tp1_pct": 0.45,
+    "tp2_pct": 0.45,
+    "pp_vol_lookback": 7,
+    "pp_vol_mult": 1.9000000000000001,
+    "runner_pct": 0.1
+  },
+  "tier2_filters": {
+    "min_rvol": 0.99,
+    "min_adr": 2.01,
+    "max_dist_sma20": 8.27,
+    "min_dollar_volume": 20000000,
+    "min_consolidation_days": 5,
+    "min_volume": 100000,
+    "min_rs_percentile": 55.0,
+    "use_rs_percentile": true,
+    "rs_lookback_days": 60,
+    "require_spy_above_sma50": true,
+    "max_vix_threshold": 25.0,
+    "use_market_regime_filter": true
+  },
+  "tier3_risk": {
+    "rvol_danger": 3.0,
+    "rvol_warning": 2.0,
+    "rvol_danger_size": 0.3,
+    "rvol_warning_size": 0.65,
+    "adr_high": 6.0,
+    "adr_med": 5.0,
+    "adr_high_size": 0.25,
+    "adr_med_size": 0.33,
+    "max_exposure_pct": 0.65,
+    "max_position_pct": 0.25,
+    "earnings_days": 5,
+    "earnings_cushion": 2,
+    "max_stop_pct_hard": 0.08,
+    "compounding_enabled": false,
+    "max_loss_pct": 1.5,
+    "max_positions": 3,
+    "position_size_method": "equal_weight",
+    "risk_fraction": 0.005
+  },
+  "is_score": -38.656,
+  "screener": "triad_rts",
+  "pattern": "pocket_pivot",
+  "validation": {}
+}

@@ -1,0 +1,27 @@
+{
+  "date": "2026-04-24",
+  "starting_capital": 100000.0,
+  "ending_capital": 99991.79,
+  "net_pnl": 0.0,
+  "orders": 6,
+  "fills": 12,
+  "trades": 6,
+  "wins": 0,
+  "losses": 0,
+  "win_rate_pct": 0.0,
+  "profit_factor": 0.0,
+  "expectancy": 0.0,
+  "max_drawdown_pct": -76.18,
+  "by_agent": {
+    "combo_ideal_setup": {
+      "trades": 1,
+      "pnl": 0.0,
+      "win_rate_pct": 0.0
+    },
+    "combo_pullback_entry": {
+      "trades": 5,
+      "pnl": 0.0,
+      "win_rate_pct": 0.0
+    }
+  }
+}

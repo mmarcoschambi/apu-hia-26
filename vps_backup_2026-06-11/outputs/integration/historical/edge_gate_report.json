@@ -1,0 +1,205 @@
+{
+  "preflight": {
+    "passed": true,
+    "hydrated_rate_A": 0.0,
+    "hydrated_rate_B": 1.0,
+    "common_date_start": "2024-03-13",
+    "common_date_end": "2024-12-20",
+    "common_sessions": 156,
+    "errors": []
+  },
+  "total_metrics": 7,
+  "total_promotions": 7,
+  "promote_count": 0,
+  "hold_count": 7,
+  "reject_count": 0,
+  "rolling_degradation_detected": false,
+  "rolling_degradation_pct": 0.0,
+  "edge_metrics": [
+    {
+      "source_system": "B",
+      "strategy_id": "preset_02",
+      "trades": 4,
+      "win_rate": 0.0,
+      "avg_win": 0.0,
+      "avg_loss": -1.019,
+      "expectancy": -1.019,
+      "profit_factor": 0.0,
+      "payoff_ratio": 0.0,
+      "max_drawdown": 4.076,
+      "sharpe": 0.0,
+      "expectancy_per_100usd": -101.9
+    },
+    {
+      "source_system": "B",
+      "strategy_id": "preset_12",
+      "trades": 2,
+      "win_rate": 0.0,
+      "avg_win": 0.0,
+      "avg_loss": -1.019,
+      "expectancy": -1.019,
+      "profit_factor": 0.0,
+      "payoff_ratio": 0.0,
+      "max_drawdown": 2.038,
+      "sharpe": 0.0,
+      "expectancy_per_100usd": -101.9
+    },
+    {
+      "source_system": "B",
+      "strategy_id": "preset_03",
+      "trades": 2,
+      "win_rate": 0.0,
+      "avg_win": 0.0,
+      "avg_loss": -1.019,
+      "expectancy": -1.019,
+      "profit_factor": 0.0,
+      "payoff_ratio": 0.0,
+      "max_drawdown": 2.038,
+      "sharpe": 0.0,
+      "expectancy_per_100usd": -101.9
+    },
+    {
+      "source_system": "B",
+      "strategy_id": "preset_06",
+      "trades": 20,
+      "win_rate": 0.3,
+      "avg_win": 1.5361,
+      "avg_loss": -0.9796,
+      "expectancy": -0.2249,
+      "profit_factor": 0.672,
+      "payoff_ratio": 1.5681,
+      "max_drawdown": 5.4571,
+      "sharpe": -0.186,
+      "expectancy_per_100usd": -22.4906
+    },
+    {
+      "source_system": "B",
+      "strategy_id": "preset_04",
+      "trades": 2,
+      "win_rate": 0.0,
+      "avg_win": 0.0,
+      "avg_loss": -1.019,
+      "expectancy": -1.019,
+      "profit_factor": 0.0,
+      "payoff_ratio": 0.0,
+      "max_drawdown": 2.038,
+      "sharpe": 0.0,
+      "expectancy_per_100usd": -101.9
+    },
+    {
+      "source_system": "B",
+      "strategy_id": "preset_07",
+      "trades": 16,
+      "win_rate": 0.25,
+      "avg_win": 1.0311,
+      "avg_loss": -0.7449,
+      "expectancy": -0.3009,
+      "profit_factor": 0.4614,
+      "payoff_ratio": 1.3843,
+      "max_drawdown": 5.5258,
+      "sharpe": -0.3198,
+      "expectancy_per_100usd": -30.0871
+    },
+    {
+      "source_system": "B",
+      "strategy_id": "preset_01",
+      "trades": 2,
+      "win_rate": 0.0,
+      "avg_win": 0.0,
+      "avg_loss": -1.019,
+      "expectancy": -1.019,
+      "profit_factor": 0.0,
+      "payoff_ratio": 0.0,
+      "max_drawdown": 2.038,
+      "sharpe": 0.0,
+      "expectancy_per_100usd": -101.9
+    }
+  ],
+  "calibrated_signals": 9307,
+  "promotions": [
+    {
+      "source_system": "B",
+      "strategy_id": "preset_02",
+      "decision": "HOLD",
+      "reasons": [
+        "insufficient_trades: 4 < 30",
+        "expectancy: -1.0190 <= 0.0",
+        "profit_factor: 0.0000 < 1.2",
+        "max_drawdown: 4.0760 > 0.15",
+        "sharpe: 0.0000 < 0.8"
+      ]
+    },
+    {
+      "source_system": "B",
+      "strategy_id": "preset_12",
+      "decision": "HOLD",
+      "reasons": [
+        "insufficient_trades: 2 < 30",
+        "expectancy: -1.0190 <= 0.0",
+        "profit_factor: 0.0000 < 1.2",
+        "max_drawdown: 2.0380 > 0.15",
+        "sharpe: 0.0000 < 0.8"
+      ]
+    },
+    {
+      "source_system": "B",
+      "strategy_id": "preset_03",
+      "decision": "HOLD",
+      "reasons": [
+        "insufficient_trades: 2 < 30",
+        "expectancy: -1.0190 <= 0.0",
+        "profit_factor: 0.0000 < 1.2",
+        "max_drawdown: 2.0380 > 0.15",
+        "sharpe: 0.0000 < 0.8"
+      ]
+    },
+    {
+      "source_system": "B",
+      "strategy_id": "preset_06",
+      "decision": "HOLD",
+      "reasons": [
+        "insufficient_trades: 20 < 30",
+        "expectancy: -0.2249 <= 0.0",
+        "profit_factor: 0.6720 < 1.2",
+        "max_drawdown: 5.4571 > 0.15",
+        "sharpe: -0.1860 < 0.8"
+      ]
+    },
+    {
+      "source_system": "B",
+      "strategy_id": "preset_04",
+      "decision": "HOLD",
+      "reasons": [
+        "insufficient_trades: 2 < 30",
+        "expectancy: -1.0190 <= 0.0",
+        "profit_factor: 0.0000 < 1.2",
+        "max_drawdown: 2.0380 > 0.15",
+        "sharpe: 0.0000 < 0.8"
+      ]
+    },
+    {
+      "source_system": "B",
+      "strategy_id": "preset_07",
+      "decision": "HOLD",
+      "reasons": [
+        "insufficient_trades: 16 < 30",
+        "expectancy: -0.3009 <= 0.0",
+        "profit_factor: 0.4614 < 1.2",
+        "max_drawdown: 5.5258 > 0.15",
+        "sharpe: -0.3198 < 0.8"
+      ]
+    },
+    {
+      "source_system": "B",
+      "strategy_id": "preset_01",
+      "decision": "HOLD",
+      "reasons": [
+        "insufficient_trades: 2 < 30",
+        "expectancy: -1.0190 <= 0.0",
+        "profit_factor: 0.0000 < 1.2",
+        "max_drawdown: 2.0380 > 0.15",
+        "sharpe: 0.0000 < 0.8"
+      ]
+    }
+  ]
+}

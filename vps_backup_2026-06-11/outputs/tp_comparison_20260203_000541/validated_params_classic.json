@@ -1,0 +1,53 @@
+{
+  "validated_date": "2026-02-03 00:13:48",
+  "validation_period": "2020-01-01 to 2024-12-31",
+  "source": "walk_forward + advanced_validation",
+  "config_name": "Config_5_Window_5",
+  "universe": [
+    "AAPL",
+    "MSFT",
+    "GOOGL",
+    "NVDA",
+    "TSLA",
+    "META",
+    "AMZN",
+    "NFLX",
+    "AMD",
+    "AVGO"
+  ],
+  "performance": {
+    "sharpe_ratio": 1.36563659138108,
+    "annualized_return_pct": 2.2716830085917294,
+    "total_return_pct": 14.407631121635436,
+    "total_trades": 61,
+    "win_rate_pct": 76.25,
+    "max_drawdown_pct": -1.846298739276513,
+    "mar_ratio": 1.230398396676535
+  },
+  "parameters": {
+    "min_rvol": 2.0,
+    "min_adr": 2.5,
+    "risk_dollars": 300,
+    "max_dist_sma20": 12.0,
+    "max_stop_pct": 7.0,
+    "tp1_r": 1.25,
+    "tp2_r": 4.0,
+    "require_spy_above_sma50": true,
+    "use_earnings_calendar": false,
+    "use_trailing_stop": false,
+    "use_adaptive_filtering": false,
+    "use_market_regime_filter": false,
+    "use_dynamic_thresholds": false,
+    "min_volume": 300000,
+    "min_dollar_volume": 5000000,
+    "min_consolidation_days": 10,
+    "rvol_warning": 2.0,
+    "rvol_danger": 3.0,
+    "rvol_warning_size": 0.65,
+    "rvol_danger_size": 0.3,
+    "use_phases": true,
+    "tp1_pct": 0.5,
+    "tp2_pct": 0.3,
+    "runner_pct": 0.2
+  }
+}

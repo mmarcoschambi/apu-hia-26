@@ -1,0 +1,42 @@
+{
+  "date": "2026-05-13",
+  "brief": "\ud83d\ude80 <b>MOMENTUM V2 | 2026-05-13</b>\n\u2022 Regime: <b>PASS</b>\n\u2022 Universe: <code>583</code>\n\u2022 Signals: <code>0</code>\n\n\ud83d\udcca <b>BREADTH HEALTH: \u26aa N/A</b>\n\u2022 VIX: <code>17.87</code> \ud83d\udfe2\n\u2022 Status: <code>DATA STALE (0/0)</code> \u26a0\ufe0f\n\n\ud83d\udc8e <b>MARKET ALPHA (Gamma/DIX)</b>\n\u2022 DIX: <code>45.4%</code> \ud83d\udd25 (Dark Pool Buy %)\n\u2022 GEX: <code>$8.6B</code> \u2705 (Gamma Exposure)\n\n\n\ud83d\udd25 <b>HOT SECTORS</b>\n\u2022 <b>XLK Tecnolog\u00eda</b> | RS 191.8% | S1 \u2713\n\u2022 <b>XLP Consumo defensivo</b> | RS -25.4% | S1 \u2717\n\u2022 <b>XLE Energ\u00eda</b> | RS -44.6% | S1 \u2717\n\u2022 <b>XLRE Real Estate</b> | RS -69.6% | S1 \u2717\n\u2022 <b>XLI Industriales</b> | RS -76.5% | S1 \u2717\n\n\ud83c\udfc6 <b>TOP GLOBAL (TOTAL RANKING)</b>\n\u2022 <code>CSCO</code> (XLK) | Prox: <b>93</b> | RS: <b>86</b>\n\u2022 <code>AAPL</code> (XLK) | Prox: <b>90</b> | RS: <b>79</b>\n\u2022 <code>RIO</code> (XLB) | Prox: <b>86</b> | RS: <b>77</b>\n\u2022 <code>CVS</code> (XLV) | Prox: <b>80</b> | RS: <b>87</b>\n\u2022 <code>LQDA</code> (OTHER) | Prox: <b>80</b> | RS: <b>94</b>\n\n\ud83c\udfaf <b>SECTORES CON CANDIDATOS</b>\n<b>[XLK Tecnolog\u00eda | RS 191.8% \ud83d\udd25]</b>\n\u2022 \u2b06\ufe0f <code>CSCO</code>\n  RS: <b>86</b> | Prox: <b>93</b> | <a href=\"https://www.tradingview.com/symbols/CSCO/\">TradingView</a>\n  Estado: <b>\ud83d\udcc9 Consolidar</b>\n  Dist SMA20: 9.64% / max 6.77%\n  RVOL: 1.51 | Break: <code>98.83</code>\n  Bloqueos: Extendido de SMA20 | Live: <code>Dist SMA20 &lt;= 6.77%</code>\n\n\u2022 \ud83c\udd95 <code>AAPL</code> [Tema: HARDWARE, PHONES, CONSUMER TECH]\n  RS: <b>79</b> | Prox: <b>90</b> | <a href=\"https://www.tradingview.com/symbols/AAPL/\">TradingView</a>\n  Estado: <b>\ud83d\udce1 Esperar volumen</b>\n  Dist SMA20: 6.64% / max 6.77%\n  RVOL: 0.93 | Break: <code>294.49</code>\n  Bloqueos: RVOL bajo | Live: <code>RVOL &gt;= 1.10</code>\n\n\u2022 \ud83c\udd95 <code>SONY</code>\n  RS: <b>66</b> | Prox: <b>68</b> | <a href=\"https://www.tradingview.com/symbols/SONY/\">TradingView</a>\n  Estado: <b>\ud83d\udcc9 Consolidar</b>\n  Dist SMA20: 7.58% / max 6.77%\n  RVOL: 1.75 | Break: <code>22.05</code>\n  Bloqueos: MA stack roto, Extendido de SMA20 | Live: <code>SMA20&gt;SMA50 (-1.16%)</code>\n\n\u2022 \ud83c\udd95 <code>LSCC</code> \ud83d\udd25 HTF\n  RS: <b>79</b> | Prox: <b>60</b> | <a href=\"https://www.tradingview.com/symbols/LSCC/\">TradingView</a>\n  Estado: <b>\u23f3 Esperar breakout</b>\n  Dist SMA20: 4.69% / max 6.77%\n  RVOL: 1.11 | Break: <code>129.38</code>\n  Bloqueos: Falta breakout, MA stack roto | Live: <code>Breakout &gt; 129.38</code>\n\n\u2022 \ud83c\udd95 <code>KEYS</code> \ud83d\udd25 HTF\n  RS: <b>74</b> | Prox: <b>60</b> | <a href=\"https://www.tradingview.com/symbols/KEYS/\">TradingView</a>\n  Estado: <b>\u23f3 Esperar breakout</b>\n  Dist SMA20: 4.46% / max 6.77%\n  RVOL: 1.33 | Break: <code>370.17</code>\n  Bloqueos: Falta breakout | Live: <code>Breakout &gt; 370.17</code>\n\n\n\ud83d\udce1 <b>DATA INCOMPLETE RADAR</b>\n\u2022 <b>D</b> (XLU) | RS 47 | RVOL premarket no confiable\n\n\ud83d\udea8 <b>ALERTA TOP: Sector XLK</b>\nCandidatos: <code>CSCO / AAPL / SONY</code>\nBlocker: <b>Extendido de SMA20</b>\nAcci\u00f3n: <b>Esperar Dist SMA20 &lt;= 6.77%; AAPL adem\u00e1s RVOL &gt;= 1.10</b>\n\n\ud83d\udd01 <b>NEAREST FLOW 2026-05-08 \u2192 2026-05-13</b>\n\u2022 \u274c <b>NET</b> (Prev R1) | Fuera radar | Wait: <code>N/A</code>\n\u2022 \u2b07\ufe0f-64 <b>VTRS</b> (Prev R2) | Cayo | Wait: <code>Breakout &gt; 17.53</code>\n\u2022 \u274c <b>ADSK</b> (Prev R3) | Fuera radar | Wait: <code>N/A</code>\n\u2022 \u274c <b>NTRA</b> (Prev R4) | Fuera radar | Wait: <code>N/A</code>\n\u2022 \u274c <b>AXON</b> (Prev R5) | Fuera radar | Wait: <code>N/A</code>\n------------------------------\n\ud83e\udded Radar Rotation: No data available for today.",
+  "buttons": [
+    [
+      {
+        "text": "\ud83d\udd0e CSCO",
+        "callback_data": "detail:CSCO"
+      },
+      {
+        "text": "\ud83d\udd0e AAPL",
+        "callback_data": "detail:AAPL"
+      }
+    ],
+    [
+      {
+        "text": "\ud83d\udd0e SONY",
+        "callback_data": "detail:SONY"
+      },
+      {
+        "text": "\ud83d\udd0e LSCC",
+        "callback_data": "detail:LSCC"
+      }
+    ],
+    [
+      {
+        "text": "\ud83d\udd0e KEYS",
+        "callback_data": "detail:KEYS"
+      }
+    ],
+    [
+      {
+        "text": "\ud83d\udd04 Refresh",
+        "callback_data": "refresh:market"
+      },
+      {
+        "text": "\u26a1 Regen All",
+        "callback_data": "regenerate:market"
+      }
+    ]
+  ]
+}

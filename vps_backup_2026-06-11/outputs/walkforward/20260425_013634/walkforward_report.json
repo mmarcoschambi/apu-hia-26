@@ -1,0 +1,110 @@
+{
+  "generated_at": "2026-04-25T01:36:34.221574",
+  "start": "2020-01-01",
+  "end": "2022-12-31",
+  "folds": 3,
+  "modes": [
+    "B"
+  ],
+  "universe_count": 100,
+  "results": [
+    {
+      "mode": "B",
+      "folds": [
+        {
+          "fold": 0,
+          "mode": "B",
+          "is_start": "2020-01-01",
+          "is_end": "2020-12-30",
+          "oos_start": "2020-12-31",
+          "oos_end": "2021-12-31",
+          "is_signals": 0,
+          "oos_signals": 0,
+          "is_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0
+          },
+          "oos_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "insufficient_oos_trades=0<10"
+            ]
+          }
+        },
+        {
+          "fold": 1,
+          "mode": "B",
+          "is_start": "2020-01-01",
+          "is_end": "2021-12-30",
+          "oos_start": "2021-12-31",
+          "oos_end": "2022-12-31",
+          "is_signals": 0,
+          "oos_signals": 0,
+          "is_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0
+          },
+          "oos_metrics": {
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "profit_factor": 0.0,
+            "sharpe": 0.0,
+            "max_drawdown": 0.0,
+            "expectancy": 0.0
+          },
+          "gate": {
+            "verdict": "HOLD",
+            "reasons": [
+              "insufficient_oos_trades=0<10"
+            ]
+          }
+        }
+      ],
+      "stress": {
+        "mode": "B",
+        "stress_metrics": {
+          "trades": 3,
+          "wins": 0,
+          "losses": 3,
+          "win_rate": 0.0,
+          "total_pnl": -11900.5,
+          "profit_factor": 0.0,
+          "sharpe": -41.597,
+          "max_drawdown": 11900500000000.0,
+          "expectancy": -3966.8333,
+          "avg_win": 0.0,
+          "avg_loss": 3966.83
+        },
+        "signals": 3
+      }
+    }
+  ]
+}

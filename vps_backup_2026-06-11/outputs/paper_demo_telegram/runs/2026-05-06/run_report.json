@@ -1,0 +1,28 @@
+{
+  "date": "2026-05-06",
+  "generated_at": "2026-05-06T03:23:35.286288",
+  "status": "idle",
+  "kill_switch": false,
+  "entries_paused": false,
+  "metrics": {
+    "open_positions": 0,
+    "closed_positions": 0,
+    "pending_intents": 0,
+    "snoozed_intents": 0,
+    "approved_intents": 0,
+    "rejected_intents": 0,
+    "expired_intents": 0,
+    "orders": 0,
+    "fills": 0,
+    "realized_pnl": 0,
+    "kill_switch": false,
+    "entries_paused": false
+  },
+  "open_positions": 0,
+  "closed_positions": 0,
+  "pending_intents": 0,
+  "snoozed_intents": 0,
+  "approved_intents": 0,
+  "rejected_intents": 0,
+  "expired_intents": 0
+}

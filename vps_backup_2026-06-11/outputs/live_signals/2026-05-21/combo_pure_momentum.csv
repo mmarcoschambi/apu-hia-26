@@ -1,0 +1,4 @@
+agent_name,combo_name,ticker,signal_date,entry_score,screener_score,screener_reason,pattern_signal,tier2_filter,rvol,adr_pct,dist_sma20,consol_days,volume,dollar_vol_M,rs_ret,rs_percentile,entry_price,close,spy_above_sma50,spy_above_sma200,reject_contract,mode
+A,A,AMD,2026-05-21,0.918,91.8,qullamaggie_momentum=PASS,breakout,passed,0.55,4.44,18.87,12,21872149,14169.5,0.6141,95.2,353.72,353.72,True,True,APPROVED,A
+A,A,AMZN,2026-05-21,0.731,73.1,qullamaggie_momentum=PASS,breakout,passed,0.26,2.55,5.87,16,12633593,13375.4,0.2368,86.2,273.12,273.12,True,True,APPROVED,A
+A,A,AMAT,2026-05-21,0.611,61.1,qullamaggie_momentum=PASS,breakout,passed,1.21,3.35,7.31,17,7793800,2814.5,0.1344,80.7,436.61,436.61,True,True,APPROVED,A

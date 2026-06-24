@@ -1,0 +1,42 @@
+{
+  "date": "2026-05-12",
+  "brief": "\ud83d\ude80 <b>MOMENTUM V2 | 2026-05-12</b> (Data: 2026-05-11)\n\u2022 Regime: <b>PASS</b>\n\u2022 Universe: <code>587</code>\n\u2022 Signals: <code>0</code>\n\n\ud83d\udcca <b>BREADTH HEALTH: \u26aa N/A</b>\n\u2022 VIX: <code>18.38</code> \ud83d\udfe2\n\u2022 Status: <code>DATA STALE (0/0)</code> \u26a0\ufe0f\n\n\ud83d\udc8e <b>MARKET ALPHA (Gamma/DIX)</b>\n\u2022 DIX: <code>44.0%</code> \u2744\ufe0f (Dark Pool Buy %)\n\u2022 GEX: <code>$7.5B</code> \u2705 (Gamma Exposure)\n\n\n\ud83d\udd25 <b>HOT SECTORS</b>\n\u2022 <b>XLK Tecnolog\u00eda</b> | RS 192.7% | S1 \u2713\n\u2022 <b>XLP Consumo defensivo</b> | RS -42.1% | S1 \u2717\n\u2022 <b>XLE Energ\u00eda</b> | RS -54.0% | S1 \u2717\n\u2022 <b>XLRE Real Estate</b> | RS -57.9% | S1 \u2717\n\u2022 <b>XLY Consumo discrecional</b> | RS -74.8% | S1 \u2717\n\n\ud83c\udfc6 <b>TOP GLOBAL (TOTAL RANKING)</b>\n\u2022 <code>DD</code> (XLB) | Prox: <b>98</b> | RS: <b>66</b>\n\u2022 <code>ADI</code> (XLK) | Prox: <b>96</b> | RS: <b>82</b>\n\u2022 <code>CSCO</code> (XLK) | Prox: <b>92</b> | RS: <b>82</b>\n\u2022 <code>AMAT</code> (XLK) | Prox: <b>92</b> | RS: <b>74</b>\n\u2022 <code>ESI</code> (OTHER) | Prox: <b>90</b> | RS: <b>80</b>\n\n\ud83c\udfaf <b>SECTORES CON CANDIDATOS</b>\n<b>[XLK Tecnolog\u00eda | RS 192.7% \ud83d\udd25]</b>\n\u2022 \u2b07\ufe0f <code>ADI</code>\n  RS: <b>82</b> | Prox: <b>96</b> | <a href=\"https://www.tradingview.com/symbols/ADI/\">TradingView</a>\n  Estado: <b>\ud83d\udcc9 Consolidar</b>\n  Dist SMA20: 8.49% / max 6.77%\n  RVOL: 1.13 | Break: <code>418.75</code>\n  Bloqueos: Extendido de SMA20 | Live: <code>Dist SMA20 &lt;= 6.77%</code>\n\n\u2022 \u2b07\ufe0f <code>CSCO</code>\n  RS: <b>82</b> | Prox: <b>92</b> | <a href=\"https://www.tradingview.com/symbols/CSCO/\">TradingView</a>\n  Estado: <b>\ud83d\udcc9 Consolidar</b>\n  Dist SMA20: 10.02% / max 6.77%\n  RVOL: 1.72 | Break: <code>97.02</code>\n  Bloqueos: Extendido de SMA20 | Live: <code>Dist SMA20 &lt;= 6.77%</code>\n\n\u2022 \u2b07\ufe0f <code>AMAT</code> [Tema: SEMIS]\n  RS: <b>74</b> | Prox: <b>92</b> | <a href=\"https://www.tradingview.com/symbols/AMAT/\">TradingView</a>\n  Estado: <b>\ud83d\udcc9 Consolidar</b>\n  Dist SMA20: 10.08% / max 6.77%\n  RVOL: 1.33 | Break: <code>438.04</code>\n  Bloqueos: Extendido de SMA20 | Live: <code>Dist SMA20 &lt;= 6.77%</code>\n\n\u2022 \u2b06\ufe0f <code>MU</code> [Tema: SEMIS]\n  RS: <b>99</b> | Prox: <b>80</b> | <a href=\"https://www.tradingview.com/symbols/MU/\">TradingView</a>\n  Estado: <b>\ud83d\udcc9 Consolidar</b>\n  Dist SMA20: 46.25% / max 6.77%\n  RVOL: 1.59 | Break: <code>747.21</code>\n  Bloqueos: Extendido de SMA20 | Live: <code>Dist SMA20 &lt;= 6.77%</code>\n\n\u2022 \ud83c\udd95 <code>STX</code> [Tema: SEMIS]\n  RS: <b>97</b> | Prox: <b>80</b> | <a href=\"https://www.tradingview.com/symbols/STX/\">TradingView</a>\n  Estado: <b>\ud83d\udcc9 Consolidar</b>\n  Dist SMA20: 29.47% / max 6.77%\n  RVOL: 1.25 | Break: <code>802.13</code>\n  Bloqueos: Extendido de SMA20 | Live: <code>Dist SMA20 &lt;= 6.77%</code>\n\n\n\ud83d\udce1 <b>DATA INCOMPLETE RADAR</b>\n\u2022 <b>QBTS</b> (XLK) | RS 97 | RVOL premarket no confiable\n\u2022 <b>PFGC</b> (OTHER) | RS 64 | RVOL premarket no confiable\n\u2022 <b>ENTG</b> (XLK) | RS 66 | RVOL premarket no confiable\n\n\ud83d\udea8 <b>ALERTA TOP: Sector XLK</b>\nCandidatos: <code>ADI / CSCO / AMAT</code>\nBlocker: <b>Extendido de SMA20</b>\nAcci\u00f3n: <b>Esperar Dist SMA20 &lt;= 6.77%</b>\n\n\ud83c\udfdb\ufe0f <b>SECTOR MONEY FLOW</b>\n\u2022 <b>XLK Tecnolog\u00eda</b> | \u27a1\ufe0f | RS +4.33%\n\u2022 <b>XLY Consumo discrecional</b> | \u27a1\ufe0f | RS +8.37%\n\u2022 <b>XLRE Real Estate</b> | \u27a1\ufe0f | RS -3.62%\n\u2022 <b>XLP Consumo defensivo</b> | \u27a1\ufe0f | RS -0.09%\n\u2022 <b>XLI Industriales</b> | \ud83d\udd25 \u2b06\ufe0f | RS +6.59%\n\n\ud83d\udd2d <b>TOP WATCHLIST POR FLOW</b>\n<i>Top por score sectorial; no necesariamente listos para trigger.</i>\n\u2022 XLK: <code>ON</code> (72), <code>AMD</code> (70), <code>ASML</code> (59)\n\u2022 XLY: <code>MNST</code> (18)\n\u2022 XLRE: <code>PSA</code> (50), <code>CCI</code> (30)\n\u2022 XLP: <code>PM</code> (60), <code>KO</code> (50)\n\u2022 XLI: <code>ETN</code> (60), <code>PWR</code> (40), <code>HON</code> (30)\n\n\ud83d\udd01 <b>NEAREST FLOW 2026-05-11 \u2192 2026-05-12</b>\n\u2022 \u2b07\ufe0f-1 <b>ADI</b> (Prev R1) | Sigue top | Wait: <code>Dist SMA20 &lt;= 6.77%</code>\n\u2022 \u2b07\ufe0f-1 <b>CSCO</b> (Prev R2) | Sigue top | Wait: <code>Dist SMA20 &lt;= 6.77%</code>\n\u2022 \u2b07\ufe0f-1 <b>AMAT</b> (Prev R3) | Sigue top | Wait: <code>Dist SMA20 &lt;= 6.77%</code>\n\u2022 \u2b07\ufe0f-59 <b>ASML</b> (Prev R4) | Cayo | Wait: <code>Breakout &gt; 1595.31</code>\n\u2022 \u274c <b>TECK</b> (Prev R5) | Fuera radar | Wait: <code>N/A</code>",
+  "buttons": [
+    [
+      {
+        "text": "\ud83d\udd0e ADI",
+        "callback_data": "detail:ADI"
+      },
+      {
+        "text": "\ud83d\udd0e CSCO",
+        "callback_data": "detail:CSCO"
+      }
+    ],
+    [
+      {
+        "text": "\ud83d\udd0e AMAT",
+        "callback_data": "detail:AMAT"
+      },
+      {
+        "text": "\ud83d\udd0e MU",
+        "callback_data": "detail:MU"
+      }
+    ],
+    [
+      {
+        "text": "\ud83d\udd0e STX",
+        "callback_data": "detail:STX"
+      }
+    ],
+    [
+      {
+        "text": "\ud83d\udd04 Refresh",
+        "callback_data": "refresh:market"
+      },
+      {
+        "text": "\u26a1 Regen All",
+        "callback_data": "regenerate:market"
+      }
+    ]
+  ]
+}

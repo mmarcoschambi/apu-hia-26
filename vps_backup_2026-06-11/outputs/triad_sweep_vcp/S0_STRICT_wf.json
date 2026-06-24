@@ -1,0 +1,63 @@
+{
+  "combo": "combo_triad_rts_vcp",
+  "run_at": "2026-04-23T23:24:35.215303",
+  "folds": [
+    {
+      "fold": 1,
+      "oos_start": "2022-01-01",
+      "oos_end": "2022-12-31",
+      "trades": 2,
+      "sharpe": -0.029,
+      "pf": 0.0,
+      "win_rate": 0.0,
+      "max_dd": 1.24,
+      "total_return": -0.05,
+      "status": "ok"
+    },
+    {
+      "fold": 2,
+      "oos_start": "2023-01-01",
+      "oos_end": "2023-12-31",
+      "trades": 5,
+      "sharpe": 0.435,
+      "pf": 0.0,
+      "win_rate": 0.0,
+      "max_dd": 0.92,
+      "total_return": 0.67,
+      "status": "ok"
+    },
+    {
+      "fold": 3,
+      "oos_start": "2024-01-01",
+      "oos_end": "2024-12-31",
+      "trades": 0,
+      "sharpe": 0.0,
+      "pf": 0.0,
+      "win_rate": 0.0,
+      "max_dd": 0.0,
+      "total_return": 0.0,
+      "status": "ok"
+    },
+    {
+      "fold": 4,
+      "oos_start": "2025-01-01",
+      "oos_end": "2025-12-31",
+      "trades": 4,
+      "sharpe": -1.304,
+      "pf": 0.0,
+      "win_rate": 0.0,
+      "max_dd": 1.88,
+      "total_return": -1.88,
+      "status": "ok"
+    }
+  ],
+  "aggregate": {
+    "sharpe_mean": 0,
+    "sharpe_min": 0,
+    "pf_mean": 0,
+    "pf_consistent": false,
+    "trades_total": 0,
+    "trades_per_fold": 0,
+    "verdict": "INSUFFICIENT_DATA"
+  }
+}

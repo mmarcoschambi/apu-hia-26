@@ -1,0 +1,10 @@
+{
+  "min_rvol": 1.5,
+  "max_dist_sma20": 10.0,
+  "min_consolidation_days": 10,
+  "min_adr": 2.0,
+  "min_dollar_volume": 2000000,
+  "require_sector_strength": false,
+  "sector_top_percentile": 0.50,
+  "notes": "Versión balanceada - menos restrictiva que la derivada estadísticamente"
+}

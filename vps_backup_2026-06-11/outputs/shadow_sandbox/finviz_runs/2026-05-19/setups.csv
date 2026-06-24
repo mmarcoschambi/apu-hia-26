@@ -1,0 +1,186 @@
+ticker,rs,breakout_lvl,dist_sma20_pct,dist_sma20,rvol,waiting_desc,sector_etf,excluded_by_xlv,allowed_shadow_candidate,shadow_status,source_snapshot
+F,65.68848758465012,14.94,5.31,5.31,1.09,Breakout > 14.94,OTHER,False,True,shadow_allowed,paper_finviz
+SNOW,78.55530474040631,159.83,11.02,11.02,1.51,SMA20>SMA50 (-3.85%),OTHER,False,True,shadow_allowed,paper_finviz
+SJM,77.87810383747178,100.87,6.69,6.69,1.42,SMA50>SMA100 (-3.20%),OTHER,False,True,shadow_allowed,paper_finviz
+CSCO,94.80812641083521,119.36,23.52,23.52,1.0,Breakout > 119.36,XLK,False,True,shadow_allowed,paper_finviz
+OSCR,98.1941309255079,24.28,27.91,27.91,1.61,SMA100/SMA200 N/A,OTHER,False,True,shadow_allowed,paper_finviz
+TTWO,81.48984198645599,246.25,8.98,8.98,1.4,Breakout > 246.25,OTHER,False,True,shadow_allowed,paper_finviz
+SAIL,88.48758465011286,13.89,19.96,19.96,2.09,SMA20>SMA50 (-3.52%),OTHER,False,True,shadow_allowed,paper_finviz
+SAP,57.33634311512416,180.03,3.06,3.06,0.81,Breakout > 180.03,OTHER,False,True,shadow_allowed,paper_finviz
+BTDR,63.20541760722348,15.11,3.88,3.88,1.15,Breakout > 15.11,OTHER,False,True,shadow_allowed,paper_finviz
+LQDA,97.51693002257336,59.75,28.83,28.83,0.92,Breakout > 59.75,OTHER,False,True,shadow_allowed,paper_finviz
+HUT,89.39051918735892,112.26,8.24,8.24,1.06,Breakout > 112.26,OTHER,False,True,shadow_allowed,paper_finviz
+TWLO,95.03386004514672,203.71,13.23,13.23,0.87,Breakout > 203.71,OTHER,False,True,shadow_allowed,paper_finviz
+DDOG,98.87133182844244,211.28,28.83,28.83,0.83,Breakout > 211.28,XLK,False,True,shadow_allowed,paper_finviz
+TXNM,63.88261851015802,59.48,0.66,0.66,1.17,Breakout > 59.48,OTHER,False,True,shadow_allowed,paper_finviz
+PHG,36.56884875846501,28.34,0.43,0.43,0.9,Breakout > 28.34,OTHER,False,True,shadow_allowed,paper_finviz
+LSCC,68.84875846501129,130.0,1.2,1.2,1.08,Breakout > 130.00,OTHER,False,True,shadow_allowed,paper_finviz
+STX,95.48532731376976,841.31,4.5,4.5,1.02,Breakout > 841.31,XLK,False,True,shadow_allowed,paper_finviz
+HUM,96.16252821670429,310.94,20.85,20.85,0.85,Breakout > 310.94,OTHER,False,True,shadow_allowed,paper_finviz
+CAH,42.21218961625282,215.0,2.34,2.34,0.96,Breakout > 215.00,OTHER,False,True,shadow_allowed,paper_finviz
+PSN,39.27765237020316,56.24,0.46,0.46,1.19,Breakout > 56.24,OTHER,False,True,shadow_allowed,paper_finviz
+SONY,73.81489841986456,22.98,9.17,9.17,0.84,Breakout > 22.98,OTHER,False,True,shadow_allowed,paper_finviz
+MET,72.46049661399549,80.97,4.01,4.01,1.22,SMA50>SMA100 (-1.72%),OTHER,False,True,shadow_allowed,paper_finviz
+D,77.42663656884876,65.61,7.66,7.66,6.09,XLU > SMA20,XLU,False,True,shadow_allowed,paper_finviz
+ERIC,78.1038374717833,12.85,8.09,8.09,1.63,Breakout > 12.85,OTHER,False,True,shadow_allowed,paper_finviz
+DXCM,62.30248306997742,65.29,7.19,7.19,2.29,Breakout > 65.29,OTHER,False,True,shadow_allowed,paper_finviz
+ZBH,26.185101580135438,96.25,0.07,0.07,0.81,Breakout > 96.25,OTHER,False,True,shadow_allowed,paper_finviz
+AXTI,94.35665914221218,134.0,8.21,8.21,0.96,Breakout > 134.00,OTHER,False,True,shadow_allowed,paper_finviz
+CCI,66.36568848758465,92.81,1.88,1.88,1.04,Breakout > 92.81,XLRE,False,True,shadow_allowed,paper_finviz
+CPRX,88.03611738148985,32.56,5.84,5.84,1.24,Breakout > 32.56,OTHER,False,True,shadow_allowed,paper_finviz
+NOW,69.07449209932281,104.5,12.3,12.3,1.7,Breakout > 104.50,XLK,False,True,shadow_allowed,paper_finviz
+CHKP,34.31151241534989,142.43,2.13,2.13,0.8,Breakout > 142.43,OTHER,False,True,shadow_allowed,paper_finviz
+RSG,67.72009029345372,214.1,4.14,4.14,1.06,SMA20>SMA50 (-3.43%),OTHER,False,True,shadow_allowed,paper_finviz
+NXT,91.64785553047405,156.78,8.23,8.23,1.11,Breakout > 156.78,OTHER,False,True,shadow_allowed,paper_finviz
+PENG,99.09706546275395,53.27,25.22,25.22,0.98,Breakout > 53.27,OTHER,False,True,shadow_allowed,paper_finviz
+SWKS,86.23024830699775,72.81,6.51,6.51,1.37,Breakout > 72.81,OTHER,False,True,shadow_allowed,paper_finviz
+EQH,66.81715575620768,44.78,1.87,1.87,1.11,Breakout > 44.78,OTHER,False,True,shadow_allowed,paper_finviz
+COST,75.62076749435666,1057.5,6.02,6.02,1.3,OK,XLP,False,True,shadow_allowed,paper_finviz
+TXN,93.00225733634312,310.29,7.05,7.05,0.72,Breakout > 310.29,OTHER,False,True,shadow_allowed,paper_finviz
+EXTR,94.13092550790067,25.13,11.5,11.5,0.64,Breakout > 25.13,OTHER,False,True,shadow_allowed,paper_finviz
+BGC,54.176072234762984,11.83,1.22,1.22,1.2,Breakout > 11.83,OTHER,False,True,shadow_allowed,paper_finviz
+CLX,33.86004514672686,102.43,0.1,0.1,0.75,Breakout > 102.43,OTHER,False,True,shadow_allowed,paper_finviz
+BIDU,75.16930022573364,152.37,3.85,3.85,1.43,Breakout > 152.37,OTHER,False,True,shadow_allowed,paper_finviz
+EVRG,60.94808126410835,84.09,0.14,0.14,1.05,Breakout > 84.09,OTHER,False,True,shadow_allowed,paper_finviz
+APP,60.722347629796836,512.69,4.66,4.66,0.94,Breakout > 512.69,OTHER,False,True,shadow_allowed,paper_finviz
+MXL,100.0,104.27,20.22,20.22,0.53,Breakout > 104.27,OTHER,False,True,shadow_allowed,paper_finviz
+AON,55.53047404063205,336.0,2.79,2.79,1.0,Breakout > 336.00,OTHER,False,True,shadow_allowed,paper_finviz
+CRM,46.50112866817156,193.56,0.03,0.03,1.12,Breakout > 193.56,XLK,False,True,shadow_allowed,paper_finviz
+WRB,69.52595936794582,68.72,3.23,3.23,0.93,SMA50>SMA100 (-2.27%),OTHER,False,True,shadow_allowed,paper_finviz
+SNPS,76.2979683972912,519.71,0.56,0.56,1.17,Breakout > 519.71,XLK,False,True,shadow_allowed,paper_finviz
+IT,58.91647855530474,161.61,3.02,3.02,0.95,Breakout > 161.61,OTHER,False,True,shadow_allowed,paper_finviz
+KHC,71.78329571106094,24.15,2.69,2.69,1.39,Breakout > 24.15,OTHER,False,True,shadow_allowed,paper_finviz
+ACGL,55.30474040632054,99.16,0.92,0.92,1.2,Breakout > 99.16,OTHER,False,True,shadow_allowed,paper_finviz
+CHD,61.6252821670429,100.29,2.66,2.66,1.25,Breakout > 100.29,OTHER,False,True,shadow_allowed,paper_finviz
+GLW,75.39503386004515,211.79,0.91,0.91,1.14,Breakout > 211.79,OTHER,False,True,shadow_allowed,paper_finviz
+GOOG,85.55304740406321,399.93,5.37,5.37,0.99,Breakout > 399.93,XLC,False,True,shadow_allowed,paper_finviz
+BRK-B,68.39729119638827,489.42,2.74,2.74,1.01,Breakout > 489.42,OTHER,False,True,shadow_allowed,paper_finviz
+FTNT,97.96839729119638,123.33,27.98,27.98,0.92,RVOL >= 1.10,XLK,False,True,shadow_allowed,paper_finviz
+SMTC,91.19638826185101,143.34,13.59,13.59,1.27,Breakout > 143.34,OTHER,False,True,shadow_allowed,paper_finviz
+BSY,42.43792325056434,36.12,1.04,1.04,1.37,Breakout > 36.12,OTHER,False,True,shadow_allowed,paper_finviz
+RIOT,92.7765237020316,25.86,11.37,11.37,0.86,Breakout > 25.86,OTHER,False,True,shadow_allowed,paper_finviz
+SYK,35.44018058690745,344.62,1.83,1.83,1.26,Breakout > 344.62,XLV,True,False,blocked_by_sector,paper_finviz
+CPRT,56.884875846501124,34.52,0.38,0.38,1.67,Breakout > 34.52,OTHER,False,True,shadow_allowed,paper_finviz
+AAOI,74.04063205417607,233.67,2.35,2.35,1.1,Breakout > 233.67,OTHER,False,True,shadow_allowed,paper_finviz
+RYAAY,36.794582392776526,61.9,0.12,0.12,1.04,Breakout > 61.90,OTHER,False,True,shadow_allowed,paper_finviz
+BJ,69.3002257336343,97.2,3.07,3.07,1.39,Breakout > 97.20,OTHER,False,True,shadow_allowed,paper_finviz
+ZETA,73.58916478555305,19.88,9.34,9.34,1.89,Breakout > 19.88,OTHER,False,True,shadow_allowed,paper_finviz
+SOLV,77.65237020316027,75.91,7.66,7.66,0.99,SMA50>SMA100 (-6.65%),OTHER,False,True,shadow_allowed,paper_finviz
+PWR,87.81038374717834,788.75,1.49,1.49,1.41,Breakout > 788.75,XLI,False,True,shadow_allowed,paper_finviz
+WMB,79.23250564334086,78.24,4.77,4.77,1.05,Breakout > 78.24,OTHER,False,True,shadow_allowed,paper_finviz
+MDB,90.9706546275395,317.21,18.3,18.3,1.69,SMA50>SMA100 (-16.94%),XLK,False,True,shadow_allowed,paper_finviz
+ALL,67.04288939051919,222.23,2.42,2.42,1.12,Breakout > 222.23,OTHER,False,True,shadow_allowed,paper_finviz
+DBX,84.65011286681715,29.1,10.3,10.3,1.49,Breakout > 29.10,OTHER,False,True,shadow_allowed,paper_finviz
+ZS,93.22799097065463,162.73,20.88,20.88,2.1,SMA50>SMA100 (-14.98%),OTHER,False,True,shadow_allowed,paper_finviz
+ESTC,79.68397291196389,53.33,9.51,9.51,1.29,SMA20>SMA50 (-1.19%),OTHER,False,True,shadow_allowed,paper_finviz
+JNJ,57.11060948081265,235.26,1.1,1.1,1.29,Breakout > 235.26,XLV,True,False,blocked_by_sector,paper_finviz
+VVV,45.82392776523702,37.12,0.24,0.24,0.71,Breakout > 37.12,OTHER,False,True,shadow_allowed,paper_finviz
+RKLB,96.61399548532731,133.18,36.95,36.95,1.21,Breakout > 133.18,OTHER,False,True,shadow_allowed,paper_finviz
+NTAP,82.39277652370203,123.47,6.3,6.3,1.23,Breakout > 123.47,OTHER,False,True,shadow_allowed,paper_finviz
+NVT,86.90744920993228,175.0,2.27,2.27,1.03,Breakout > 175.00,OTHER,False,True,shadow_allowed,paper_finviz
+VIST,86.00451467268623,75.96,10.94,10.94,1.39,SMA100/SMA200 N/A,OTHER,False,True,shadow_allowed,paper_finviz
+WSC,81.941309255079,28.75,0.99,0.99,0.7,Breakout > 28.75,OTHER,False,True,shadow_allowed,paper_finviz
+CMBT,82.16704288939052,15.57,6.63,6.63,1.22,Breakout > 15.57,OTHER,False,True,shadow_allowed,paper_finviz
+ROL,59.59367945823928,57.24,0.26,0.26,1.03,Breakout > 57.24,OTHER,False,True,shadow_allowed,paper_finviz
+WMG,82.84424379232506,33.65,13.4,13.4,0.8,SMA50>SMA100 (-2.29%),OTHER,False,True,shadow_allowed,paper_finviz
+WERN,82.61851015801355,38.46,7.12,7.12,0.85,Breakout > 38.46,OTHER,False,True,shadow_allowed,paper_finviz
+VRTX,58.013544018058695,456.68,0.74,0.74,1.28,Breakout > 456.68,XLV,True,False,blocked_by_sector,paper_finviz
+VSH,95.71106094808127,40.07,16.85,16.85,1.09,Breakout > 40.07,OTHER,False,True,shadow_allowed,paper_finviz
+NNN,59.14221218961625,45.0,1.04,1.04,1.44,Breakout > 45.00,OTHER,False,True,shadow_allowed,paper_finviz
+UNP,78.3295711060948,274.79,3.59,3.59,1.05,XLI > SMA20,XLI,False,True,shadow_allowed,paper_finviz
+ADP,79.90970654627539,216.55,6.84,6.84,1.04,SMA50>SMA100 (-7.16%),OTHER,False,True,shadow_allowed,paper_finviz
+MU,97.74266365688487,818.67,10.4,10.4,1.22,Breakout > 818.67,XLK,False,True,shadow_allowed,paper_finviz
+BW,89.61625282167043,22.03,20.88,20.88,1.37,Breakout > 22.03,OTHER,False,True,shadow_allowed,paper_finviz
+LUNR,89.84198645598194,37.85,17.62,17.62,1.51,Breakout > 37.85,OTHER,False,True,shadow_allowed,paper_finviz
+HIG,54.85327313769752,141.61,0.98,0.98,1.07,Breakout > 141.61,OTHER,False,True,shadow_allowed,paper_finviz
+BIIB,71.33182844243792,205.97,0.66,0.66,0.88,Breakout > 205.97,XLV,True,False,blocked_by_sector,paper_finviz
+SGHC,83.52144469525959,14.07,6.9,6.9,1.26,Breakout > 14.07,OTHER,False,True,shadow_allowed,paper_finviz
+CTAS,53.04740406320542,179.75,2.43,2.43,1.11,Breakout > 179.75,OTHER,False,True,shadow_allowed,paper_finviz
+MSFT,63.6568848758465,433.7,1.4,1.4,0.93,Breakout > 433.70,XLK,False,True,shadow_allowed,paper_finviz
+MNDY,83.7471783295711,88.48,9.72,9.72,1.43,Breakout > 88.48,OTHER,False,True,shadow_allowed,paper_finviz
+ARM,90.51918735891647,239.5,1.96,1.96,0.74,Breakout > 239.50,XLK,False,True,shadow_allowed,paper_finviz
+PAGP,80.81264108352144,24.72,5.52,5.52,1.12,SMA100/SMA200 N/A,OTHER,False,True,shadow_allowed,paper_finviz
+ON,92.55079006772009,119.1,6.85,6.85,0.9,Breakout > 119.10,XLK,False,True,shadow_allowed,paper_finviz
+MMM,62.75395033860045,158.14,5.0,5.0,1.26,Breakout > 158.14,XLI,False,True,shadow_allowed,paper_finviz
+P,83.06997742663657,93.92,1.99,1.99,1.11,Breakout > 93.92,OTHER,False,True,shadow_allowed,paper_finviz
+AMAT,72.686230248307,448.45,0.26,0.26,1.1,Breakout > 448.45,XLK,False,True,shadow_allowed,paper_finviz
+IRDM,70.42889390519187,44.61,7.08,7.08,1.1,Breakout > 44.61,OTHER,False,True,shadow_allowed,paper_finviz
+AES,64.10835214446952,14.49,1.29,1.29,1.07,SMA50>SMA100 (-2.09%),OTHER,False,True,shadow_allowed,paper_finviz
+NTNX,85.32731376975168,46.41,9.66,9.66,1.49,SMA50>SMA100 (-4.12%),OTHER,False,True,shadow_allowed,paper_finviz
+RDY,69.97742663656885,14.2,1.5,1.5,0.68,Breakout > 14.20,OTHER,False,True,shadow_allowed,paper_finviz
+HON,43.792325056433405,232.33,1.53,1.53,1.41,Breakout > 232.33,XLI,False,True,shadow_allowed,paper_finviz
+LOGI,72.00902934537245,110.47,4.1,4.1,0.8,Breakout > 110.47,OTHER,False,True,shadow_allowed,paper_finviz
+KGS,88.71331828442437,76.17,9.42,9.42,1.89,Breakout > 76.17,OTHER,False,True,shadow_allowed,paper_finviz
+BRKR,70.6546275395034,45.24,6.96,6.96,0.88,Breakout > 45.24,OTHER,False,True,shadow_allowed,paper_finviz
+BOX,74.94356659142211,26.0,4.76,4.76,1.28,Breakout > 26.00,OTHER,False,True,shadow_allowed,paper_finviz
+VIK,60.0451467268623,92.0,4.95,4.95,1.65,Breakout > 92.00,OTHER,False,True,shadow_allowed,paper_finviz
+SO,63.43115124153499,96.6,0.71,0.71,1.27,Breakout > 96.60,XLU,False,True,shadow_allowed,paper_finviz
+FLEX,98.41986455981942,147.34,15.94,15.94,1.21,Breakout > 147.34,OTHER,False,True,shadow_allowed,paper_finviz
+MKSI,72.91196388261851,326.84,1.32,1.32,1.08,Breakout > 326.84,OTHER,False,True,shadow_allowed,paper_finviz
+ADI,79.45823927765237,435.72,3.28,3.28,1.21,Breakout > 435.72,XLK,False,True,shadow_allowed,paper_finviz
+ASTS,74.7178329571106,87.78,14.95,14.95,1.26,Breakout > 87.78,OTHER,False,True,shadow_allowed,paper_finviz
+EPD,77.20090293453724,39.68,3.69,3.69,1.4,Breakout > 39.68,OTHER,False,True,shadow_allowed,paper_finviz
+IBKR,74.2663656884876,88.44,5.08,5.08,0.97,Breakout > 88.44,OTHER,False,True,shadow_allowed,paper_finviz
+STM,95.25959367945825,65.31,10.16,10.16,1.07,Breakout > 65.31,OTHER,False,True,shadow_allowed,paper_finviz
+NBIX,87.58465011286681,162.39,11.08,11.08,0.9,Breakout > 162.39,OTHER,False,True,shadow_allowed,paper_finviz
+WRBY,80.58690744920993,29.95,14.51,14.51,0.96,Breakout > 29.95,OTHER,False,True,shadow_allowed,paper_finviz
+MRVL,83.97291196388262,192.15,1.98,1.98,0.95,Breakout > 192.15,OTHER,False,True,shadow_allowed,paper_finviz
+UMC,94.5823927765237,17.43,20.84,20.84,1.32,Breakout > 17.43,OTHER,False,True,shadow_allowed,paper_finviz
+WTTR,93.67945823927766,19.04,13.68,13.68,0.89,SMA100/SMA200 N/A,OTHER,False,True,shadow_allowed,paper_finviz
+FLNC,98.64559819413093,27.39,19.64,19.64,1.13,Breakout > 27.39,OTHER,False,True,shadow_allowed,paper_finviz
+EXEL,84.19864559819413,51.63,6.12,6.12,0.87,Breakout > 51.63,OTHER,False,True,shadow_allowed,paper_finviz
+CB,60.270880361173816,334.97,1.78,1.78,0.97,Breakout > 334.97,OTHER,False,True,shadow_allowed,paper_finviz
+NOK,93.45372460496614,15.19,9.63,9.63,0.73,Breakout > 15.19,OTHER,False,True,shadow_allowed,paper_finviz
+TSEM,80.1354401805869,283.46,11.21,11.21,1.19,Breakout > 283.46,OTHER,False,True,shadow_allowed,paper_finviz
+QCOM,97.06546275395034,247.9,13.05,13.05,0.7,Breakout > 247.90,XLK,False,True,shadow_allowed,paper_finviz
+JD,62.528216704288944,34.3,2.96,2.96,1.0,Breakout > 34.30,OTHER,False,True,shadow_allowed,paper_finviz
+SMFG,68.17155756207674,22.52,3.35,3.35,0.94,Breakout > 22.52,OTHER,False,True,shadow_allowed,paper_finviz
+NXPI,93.90519187358916,306.62,5.52,5.52,0.8,Breakout > 306.62,XLK,False,True,shadow_allowed,paper_finviz
+APLD,89.1647855530474,47.79,2.16,2.16,0.81,Breakout > 47.79,OTHER,False,True,shadow_allowed,paper_finviz
+CLSK,81.03837471783297,15.04,3.65,3.65,1.13,Breakout > 15.04,OTHER,False,True,shadow_allowed,paper_finviz
+NSC,73.36343115124153,321.98,2.28,2.28,1.38,Breakout > 321.98,OTHER,False,True,shadow_allowed,paper_finviz
+INTC,99.32279909706546,132.75,8.5,8.5,0.91,Breakout > 132.75,XLK,False,True,shadow_allowed,paper_finviz
+VTR,71.10609480812641,91.06,1.81,1.81,0.82,Breakout > 91.06,OTHER,False,True,shadow_allowed,paper_finviz
+KNX,73.13769751693002,69.35,7.75,7.75,0.84,Breakout > 69.35,OTHER,False,True,shadow_allowed,paper_finviz
+MA,52.82167042889391,534.21,0.81,0.81,1.07,Breakout > 534.21,OTHER,False,True,shadow_allowed,paper_finviz
+HESM,81.7155756207675,40.01,6.62,6.62,0.79,SMA20>SMA50 (-0.21%),OTHER,False,True,shadow_allowed,paper_finviz
+XOM,79.00677200902935,158.0,6.6,6.6,1.19,SMA20>SMA50 (-2.33%),XLE,False,True,shadow_allowed,paper_finviz
+AXON,56.659142212189614,438.97,0.52,0.52,0.9,Breakout > 438.97,OTHER,False,True,shadow_allowed,paper_finviz
+REYN,61.39954853273137,22.26,2.34,2.34,0.76,Breakout > 22.26,OTHER,False,True,shadow_allowed,paper_finviz
+VSAT,81.26410835214448,75.14,8.35,8.35,1.68,Breakout > 75.14,OTHER,False,True,shadow_allowed,paper_finviz
+HIMX,99.54853273137697,21.8,23.87,23.87,0.82,Breakout > 21.80,OTHER,False,True,shadow_allowed,paper_finviz
+UBS,76.97516930022573,46.71,5.27,5.27,1.12,Breakout > 46.71,OTHER,False,True,shadow_allowed,paper_finviz
+GOOGL,85.77878103837472,403.7,5.61,5.61,0.95,Breakout > 403.70,XLK,False,True,shadow_allowed,paper_finviz
+HMC,58.465011286681715,26.66,2.86,2.86,2.32,Breakout > 26.66,OTHER,False,True,shadow_allowed,paper_finviz
+DVN,80.36117381489842,51.95,2.85,2.85,1.02,Breakout > 51.95,XLE,False,True,shadow_allowed,paper_finviz
+ENPH,96.83972911963883,53.89,32.08,32.08,1.39,Breakout > 53.89,XLK,False,True,shadow_allowed,paper_finviz
+BEKE,76.74943566591422,19.76,1.74,1.74,1.08,Breakout > 19.76,OTHER,False,True,shadow_allowed,paper_finviz
+NVTS,97.29119638826185,23.82,8.39,8.39,0.72,Breakout > 23.82,OTHER,False,True,shadow_allowed,paper_finviz
+CVS,91.87358916478556,98.43,11.63,11.63,0.82,Breakout > 98.43,XLV,True,False,blocked_by_sector,paper_finviz
+MTSI,92.09932279909707,401.25,12.2,12.2,1.39,Breakout > 401.25,OTHER,False,True,shadow_allowed,paper_finviz
+GTLB,85.10158013544017,26.39,7.59,7.59,1.09,Breakout > 26.39,OTHER,False,True,shadow_allowed,paper_finviz
+HPE,87.3589164785553,34.69,10.16,10.16,1.07,Breakout > 34.69,OTHER,False,True,shadow_allowed,paper_finviz
+ONON,65.46275395033861,37.89,6.73,6.73,0.96,XLY > SMA20,XLY,False,True,shadow_allowed,paper_finviz
+ADBE,67.2686230248307,259.44,3.43,3.43,1.11,Breakout > 259.44,XLK,False,True,shadow_allowed,paper_finviz
+OTEX,65.01128668171557,25.23,2.9,2.9,0.87,Breakout > 25.23,OTHER,False,True,shadow_allowed,paper_finviz
+INOD,99.77426636568849,114.77,54.71,54.71,0.72,Breakout > 114.77,OTHER,False,True,shadow_allowed,paper_finviz
+UNH,88.93905191873588,404.15,4.89,4.89,0.99,Breakout > 404.15,XLV,True,False,blocked_by_sector,paper_finviz
+PRM,84.42437923250564,34.89,7.34,7.34,0.76,Breakout > 34.89,OTHER,False,True,shadow_allowed,paper_finviz
+WDC,90.06772009029346,525.15,2.92,2.92,1.09,Breakout > 525.15,XLK,False,True,shadow_allowed,paper_finviz
+HST,66.59142212189616,22.39,2.49,2.49,1.2,Breakout > 22.39,OTHER,False,True,shadow_allowed,paper_finviz
+OUT,72.23476297968398,34.96,1.94,1.94,0.9,Breakout > 34.96,OTHER,False,True,shadow_allowed,paper_finviz
+INVH,71.55756207674943,29.41,2.05,2.05,1.04,Breakout > 29.41,OTHER,False,True,shadow_allowed,paper_finviz
+MT,57.78781038374717,65.0,3.09,3.09,1.18,Breakout > 65.00,OTHER,False,True,shadow_allowed,paper_finviz
+GEN,88.26185101580135,23.5,18.09,18.09,1.0,SMA50>SMA100 (-9.71%),OTHER,False,True,shadow_allowed,paper_finviz
+RPRX,74.4920993227991,53.23,3.14,3.14,0.93,Breakout > 53.23,OTHER,False,True,shadow_allowed,paper_finviz
+DD,70.20316027088036,51.44,1.95,1.95,1.19,Breakout > 51.44,XLB,False,True,shadow_allowed,paper_finviz
+TENB,86.45598194130926,22.34,10.35,10.35,1.2,SMA50>SMA100 (-5.38%),OTHER,False,True,shadow_allowed,paper_finviz
+MAR,43.115124153498876,380.0,0.43,0.43,1.03,Breakout > 380.00,XLY,False,True,shadow_allowed,paper_finviz
+VRT,75.84650112866818,379.93,0.57,0.57,1.36,Breakout > 379.93,XLI,False,True,shadow_allowed,paper_finviz
+ALAB,90.29345372460497,239.76,4.91,4.91,1.03,Breakout > 239.76,OTHER,False,True,shadow_allowed,paper_finviz
+CRWD,95.93679458239278,598.25,24.21,24.21,1.61,SMA100>SMA200 (-4.66%),XLK,False,True,shadow_allowed,paper_finviz
+NBIS,91.42212189616254,233.73,15.73,15.73,1.18,Breakout > 233.73,OTHER,False,True,shadow_allowed,paper_finviz
+CRGY,83.29571106094808,14.16,4.86,4.86,1.55,Breakout > 14.16,OTHER,False,True,shadow_allowed,paper_finviz
+ACMR,92.32505643340858,67.66,11.74,11.74,0.8,Breakout > 67.66,OTHER,False,True,shadow_allowed,paper_finviz
+PANW,96.3882618510158,245.8,25.15,25.15,1.17,SMA100>SMA200 (-6.08%),XLK,False,True,shadow_allowed,paper_finviz
+WES,86.68171557562077,46.98,10.55,10.55,0.81,SMA100/SMA200 N/A,OTHER,False,True,shadow_allowed,paper_finviz
