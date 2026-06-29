@@ -102,5 +102,13 @@
     "scope": "project",
     "topic_key": "ui/agent-playbook-trade-walkthrough",
     "content": "Se solucionó el crash runtime en streamlit al renderizar la pestaña de Primeros Principios eliminando una vela mock redundante (June 14) en agent_playbook_ui.py. Esto igualó la longitud de la lista de velas a 52 para que coincida exactamente con la lista de fechas del eje temporal, resolviendo la excepción 'Length of values (52) does not match length of index (53)' al construir el DataFrame."
+  },
+  {
+    "timestamp": "2026-06-29T20:00:00Z",
+    "title": "Cerrado Issue #39 de deploy y validacion del VPS",
+    "type": "bugfix",
+    "scope": "project",
+    "topic_key": "vps-snapshot-serialization-fix",
+    "content": "Se descargo y verifico la data del VPS para el Lunes 29, Viernes 26 y Jueves 25 de Junio. Se constato estabilidad en los snapshots (size de ~570 tickers, >160 candidates en watchlist_detail) y ausencia absoluta de OperationalErrors de SQLite o timeouts. Se procedio al cierre formal del Issue #39 en GitHub."
   }
 ]
