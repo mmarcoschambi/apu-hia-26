@@ -67,7 +67,10 @@ def get_vps_snapshot_tickers(days_back: int = 90) -> tuple[set[str], str, str]:
             except Exception as e:
                 print(f"    [WARN] No se pudo leer {snap_path}: {e}")
                 
-    return tickers, min_date, mPROGRESS_FILE = ROOT / "scratch" / "warmup_progress.json"
+    return tickers, min_date, max_date
+
+
+PROGRESS_FILE = ROOT / "scratch" / "warmup_progress.json"
 
 
 def load_progress() -> set[str]:
