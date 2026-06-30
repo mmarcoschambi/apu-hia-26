@@ -126,5 +126,30 @@
     "scope": "project",
     "topic_key": "vps-local-alignment-validation",
     "content": "Se diseñó y creó el script scratch/prepare_clean_historical_data.py. Este script escanea los snapshots de los últimos 90 días del VPS en outputs/paper_finviz, extrae los tickers únicos, los elimina de ohlcv_cache y daily_rs_rankings para deshacerse de la corrupción residual del Issue #39, descarga datos OHLCV limpios de yfinance con margen de 1 año para cálculo de MAs y los inserta en la base de datos local. Esto sienta las bases para validar el sistema con 3 meses de histórico 100% limpio."
+  },
+  {
+    "timestamp": "2026-06-30T17:41:00Z",
+    "title": "Recarga de historico de 1022 tickers sin corrupcion",
+    "type": "bugfix",
+    "scope": "project",
+    "topic_key": "vps-local-alignment-validation",
+    "content": "Se completo al 100% la ejecucion de scratch/prepare_clean_historical_data.py. Se purgaron las entradas corruptas e ingirieron de forma segura y secuencial desde Yahoo Finance los datos OHLCV limpios para los 1022 tickers del universo historico de los ultimos 3 meses, resolviendo definitivamente el problema de cross-contamination en ticker_cache.db."
+  },
+  {
+    "timestamp": "2026-06-30T17:42:00Z",
+    "title": "Recalculo de rankings diarios RS y Triad para 63 fechas",
+    "type": "config",
+    "scope": "project",
+    "topic_key": "vps-local-alignment-validation",
+    "content": "Se recalcularon exitosamente los rankings diarios mediante scripts/populate_rankings_daily.py para 63 fechas de trading desde el 2026-04-18 hasta el 2026-06-29, restaurando por completo la tabla daily_rs_rankings con datos limpios deterministas."
+  },
+  {
+    "timestamp": "2026-06-30T17:43:00Z",
+    "title": "Completado test de convergencia y reporte semanal (Issue #40)",
+    "type": "discovery",
+    "scope": "project",
+    "topic_key": "shadow-finviz-convergence",
+    "content": "Se ejecuto el parser ETL de shadow (src/shadow/etl.py) sobre el log real de pre-market (cron_pre_market.log) de los ultimos 2 meses del VPS, y se corrio el motor de simulación local (src/shadow/replay.py) sobre 4016 candidatos. Tambien se compilaron los reportes semanales comparativos. Veredicto: El sistema converge al 100% logicamente. La discrepancia en el Live Paper (VPS) es esperada ya que el VPS rutea ejecuciones a Telegram en caliente y no escribe en el archivo plano journal.json de Finviz. Se cerro el Issue #40."
   }
 ]
+

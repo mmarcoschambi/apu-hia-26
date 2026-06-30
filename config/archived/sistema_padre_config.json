@@ -1,0 +1,69 @@
+{
+  "_schema_version": "2.1",
+  "_description": "Hito Sistema Padre Histórico — S4 Optuna Trial 380 sin E25 Sizing ni ex-XLV",
+  "_last_updated": "2026-04-10T23:30:00",
+  "_optimization_method": "S4_Optuna_600trials_200tickers_2019-2024",
+  "_promoted_trial": 380,
+  "_selection_method": "OOS_SHARPE",
+  "system": {
+    "name": "Bugatti Trading System",
+    "version": "4.0",
+    "mode": "paper",
+    "tier_system_enabled": true
+  },
+  "tier1_strategy": {
+    "tp1_r": 1.25,
+    "tp2_r": 3.0,
+    "tp1_pct": 0.33,
+    "tp2_pct": 0.33,
+    "runner_pct": 0.34,
+    "max_stop_pct": 0.08,
+    "risk_dollars": 2878,
+    "use_phases": true,
+    "signal_type": "breakout"
+  },
+  "tier2_filters": {
+    "min_rvol": 1.1048,
+    "min_adr": 1.8714,
+    "max_dist_sma20": 6.768,
+    "min_rs_percentile": 58.01,
+    "use_rs_percentile": true,
+    "rs_lookback_days": 60,
+    "min_volume": 100000,
+    "min_dollar_volume": 20000000,
+    "use_composite_sector_scoring": false,
+    "sector_top_percentile": 0.319,
+    "use_sector_etf_filter": true,
+    "sector_etf_sma_period": 20,
+    "sector_etf_dist_threshold": 0.0,
+    "use_theme_group_filter": false,
+    "theme_filter_mode": "divergence"
+  },
+  "tier3_risk": {
+    "max_exposure_pct": 0.294,
+    "max_position_pct": 0.25,
+    "rvol_danger": 3.0,
+    "rvol_warning": 2.0,
+    "rvol_danger_size": 0.5,
+    "rvol_warning_size": 0.75,
+    "adr_high": 6.0,
+    "adr_med": 5.0,
+    "adr_high_size": 0.75,
+    "adr_med_size": 0.85,
+    "earnings_days": 5,
+    "earnings_cushion": 2,
+    "max_stop_pct_hard": 0.08,
+    "risk_fraction": 0.02878,
+    "compounding_enabled": false
+  },
+  "market_regime": {
+    "require_spy_above_sma50": true,
+    "max_vix": 35.0,
+    "use_market_regime_filter": true,
+    "block_trades_in_stage3": true,
+    "block_trades_in_stage4": false,
+    "use_dynamic_thresholds": false
+  },
+  "exclude_sectors": [],
+  "exclude_tickers": []
+}
