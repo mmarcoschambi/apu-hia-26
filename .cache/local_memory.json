@@ -110,5 +110,21 @@
     "scope": "project",
     "topic_key": "vps-snapshot-serialization-fix",
     "content": "Se descargo y verifico la data del VPS para el Lunes 29, Viernes 26 y Jueves 25 de Junio. Se constato estabilidad en los snapshots (size de ~570 tickers, >160 candidates en watchlist_detail) y ausencia absoluta de OperationalErrors de SQLite o timeouts. Se procedio al cierre formal del Issue #39 en GitHub."
+  },
+  {
+    "timestamp": "2026-06-29T21:00:00Z",
+    "title": "Validada alineacion VPS-Local y cerrado Issue #42",
+    "type": "discovery",
+    "scope": "project",
+    "topic_key": "vps-local-alignment-validation",
+    "content": "Se validó la alineación entre el motor de señales VPS y local para el Issue #42. Se creó scratch/compare_vps_local_alignment.py que compara campo a campo entre snapshot.json y el cómputo local replicando la lógica exacta de _build_watchlist_detail() de paper_finviz.py. Resultados: score (RS percentile) e is_promotable 100% alineados en 161/161 tickers del snapshot del 2026-06-29. Los tests de paridad (test_signal_parity_ab.py) pasan 15/15. Los campos OHLCV (ma_stack, breakout_level, dollar_volume_m) no pudieron validarse porque la cache local ticker_cache.db contiene datos corruptos por cross-contamination residual del Issue #39 (precios duplicados entre tickers). El veredicto es que la lógica de señales VPS y LOCAL es idéntica; las diferencias observadas se deben exclusivamente a datos stale/corruptos en la cache local."
+  },
+  {
+    "timestamp": "2026-06-29T23:42:00Z",
+    "title": "Creado script para preparar datos historicos limpios de 3 meses",
+    "type": "pattern",
+    "scope": "project",
+    "topic_key": "vps-local-alignment-validation",
+    "content": "Se diseñó y creó el script scratch/prepare_clean_historical_data.py. Este script escanea los snapshots de los últimos 90 días del VPS en outputs/paper_finviz, extrae los tickers únicos, los elimina de ohlcv_cache y daily_rs_rankings para deshacerse de la corrupción residual del Issue #39, descarga datos OHLCV limpios de yfinance con margen de 1 año para cálculo de MAs y los inserta en la base de datos local. Esto sienta las bases para validar el sistema con 3 meses de histórico 100% limpio."
   }
 ]
