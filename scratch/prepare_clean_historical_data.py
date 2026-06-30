@@ -13,8 +13,12 @@ import sqlite3
 import sys
 from pathlib import Path
 from datetime import datetime, timedelta
+import socket
 import pandas as pd
 import yfinance as yf
+
+# Configurar timeout global para evitar que yfinance se cuelgue indefinidamente
+socket.setdefaulttimeout(15)
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
