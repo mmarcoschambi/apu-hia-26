@@ -67,11 +67,36 @@ def get_vps_snapshot_tickers(days_back: int = 90) -> tuple[set[str], str, str]:
             except Exception as e:
                 print(f"    [WARN] No se pudo leer {snap_path}: {e}")
                 
-    return tickers, min_date, max_date
+    return tickers, min_date, mPROGRESS_FILE = ROOT / "scratch" / "warmup_progress.json"
+
+
+def load_progress() -> set[str]:
+    """Carga la lista de tickers que ya fueron descargados y guardados de forma limpia."""
+    if PROGRESS_FILE.exists():
+        try:
+            with open(PROGRESS_FILE) as f:
+                data = json.load(f)
+                return set(data.get("completed", []))
+        except Exception:
+            pass
+    return set()
+
+
+def save_progress(completed_tickers: set[str]) -> None:
+    """Guarda el progreso actual en el archivo JSON."""
+    try:
+        PROGRESS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(PROGRESS_FILE, "w") as f:
+            json.dump({"completed": sorted(list(completed_tickers))}, f, indent=2)
+    except Exception as e:
+        print(f"    [WARN] No se pudo guardar progreso en {PROGRESS_FILE}: {e}")
 
 
 def clean_corrupted_tickers_in_db(tickers: list[str], start_date_str: str) -> None:
     """Borra la data histórica corrupta de los tickers especificados."""
+    if not tickers:
+        return
+        
     print(f"  [DB] Conectando a {DB_PATH}...")
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
@@ -103,11 +128,21 @@ def clean_corrupted_tickers_in_db(tickers: list[str], start_date_str: str) -> No
         
     conn.commit()
     conn.close()
-    print("  [DB] Limpieza completada con éxito.")
+    print("  [DB] Limpieza de tickers pendientes completada con éxito.")
 
 
-def fetch_and_store_ohlcv(tickers: list[str], start_date_str: str, end_date_str: str) -> None:
-    """Descarga de yfinance los datos limpios y los almacena en ohlcv_cache."""
+def fetch_and_store_ohlcv(
+    pending_tickers: list[str],
+    completed_tickers: set[str],
+    start_date_str: str,
+    end_date_str: str,
+    total_original: int
+) -> None:
+    """Descarga de yfinance los datos limpios y los almacena en ohlcv_cache, actualizando progreso."""
+    if not pending_tickers:
+        print("  [yfinance] Todos los tickers ya fueron completados previamente.")
+        return
+
     # Ampliamos la fecha de inicio hacia atrás para tener suficiente historial para las MAs (200 períodos)
     start_dt = datetime.strptime(start_date_str, "%Y-%m-%d")
     extended_start = (start_dt - timedelta(days=365)).strftime("%Y-%m-%d")
@@ -140,12 +175,12 @@ def fetch_and_store_ohlcv(tickers: list[str], start_date_str: str, end_date_str:
     )
     conn.commit()
     
-    total = len(tickers)
     success_count = 0
+    start_idx = len(completed_tickers) + 1
     
-    print(f"  [yfinance] Descargando {total} tickers...")
+    print(f"  [yfinance] Descargando {len(pending_tickers)} tickers pendientes (iniciando en {start_idx}/{total_original})...")
     
-    for idx, ticker in enumerate(tickers, 1):
+    for idx, ticker in enumerate(pending_tickers, start_idx):
         try:
             # Descargar datos
             df = yf.download(
@@ -157,7 +192,10 @@ def fetch_and_store_ohlcv(tickers: list[str], start_date_str: str, end_date_str:
             )
             
             if df.empty:
-                print(f"    [{idx}/{total}] ⚠️  {ticker}: Sin datos en yfinance")
+                print(f"    [{idx}/{total_original}] ⚠️  {ticker}: Sin datos en yfinance")
+                # Lo registramos como completado para no intentar de nuevo en un restart
+                completed_tickers.add(ticker)
+                save_progress(completed_tickers)
                 continue
                 
             if isinstance(df.columns, pd.MultiIndex):
@@ -195,13 +233,17 @@ def fetch_and_store_ohlcv(tickers: list[str], start_date_str: str, end_date_str:
             )
             conn.commit()
             success_count += 1
-            print(f"    [{idx}/{total}] ✅ {ticker}: {len(rows)} filas ingresadas")
+            print(f"    [{idx}/{total_original}] ✅ {ticker}: {len(rows)} filas ingresadas")
+            
+            # Actualizar progreso
+            completed_tickers.add(ticker)
+            save_progress(completed_tickers)
             
         except Exception as e:
-            print(f"    [{idx}/{total}] ❌ {ticker}: Falló descarga — {e}")
+            print(f"    [{idx}/{total_original}] ❌ {ticker}: Falló descarga — {e}")
             
     conn.close()
-    print(f"\n  [yfinance] Completado. Descargados con éxito: {success_count}/{total} tickers")
+    print(f"\n  [yfinance] Completado. Descargados con éxito en esta sesión: {success_count}/{len(pending_tickers)} tickers")
 
 
 def main():
@@ -212,18 +254,36 @@ def main():
     # 1. Obtener tickers de los snapshots de los últimos 90 días
     tickers, min_date, max_date = get_vps_snapshot_tickers(days_back=90)
     tickers_list = sorted(list(tickers))
-    print(f"  Encontrados {len(tickers_list)} tickers únicos en snapshots de los últimos 90 días.")
+    total_original = len(tickers_list)
+    print(f"  Encontrados {total_original} tickers únicos en snapshots de los últimos 90 días.")
     
     if not tickers_list:
         print("  [ERROR] No hay tickers para procesar.")
         sys.exit(1)
         
-    # 2. Limpiar base de datos local
-    clean_corrupted_tickers_in_db(tickers_list, min_date)
+    # 2. Cargar progreso previo
+    completed_tickers = load_progress()
+    if completed_tickers:
+        print(f"  [Resume] Encontrados {len(completed_tickers)} tickers ya procesados anteriormente.")
+        pending_tickers = [t for t in tickers_list if t not in completed_tickers]
+    else:
+        pending_tickers = tickers_list
+        
+    print(f"  [Resume] Quedan {len(pending_tickers)} tickers por procesar.")
     
-    # 3. Descargar e insertar datos frescos y limpios de yfinance
-    fetch_and_store_ohlcv(tickers_list, min_date, max_date)
+    # 3. Limpiar base de datos local (solo los pendientes, para no perder lo ya descargado)
+    if pending_tickers:
+        clean_corrupted_tickers_in_db(pending_tickers, min_date)
     
+    # 4. Descargar e insertar datos frescos y limpios de yfinance
+    fetch_and_store_ohlcv(pending_tickers, completed_tickers, min_date, max_date, total_original)
+    
+    # 5. Si terminamos todo, eliminamos el archivo de progreso
+    if len(completed_tickers) >= total_original:
+        if PROGRESS_FILE.exists():
+            PROGRESS_FILE.unlink()
+            print("  [Resume] Descarga completada al 100%. Limpiando archivo de progreso.")
+            
     print("\n" + "=" * 80)
     print("  SIGUIENTES PASOS SUGERIDOS")
     print("=" * 80)
