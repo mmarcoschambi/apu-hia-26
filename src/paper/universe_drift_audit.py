@@ -123,11 +123,14 @@ def run_drift_audit(
 
     metrics = compute_drift_metrics(live_set, ref_set)
 
-    gate_passed = metrics["divergence_pct"] <= max_divergence_pct
-    block_reason = None if gate_passed else f"high_drift:{metrics['divergence_pct']}%"
+    # El drift se debe medir como la porción del universo de referencia (limit 200) que NO está cubierta por el live (Finviz ~600)
+    # Jaccard distance (divergence_pct) falla matemáticamente por la disparidad estructural de tamaños de los conjuntos
+    drift_pct = 100.0 - metrics["live_coverage_pct"]
+    gate_passed = drift_pct <= max_divergence_pct
+    block_reason = None if gate_passed else f"high_drift:{drift_pct:.2f}%"
 
     logger.info(
-        f"Drift audit: divergence={metrics['divergence_pct']}% "
+        f"Drift audit: divergence={drift_pct:.2f}% (Jaccard={metrics['divergence_pct']}%) "
         f"coverage={metrics['live_coverage_pct']}% "
         f"gate_passed={gate_passed}"
     )
