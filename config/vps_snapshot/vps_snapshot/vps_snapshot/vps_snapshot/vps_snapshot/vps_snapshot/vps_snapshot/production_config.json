@@ -37,14 +37,53 @@
     "use_rs_percentile": true,
     "rs_lookback_days": 60,
     "min_volume": 100000,
+{
+  "_schema_version": "2.1",
+  "_description": "S4 Optuna — Trial 380, seleccionado por OOS Sharpe (Val=0.60, OOS=1.53, Calmar=2.73)",
+  "_last_updated": "2026-04-10T23:30:00",
+  "_optimization_method": "S4_Optuna_600trials_200tickers_2019-2024",
+  "_promoted_trial": 380,
+  "_selection_method": "OOS_SHARPE",
+  "_oos_sharpe": 1.527,
+  "_oos_calmar": 2.727,
+  "_val_sharpe": 0.596,
+  "_pbo_proxy": 0.268,
+  "system": {
+    "name": "Bugatti Trading System",
+    "version": "4.0",
+    "mode": "paper",
+    "tier_system_enabled": true
+  },
+  "=== TIER 1: STRATEGY ===": {},
+  "tier1_strategy": {
+    "tp1_r": 1.25,
+    "tp2_r": 3.0,
+    "tp1_pct": 0.33,
+    "tp2_pct": 0.33,
+    "runner_pct": 0.34,
+    "max_stop_pct": 0.08,
+    "risk_dollars": 2878,
+    "use_phases": true,
+    "signal_type": "breakout",
+    "_source": "S4 Trial 380 — risk_per_trade_pct=0.02878 × $100k"
+  },
+  "=== TIER 2: FILTERS (S4 Optuna) ===": {},
+  "tier2_filters": {
+    "min_rvol": 1.1048,
+    "min_adr": 1.8714,
+    "max_dist_sma20": 6.768,
+    "min_rs_percentile": 58.01,
+    "use_rs_percentile": true,
+    "rs_lookback_days": 60,
+    "min_volume": 100000,
     "min_dollar_volume": 20000000,
     "use_composite_sector_scoring": false,
     "sector_top_percentile": 0.319,
-    "use_sector_etf_filter": true,
+    "use_sector_etf_filter": false,
     "sector_etf_sma_period": 20,
     "sector_etf_dist_threshold": 0.0,
     "use_theme_group_filter": false,
-    "theme_filter_mode": "divergence",
+    "theme_filter_mode": null,
     "theme_min_members": 5,
     "theme_min_hold_days": 10,
     "theme_divergence_lookback": 20,
@@ -75,6 +114,27 @@
     "risk_fraction": 0.02878,
     "compounding_enabled": false,
     "_source": "S4 max_exposure_pct=0.294 de Trial 380, resto institucional fijo"
+  },
+  "=== E25 SHADOW SIZING (paper/shadow only) ===": {},
+  "tier3_fixed": {
+    "use_dynamic_extension_sizing": true,
+    "dynamic_extension_sizing": {
+      "version": "v2_atlas_informed",
+      "comfort_pct": 6.76,
+      "valley_pct": 10.0,
+      "mid_pct": 15.0,
+      "high_pct": 25.0,
+      "extreme_pct": 35.0,
+      "max_pct": 50.0,
+      "min_factor": 0.5,
+      "extreme_factor": 0.2,
+      "adr_exception_pct": 8.0
+    },
+    "shadow_status": "GO_SHADOW",
+    "live_status": "HOLD_LIVE",
+    "validated_report": "outputs/backtests/e25_validation_report.json",
+    "rollback": "Set use_dynamic_extension_sizing=false to restore baseline sizing.",
+    "_source": "E25_v2 Atlas-Informed shadow promotion, validated 2019-2026 PIT SP500"
   },
   "=== MARKET REGIME ===": {},
   "market_regime": {
@@ -181,5 +241,9 @@
       "block_on_parse_error": true,
       "block_on_high_drift": true
     }
-  }
+  },
+  "exclude_sectors": [
+    "XLV"
+  ],
+  "exclude_tickers": []
 }

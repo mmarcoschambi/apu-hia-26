@@ -42,8 +42,6 @@ class ComboConfig:
 
     # Scanner parameters
     scanner_filter: str = "default"
-    screeners: List[str] = field(default_factory=list)
-    mode: str = "all"
     pattern_filter: str = ""
     regime_blocked: List[int] = field(default_factory=list)
 
@@ -147,8 +145,6 @@ def load_combo_config(yaml_path: Path) -> ComboConfig:
         wf_sortino_mean=float(data.get("wf_sortino_mean", 0.0)),
         wf_max_drawdown=float(data.get("wf_max_drawdown", 0.0)),
         scanner_filter=data.get("scanner_filter", "default"),
-        screeners=data.get("screeners", []),
-        mode=data.get("mode", "all"),
         pattern_filter=data.get("pattern_filter", ""),
         regime_blocked=regime_blocked,
         fee_rate=float(data.get("fee_rate", 0.001)),
@@ -238,8 +234,6 @@ def save_combo_config(config: ComboConfig, combos_dir: Path | None = None) -> Pa
         "wf_sortino_mean": config.wf_sortino_mean,
         "wf_max_drawdown": config.wf_max_drawdown,
         "scanner_filter": config.scanner_filter,
-        "screeners": getattr(config, "screeners", []),
-        "mode": getattr(config, "mode", "all"),
         "pattern_filter": config.pattern_filter,
         "regime_blocked": config.regime_blocked,
         "fee_rate": config.fee_rate,

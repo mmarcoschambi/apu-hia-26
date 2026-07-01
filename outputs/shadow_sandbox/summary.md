@@ -1,45 +1,51 @@
 # Shadow Sandbox Summary
 
-Generated: 2026-06-05 19:31
-Source: outputs/paper_finviz/2026-05-*/snapshot.json (32 snapshots)
+Generated: 2026-06-30 17:30
+Source: logs/vps/cron_pre_market.log
 
 ## Global Metrics
 
 | Metric | Value |
 |--------|-------|
-| Days with runs | 22 |
-| Days with setups | 19 |
-| Total raw setups | 4626 |
-| XLV filtered | 150 |
-| Shadow candidates | 4476 |
+| Days with runs | 28 |
+| Days with setups | 12 |
+| Total raw setups | 25 |
+| XLV filtered | 1 |
+| Shadow candidates | 24 |
 | Cache warnings (sma20) | 0 |
 
 ## Per-Day Breakdown
 
 | Date | Setups | XLV Filtered | Shadow Candidates | Mode | No Auto Entry |
 |------|--------|--------------|-------------------|------|---------------|
-| 2026-05-01 | 0 | 0 | 0 | PRODUCTION | False |
-| 2026-05-02 | 0 | 0 | 0 | PRODUCTION | False |
-| 2026-05-04 | 0 | 0 | 0 | PRODUCTION | False |
-| 2026-05-05 | 470 | 12 | 458 | PRODUCTION | False |
-| 2026-05-06 | 459 | 9 | 450 | PRODUCTION | False |
-| 2026-05-07 | 237 | 3 | 234 | PRODUCTION | False |
-| 2026-05-08 | 175 | 5 | 170 | PRODUCTION | False |
-| 2026-05-11 | 283 | 8 | 275 | PRODUCTION | False |
-| 2026-05-12 | 233 | 7 | 226 | PRODUCTION | False |
-| 2026-05-13 | 128 | 20 | 108 | PRODUCTION | True |
-| 2026-05-14 | 126 | 20 | 106 | PRODUCTION | True |
-| 2026-05-15 | 193 | 6 | 187 | PRODUCTION | True |
-| 2026-05-18 | 192 | 4 | 188 | PRODUCTION | True |
-| 2026-05-19 | 185 | 6 | 179 | PRODUCTION | True |
-| 2026-05-20 | 178 | 7 | 171 | PRODUCTION | True |
-| 2026-05-21 | 220 | 6 | 214 | PRODUCTION | True |
-| 2026-05-22 | 237 | 6 | 231 | PRODUCTION | True |
-| 2026-05-25 | 257 | 7 | 250 | PRODUCTION | True |
-| 2026-05-26 | 257 | 7 | 250 | PRODUCTION | True |
-| 2026-05-27 | 286 | 5 | 281 | PRODUCTION | True |
-| 2026-05-28 | 254 | 5 | 249 | PRODUCTION | True |
-| 2026-05-29 | 256 | 7 | 249 | PRODUCTION | True |
+| 2026-05-20 | 3 | 0 | 3 | PRODUCTION | True |
+| 2026-05-21 | 4 | 1 | 3 | PRODUCTION | True |
+| 2026-05-22 | 1 | 0 | 1 | PRODUCTION | True |
+| 2026-05-25 | 0 | 0 | 0 | PRODUCTION | True |
+| 2026-05-26 | 0 | 0 | 0 | PRODUCTION | True |
+| 2026-05-27 | 0 | 0 | 0 | PRODUCTION | True |
+| 2026-05-28 | 0 | 0 | 0 | PRODUCTION | True |
+| 2026-05-29 | 0 | 0 | 0 | PRODUCTION | True |
+| 2026-06-01 | 0 | 0 | 0 | PRODUCTION | True |
+| 2026-06-02 | 0 | 0 | 0 | PRODUCTION | True |
+| 2026-06-03 | 0 | 0 | 0 | PRODUCTION | True |
+| 2026-06-04 | 0 | 0 | 0 | PRODUCTION | True |
+| 2026-06-05 | 0 | 0 | 0 | PRODUCTION | True |
+| 2026-06-08 | 1 | 0 | 1 | PRODUCTION | True |
+| 2026-06-09 | 3 | 0 | 3 | PRODUCTION | True |
+| 2026-06-10 | 0 | 0 | 0 | PRODUCTION | True |
+| 2026-06-12 | 2 | 0 | 2 | PRODUCTION | True |
+| 2026-06-15 | 0 | 0 | 0 | PRODUCTION | True |
+| 2026-06-16 | 1 | 0 | 1 | PRODUCTION | True |
+| 2026-06-17 | 1 | 0 | 1 | PRODUCTION | True |
+| 2026-06-18 | 3 | 0 | 3 | PRODUCTION | True |
+| 2026-06-19 | 0 | 0 | 0 | PRODUCTION | True |
+| 2026-06-22 | 0 | 0 | 0 | PRODUCTION | True |
+| 2026-06-23 | 0 | 0 | 0 | PRODUCTION | True |
+| 2026-06-24 | 3 | 0 | 3 | PRODUCTION | True |
+| 2026-06-25 | 0 | 0 | 0 | PRODUCTION | True |
+| 2026-06-26 | 2 | 0 | 2 | PRODUCTION | True |
+| 2026-06-29 | 1 | 0 | 1 | PRODUCTION | True |
 
 ## Legend
 - **raw_setup**: senal detectada en el log, sin filtrar
