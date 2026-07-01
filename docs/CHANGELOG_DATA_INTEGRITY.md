@@ -27,5 +27,13 @@ Se descubrieron dos causas raíces técnicas e independientes:
    - Tasa de trigger promedio: **34.14%**.
 
 ### 4. Salvaguardas y Regresiones
-- Se agregó el test unitario de regresión matemática `tests/test_drift_gate_regression.py` para evitar que la lógica del drift gate vuelva a cambiar a Jaccard.
-- Se implementó la alerta temprana `scripts/health_check_daily.py` integrada con Telegram para monitorear diariamente la presencia de snapshots, rankings e integridad del drift.
+
+#### 4.1. Bloque 1 — Blindaje del Snapshot Crudo de Finviz (Julio 2026)
+- **Sincronización diaria local (L-V 11:15 ARG):** Reemplazo del sync semanal por cron diario (`deploy/crontab_local.txt`), asegurando que el laboratorio local siempre tenga los snapshots del día disponible para análisis.
+- **Backup frío pre-sync:** Antes de cualquier operación, `sync_from_vps.sh` copia el snapshot del día a `data/backups/snapshots/` con timestamp. Protegido por `.gitignore`.
+- **Validador de integridad (`scripts/validate_snapshot_integrity.py`):** Post-sync, verifica que el snapshot exista, sea JSON válido y tenga ≥50 tickers. Si falla, aborta el pipeline con exit code 1 y alerta.
+- **Retención de 30 días en VPS:** `deploy/weekly_archive_vps.sh` ahora limpia snapshots con `mtime +30`, garantizando que el sync diario tenga margen para descargar datos aunque falle un día.
+
+#### 4.2. Bloque 2 — Detección Temprana e Inmunización (Julio 2026)
+- **Health check unificado (`scripts/health_check_daily.py`):** Corre en VPS o local y verifica tres puntos críticos: (1) snapshot de Finviz, (2) rankings en `daily_rs_rankings`, (3) estado del drift gate. Si algo falla, envía alerta por Telegram y sale con exit code 1.
+- **Test de regresión matemática (`tests/test_drift_gate_regression.py`):** Crea un escenario con 200 ref / 600 live / 180 intersección y verifica que el gate use cobertura (90%, drift=10% → pasa) y no Jaccard (71% → falso bloqueo). Si alguien revierte la métrica a Jaccard, el test falla.

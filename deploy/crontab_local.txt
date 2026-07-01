@@ -1,6 +1,14 @@
 # =============================================================================
 # CRONTAB LOCAL  -  WSL2 Ubuntu
-# Propósito: Automatizar el sync del VPS los viernes al cierre del mercado.
+# Propósito: Automatizar el sync diario del VPS al laboratorio local.
+#            Corre todos los días hábiles a las 11:15 ARG (= 10:15 NY).
+#            A esa hora el premarket del VPS (08:30 NY) ya corrió, el mercado
+#            abrió (09:30 NY) y los snapshots de Finviz del día están listos.
+#
+# Después del sync, automáticamente:
+#   - Se crea una copia fría del snapshot en data/backups/snapshots/
+#   - Se valida la integridad del snapshot (estructura JSON, tickers mínimos)
+#   - Si la validación falla, se notifica y aborta
 #
 # INSTALACIÓN:
 #   1. Abrir terminal WSL2
@@ -20,17 +28,14 @@
 # Zona horaria del cron (ajustar si tu WSL usa UTC)
 CRON_TZ=America/Argentina/Buenos_Aires
 
-# ── VIERNES 18:30 ARG (= 16:30 NY, 30 min después del cierre) ──────────────
-# Sync automático de toda la data de investigación del VPS
-30 18 * * 5 cd /home/marcos/trade/momentum-v2 && bash sync_from_vps.sh >> logs/sync_from_vps.log 2>&1
-
-# ── OPCIONAL: Sync adicional lunes 09:00 ARG ────────────────────────────────
-# Para asegurarse que tenés la última config del VPS antes de la semana
-# 0 9 * * 1 cd /home/marcos/trade/momentum-v2 && bash sync_from_vps.sh >> logs/sync_from_vps.log 2>&1
+# ── LUNES A VIERNES 11:15 ARG (= 10:15 NY) ─────────────────────────────────
+# Sync diario de toda la data de investigación del VPS
+# 10:15 NY → premarket (08:30) ya corrió, mercado abierto (09:30)
+15 11 * * 1-5 cd /home/marcos/trade/momentum-v2 && bash sync_from_vps.sh >> logs/sync_daily.log 2>&1
 
 # =============================================================================
 # VERIFICACIÓN:
 #   Ver que el cron está corriendo:  service cron status
-#   Ver logs del sync:               tail -f logs/sync_from_vps.log
+#   Ver logs del sync:               tail -f logs/sync_daily.log
 #   Listar crons activos:            crontab -l
 # =============================================================================

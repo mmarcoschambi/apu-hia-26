@@ -2,7 +2,8 @@
 # =============================================================================
 # SYNC FROM VPS  →  PC LOCAL (WSL2)
 # Propósito : Bajar toda la data de investigación del VPS al laboratorio local.
-#             Corre los viernes al cierre del mercado (16:15 NY / 18:15 ARG).
+#             Corre todos los días hábiles a las 10:15 NY / 11:15 ARG.
+#             Incluye backup frío pre-sync + validación de integridad post-sync.
 # Uso manual: ./sync_from_vps.sh
 # Cron auto : ver deploy/crontab_local.txt
 # =============================================================================
@@ -145,6 +146,51 @@ rsync $RSYNC_FLAGS \
     "$LOCAL_DIR/config/vps_snapshot/" \
   && echo "  ✅ OK" \
   || echo "  ⚠️  Advertencia en config (continuando...)"
+
+# =============================================================================
+# BACKUP FRÍO: Copia histórica del snapshot del día (antes de validación)
+# =============================================================================
+BACKUP_DIR="$LOCAL_DIR/data/backups/snapshots"
+TODAY_DATE=$(date +"%Y-%m-%d")
+SNAP_SRC="$LOCAL_DIR/outputs/paper_finviz/$TODAY_DATE"
+
+mkdir -p "$BACKUP_DIR"
+
+if [ -d "$SNAP_SRC" ]; then
+    echo ""
+    echo "▶ Backing up: Copia fría del snapshot de hoy..."
+    cp -r "$SNAP_SRC" "$BACKUP_DIR/${TODAY_DATE}_backup"
+    echo "  ✅ Backup guardado en: $BACKUP_DIR/${TODAY_DATE}_backup"
+fi
+
+# =============================================================================
+# INTEGRIDAD: Validar que el snapshot descargado no esté corrupto/vacío
+# =============================================================================
+echo ""
+echo "▶ Verificando integridad del snapshot..."
+PYTHONPATH="$LOCAL_DIR" python3 "$LOCAL_DIR/scripts/validate_snapshot_integrity.py" --date "$TODAY_DATE"
+VALIDATE_EXIT=$?
+
+if [ $VALIDATE_EXIT -ne 0 ]; then
+    echo ""
+    echo "  ⚠️  ALERTA CRÍTICA: La validación de integridad FALLÓ."
+    echo "     El snapshot del día $TODAY_DATE podría estar corrupto o vacío."
+
+    # Intentar notificar por Telegram si el helper existe
+    ALERT_SCRIPT="$LOCAL_DIR/scripts/send_signal_alerts.py"
+    if [ -f "$ALERT_SCRIPT" ]; then
+        echo "     Intentando enviar alerta vía Telegram..."
+        python3 "$ALERT_SCRIPT" --telegram \
+            --message "CRITICAL: Falló la integridad del snapshot del día $TODAY_DATE en el Laboratorio local." \
+            2>/dev/null || echo "     ⚠️  Alerta Telegram no soportada por send_signal_alerts.py (continuando...)"
+    fi
+
+    echo ""
+    echo "════════════════════════════════════════════════════════════"
+    echo "  ❌ SYNC FALLÓ — Validación de integridad no superada"
+    echo "════════════════════════════════════════════════════════════"
+    exit 1
+fi
 
 # =============================================================================
 # RESUMEN FINAL

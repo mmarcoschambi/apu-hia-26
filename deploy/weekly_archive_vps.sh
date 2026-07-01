@@ -46,7 +46,15 @@ echo "▶ Eliminando backups de más de 30 días..."
 find "$BACKUP_DIR" -name "*.tar.gz" -mtime +30 -delete
 echo "  ✅ OK"
 
-# ── 3. Rotación de logs de cron > 14 días ────────────────────────────────────
+# ── 3. Limpieza segura de snapshots antiguos de Finviz (>30 días) ────────────
+#     Conserva los últimos 30 días de snapshots diarios para que el sync local
+#     tenga margen de sobra para descargarlos aunque falle un día.
+echo "▶ Eliminando snapshots de Finviz más viejos de 30 días..."
+FINVIZ_DIR="$PROJECT/outputs/paper_finviz"
+find "$FINVIZ_DIR" -mindepth 1 -maxdepth 1 -type d -mtime +30 -exec rm -rf {} \;
+echo "  ✅ OK"
+
+# ── 4. Rotación de logs de cron > 14 días ────────────────────────────────────
 echo "▶ Rotando logs de cron > 14 días..."
 find "$PROJECT/logs" -name "cron_*.log" -mtime +14 -delete
 echo "  ✅ OK"
