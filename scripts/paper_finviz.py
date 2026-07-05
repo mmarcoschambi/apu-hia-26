@@ -1301,6 +1301,7 @@ def run_pre(trade_date, drift_override, rs_min_pct=RS_FINVIZ_MIN_PCT_DEFAULT, to
         "data_as_of": data_as_of,
         "source": "finviz",
         "universe_size": len(universe),
+        "universe_tickers": list(universe),
         "scanner_universe_count": scanner_uni_count,
         "regime_ok": reg_ok,
         "signals": signals,

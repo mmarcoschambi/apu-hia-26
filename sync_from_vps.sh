@@ -142,6 +142,7 @@ mkdir -p "$LOCAL_DIR/config/vps_snapshot"
 rsync $RSYNC_FLAGS \
     --exclude=".env" \
     --exclude="*.secret" \
+    --exclude="vps_snapshot/" \
     "$REMOTE_HOST:$REMOTE_DIR/config/" \
     "$LOCAL_DIR/config/vps_snapshot/" \
   && echo "  ✅ OK" \

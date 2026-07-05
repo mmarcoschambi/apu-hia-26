@@ -256,6 +256,7 @@ def run_pre(date_str, universe_size, send_telegram=False):
         "date": date_str,
         "source": "local_db",
         "universe_size": len(universe),
+        "universe_tickers": list(universe) if isinstance(universe, (list, tuple, set)) else list(universe) if hasattr(universe, '__iter__') else [],
         "universe_sample": universe[:20],
         "regime": {"spy_ok": spy_ok, "vix_ok": vix_ok, "pass": reg_ok},
         "signals": signals,
