@@ -176,14 +176,17 @@ if [ $VALIDATE_EXIT -ne 0 ]; then
     echo "  ⚠️  ALERTA CRÍTICA: La validación de integridad FALLÓ."
     echo "     El snapshot del día $TODAY_DATE podría estar corrupto o vacío."
 
-    # Intentar notificar por Telegram si el helper existe
-    ALERT_SCRIPT="$LOCAL_DIR/scripts/send_signal_alerts.py"
-    if [ -f "$ALERT_SCRIPT" ]; then
-        echo "     Intentando enviar alerta vía Telegram..."
-        python3 "$ALERT_SCRIPT" --telegram \
-            --message "CRITICAL: Falló la integridad del snapshot del día $TODAY_DATE en el Laboratorio local." \
-            2>/dev/null || echo "     ⚠️  Alerta Telegram no soportada por send_signal_alerts.py (continuando...)"
-    fi
+    # Intentar notificar por Telegram usando el cliente del sistema directo
+    echo "     Intentando enviar alerta vía Telegram..."
+    PYTHONPATH="$LOCAL_DIR" python3 -c "
+import sys
+try:
+    from src.utils.telegram_client import telegram_send
+    telegram_send('⚠️ [System Alert] CRITICAL: Falló la integridad del snapshot del día $TODAY_DATE en el Laboratorio local.')
+    print('     ✅ Alerta enviada con éxito.')
+except Exception as e:
+    print(f'     ⚠️  No se pudo enviar la alerta por Telegram: {e}')
+"
 
     echo ""
     echo "════════════════════════════════════════════════════════════"

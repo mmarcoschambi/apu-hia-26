@@ -62,8 +62,8 @@ def check_snapshot(snap_file: Path) -> list[str]:
     return errors
 
 
-def check_database(db_path: Path) -> list[str]:
-    """Check 2: Rankings en base de datos para la fecha de hoy."""
+def check_database(db_path: Path, date_str: str) -> list[str]:
+    """Check 2: Rankings en base de datos para la fecha especificada."""
     errors = []
     if not db_path.exists():
         errors.append("La base de datos ticker_cache.db no existe en local.")
@@ -73,14 +73,14 @@ def check_database(db_path: Path) -> list[str]:
         conn = sqlite3.connect(str(db_path))
         row = conn.execute(
             "SELECT COUNT(*) FROM daily_rs_rankings WHERE date = ?",
-            (TODAY,),
+            (date_str,),
         ).fetchone()
         conn.close()
         count = row[0] if row else 0
-        print(f"  🗄️  DB rankings: {count} registros para hoy")
+        print(f"  🗄️  DB rankings: {count} registros para {date_str}")
         if count == 0:
             errors.append(
-                f"Faltan rankings en la base de datos para hoy ({TODAY})."
+                f"Faltan rankings en la base de datos para {date_str}."
             )
     except Exception as e:
         errors.append(f"Error consultando rankings en SQLite: {e}")
@@ -129,7 +129,7 @@ def run_health_check(date_str: str, quiet: bool = False) -> int:
 
     all_errors = []
     all_errors.extend(check_snapshot(snap_file))
-    all_errors.extend(check_database(DB_PATH))
+    all_errors.extend(check_database(DB_PATH, date_str))
     all_errors.extend(check_drift_gate(audit_file))
 
     if all_errors:
