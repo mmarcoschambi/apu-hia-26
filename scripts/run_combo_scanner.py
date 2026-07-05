@@ -338,12 +338,21 @@ def run_combo_scan(
         logger.info(f"  Scanning {name}...")
         effective_mode = "A" if name == "combo_pure_momentum" else "B"
         
+        # Inyectar tier3_fixed (E25) solo en System B desde production_config.json
+        if effective_mode == "B":
+            cfg["tier3_fixed"] = dict(master_cfg.get("tier3_fixed", {}))
+        
         # Config contrafactual
         cfg_no_sector = copy.deepcopy(cfg)
         cfg_no_sector.setdefault("tier2_filters", {})["use_sector_etf_filter"] = False
 
         # Inyectar Overrides en la config del agente
+        # System B con dynamic extension sizing salta max_dist_sma20 (E25 maneja su propio limite)
+        skip_max_dist = (effective_mode == "B"
+                         and cfg.get("tier3_fixed", {}).get("use_dynamic_extension_sizing", False))
         for k, v in final_t2.items():
+            if skip_max_dist and k == "max_dist_sma20":
+                continue
             cfg.setdefault("tier2_filters", {})[k] = v
             cfg.setdefault("screener", {}).setdefault("params", {})[k] = v
             if k == "min_adr_pct":

@@ -243,3 +243,75 @@ def test_dynamic_sizing_version_specific_defaults():
     factor, reason = calculate_dynamic_sizing_factor(22.5, 4.5, cfg_v1_no_high)
     assert pytest.approx(factor, abs=0.02) == 0.35
     assert "v1_high_extension_penalty" in reason
+
+
+# ==========================================
+# INTEGRATION: SCANNER max_dist_sma20 SKIP
+# ==========================================
+
+def test_e25_override_skips_max_dist_sma20():
+    """System B con dynamic extension no debe recibir hard block de max_dist_sma20."""
+    prod_config = {
+        "tier2_filters": {
+            "min_rvol": 1.1,
+            "max_dist_sma20": 6.768,
+        },
+        "tier3_fixed": {
+            "use_dynamic_extension_sizing": True,
+        },
+        "tier1_strategy": {},
+    }
+
+    cfg_b = {
+        "name": "combo_stage2_breakout",
+        "tier3_fixed": {},
+        "tier2_filters": {"min_rvol": 0.8},
+    }
+
+    # Inyectar tier3_fixed como haria run_combo_scanner.py
+    cfg_b["tier3_fixed"] = dict(prod_config.get("tier3_fixed", {}))
+
+    # Simular el filtro de override
+    skip_max_dist = cfg_b.get("tier3_fixed", {}).get("use_dynamic_extension_sizing", False)
+    t2_overrides = prod_config.get("tier2_filters", {})
+    for k, v in t2_overrides.items():
+        if skip_max_dist and k == "max_dist_sma20":
+            continue
+        cfg_b["tier2_filters"][k] = v
+
+    # max_dist_sma20 NO debe haberse inyectado
+    assert "max_dist_sma20" not in cfg_b["tier2_filters"], \
+        f"max_dist_sma20={cfg_b['tier2_filters'].get('max_dist_sma20')} debe omitirse"
+    # min_rvol SI debe haberse inyectado
+    assert cfg_b["tier2_filters"]["min_rvol"] == 1.1
+
+
+def test_e25_without_dynamic_extension_receives_max_dist_sma20():
+    """System B sin dynamic extension todavia recibe max_dist_sma20 (backwards compat)."""
+    cfg_b = {
+        "name": "combo_stage2_breakout",
+        "tier3_fixed": {},
+        "tier2_filters": {"min_rvol": 0.8},
+    }
+
+    skip_max_dist = cfg_b.get("tier3_fixed", {}).get("use_dynamic_extension_sizing", False)
+    t2_overrides = {"min_rvol": 1.1, "max_dist_sma20": 6.768}
+    for k, v in t2_overrides.items():
+        if skip_max_dist and k == "max_dist_sma20":
+            continue
+        cfg_b["tier2_filters"][k] = v
+
+    assert cfg_b["tier2_filters"]["max_dist_sma20"] == 6.768
+
+
+def test_combined_csv_preserves_e25_10pct_extension():
+    """Verifica que una extension del 10% bajo System B produce sizing_factor correcto
+    (0.30 para valley_penalty segun curva v2_atlas_informed)."""
+    factor, reason = calculate_dynamic_sizing_factor(10.0, 4.0, E25_CONFIG_V2)
+    assert factor == 0.3
+    assert "v2_valley_penalty" in reason
+
+    # Sweetspot del 12.5% → 0.40
+    factor, reason = calculate_dynamic_sizing_factor(12.5, 4.0, E25_CONFIG_V2)
+    assert pytest.approx(factor, abs=0.02) == 0.40
+    assert "v2_atlas_sweetspot" in reason

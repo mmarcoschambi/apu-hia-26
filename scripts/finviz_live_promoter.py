@@ -777,13 +777,21 @@ def promote_candidates(date: str, min_rvol: float = 1.5, send_telegram: bool = F
                         prefix = "<b>[SISTEMA A]</b> " if combo_name == "combo_pure_momentum" else "<b>[SISTEMA B]</b> "
                         header_title = prefix + header_title
                         
+                        sizing_str = ""
+                        if combo_name == "combo_stage2_breakout" and risk_info.get("sizing_factor") is not None:
+                            sf = risk_info["sizing_factor"]
+                            if sf < 1.0:
+                                sizing_str = f"\n• Size Factor: <b>{sf:.0%}</b> (<i>{risk_info.get('sizing_reason', '')}</i>)"
+                                if risk_info.get("risk_budget_usd") is not None:
+                                    sizing_str += f"\n• Adjusted Risk: <b>${risk_info['risk_budget_usd']:.2f}</b> (Shares: <b>{risk_info.get('shares', 0)}</b>)"
+
                         msg = (
                             f"{header_title}\n"
                             f"{watchlist_badge}\n\n"
                             f"⚡ <b>TRIGGER DETAILS:</b>\n"
                             f"• Live Trigger: <b>PASS</b>\n"
                             f"• Price: <b>${price:.2f}</b>{price_flag} (Break: ${breakout_lvl:.2f})\n"
-                            f"• Live RVOL: <b>{live_rvol:.2f}x</b>\n\n"
+                            f"• Live RVOL: <b>{live_rvol:.2f}x</b>{sizing_str}\n\n"
                             f"{gate_icon} <b>ENTRY GATE STATUS: {entry_gate_status}</b>\n"
                             f"• Gate Reason: <code>{html.escape(entry_gate_reason, quote=False)}</code>\n"
                             f"• Source: <i>{entry_gate_source}</i>\n\n"

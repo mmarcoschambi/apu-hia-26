@@ -265,6 +265,9 @@ def _map_premarket_detail_to_signal(ticker: str, detail: dict, date: str) -> dic
         "gate_dist_sma20": detail.get("dist_sma20_pct", 0.0),
         "gate_sector_etf_dist": detail.get("sector_etf_dist_pct"),
         "combos": detail.get("combos", []),
+        "sizing_factor": detail.get("sizing_factor", 1.0),
+        "sizing_reason": detail.get("sizing_reason", ""),
+        "risk_budget_usd": detail.get("risk_budget_usd"),
     }
 
 
@@ -372,12 +375,15 @@ def _enrich_with_history(signals: list[dict], date: str) -> list[dict]:
     return signals
 
 
-def _classify_urgency(signal: dict) -> tuple[str, str, str]:
+def _classify_urgency(signal: dict, system: str | None = None) -> tuple[str, str, str]:
     """
     Retorna (tier, badge_html, evolution_badge_html)
     tier       : "A" | "B" | "C"
     badge      : badge principal de urgencia
     evo_badge  : badge de evolución (vacío si sin historia o sin movimiento)
+
+    Si system="B", se usa el umbral de la config E25 (comfort_pct) en vez del
+    global _MAX_DIST_SMA20 para la clasificación por extensión.
     """
     reasons    = signal.get("reasons") or []
     dist_sma   = float(signal.get("dist_sma20",
@@ -390,7 +396,15 @@ def _classify_urgency(signal: dict) -> tuple[str, str, str]:
     dist_trend  = signal.get("_dist_trend_5d")   # negativo = consolidando
     near_bo     = signal.get("_near_breakout", False)
 
-    has_dist  = dist_sma > _MAX_DIST_SMA20
+    # ── Umbral de extensión según sistema ─────────────────────────────────
+    # System B (E25) permite hasta 35.0% (extensión mitigada por sizing).
+    # System A (Padre) usa _MAX_DIST_SMA20 (6.77%).
+    if system == "B":
+        max_dist = 35.0
+    else:
+        max_dist = _MAX_DIST_SMA20
+
+    has_dist  = dist_sma > max_dist
     has_ma    = any("MA stack" in r or "MA Stack" in r for r in reasons)
     has_bkout = any("breakout" in r.lower() for r in reasons)
     has_rvol  = any("RVOL" in r for r in reasons)
@@ -658,7 +672,7 @@ def build_watchlist_message(date: str | None = None, page: int = 1, system: str 
     # ─────────────────────────────────────────────────────────────────────
 
     for s in signals:
-        tier, badge, evo_badge = _classify_urgency(s)   # ← ahora retorna 3 valores
+        tier, badge, evo_badge = _classify_urgency(s, system=system)
         s["_urgency_tier"]  = tier
         s["_urgency_badge"] = badge
         s["_evo_badge"]     = evo_badge                 # ← NUEVO
@@ -693,7 +707,7 @@ def build_watchlist_message(date: str | None = None, page: int = 1, system: str 
     ]
 
     # Group page signals by sector ETF
-    lines.extend(_build_watchlist_grouped_lines(page_signals, resolved))
+    lines.extend(_build_watchlist_grouped_lines(page_signals, resolved, system=system))
 
     # Footer stats
     scores = [float(s.get("entry_score", 0) or 0) for s in signals]
@@ -707,7 +721,7 @@ def build_watchlist_message(date: str | None = None, page: int = 1, system: str 
     return "\n".join(lines), buttons
 
 
-def _build_watchlist_grouped_lines(signals: list, date: str) -> list[str]:
+def _build_watchlist_grouped_lines(signals: list, date: str, system: str | None = None) -> list[str]:
     """Build enriched watchlist lines grouped by sector ETF."""
     ticker_to_etf = _get_ticker_to_etf()
     groups: dict[str, list[dict]] = {}
@@ -757,6 +771,17 @@ def _build_watchlist_grouped_lines(signals: list, date: str) -> list[str]:
                     rs_part = f" {rs_icon} RS:{theme_rs:+.1%}"
                 theme_line = f"\n         └ {theme_names}{rs_part}"
 
+            # Badge de sizing para el Sistema B
+            sizing_lbl = ""
+            if system == "B":
+                sf = s.get("sizing_factor")
+                dist = s.get("dist_sma20", s.get("gate_dist_sma20", 0.0))
+                dist_val = float(dist) if dist is not None else 0.0
+                if sf is not None and float(sf) < 1.0:
+                    sizing_lbl = f" <code>(Size: {float(sf):.0%} [Ext: {dist_val:.1f}%])</code>"
+                elif dist_val > 6.76:
+                    sizing_lbl = f" <code>(Ext: {dist_val:.1f}%)</code>"
+
             # Badge de urgencia en línea separada si no es PASS (no saturar los verdes)
             urgency_line = ""
             if gate_status != "PASS" and urgency_badge:
@@ -768,7 +793,7 @@ def _build_watchlist_grouped_lines(signals: list, date: str) -> list[str]:
 
             lines.append(
                 f"  <code>{ticker:<5}</code> ★{score:.0f}  "
-                f"Entry:<code>{entry:.2f}</code>  "
+                f"Entry:<code>{entry:.2f}</code>{sizing_lbl}  "
                 f"ADR:<code>{adr:.1f}%</code> {gate_icon}"
                 f"{theme_line}"
                 f"{urgency_line}"

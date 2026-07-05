@@ -189,6 +189,34 @@ class TestWatchlistView(unittest.TestCase):
         self.assertEqual(tier, "C")
         self.assertEqual(evo, "")
 
+    def test_classify_urgency_system_b_e25_threshold(self):
+        """System B con 10% extension debe tratarse distinto que System A."""
+        from src.paper.telegram_views import _classify_urgency
+
+        # 10% extension y RVOL bajo bajo System A → 🟡 Consolidar + RVOL (Tier B)
+        tier_a, badge_a, _ = _classify_urgency({
+            "reasons": ["RVOL bajo"], "dist_sma20": 10.0,
+            "entry_gate_status": "BLOCKED"
+        }, system="A")
+        self.assertEqual(tier_a, "B")
+        self.assertIn("Consolidar", badge_a)
+
+        # 10% extension y RVOL bajo bajo System B → 🟢 RVOL pendiente (Tier A) porque < 35%
+        tier_b, badge_b, _ = _classify_urgency({
+            "reasons": ["RVOL bajo"], "dist_sma20": 10.0,
+            "entry_gate_status": "BLOCKED"
+        }, system="B")
+        self.assertEqual(tier_b, "A")
+        self.assertIn("RVOL", badge_b)
+
+        # 40% extension y RVOL bajo bajo System B → TIER C (Radar largo plazo) porque > 35%
+        tier_b_extreme, badge_b_extreme, _ = _classify_urgency({
+            "reasons": ["RVOL bajo"], "dist_sma20": 40.0,
+            "entry_gate_status": "BLOCKED"
+        }, system="B")
+        self.assertEqual(tier_b_extreme, "C")
+        self.assertIn("Radar", badge_b_extreme)
+
     @patch("src.paper.telegram_views.Path.exists")
     @patch("src.paper.telegram_views.pd.read_sql_query")
     @patch("src.paper.telegram_views.sqlite3.connect")
@@ -281,6 +309,34 @@ class TestWatchlistView(unittest.TestCase):
         
         # None
         self.assertIsNone(_get_system_for_chat("-1009999999999"))
+
+    @patch("src.paper.telegram_views.load_watchlist_signals")
+    @patch("src.paper.telegram_views._get_sector_status")
+    @patch("src.paper.telegram_views._get_theme_rs_vs_etf")
+    @patch("src.paper.telegram_views.get_themes")
+    def test_build_watchlist_message_sizing_display(self, mock_get_themes, mock_theme_rs, mock_sector_status, mock_load):
+        # NVDA con extensión de 12% y sizing factor de 0.50 en E25
+        mock_load.return_value = ("2026-05-21", [
+            {
+                "ticker": "NVDA", 
+                "entry_score": 87.0, 
+                "entry_price": 135.20, 
+                "gate_adr_pct": 3.2, 
+                "sector_etf": "XLK", 
+                "entry_gate_status": "PASS", 
+                "combos": ["Minervini"],
+                "dist_sma20": 12.0,
+                "sizing_factor": 0.50
+            },
+        ])
+        mock_get_themes.return_value = ["AI/ML"]
+        mock_theme_rs.return_value = 0.021
+        mock_sector_status.return_value = (True, 0.012)
+
+        msg_text, _ = build_watchlist_message("2026-05-21", page=1, system="B")
+        
+        # Debe contener el tag de Size y extensión
+        self.assertIn("(Size: 50% [Ext: 12.0%])", msg_text)
 
 if __name__ == "__main__":
     unittest.main()

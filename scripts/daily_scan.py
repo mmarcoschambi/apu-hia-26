@@ -278,6 +278,10 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
     
     logger.info(f"Effective Risk per Trade: ${effective_risk:.2f} ({active_mode['risk_multiplier']*100:.0f}%)")
 
+    # Inyectar tier3_fixed (E25) solo en System B desde production_config.json
+    # Esto le da acceso a use_dynamic_extension_sizing, dynamic_extension_sizing, etc.
+    cfg_b["tier3_fixed"] = dict(master_cfg.get("tier3_fixed", {}))
+
     # Aplicar Overrides: Master Config gana, luego VALIDATED_OVERRIDES como fallback/legacy
     VALIDATED_OVERRIDES = {
         "min_rs_percentile": 75,
@@ -291,7 +295,12 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
     final_t2 = {**VALIDATED_OVERRIDES, **t2_master}
 
     # En cfg_a y cfg_b, inyectar en tier2_filters y screener.params
+    # System B con dynamic extension sizing salta max_dist_sma20 (E25 maneja su propio limite)
+    skip_max_dist_b = cfg_b.get("tier3_fixed", {}).get("use_dynamic_extension_sizing", False)
+
     for k, v in final_t2.items():
+        if skip_max_dist_b and k == "max_dist_sma20":
+            continue
         cfg_a.setdefault("tier2_filters", {})[k] = v
         cfg_b.setdefault("tier2_filters", {})[k] = v
 

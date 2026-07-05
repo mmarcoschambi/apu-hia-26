@@ -1,0 +1,47 @@
+[
+  {
+    "id": "EXP-01",
+    "title": "Track 1: Sandbox Shadow en Vivo (Joya Russell)",
+    "status": "🟡 Shadow / Monitoreo",
+    "universe": "Russell 1000 + E25 + ex-XLV + ticker-cap 20%",
+    "metric": "Convergencia del backtest vs live & Sharpe >= 1.5",
+    "description": "Crear un sandbox separado para el flujo real de las últimas ~5 semanas. Fuente: scrape Finviz/VPS real, fechas reales y tickers reales detectados ese día, sin usar universo histórico 'limpio' ni selección retrospectiva. Comparar contra el sistema paper actual del VPS, Russell E25 sin ex-XLV y el combo/system A actual. Output semanal: señales nuevas, señales filtradas por XLV, bloqueadas por ticker cap, exposición por ticker/sector, PnL simulado y divergencia vs backtest esperado.",
+    "date": "2026-06-24"
+  },
+  {
+    "id": "EXP-02",
+    "title": "Track 2: Russell Refit (S5 Optuna)",
+    "status": "🔴 Pendiente / Backlog",
+    "universe": "Russell 1000",
+    "metric": "Sharpe robusto sin overfitting, PBO < 40%",
+    "description": "Si Russell funciona mejor que SP500/PIT, entonces Trial 380 queda como 'parámetro heredado'. Primero auditar qué parámetros actuales vienen de S4 Optuna sobre 200 tickers/PIT, cuáles sobrevivieron a Russell y cuáles dependen del universo chico. Luego lanzar 'S5 Russell Optuna' con diseño congelado (Russell 1000, baseline sin Variant E, E25 opcional como sizing overlay, ex-XLV como regla candidata, ticker cap 20 como risk constraint, buscando objetivo robusto, no retorno bruto). Gate mínimo para aceptar: supera al candidato actual en PF/MDD/consistencia, no depende de PYPL/XLK de forma extrema y pasa ventanas 2019-2020, 2021-2022, 2023-2024, 2025.",
+    "date": "2026-06-24"
+  },
+  {
+    "id": "EXP-03",
+    "title": "Track 3: Auditoría de Exits (Sistema A)",
+    "status": "🔴 Pendiente / Backlog",
+    "universe": "N/A",
+    "metric": "Consistencia de parámetros del backtest",
+    "description": "Realizar una auditoría corta para verificar si el backtest Russell/E25 actual está usando realmente la misma salida TP1/TP2/runner; qué 'tp1_r', 'tp2_r', 'tp1_pct', 'tp2_pct', 'runner_pct' usa; si 'use_trailing_stop' está apagado o prendido; y si el runner sale por EMA 8/21, ATR trail, stop o cierre completo. No asumir 'solo TP/SL' hasta auditar el comando/config efectivo.",
+    "date": "2026-06-24"
+  },
+  {
+    "id": "EXP-04",
+    "title": "Track 4: Experimento E26 (Exits - Trimming & Scaling)",
+    "status": "🔴 Pendiente / Backlog",
+    "universe": "Russell 1000 + E25",
+    "metric": "Profit Factor +0.10 mínimo sin bajar WR del 50%",
+    "description": "Hipótesis: Implementar salidas parciales mejorará tu Profit Factor en al menos +0.10 sin bajar tu Win Rate por debajo del 50%. Qué vamos a probar: Tu salida base vs. Salidas parciales (TP1/TP2) + Runner vs. Trimming (recortar al subir) vs. Salida por tiempo (estilo Atlas que corta perdedores rápido pero cobra ganancias en hasta 32 fracciones dejando un 'runner' con trailing stop para capturar tendencia). Diseño E26: baseline actual, TP1/TP2/runner actual, trailing runner más agresivo, trimming incremental, time exit, Atlas-like scale-out. Gate E26: PF +0.10 mínimo, WR no baja de 50%, MDD no empeora, no aumenta demasiado turnover y mejora 2025/live-like.",
+    "date": "2026-06-24"
+  },
+  {
+    "id": "EXP-05",
+    "title": "Track 5: Cobertura QuantConnect (ETFs Temáticos)",
+    "status": "🔴 Pendiente / Backlog",
+    "universe": "Style / Thematic ETFs",
+    "metric": "Generación de Alfa mediante filtros sectoriales/temáticos",
+    "description": "La carpeta quantconnect/ tiene datos PIT de SP500, QQQ, IWB, IWM, MDY, ETFs sectoriales y style ETFs. No asumir que eso equivale a Russell 1000 PIT completo. Uso recomendado: benchmark/regime, filtros sectoriales, auditoría PIT vs no-PIT, proxies temáticos/sectoriales y validación externa de señales. Próxima auditoría: confirmar si hay Russell/IWB enough coverage, mapear ETFs disponibles por tipo: sector, style, index, thematic y decidir si sirven para E11/E26 o solo para contexto.",
+    "date": "2026-06-24"
+  }
+]

@@ -150,6 +150,14 @@
     "scope": "project",
     "topic_key": "shadow-finviz-convergence",
     "content": "Se ejecuto el parser ETL de shadow (src/shadow/etl.py) sobre el log real de pre-market (cron_pre_market.log) de los ultimos 2 meses del VPS, y se corrio el motor de simulación local (src/shadow/replay.py) sobre 4016 candidatos. Tambien se compilaron los reportes semanales comparativos. Veredicto: El sistema converge al 100% logicamente. La discrepancia en el Live Paper (VPS) es esperada ya que el VPS rutea ejecuciones a Telegram en caliente y no escribe en el archivo plano journal.json de Finviz. Se cerro el Issue #40."
+  },
+  {
+    "timestamp": "2026-07-05T04:20:00Z",
+    "title": "Alineacion e integracion de extension SMA20 y Sizing E25",
+    "type": "bugfix",
+    "scope": "project",
+    "topic_key": "vps-local-alignment-validation",
+    "content": "Se resolvio la desalineacion de la sobre-extension de SMA20 entre Padre y E25. En paper_finviz.py se corrigio load_combo_params para que System B reciba tier3_fixed y System A reciba tier3_risk. En daily_scan.py y run_combo_scanner.py se inyecto tier3_fixed en System B y se omitio max_dist_sma20 bajo sizing dinamico. En telegram_views.py se parametrizo _classify_urgency con max_dist=35.0% para el Sistema B para no penalizarlo visualmente con warning amarillo, exponiendo sizing_factor en el pipeline y mostrando 'Size: XX% (Ext: YY%)' al lado del precio de entrada en la watchlist. En finviz_live_promoter.py se inyecto el factor de sizing y el riesgo ajustado real en el mensaje de Telegram del trigger en vivo. Se reescribieron y agregaron los tests unitarios pasando al 100% (27/27 passed)."
   }
 ]
 

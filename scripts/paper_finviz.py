@@ -416,29 +416,40 @@ def _get_latest_ohlcv_date(db_path: Path) -> str | None:
 
 
 def load_combo_params(name):
-    """Carga parametros fusionados para el combo específico."""
+    """Carga parametros fusionados para el combo específico.
+
+    Cada sistema recibe su bloque de configuracion correcto:
+    - System A (combo_pure_momentum) → tier3_risk (sizing estandar, sin dynamic extension)
+    - System B (combo_stage2_breakout) → tier3_fixed (E25 dynamic extension sizing)
+    """
     try:
         from src.integration.combo_loader import load_combo_merged
         combo_cfg, _ = load_combo_merged(name)
-        
-        # Si es combo_pure_momentum, fundir con production_config.json (System A/Bugatti)
-        if name == "combo_pure_momentum":
-            prod_config = load_production_config()
-            if "tier1_strategy" not in combo_cfg:
-                combo_cfg["tier1_strategy"] = {}
-            combo_cfg["tier1_strategy"].update(prod_config.get("tier1_strategy", {}))
-            
-            if "tier2_filters" not in combo_cfg:
-                combo_cfg["tier2_filters"] = {}
-            prod_t2 = prod_config.get("tier2_filters", {}).copy()
-            if not combo_cfg["tier2_filters"].get("use_rs_percentile", False):
-                prod_t2["use_rs_percentile"] = False
-            combo_cfg["tier2_filters"].update(prod_t2)
-            
-            if "tier3_fixed" not in combo_cfg:
-                combo_cfg["tier3_fixed"] = {}
-            combo_cfg["tier3_fixed"].update(prod_config.get("tier3_fixed", {}))
-            
+        prod_config = load_production_config()
+
+        # ── Merges comunes a ambos sistemas ────────────────────────────────
+        if "tier1_strategy" not in combo_cfg:
+            combo_cfg["tier1_strategy"] = {}
+        combo_cfg["tier1_strategy"].update(prod_config.get("tier1_strategy", {}))
+
+        if "tier2_filters" not in combo_cfg:
+            combo_cfg["tier2_filters"] = {}
+        prod_t2 = prod_config.get("tier2_filters", {}).copy()
+        if not combo_cfg["tier2_filters"].get("use_rs_percentile", False):
+            prod_t2["use_rs_percentile"] = False
+        combo_cfg["tier2_filters"].update(prod_t2)
+
+        # ── Enrutamiento tier3 por sistema ─────────────────────────────────
+        if name == "combo_stage2_breakout":
+            # System B → E25 Shadow: tier3_fixed (dynamic extension sizing)
+            combo_cfg["tier3_fixed"] = dict(prod_config.get("tier3_fixed", {}))
+        elif name == "combo_pure_momentum":
+            # System A → tier3_risk estandar (sin dynamic extension)
+            if "tier3_risk" not in combo_cfg:
+                combo_cfg["tier3_risk"] = {}
+            combo_cfg["tier3_risk"].update(prod_config.get("tier3_risk", {}))
+
+        # tier3_fixed tiene prioridad si existe (System B), sino tier3_risk (System A)
         params = {
             "tier1_strategy": combo_cfg.get("tier1_strategy", {}),
             "tier2_filters": combo_cfg.get("tier2_filters", {}),
