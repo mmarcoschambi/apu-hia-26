@@ -158,6 +158,14 @@
     "scope": "project",
     "topic_key": "vps-local-alignment-validation",
     "content": "Se resolvio la desalineacion de la sobre-extension de SMA20 entre Padre y E25. En paper_finviz.py se corrigio load_combo_params para que System B reciba tier3_fixed y System A reciba tier3_risk. En daily_scan.py y run_combo_scanner.py se inyecto tier3_fixed en System B y se omitio max_dist_sma20 bajo sizing dinamico. En telegram_views.py se parametrizo _classify_urgency con max_dist=35.0% para el Sistema B para no penalizarlo visualmente con warning amarillo, exponiendo sizing_factor en el pipeline y mostrando 'Size: XX% (Ext: YY%)' al lado del precio de entrada en la watchlist. En finviz_live_promoter.py se inyecto el factor de sizing y el riesgo ajustado real en el mensaje de Telegram del trigger en vivo. Se reescribieron y agregaron los tests unitarios pasando al 100% (27/27 passed)."
+  },
+  {
+    "timestamp": "2026-07-06T03:20:00Z",
+    "title": "Resolucion de caida de alertas de Telegram y bucle de reinicios en bot listener",
+    "type": "bugfix",
+    "scope": "project",
+    "topic_key": "vps-telegram-alerts-fix",
+    "content": "Se resolvio la inactividad de finviz-live-promoter.service en el VPS corrigiendo la falta de privilegios (sudo) en el crontab para llamadas a systemctl de inicio/fin. En paralelo, se resolvio un bucle de reinicios (mas de 504.000 fallos) en el servicio telegram-bot-listener.service originado por caracteres CRLF de Windows en scripts/run_telegram_listener.sh. Se configuro git core.autocrlf=input de forma global en la maquina local para evitar que se reintroduzcan CRLF al hacer checkouts en WSL2, se convirtieron todos los shell scripts a LF, se redesplego y se reiniciaron ambos servicios con exito, liberando 2.2GB de espacio en el disco del VPS."
   }
 ]
 
