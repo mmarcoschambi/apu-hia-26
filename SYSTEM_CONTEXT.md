@@ -46,7 +46,7 @@ El sistema es auto-consciente de su entorno (**Auto-Aware**):
 *   Exclusión activa de XLV en el scanner y backtests diarios.
 *   Auditoría diaria automatizada de señales aprobadas y rechazadas (`rejection_audit.csv`).
 *   Configuraciones leídas directamente de [production_config.json](file:///home/marcos/trade/momentum-v2/config/production_config.json).
-*   **Breadth Gate (Filtro de participación de mercado):** Libre de sesgo de selección y con cálculo de calentamiento de 252 días corregido y validado con tests.
+*   **Breadth Gate (Filtro de participación de mercado):** Optimizado y validado en Walk-Forward de 15 pliegues (Modos A y B). Determinado NO-GO para su uso estático (degrada Sharpe de 0.39 a 0.23). Se promueve a Gate Dinámico Condicional acoplado al Regime Detection (umbral 0.40 en Modo B activado únicamente en mercados correctivos/bajistas).
  
 ### 🟡 En Desarrollo / Shadow Mode
 *   **Variante E (Divergencia Temática):** Monitoreo pasivo en shadow trading para acumular ~30-40 señales reales antes de su promoción.

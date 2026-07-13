@@ -182,6 +182,14 @@
     "scope": "project",
     "topic_key": "breadth-gate-bugs-fix",
     "content": "Se resolvieron los dos bugs core del Breadth Gate (Exp#5b) en vectorbt_engine_advanced.py. Se removió el sesgo de selección en SQL consultando todo el universo cargado en la base de datos (no solo entries.columns). Se corrigió la pérdida de warm-up calculando las MAs y los máximos rodantes de 252 días sobre la matriz de pivot completa antes de reindexar por entries.index. Se agregó tests/test_breadth_gate.py con metodología TDD Red-to-Green, logrando que la suite completa de 34 tests pase en verde al 100%."
+  },
+  {
+    "timestamp": "2026-07-13T20:18:00Z",
+    "title": "Optimizacion e investigacion del Breadth Gate en Walk-Forward (Issue #50)",
+    "type": "discovery",
+    "scope": "project",
+    "topic_key": "breadth-gate-walkforward-optimization",
+    "content": "Se corrigió un desalineamiento de un fold en el mapeo inicial (Fold 15 vs Fold 14) mediante la validación cruzada de firmas de días hábiles únicas contra la base de datos (date(date) distinct SQL). Se corrió Walk-Forward de 15 pliegues para los Modos A (SMA20) y B (High/Low nh_nl) de 2022 a 2026. Veredicto: NO-GO para el Gate Estático ya que drena retornos globales (Sharpe 0.23 vs 0.39 baseline). Se recomienda un Gate Dinámico Condicional acoplado al módulo de Regime Detection para proteger capital en mercados bajistas y no lastrar en mercados alcistas."
   }
 ]
 

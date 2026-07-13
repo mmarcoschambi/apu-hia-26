@@ -26,14 +26,14 @@ FOLDS=(
 for fold in "${FOLDS[@]}"; do
   read -r IS_START IS_END OOS_START OOS_END <<< "$fold"
   TAG="${IS_START}_${OOS_END}"
-  LOG="$OUTDIR/breadth_${TAG}.log"
-  JSON="$OUTDIR/breadth_${TAG}.json"
+  LOG="$OUTDIR/breadth_b_${TAG}.log"
+  JSON="$OUTDIR/breadth_b_${TAG}.json"
 
   printf 'Running fold %s -> %s\n' "$IS_START" "$OOS_END"
 
   stdbuf -oL -eL timeout 2h python3 "$ROOT/experiments/breadth_sandbox.py" \
-    --mode a \
-    --configs S0 B1_045 B1_050 B1_055 \
+    --mode b \
+    --configs S0 B_040 B_050 B_060 \
     --is-start "$IS_START" \
     --is-end "$IS_END" \
     --oos-start "$OOS_START" \
