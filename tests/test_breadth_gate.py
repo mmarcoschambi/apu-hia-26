@@ -7,7 +7,7 @@ from src.backtest.vectorbt_engine_advanced import AdvancedVectorBTEngine
 
 class TestBreadthGate(unittest.TestCase):
 
-    @patch("src.backtest.vectorbt_engine_advanced.sqlite3.connect")
+    @patch("sqlite3.connect")
     def test_breadth_gate_no_selection_bias_and_warmup(self, mock_connect):
         # 1. Crear entries mockeadas de simulación (2 tickers, 3 días)
         dates = pd.to_datetime(["2019-01-01", "2019-01-02", "2019-01-03"])
