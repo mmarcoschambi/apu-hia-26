@@ -2945,6 +2945,10 @@ class AdvancedVectorBTEngine:
             )
             conn.close()
 
+            # Filter to keep only tickers in the target backtest universe to avoid international/out-of-universe data noise
+            tickers_set = set(tickers)
+            df = df[df["ticker"].isin(tickers_set)]
+
             if df.empty:
                 logger.warning("No data returned for breadth mask; allowing all entries")
                 return pd.DataFrame(True, index=entries.index, columns=entries.columns)
@@ -2966,6 +2970,11 @@ class AdvancedVectorBTEngine:
             close_pivot = df.pivot(index="date", columns="ticker", values="close")
             high_pivot = df.pivot(index="date", columns="ticker", values="high")
             low_pivot = df.pivot(index="date", columns="ticker", values="low")
+
+            # Reindex pivots to entries.index (US trading calendar) to eliminate weekend/holiday noise from other markets
+            close_pivot = close_pivot.reindex(entries.index)
+            high_pivot = high_pivot.reindex(entries.index)
+            low_pivot = low_pivot.reindex(entries.index)
 
             if self.breadth_filter_mode == "nh_nl":
                 rolling_high = high_pivot.shift(1).rolling(252, min_periods=20).max()
