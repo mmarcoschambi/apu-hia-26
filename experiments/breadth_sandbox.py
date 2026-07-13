@@ -13,6 +13,18 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+# Windows compatibility mock for 'resource' module
+try:
+    import resource
+except ImportError:
+    from types import ModuleType
+    mock_resource = ModuleType("resource")
+    mock_resource.RUSAGE_SELF = 0
+    class MockRUUsage:
+        ru_maxrss = 0
+    mock_resource.getrusage = lambda *args, **kwargs: MockRUUsage()
+    sys.modules["resource"] = mock_resource
+
 from src.backtest.vectorbt_engine_advanced import AdvancedVectorBTEngine
 from src.data.pit_universe import PointInTimeUniverse
 
