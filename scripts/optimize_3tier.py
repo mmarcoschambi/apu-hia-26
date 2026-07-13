@@ -74,6 +74,7 @@ try:
     from src.backtest.vectorbt_engine_advanced import AdvancedVectorBTEngine
     from src.backtest.numba_core import simulate_fast_core
     from src.validation.research_gate import ResearchGate, ValidationThresholds
+    from src.validation.stress_testing import StressTestSuite, StressThresholds
     from src.validation.robustness_metrics import (
         robust_objective_function,
         RobustObjectiveConfig,
@@ -1452,6 +1453,31 @@ def validate_with_research_gate(
     return result
 
 
+# PHASE 4.5: STRESS GATE
+# ═══════════════════════════════════════════════════════════
+
+def run_stress_gate(
+    universe: List[str],
+    full_params: Dict[str, Any],
+    train_dates: Tuple[str, str],
+    template_engine=None,
+) -> Tuple[bool, Any]:
+    """Phase 4.5: Full StressTestSuite gate before VPS export."""
+    logger.info("=" * 70)
+    logger.info("PHASE 4.5: STRESS GATE (StressTestSuite)")
+    logger.info("=" * 70)
+    suite = StressTestSuite(engine_class=AdvancedVectorBTEngine)
+    baseline_engine = template_engine  # reusar datos si disponible
+    result = suite.run_full_stress_test(
+        params=full_params,
+        universe=universe,
+        test_dates=train_dates,
+        baseline_engine=baseline_engine,
+        verbose=True,
+    )
+    return result.all_passed, result
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # PHASE 5: AUTO-EXPORT TO STREAMLIT
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1834,6 +1860,8 @@ def run_pipeline(args) -> Dict[str, Any]:
     validation_result = None
     promoted_tier1 = None
     best_is_score = best_score
+    stress_passed = None
+    stress_result = None
 
     if not args.skip_validation:
         # Get top 10 trials to find the most robust one (OOS-first selection)
@@ -1985,6 +2013,21 @@ def run_pipeline(args) -> Dict[str, Any]:
         if promoted_tier1:
             best_tier1 = promoted_tier1
             best_score = best_is_score
+
+            # Phase 4.5: Stress Gate
+            if not args.skip_stress:
+                # Combine complete combo parameters for the stress test
+                full_params = {**tier3_raw, **tier2_derived, **best_tier1}
+                stress_passed, stress_result = run_stress_gate(
+                    universe, full_params, (args.start, args.end), _template_engine
+                )
+                if not stress_passed:
+                    logger.error("❌ STRESS GATE FAILED — export al VPS bloqueado.")
+                    for r in stress_result.failure_reasons:
+                        logger.error(f"   • {r}")
+                    promoted_tier1 = None  # bloquea el export
+            else:
+                logger.info("  SKIPPING stress gate (--skip-stress)")
         else:
             validation_result = all_results[-1] if all_results else None
             logger.error(
@@ -2019,6 +2062,10 @@ def run_pipeline(args) -> Dict[str, Any]:
             "best_trial_metrics": {
                 k: v for k, v in study.best_trial.user_attrs.items()
             },
+        },
+        "stress_gate": {
+            "passed": stress_passed if (not args.skip_stress and stress_passed is not None) else ("skipped" if args.skip_stress else "not_run"),
+            "failure_reasons": stress_result.failure_reasons if (not args.skip_stress and stress_result is not None) else [],
         },
     }
 
@@ -2365,6 +2412,11 @@ Examples:
         "--skip-validation",
         action="store_true",
         help="Skip ResearchGate validation (for quick dev runs)",
+    )
+    parser.add_argument(
+        "--skip-stress",
+        action="store_true",
+        help="Skip StressTestSuite gate (dev mode only)",
     )
     parser.add_argument(
         "--validation-strict",

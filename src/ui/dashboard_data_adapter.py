@@ -424,12 +424,30 @@ class DashboardDataAdapter:
                 .fillna("NONE")
             )
 
+        # shares, entry_price, exit_price defaults to prevent crashes (Fix Issue #10)
+        if "shares" not in df.columns:
+            logger.warning("[Adapter] Columna 'shares' no encontrada — se asumirá 1")
+            df["shares"] = 1.0
+        else:
+            df["shares"] = pd.to_numeric(df["shares"], errors="coerce").fillna(1.0)
+
+        if "entry_price" not in df.columns:
+            df["entry_price"] = 1.0
+        else:
+            df["entry_price"] = pd.to_numeric(df["entry_price"], errors="coerce").fillna(1.0)
+
+        if "exit_price" not in df.columns:
+            df["exit_price"] = df["entry_price"] if "entry_price" in df.columns else 1.0
+        else:
+            df["exit_price"] = pd.to_numeric(df["exit_price"], errors="coerce").fillna(1.0)
+
         # pnl numérico
         if "pnl" not in df.columns:
             logger.warning("[Adapter] Columna 'pnl' no encontrada — se asumirá 0")
             df["pnl"] = 0.0
         else:
             df["pnl"] = pd.to_numeric(df["pnl"], errors="coerce").fillna(0.0)
+
 
         # r_multiple
         if "r_multiple" not in df.columns:

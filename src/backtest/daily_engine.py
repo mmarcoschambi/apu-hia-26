@@ -705,10 +705,15 @@ class DailyBacktestEngine:
             # 🛡️ Nuevas métricas de riesgo
             trade_record['dist_sma20_pct'] = pos.context_data.get('dist_sma20_pct', 0)
             trade_record['vol_trig'] = pos.context_data.get('vol_trig', 'Unknown')
+            trade_record['days_to_next_earnings'] = pos.context_data.get('days_to_next_earnings', -1)
+            trade_record['time_since_earnings'] = pos.context_data.get('time_since_earnings', -1)
         else:
             trade_record['context_rvol'] = 0.0
             trade_record['dist_sma20_pct'] = 0.0
             trade_record['vol_trig'] = 'Unknown'
+            trade_record['days_to_next_earnings'] = -1
+            trade_record['time_since_earnings'] = -1
+
 
         self.portfolio.closed_trades.append(trade_record)
     
@@ -988,14 +993,35 @@ class DailyBacktestEngine:
             # Determinar trend_sma del candidato (viene del screener)
             trend_sma = 'Uptrend' if cand.get('price', 0) > cand.get('sma_20', 0) else 'Weak'
             
+            # Earnings metrics for Context (Fix Issue #1)
+            days_to_earning_val = -1
+            time_since_earning_val = -1
+            try:
+                if not earnings_dates.empty:
+                    earning_dt = pd.to_datetime(earnings_dates).tz_localize(None)
+                    today_dt = pd.to_datetime(today).tz_localize(None)
+                    
+                    future_earnings = earning_dt[earning_dt > today_dt]
+                    if not future_earnings.empty:
+                        days_to_earning_val = int((future_earnings[0] - today_dt).days)
+                        
+                    past_earnings = earning_dt[earning_dt <= today_dt]
+                    if not past_earnings.empty:
+                        time_since_earning_val = int((today_dt - past_earnings[-1]).days)
+            except Exception as e:
+                logger.debug(f"Error calculating daily engine earnings context: {e}")
+
             context = {
                 'adr_pct': adr_pct,
                 'avg_volume': avg_volume,
                 'rvol': cand.get('rvol', 0),  # Tomar RVOL del screener
                 'dist_sma20_pct': dist_sma20,  # Agregar métrica de extensión
                 'vol_trig': vol_trig,  # Agregar clasificación VolTrig
-                'trend_sma': trend_sma
+                'trend_sma': trend_sma,
+                'days_to_next_earnings': days_to_earning_val,
+                'time_since_earnings': time_since_earning_val
             }
+
 
             if sizing['shares'] > 0:
                 self.pending_orders.append(PendingOrder(

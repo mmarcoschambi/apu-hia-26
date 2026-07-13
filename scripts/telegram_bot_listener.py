@@ -41,7 +41,13 @@ from src.paper.telegram_views import (
     build_watchlist_message,
     build_watchlist_detail,
 )
-from src.utils.telegram_client import answer_callback, edit_message, get_updates, send_message_with_buttons
+from src.paper.telegram_views import load_monitor_snapshot
+from src.utils.telegram_client import (
+    answer_callback,
+    edit_message,
+    get_updates,
+    send_message_with_buttons,
+)
 
 EVENTS_DIR = PROJECT_ROOT / "outputs" / "telegram_events"
 STATE_DIR = PROJECT_ROOT / "outputs" / "telegram_state"
@@ -50,12 +56,30 @@ EVENTS_DIR.mkdir(parents=True, exist_ok=True)
 
 REFRESH_BUTTONS = {
     "market": [
-        [{"text": "🔄 Refresh", "callback_data": "refresh:market"}, {"text": "⚡ Regen All", "callback_data": "regenerate:market"}]
+        [
+            {"text": "🔄 Refresh", "callback_data": "refresh:market"},
+            {"text": "⚡ Regen All", "callback_data": "regenerate:market"},
+        ]
     ],
-    "signals": [[{"text": "🔄 Refresh", "callback_data": "refresh:signals"}]],
-    "watchlist": [[{"text": "🔄 Refresh", "callback_data": "refresh:watchlist"}]],
+    "signals": [
+        [
+            {"text": "🔄 Refresh", "callback_data": "refresh:signals"},
+            {"text": "🧪 Shadow Audit", "callback_data": "shadow_audit:signals"},
+        ]
+    ],
+    "watchlist": [
+        [
+            {"text": "🔄 Refresh", "callback_data": "refresh:watchlist"},
+            {"text": "🧪 Shadow Audit", "callback_data": "shadow_audit:watchlist"},
+        ]
+    ],
     "portfolio": [[{"text": "🔄 Refresh", "callback_data": "refresh:portfolio"}]],
-    "paper_run": [[{"text": "🔄 Refresh", "callback_data": "refresh:paper_run"}]],
+    "paper_run": [
+        [
+            {"text": "🔄 Refresh", "callback_data": "refresh:paper_run"},
+            {"text": "🧪 Shadow Audit", "callback_data": "shadow_audit:paper_run"},
+        ]
+    ],
 }
 
 load_dotenv()
@@ -72,9 +96,7 @@ def _load_offset() -> int:
 
 
 def _save_offset(offset: int) -> None:
-    (STATE_DIR / "updates_offset.json").write_text(
-        json.dumps({"offset": offset}, indent=2)
-    )
+    (STATE_DIR / "updates_offset.json").write_text(json.dumps({"offset": offset}, indent=2))
 
 
 def _is_monitor_chat(chat_id: str) -> bool:
@@ -355,12 +377,13 @@ def _handle_callback(update: dict) -> None:
 
     if action == "regenerate":
         import subprocess
+
         target = payload or "market"
         answer_callback(callback_id, f"Regenerating {target} data... (approx 30s)")
-        
+
         if target == "market":
             subprocess.Popen([sys.executable, "scripts/finviz_monitor.py"])
-        
+
         _log_action(chat_id, user_id, "regenerate", {"target": target}, status="applied")
         return
 
@@ -373,6 +396,7 @@ def _handle_callback(update: dict) -> None:
             page = 1
             msg_text = message.get("text", "")
             import re
+
             m = re.search(r"Page (\d+)/", msg_text)
             if m:
                 try:
@@ -387,7 +411,9 @@ def _handle_callback(update: dict) -> None:
                 text=resolved_text,
                 buttons=resolved_buttons,
             )
-            _log_action(chat_id, user_id, "refresh", {"target": target, "page": page}, status="applied")
+            _log_action(
+                chat_id, user_id, "refresh", {"target": target, "page": page}, status="applied"
+            )
             answer_callback(callback_id, "Watchlist refreshed")
             return
         if (monitor_chat or live_chat) and not shared_chat and target == "signals":
@@ -407,6 +433,35 @@ def _handle_callback(update: dict) -> None:
 
     if action == "noop":
         answer_callback(callback_id)
+        return
+
+    if action == "shadow_audit":
+        target = payload or "market"
+        if target not in {"market", "signals", "watchlist", "paper_run"}:
+            answer_callback(callback_id, "Unsupported audit target")
+            return
+        resolved, snapshot = load_monitor_snapshot()
+        if not resolved or not snapshot:
+            answer_callback(callback_id, "No shadow audit available")
+            return
+        if target == "market":
+            brief, buttons = build_market_message(resolved)
+        elif target == "watchlist":
+            brief, buttons = build_watchlist_message(resolved)
+        elif target == "signals":
+            brief, buttons = build_signals_message(resolved), REFRESH_BUTTONS["signals"]
+        else:
+            brief, buttons = build_paper_run_message(resolved), REFRESH_BUTTONS["paper_run"]
+        edit_message(
+            chat_id=chat_id,
+            message_id=message.get("message_id"),
+            text=brief,
+            buttons=buttons,
+        )
+        answer_callback(callback_id, "Shadow audit loaded")
+        _log_action(
+            chat_id, user_id, "shadow_audit", {"target": target, "date": resolved}, status="applied"
+        )
         return
 
     if action == "watchlist_page":
@@ -453,17 +508,23 @@ def _handle_callback(update: dict) -> None:
 
     if action == "approve_trade":
         result = approve_intent(state.date, payload, chat_id, user_id, callback_id)
-        answer_callback(callback_id, "approved" if result.get("ok") else str(result.get("reason", "error")))
+        answer_callback(
+            callback_id, "approved" if result.get("ok") else str(result.get("reason", "error"))
+        )
         _send_view(chat_id, "portfolio", "", interactive=True)
         return
     if action == "reject_trade":
         result = reject_intent(state.date, payload, chat_id, user_id, callback_id)
-        answer_callback(callback_id, "rejected" if result.get("ok") else str(result.get("reason", "error")))
+        answer_callback(
+            callback_id, "rejected" if result.get("ok") else str(result.get("reason", "error"))
+        )
         _send_view(chat_id, "signals", "", interactive=True)
         return
     if action == "snooze_trade":
         result = snooze_intent(state.date, payload, chat_id, user_id, callback_id)
-        answer_callback(callback_id, "snoozed" if result.get("ok") else str(result.get("reason", "error")))
+        answer_callback(
+            callback_id, "snoozed" if result.get("ok") else str(result.get("reason", "error"))
+        )
         _send_view(chat_id, "signals", "", interactive=True)
         return
     if action == "close_position":
@@ -481,12 +542,16 @@ def _handle_callback(update: dict) -> None:
             )
         answer_callback(
             callback_id,
-            "confirm close" if result.get("confirm_required") else str(result.get("reason", "error")),
+            "confirm close"
+            if result.get("confirm_required")
+            else str(result.get("reason", "error")),
         )
         return
     if action == "confirm_close":
         result = close_position(state.date, payload, chat_id, user_id, callback_id, confirm=True)
-        answer_callback(callback_id, "closed" if result.get("ok") else str(result.get("reason", "error")))
+        answer_callback(
+            callback_id, "closed" if result.get("ok") else str(result.get("reason", "error"))
+        )
         _send_view(chat_id, "portfolio", "", interactive=True)
         return
 

@@ -42,6 +42,7 @@ from src.utils.market_context_live import (
 from src.analytics.paper_analytics_engine import compute_daily_analytics
 from src.analytics.simulation_pack import run_simulation_pack
 from src.paper.analytics_io import build_analytics_inputs, save_daily_analytics
+from src.signals.signal_engine import calculate_dynamic_sizing_factor
 
 logging.basicConfig(
     level=logging.INFO,
@@ -185,11 +186,14 @@ def scan_combo_signals(combo_name: str, universe: list) -> list:
 
     T1 = prod_cfg.get("tier1_strategy", {})
     T2 = prod_cfg.get("tier2_filters", {})
+    T3 = prod_cfg.get("tier3_fixed", prod_cfg.get("tier3_risk", {}))
     MR = prod_cfg.get("market_regime", {})
+    e25_enabled = bool(T3.get("use_dynamic_extension_sizing", False))
 
     MIN_RVOL = tier2.get("min_rvol", T2.get("min_rvol", 0.7))
     MIN_ADR = tier2.get("min_adr", T2.get("min_adr", 1.5))
     MAX_DIST_SMA20 = tier2.get("max_dist_sma20", T2.get("max_dist_sma20", 12.0))
+    EFFECTIVE_MAX_DIST = 50.0 if e25_enabled else MAX_DIST_SMA20
     MIN_CONSOL = tier2.get(
         "min_consolidation_days", T2.get("min_consolidation_days", 3)
     )
@@ -201,8 +205,13 @@ def scan_combo_signals(combo_name: str, universe: list) -> list:
     REQ_SPY = MR.get("require_spy_above_sma50", True)
 
     logger.info(
-        f"    Filters: RVOL>={MIN_RVOL}, ADR>={MIN_ADR}, Dist<={MAX_DIST_SMA20}, DV>={MIN_DV / 1e6:.0f}M"
+        f"    Filters: RVOL>={MIN_RVOL}, ADR>={MIN_ADR}, Dist<={EFFECTIVE_MAX_DIST}, DV>={MIN_DV / 1e6:.0f}M"
     )
+    if e25_enabled:
+        logger.info(
+            "    E25 dynamic extension sizing: ENABLED "
+            f"({T3.get('dynamic_extension_sizing', {}).get('version', 'unknown')})"
+        )
 
     all_closes = {}
     for ticker in universe:
@@ -255,7 +264,7 @@ def scan_combo_signals(combo_name: str, universe: list) -> list:
                 continue
             if adr_val < MIN_ADR:
                 continue
-            if last_dist > MAX_DIST_SMA20:
+            if last_dist > EFFECTIVE_MAX_DIST:
                 continue
             if dollar_vol < MIN_DV:
                 continue
@@ -283,6 +292,13 @@ def scan_combo_signals(combo_name: str, universe: list) -> list:
             stop_price = round(last_close - stop_dist, 4)
             tp1_price = round(last_close + stop_dist * T1.get("tp1_r", 1.75), 4)
             tp2_price = round(last_close + stop_dist * T1.get("tp2_r", 3.75), 4)
+            raw_risk_budget = float(T1.get("risk_dollars", 1000))
+            e25_cfg = {"tier3_fixed": T3}
+            sizing_factor, sizing_reason = calculate_dynamic_sizing_factor(
+                last_dist, adr_val, e25_cfg
+            )
+            adjusted_risk_budget = round(raw_risk_budget * sizing_factor, 2)
+            shares = int(adjusted_risk_budget / stop_dist) if stop_dist > 0 else 0
 
             signals.append(
                 {
@@ -301,7 +317,14 @@ def scan_combo_signals(combo_name: str, universe: list) -> list:
                     "stop_price": stop_price,
                     "tp1": tp1_price,
                     "tp2": tp2_price,
-                    "risk_$": T1.get("risk_dollars", 1000),
+                    "risk_$": adjusted_risk_budget,
+                    "shares": shares,
+                    "initial_size": shares,
+                    "risk_budget_usd": adjusted_risk_budget,
+                    "raw_risk_budget_usd": raw_risk_budget,
+                    "risk_per_share": round(stop_dist, 4),
+                    "sizing_factor": sizing_factor,
+                    "sizing_reason": sizing_reason,
                     "screener": screener_name,
                     "signal_type": signal_type,
                 }
@@ -422,9 +445,13 @@ def generate_watchlist_alerts(universe: list, today: str) -> list:
     prod_cfg = json.load(open(ROOT_A / "config" / "production_config.json"))
 
     T2_A = prod_cfg.get("tier2_filters", {})
+    T3_A = prod_cfg.get("tier3_fixed", prod_cfg.get("tier3_risk", {}))
     MIN_RVOL_A = T2_A.get("min_rvol", 0.7)
     MIN_ADR_A = T2_A.get("min_adr", 1.5)
     MAX_DIST_A = T2_A.get("max_dist_sma20", 12.0)
+    EFFECTIVE_MAX_DIST_A = (
+        50.0 if T3_A.get("use_dynamic_extension_sizing", False) else MAX_DIST_A
+    )
     MIN_DV_A = T2_A.get("min_dollar_volume", 10_000_000)
     MIN_VOL_A = T2_A.get("min_volume", 100_000)
     MIN_RS_A = T2_A.get("min_rs_percentile", 70.0)
@@ -502,7 +529,7 @@ def generate_watchlist_alerts(universe: list, today: str) -> list:
             )  # >0 = debajo de SMA20
             gap_rvol = max(0.0, MIN_RVOL_A - rvol_a)
             gap_adr = max(0.0, MIN_ADR_A - adr_a)
-            gap_dist = max(0.0, dist_a - MAX_DIST_A)  # >0 = demasiado extendido
+            gap_dist = max(0.0, dist_a - EFFECTIVE_MAX_DIST_A)  # >0 = demasiado extendido
             gap_dv_M = max(0.0, (MIN_DV_A - dv_a) / 1e6)
             gap_rs = max(0.0, MIN_RS_A - rs_pct_a)
 
@@ -513,8 +540,8 @@ def generate_watchlist_alerts(universe: list, today: str) -> list:
                 blockers.append(f"rvol({rvol_a:.2f}<{MIN_RVOL_A})")
             if adr_a < MIN_ADR_A:
                 blockers.append(f"adr({adr_a:.2f}<{MIN_ADR_A})")
-            if dist_a > MAX_DIST_A:
-                blockers.append(f"dist({dist_a:.1f}>{MAX_DIST_A})")
+            if dist_a > EFFECTIVE_MAX_DIST_A:
+                blockers.append(f"dist({dist_a:.1f}>{EFFECTIVE_MAX_DIST_A})")
             if dv_a < MIN_DV_A:
                 blockers.append(f"dv({dv_a / 1e6:.0f}M<{MIN_DV_A / 1e6:.0f}M)")
             if rs_pct_a < MIN_RS_A:

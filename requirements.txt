@@ -20,3 +20,4 @@ python-dotenv
 colorlog
 openbb
 rich
+pytest

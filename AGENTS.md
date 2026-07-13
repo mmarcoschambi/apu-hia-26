@@ -103,6 +103,7 @@ No comenzar sin ID de issue. No comenzar sin leer los criterios de aceptación.
   ```
 - Si los tests fallan: corregir y volver a probar iterativamente.
 - Los criterios de aceptación son **cuantitativos**: no cierra hasta que las métricas pasen.
+- PROHIBIDO usar `git commit --no-verify`. Si el hook falla, corregir el mensaje de commit, no bypassear el hook.
 
 ### Fase 3 — Cierre y Documentación
 ```bash

@@ -18,7 +18,9 @@ class RiskManager:
                  risk_fraction: float = 0.005, 
                  max_exposure_fraction: float = 0.25,
                  buying_power: Optional[float] = None,
-                 allow_fractional_shares: bool = True):
+                 allow_fractional_shares: bool = True,
+                 max_allowed_stop_pct: Optional[float] = None,
+                 adr_high_threshold: Optional[float] = None):
         """
         Initialize the Risk Manager.
 
@@ -28,12 +30,35 @@ class RiskManager:
             max_exposure_fraction: Hard cap on nominal exposure per single asset (e.g., 0.25 for 25%).
             buying_power: Available buying power. Defaults to account_equity if None (Cash account).
             allow_fractional_shares: Enable fractional shares for small accounts (default: True).
+            max_allowed_stop_pct: Maximum allowed stop loss percentage (e.g. 0.08 for 8%). Read from config if None.
+            adr_high_threshold: ADR percentage threshold for high volatility cap. Read from config if None.
         """
         self.account_equity = account_equity
         self.risk_fraction = risk_fraction
         self.max_exposure_fraction = max_exposure_fraction
         self.buying_power = buying_power if buying_power is not None else account_equity
         self.allow_fractional_shares = allow_fractional_shares
+
+        # Cargar de config o usar fallback
+        if max_allowed_stop_pct is not None:
+            self.max_allowed_stop_pct = max_allowed_stop_pct
+        else:
+            try:
+                from src.config.dynamic_config import load_production_config
+                cfg = load_production_config()
+                self.max_allowed_stop_pct = cfg.get("risk_gate", {}).get("max_allowed_stop_pct", 0.08)
+            except Exception:
+                self.max_allowed_stop_pct = 0.08
+
+        if adr_high_threshold is not None:
+            self.adr_high_threshold = adr_high_threshold
+        else:
+            try:
+                from src.config.dynamic_config import load_production_config
+                cfg = load_production_config()
+                self.adr_high_threshold = cfg.get("tier3_risk", {}).get("adr_high", 5.0)
+            except Exception:
+                self.adr_high_threshold = 5.0
 
     def calculate_position_size(self, 
                                 entry_price: float, 
@@ -68,11 +93,10 @@ class RiskManager:
         # --- MODIFICACIÓN 1: STOP LOSS SANITY CHECK (Anti-Bagholding) ---
         # Rechazar trades con stops demasiado amplios (ineficientes)
         stop_loss_pct = abs(entry_price - stop_price) / entry_price
-        MAX_ALLOWED_STOP_PCT = 0.08  # 8% Hard Cap institucional
         
-        if stop_loss_pct > MAX_ALLOWED_STOP_PCT:
-            logger.warning(f"Trade Rejected: Stop Loss of {stop_loss_pct:.2%} exceeds max allowed {MAX_ALLOWED_STOP_PCT:.2%}")
-            return self._zero_allocation(f"Stop Loss too wide ({stop_loss_pct:.2%} > {MAX_ALLOWED_STOP_PCT:.2%})")
+        if stop_loss_pct > self.max_allowed_stop_pct:
+            logger.warning(f"Trade Rejected: Stop Loss of {stop_loss_pct:.2%} exceeds max allowed {self.max_allowed_stop_pct:.2%}")
+            return self._zero_allocation(f"Stop Loss too wide ({stop_loss_pct:.2%} > {self.max_allowed_stop_pct:.2%})")
 
         # 3. Monetary Risk Calculation (R)
         # R = account_equity * risk_fraction * market_regime_factor
@@ -116,8 +140,8 @@ class RiskManager:
         # 7. Hard Risk Constraints
         
         # --- MODIFICACIÓN 2: EXPOSICIÓN DINÁMICA basada en VOLATILIDAD (ADR Tiering) ---
-        # Si la acción es muy volátil (ADR > 5%), reducimos exposición máxima a la mitad
-        if adr_percent > 5.0:
+        # Si la acción es muy volátil (ADR > adr_high_threshold), reducimos exposición máxima a la mitad
+        if adr_percent > self.adr_high_threshold:
             dynamic_max_exposure = self.max_exposure_fraction * 0.5  # Ej: 25% -> 12.5%
             limit_reason = "High Volatility Cap"
         else:

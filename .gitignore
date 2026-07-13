@@ -79,3 +79,5 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+# Local AI runtime state
+.atl/

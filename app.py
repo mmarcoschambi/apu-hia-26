@@ -1134,14 +1134,95 @@ def _load_canonical_backtest_results():
     return trades, equity, metrics
 
 
+def _list_available_backtest_tags() -> list[str]:
+    base = Path("outputs/backtests")
+    if not base.exists():
+        return []
+    # Find all *_metrics.json files
+    metrics_files = list(base.glob("*_metrics.json"))
+    
+    ignored_files = {
+        "backtest_metrics.json", 
+        "rejection_stats.json", 
+        "e25_validation_report.json", 
+        "e22_sector_filter_report.json", 
+        "e23_regime_switch_report.json", 
+        "e24_switch_refinement_report.json",
+        "variant_e_validation_report.json",
+        "concentration_stress_test_report.json"
+    }
+    
+    # Sort files by modification time (newest first)
+    metrics_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+    
+    tags = []
+    for f in metrics_files:
+        name = f.name
+        if name in ignored_files:
+            continue
+        # Extract tag
+        if name.endswith("_metrics.json"):
+            tag = name[:-13]  # Len("_metrics.json") is 13
+            tags.append(tag)
+    return tags
+
+
+def _load_tagged_backtest_results(tag: str = None):
+    base = Path("outputs/backtests")
+    if tag is None or tag == "Canonical Active":
+        trades_path = base / "complete_trades_clean.csv"
+        equity_path = base / "equity_curve.csv"
+        metrics_path = base / "backtest_metrics.json"
+    else:
+        trades_path = base / f"{tag}_trades.csv"
+        equity_path = base / f"{tag}_equity.csv"
+        metrics_path = base / f"{tag}_metrics.json"
+        
+        # Fallbacks for other formats (like vectorbt outputs)
+        if not trades_path.exists():
+            if (base / f"{tag}_results.csv").exists():
+                trades_path = base / f"{tag}_results.csv"
+            elif (base / f"{tag}.csv").exists():
+                trades_path = base / f"{tag}.csv"
+            
+    trades = pd.read_csv(trades_path) if trades_path.exists() else pd.DataFrame()
+    equity = pd.read_csv(equity_path) if equity_path.exists() else pd.DataFrame()
+    metrics = {}
+    if metrics_path.exists():
+        try:
+            with open(metrics_path, "r") as f:
+                metrics = json.load(f)
+        except Exception:
+            metrics = {}
+    return trades, equity, metrics
+
+
 def _render_canonical_portfolio_tab():
-    trades, equity, metrics = _load_canonical_backtest_results()
+    tags = _list_available_backtest_tags()
+    
+    st.subheader("📊 Analizador y Selector de Backtests")
+    st.caption("Visualiza y compara tus diferentes calibraciones de backtest e históricos directamente.")
+
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        selected_tag = st.selectbox(
+            "Seleccionar Ejecución de Backtest",
+            ["Canonical Active", *tags],
+            index=0,
+            help="Carga los archivos con tag específico de outputs/backtests/"
+        )
+    with col2:
+        st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+        if st.button("🔄 Refrescar Ejecuciones", use_container_width=True):
+            st.rerun()
+
+    trades, equity, metrics = _load_tagged_backtest_results(None if selected_tag == "Canonical Active" else selected_tag)
     
     if trades.empty:
-        st.info("No hay resultados de backtest canónico. Ejecuta uno desde el sidebar (⚡ Run Scripts).")
+        st.info("No hay resultados de backtest para esta ejecución. Asegúrate de haber guardado los archivos con el tag correspondiente en outputs/backtests/.")
         return
 
-    st.subheader("Canonical Backtest Summary (Plan B)")
+    st.subheader(f"Backtest: {selected_tag}")
     st.caption("Estrategia: Portfolio Manager con límites sectoriales y riesgo fijo (2.8%)")
 
     # Metrics Row
@@ -1153,6 +1234,48 @@ def _render_canonical_portfolio_tab():
         ("Win Rate", f"{metrics.get('win_rate', 0)}%", None),
         ("Total Trades", f"{metrics.get('total_trades', 0)}", None),
     ])
+
+    # Load and display robustness report if it exists
+    robustness = {}
+    if selected_tag == "Canonical Active":
+        robust_path = Path("outputs/backtests/backtest_robustness.json")
+    else:
+        robust_path = Path("outputs/backtests") / f"{selected_tag}_robustness.json"
+        
+    if robust_path.exists():
+        try:
+            with open(robust_path, "r") as f:
+                robustness = json.load(f)
+        except Exception:
+            pass
+            
+    if robustness:
+        st.markdown("")
+        with st.expander("🛡️ Métricas Avanzadas de Robustez (Bootstrap & Drawdown)", expanded=False):
+            risk_adj = robustness.get("risk_adjusted", {})
+            dd_metrics = robustness.get("drawdown_metrics", {})
+            bootstrap = robustness.get("bootstrap_percentiles", {})
+            prob_loss = robustness.get("probability_of_loss", 0.0)
+            
+            r_col1, r_col2, r_col3 = st.columns(3)
+            with r_col1:
+                st.markdown("**Ajuste por Riesgo (Sortino/Omega):**")
+                st.markdown(f"• **Sortino Ratio:** `{risk_adj.get('sortino', 0.0):.2f}`")
+                st.markdown(f"• **Omega Ratio:** `{risk_adj.get('omega', 0.0):.2f}`")
+                st.markdown(f"• **Calmar Ratio:** `{risk_adj.get('calmar', 0.0):.2f}`")
+                st.markdown(f"• **Tail Ratio:** `{risk_adj.get('tail_ratio', 0.0):.2f}`")
+            with r_col2:
+                st.markdown("**Estadísticas de Drawdown:**")
+                st.markdown(f"• **Avg Drawdown:** `-{dd_metrics.get('avg_dd_pct', 0.0):.2f}%`")
+                st.markdown(f"• **Max Drawdown Duration:** `{dd_metrics.get('dd_duration', 0)}` días")
+                st.markdown(f"• **Avg Drawdown Duration:** `{dd_metrics.get('avg_dd_duration', 0.0):.1f}` días")
+                st.markdown(f"• **Frecuencia Drawdown:** `{dd_metrics.get('dd_frequency', 0.0)*100:.1f}%`")
+            with r_col3:
+                st.markdown("**Simulaciones Bootstrap & Riesgo:**")
+                st.markdown(f"• **Probabilidad de Pérdida:** `{prob_loss*100:.1f}%`")
+                st.markdown(f"• **Retorno Medio Bootstrap:** `{bootstrap.get('mean', 0.0):.2f}%`")
+                st.markdown(f"• **Peor Escenario (P10):** `{bootstrap.get('p10', 0.0):.2f}%`")
+                st.markdown(f"• **Mejor Escenario (P90):** `{bootstrap.get('p90', 0.0):.2f}%`")
 
     # Equity Curve
     if not equity.empty:

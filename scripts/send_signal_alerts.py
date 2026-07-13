@@ -47,7 +47,157 @@ OUTPUT_DIR = PROJECT_ROOT / "outputs" / "live_signals"
 ALERTS_DIR = PROJECT_ROOT / "outputs" / "alerts"
 SENT_DIR = PROJECT_ROOT / "outputs" / "telegram_alerts"
 
+
+def _e25_bucket(dist_sma20: float) -> str:
+    if dist_sma20 <= 6.76:
+        return "Z1"
+    if dist_sma20 <= 10.0:
+        return "Z2"
+    if dist_sma20 <= 15.0:
+        return "Z3"
+    if dist_sma20 <= 25.0:
+        return "Z4"
+    if dist_sma20 <= 35.0:
+        return "Z5"
+    return "Z6"
+
+
+def _load_e25_cfg() -> dict:
+    try:
+        from src.config.dynamic_config import load_production_config
+
+        return load_production_config()
+    except Exception:
+        return {}
+
+
+def _e25_row(row: pd.Series | dict) -> dict:
+    from src.signals.signal_engine import calculate_dynamic_sizing_factor
+
+    cfg = _load_e25_cfg()
+    dist = float(
+        (row.get("dist_sma20") if hasattr(row, "get") else row.get("dist_sma20"))
+        or row.get("dist_sma20_pct", 0)
+        or 0
+    )
+    adr = float(
+        (row.get("adr_pct") if hasattr(row, "get") else row.get("adr_pct"))
+        or row.get("gate_adr_pct", 0)
+        or 0
+    )
+    factor, reason = calculate_dynamic_sizing_factor(dist, adr, cfg)
+    return {
+        "dist_sma20": round(dist, 2),
+        "adr_pct": round(adr, 2),
+        "sizing_factor": round(float(factor), 2),
+        "sizing_reason": reason,
+        "extension_bucket": _e25_bucket(dist),
+    }
+
+
 logger = logging.getLogger(__name__)
+
+import sqlite3
+
+def _get_dv(row, db_path=None) -> float:
+    if db_path is None:
+        db_path = str(PROJECT_ROOT / "data" / "ticker_cache.db")
+    dv = row.get("dollar_vol_M") or row.get("dollar_volume_m") or 0
+    if dv and dv > 0:
+        return float(dv)
+    # Fallback 1: calcular desde precio y volumen del CSV
+    price = row.get("entry_price") or row.get("close") or 0
+    avg_vol = row.get("avg_volume_20d") or row.get("rvol_baseline") or 0
+    if price and avg_vol:
+        return (float(price) * float(avg_vol)) / 1e6
+    # Fallback 2: consultar DB directamente
+    if db_path and Path(db_path).exists():
+        ticker = row.get("ticker")
+        if ticker:
+            try:
+                conn = sqlite3.connect(db_path)
+                r = conn.execute(
+                    "SELECT AVG(close * volume) / 1e6 FROM ohlcv_cache "
+                    "WHERE ticker=? ORDER BY date DESC LIMIT 20", (ticker,)
+                ).fetchone()
+                conn.close()
+                if r and r[0]:
+                    return float(r[0])
+            except Exception:
+                pass
+    return 0.0
+
+
+def build_shadow_audit_html(df, date, sector_map) -> str:
+    FINVIZ_DIR = PROJECT_ROOT / "outputs" / "paper_finviz"
+    # Separar Local-only vs Finviz-only
+    local_tickers = set(df["ticker"].tolist()) if not df.empty else set()
+    # Cargar snapshot Finviz del día para obtener el universo completo
+    snapshot_path = FINVIZ_DIR / date / "snapshot.json"
+    snapshot_missing = not snapshot_path.exists()
+    finviz_tickers = set()
+    if not snapshot_missing:
+        try:
+            snap = json.loads(snapshot_path.read_text())
+            finviz_tickers = set(snap.get("watchlist_detail", {}).keys())
+        except Exception:
+            pass
+    
+    local_only = local_tickers - finviz_tickers
+    finviz_only = finviz_tickers - local_tickers
+    overlap = local_tickers & finviz_tickers
+    
+    if not df.empty:
+        shadow_signals = df[df["ticker"].apply(
+            lambda t: sector_map.get(t) in ("XLK", "XLC")
+        )]
+    else:
+        shadow_signals = pd.DataFrame()
+    
+    # Detectar variables en cero
+    zero_dv = []
+    if not df.empty:
+        zero_dv = df[df.apply(lambda r: _get_dv(r) == 0, axis=1)]["ticker"].tolist()
+        
+    notes = []
+    if snapshot_missing:
+        notes.append(
+            f"⚠️ snapshot.json NO disponible (esperado: outputs/paper_finviz/{date}/snapshot.json — correr sync_from_vps.sh)"
+        )
+    if zero_dv:
+        notes.append(f"Revisar variables en cero (DV: 0): {', '.join(zero_dv[:5])}")
+    audit_note = " | ".join(notes)
+    
+    header = f"🕵️ <b>SHADOW / E25 AUDIT | {date}</b>\n"
+    if snapshot_missing:
+        stats = (
+            f"❌ <b>Snapshot de Finviz NO disponible.</b>\n"
+            f"No se puede calcular Overlap o Finviz-only.\n"
+            f"Mostrando solo señales locales ({len(local_tickers)} en total).\n\n"
+        )
+    else:
+        stats = (
+            f"Candidatos Finviz-only: {len(finviz_only)} | Overlap: {len(overlap)}\n\n"
+            f"<b>Local Divergences:</b> {', '.join(sorted(local_only)[:8]) if local_only else 'None'}\n"
+            f"<b>Finviz Divergences:</b> {', '.join(sorted(finviz_only)[:8]) if finviz_only else 'None'}\n"
+        )
+    
+    # Top shadow signals
+    signals_html = "\n<b>Shadow Signals (Testing):</b>\n"
+    if not shadow_signals.empty:
+        for _, row in shadow_signals.head(5).iterrows():
+            sec = sector_map.get(row["ticker"], "OTHER")
+            e25 = _e25_row(row)
+            signals_html += (
+                f"• [<code>{sec}-Only</code>] <b>{row['ticker']}</b> | "
+                f"Score: {row['entry_score']:.2f} | Price: ${row.get('entry_price', 0):.2f}\n"
+                f"  Status: {row.get('waiting_for', 'OK')} | Blocker: <i>{row.get('primary_reason', '') or row.get('waiting_for', '')}</i>\n"
+            )
+    else:
+        signals_html += "No shadow signals above threshold.\n"
+        
+    footer = f"\n⚠️ <i>Nota Audit: {audit_note}</i>" if audit_note else ""
+    return header + stats + signals_html + footer
 
 
 def _flatten_metrics(df: pd.DataFrame) -> pd.DataFrame:
@@ -86,10 +236,17 @@ def load_signals(
     combined_path = OUTPUT_DIR / date / "combined.csv"
     if not combined_path.exists():
         # Retornar DF vacio con columnas minimas esperadas
-        return pd.DataFrame(columns=[
-            "ticker", "agent_name", "entry_score", "entry_price", 
-            "stop_loss", "rvol", "dollar_vol_M"
-        ])
+        return pd.DataFrame(
+            columns=[
+                "ticker",
+                "agent_name",
+                "entry_score",
+                "entry_price",
+                "stop_loss",
+                "rvol",
+                "dollar_vol_M",
+            ]
+        )
 
     try:
         df = pd.read_csv(combined_path)
@@ -101,7 +258,7 @@ def load_signals(
     if "entry_score" not in df.columns:
         df["entry_score"] = 0.5
     else:
-        df["entry_score"] = pd.to_numeric(df["entry_score"], errors='coerce').fillna(0.5)
+        df["entry_score"] = pd.to_numeric(df["entry_score"], errors="coerce").fillna(0.5)
 
     if agents:
         df = df[df["agent_name"].isin(agents)]
@@ -164,13 +321,14 @@ def build_alert_text(
     for _, row in df_show.iterrows():
         tier2 = str(row.get("tier2_filter", "passed"))[:20]
         price = row.get("entry_price", 0)
+        e25 = _e25_row(row)
         lines.append(
             f"  {row['ticker']:<8} {row['agent_name']:<28} "
             f"{row['entry_score']:<8.3f} "
             f"{price:<10.2f} "
             f"{row.get('rvol', 0):<7.2f} "
-            f"{row.get('adr_pct', 0):<7.2f} "
-            f"{row.get('dist_sma20', 0):<7.2f} "
+            f"{e25['adr_pct']:<7.2f} "
+            f"{e25['dist_sma20']:<7.2f} "
             f"{tier2}"
         )
 
@@ -183,10 +341,11 @@ def build_alert_text(
         lines.append("\n  TOP CANDIDATES (score >= 0.7):")
         for _, row in high_score.iterrows():
             price = row.get("entry_price", 0)
+            e25 = _e25_row(row)
             lines.append(
                 f"    ★ {row['ticker']}  score={row['entry_score']:.3f}  "
                 f"price=${price:.2f}  rvol={row.get('rvol', 0):.1f}x  "
-                f"dv={row.get('dollar_vol_M', 0):.0f}M"
+                f"dv={row.get('dollar_vol_M', 0):.0f}M  Dist={e25['dist_sma20']:+.1f}%  SF={e25['sizing_factor']:.2f}"
             )
 
     lines.append(f"\n{sep}")
@@ -195,6 +354,7 @@ def build_alert_text(
 
 
 from src.utils.sector_rotation import get_ticker_sector_mapping
+
 
 def build_telegram_html(
     df: pd.DataFrame,
@@ -210,12 +370,12 @@ def build_telegram_html(
     import html
 
     # Header
-    title = f"🚀 <b>SIGNAL ALERTS | {date}</b>"
+    title = f"🟢 <b>SIGNAL ALERTS | {date}</b>"
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     disclaimer = ""
     if show_disclaimer:
         disclaimer = "\n⚠️ <b>MANUAL REVIEW:</b> <i>Raw finviz_live candidates; validar Radar Sectorizado + Live Trigger antes de operar.</i>\n"
-    
+
     header = f"{title}\n<i>Generated: {timestamp}</i>\n{disclaimer}"
 
     if df.empty:
@@ -258,24 +418,11 @@ def build_telegram_html(
     agents_summary = "\n🤖 <b>Agents:</b>\n"
     for agent, grp in df_filtered.groupby("agent_name"):
         agents_summary += (
-            f"• <code>{agent}</code>: {len(grp)} signals "
-            f"(top: {grp['entry_score'].max():.3f})\n"
+            f"• <code>{agent}</code>: {len(grp)} signals (top: {grp['entry_score'].max():.3f})\n"
         )
 
     if summary_only:
         return header + stats + agents_summary
-
-    # Helper para Dollar Volume Fallback
-    def _get_dv(row):
-        dv = row.get("dollar_vol_M")
-        if dv is None or dv == 0:
-            dv = row.get("dollar_volume_m")
-        if dv is None or dv == 0:
-            # Fallback calculation: price * avg_volume_20d / 1e6
-            price = row.get("entry_price", 0)
-            avg_vol = row.get("avg_volume_20d", 0)
-            dv = (price * avg_vol) / 1e6
-        return dv or 0
 
     # Helper para Precio Sospechoso
     def _is_suspicious(row):
@@ -283,7 +430,7 @@ def build_telegram_html(
         close = row.get("close", 0)
         if close > 0:
             diff = abs(price - close) / close
-            if diff > 0.15: # > 15% diff vs close
+            if diff > 0.15:  # > 15% diff vs close
                 return True
         return False
 
@@ -297,25 +444,22 @@ def build_telegram_html(
             price = row.get("entry_price", 0)
             price_flag = " ⚠️" if _is_suspicious(row) else ""
             sec = sector_map.get(ticker, "OTHER")
+            if sec in ("XLK", "XLC"):
+                continue
             dv = _get_dv(row)
-            
+            e25 = _e25_row(row)
+
             # Estado y Blockers
-            waiting = row.get("waiting_for", "OK")
-            blocker = row.get("primary_reason", "")
+            waiting = html.escape(str(row.get("waiting_for", "OK")))
+            blocker = html.escape(str(row.get("primary_reason", "")))
             if not blocker and waiting != "OK":
                 blocker = waiting
-            
-            # Format shadow vs observation tags explicitly
-            if sec == "XLK":
-                tag = f"⚡ <b>[SHADOW: XLK-Only] {ticker}</b>"
-            elif sec == "XLC":
-                tag = f"👁️ <b>[OBSERVATION: XLC] {ticker}</b>"
-            else:
-                tag = f"⭐ <b>{ticker}</b> ({sec})"
-            
+
+            tag = f"⭐ <b>{ticker}</b> ({sec})"
+
             top_candidates += (
                 f"{tag} | Score: {row['entry_score']:.3f}{price_flag}\n"
-                f"   Price: ${price:.2f} | Dist20: {row.get('dist_sma20', 0):.1f}% | DV: {dv:.0f}M\n"
+                f"   Price: ${price:.2f} | Dist20: {e25['dist_sma20']:.1f}% | SF: {e25['sizing_factor']:.2f} | DV: {dv:.0f}M\n"
                 f"   Status: <b>{waiting}</b> | Blocker: <i>{blocker}</i>\n"
             )
 
@@ -333,11 +477,12 @@ def build_telegram_html(
     for _, row in df_show.iterrows():
         ticker = row["ticker"]
         dv = _get_dv(row)
+        e25 = _e25_row(row)
         table_content += (
             f"{ticker:<7} "
             f"{row['entry_score']:<6.3f} "
             f"{row.get('entry_price', 0):<8.2f} "
-            f"{row.get('dist_sma20', 0):<7.1f} "
+            f"{e25['dist_sma20']:<7.1f} "
             f"{dv:<4.0f}\n"
         )
     table_content += "</pre>"
@@ -348,16 +493,7 @@ def build_telegram_html(
         first_ticker = df_filtered.iloc[0]["ticker"]
         footer = f"\n🔗 <a href='https://finviz.com/quote.ashx?t={first_ticker}'>View {first_ticker} on Finviz</a>"
 
-    return (
-        header
-        + stats
-        + agents_summary
-        + top_candidates
-        + table_header
-        + table_content
-        + footer
-    )
-
+    return header + stats + agents_summary + top_candidates + table_header + table_content + footer
 
 
 def export_md(df: pd.DataFrame, date: str, output_dir: Path) -> Path:
@@ -384,12 +520,8 @@ def export_md(df: pd.DataFrame, date: str, output_dir: Path) -> Path:
 
     lines.append("## All Signals")
     lines.append("")
-    lines.append(
-        "| Ticker | Agent | Score | Price | RVOL | ADR% | Dist% | Tier2 Filter |"
-    )
-    lines.append(
-        "|--------|-------|-------|-------|------|------|-------|--------------|"
-    )
+    lines.append("| Ticker | Agent | Score | Price | RVOL | ADR% | Dist% | Tier2 Filter |")
+    lines.append("|--------|-------|-------|-------|------|------|-------|--------------|")
 
     for _, row in df.iterrows():
         lines.append(
@@ -442,6 +574,18 @@ def _save_snapshot(
         "top_candidates": top_candidates,
         "signals": df.head(50).to_dict(orient="records") if not df.empty else [],
     }
+    if not df.empty:
+        e25_rows = [_e25_row(row) for _, row in df.head(50).iterrows()]
+        snapshot["e25_summary"] = {
+            "signals": len(df),
+            "avg_sizing_factor": round(sum(r["sizing_factor"] for r in e25_rows) / len(e25_rows), 2)
+            if e25_rows
+            else 1.0,
+            "bucket_counts": {
+                bucket: sum(1 for r in e25_rows if r["extension_bucket"] == bucket)
+                for bucket in ["Z1", "Z2", "Z3", "Z4", "Z5", "Z6"]
+            },
+        }
     snapshot_path.write_text(json.dumps(snapshot, indent=2, default=str))
     return snapshot_path
 
@@ -449,7 +593,7 @@ def _save_snapshot(
 def _build_top_candidates(df: pd.DataFrame, limit: int = 5) -> list[dict]:
     if df.empty or "entry_score" not in df.columns:
         return []
-    
+
     high = df[df["entry_score"] >= 0.7].head(limit)
     result = []
     for _, row in high.iterrows():
@@ -471,13 +615,14 @@ def _build_top_candidates(df: pd.DataFrame, limit: int = 5) -> list[dict]:
 def _log_shadow_ledger(df: pd.DataFrame, date: str) -> None:
     try:
         from src.utils.sector_rotation import get_ticker_sector_mapping
+
         tickers = df["ticker"].unique().tolist() if not df.empty else []
         sector_map = get_ticker_sector_mapping(tickers)
-        
+
         ledger_dir = PROJECT_ROOT / "outputs" / "shadow_theme_filter"
         ledger_dir.mkdir(parents=True, exist_ok=True)
         ledger_file = ledger_dir / "shadow_audit_ledger.jsonl"
-        
+
         logged_count = 0
         with open(ledger_file, "a") as f:
             for _, row in df.iterrows():
@@ -485,10 +630,10 @@ def _log_shadow_ledger(df: pd.DataFrame, date: str) -> None:
                 sec = sector_map.get(ticker, "OTHER")
                 if sec not in ("XLK", "XLC"):
                     continue
-                
+
                 # Check if variant E would accept
                 status = "SHADOW" if sec == "XLK" else "OBSERVATION"
-                
+
                 # Simple dict matching shadow_logger schema
                 entry = {
                     "timestamp": datetime.now().isoformat(),
@@ -500,16 +645,22 @@ def _log_shadow_ledger(df: pd.DataFrame, date: str) -> None:
                     "theme_above_sma20": True,
                     "theme_dist": 0.0,
                     "sector_etf_ok": True if sec == "XLK" else False,
-                    "sector_dist": float(row.get("dist_sma20", 0.0)) / 100.0 if row.get("dist_sma20") is not None else 0.0,
+                    "sector_dist": float(row.get("dist_sma20", 0.0)) / 100.0
+                    if row.get("dist_sma20") is not None
+                    else 0.0,
                     "theme_vs_sector_20d": 0.0,
                     "variant_e_would_accept": True,
                     "signal_accepted_by_router": True,
-                    "entry_price": float(row.get("entry_price", 0.0)) if row.get("entry_price") is not None else 0.0,
-                    "stop_price": float(row.get("stop_loss", 0.0)) if row.get("stop_loss") is not None else 0.0,
+                    "entry_price": float(row.get("entry_price", 0.0))
+                    if row.get("entry_price") is not None
+                    else 0.0,
+                    "stop_price": float(row.get("stop_loss", 0.0))
+                    if row.get("stop_loss") is not None
+                    else 0.0,
                     "fwd_5d": None,
                     "fwd_10d": None,
                     "fwd_20d": None,
-                    "source": "live_promoter"
+                    "source": "live_promoter",
                 }
                 f.write(json.dumps(entry) + "\n")
                 logged_count += 1
@@ -524,31 +675,21 @@ def main():
     parser.add_argument("--date", type=str, default=None, help="Scan date (YYYY-MM-DD)")
     parser.add_argument("--agents", nargs="+", help="Filter by agent names")
     parser.add_argument("--tickers", nargs="+", help="Filter by tickers")
-    parser.add_argument(
-        "--min-score", type=float, default=0.0, help="Min entry_score filter"
-    )
+    parser.add_argument("--min-score", type=float, default=0.0, help="Min entry_score filter")
     parser.add_argument("--top", type=int, default=0, help="Show only top N signals")
-    parser.add_argument(
-        "--summary-only", action="store_true", help="Show only agent summary"
-    )
-    parser.add_argument(
-        "--export-md", action="store_true", help="Export to markdown file"
-    )
-    parser.add_argument(
-        "--telegram", action="store_true", help="Send alert via Telegram"
-    )
+    parser.add_argument("--summary-only", action="store_true", help="Show only agent summary")
+    parser.add_argument("--export-md", action="store_true", help="Export to markdown file")
+    parser.add_argument("--telegram", action="store_true", help="Send alert via Telegram")
     parser.add_argument(
         "--auto-threshold",
         type=float,
         default=0.70,
         help="Min top score required to send the auto summary",
     )
-    parser.add_argument(
-        "--no-auto", action="store_true", help="Disable auto summary message"
-    )
-    parser.add_argument(
-        "--no-manual", action="store_true", help="Disable manual detail message"
-    )
+    parser.add_argument("--no-auto", action="store_true", help="Disable auto summary message")
+    parser.add_argument("--no-manual", action="store_true", help="Disable manual detail message")
+    parser.add_argument("--shadow-only", action="store_true", help="Solo enviar shadow audit")
+    parser.add_argument("--main-only", action="store_true", help="Solo enviar sistema principal")
     args = parser.parse_args()
 
     date = args.date or datetime.now().strftime("%Y-%m-%d")
@@ -579,16 +720,24 @@ def main():
         print(f"\n  📄 Alert exported to: {path}")
 
     if args.telegram:
-        filtered = df[df["entry_score"] >= args.min_score] if not df.empty else df
-        agents_list = (
-            sorted(filtered["agent_name"].unique().tolist())
-            if not filtered.empty
-            else []
-        )
-        top_candidates = _build_top_candidates(filtered)
+        # Resolve sector mapping to separate main/shadow
+        from src.utils.sector_rotation import get_ticker_sector_mapping
+        tickers = df["ticker"].unique().tolist() if not df.empty else []
+        sector_map = get_ticker_sector_mapping(tickers)
+
+        shadow_chat = os.getenv("TELEGRAM_CHAT_ID_SHADOW") or os.getenv("TELEGRAM_CHAT_ID")
+        main_chat = os.getenv("TELEGRAM_CHAT_ID")
+
+        # Let's filter out XLK/XLC for the main flow
+        main_df = df[~df["ticker"].apply(lambda t: sector_map.get(t) in ("XLK", "XLC"))] if not df.empty else df
+
+        # Determine signals above score thresholds for MAIN
+        main_filtered = main_df[main_df["entry_score"] >= args.min_score] if not main_df.empty else main_df
+        agents_list = sorted(main_filtered["agent_name"].unique().tolist()) if not main_filtered.empty else []
+        top_candidates = _build_top_candidates(main_filtered)
 
         snapshot_path = _save_snapshot(
-            date, filtered, top_candidates, agents_list, args.top, args.min_score
+            date, main_filtered, top_candidates, agents_list, args.top, args.min_score
         )
 
         if filtered.empty:
