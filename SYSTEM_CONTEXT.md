@@ -41,21 +41,23 @@ El sistema es auto-consciente de su entorno (**Auto-Aware**):
 ---
 
 ## 4. Estado de Desarrollo y Roadmap
-
+ 
 ### 🟢 Activo en Producción / Live
 *   Exclusión activa de XLV en el scanner y backtests diarios.
 *   Auditoría diaria automatizada de señales aprobadas y rechazadas (`rejection_audit.csv`).
 *   Configuraciones leídas directamente de [production_config.json](file:///home/marcos/trade/momentum-v2/config/production_config.json).
-
+*   **Breadth Gate (Filtro de participación de mercado):** Libre de sesgo de selección y con cálculo de calentamiento de 252 días corregido y validado con tests.
+ 
 ### 🟡 En Desarrollo / Shadow Mode
 *   **Variante E (Divergencia Temática):** Monitoreo pasivo en shadow trading para acumular ~30-40 señales reales antes de su promoción.
-
+ 
 ### 🔴 Bloqueado / Pendiente
 *   **Dynamic Switch (Ataque/Defensa):** Bloqueado hasta implementar la precarga histórica del `health_score` en la base de datos local.
-
+ 
 ### ❌ Descartado Definitivamente
 *   **Modelos Random Forest tradicionales de sklearn:** Reemplazados por LightGBM debido a su velocidad de entrenamiento y feature importance nativa óptima para series de tiempo.
 *   **GridSearch:** Reemplazado por Optuna con algoritmos de poda (pruning) eficientes.
+*   **Salidas por salud de mercado (Fase-Aware y Binarias):** Se descartaron definitivamente tras simulación a 6 años (2019-2025). Multiplican la fricción transaccional por 4 (1,091 trades) y cortan las ganancias de líderes, degradando severamente el retorno (37.5% vs 222.3% baseline). El control macro debe limitarse al Sizing Gate de entrada.
 
 ---
 

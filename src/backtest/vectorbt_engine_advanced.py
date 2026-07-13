@@ -2939,10 +2939,9 @@ class AdvancedVectorBTEngine:
             db_path = project_root / "data" / "ticker_cache.db"
             conn = sqlite3.connect(str(db_path))
             df = pd.read_sql_query(
-                "SELECT ticker, date, close, high, low FROM ohlcv_cache WHERE ticker IN (%s) AND date BETWEEN ? AND ? ORDER BY ticker, date"
-                % ",".join(["?"] * len(tickers)),
+                "SELECT ticker, date, close, high, low FROM ohlcv_cache WHERE date BETWEEN ? AND ? ORDER BY ticker, date",
                 conn,
-                params=tickers + [fetch_start, fetch_end],
+                params=[fetch_start, fetch_end],
             )
             conn.close()
 
@@ -2956,39 +2955,34 @@ class AdvancedVectorBTEngine:
                 subset=["ticker", "date"], keep="last"
             )
 
-            if df["ticker"].nunique() < max(1, len(tickers) // 2):
+            db_tickers_count = df["ticker"].nunique()
+            if db_tickers_count < max(1, len(tickers) // 2):
                 logger.warning(
                     "Breadth data covers only %s/%s tickers for this run",
-                    df["ticker"].nunique(),
+                    db_tickers_count,
                     len(tickers),
                 )
 
-            close_pivot = df.pivot(index="date", columns="ticker", values="close").reindex(
-                entries.index
-            )
-            high_pivot = df.pivot(index="date", columns="ticker", values="high").reindex(
-                entries.index
-            )
-            low_pivot = df.pivot(index="date", columns="ticker", values="low").reindex(
-                entries.index
-            )
+            close_pivot = df.pivot(index="date", columns="ticker", values="close")
+            high_pivot = df.pivot(index="date", columns="ticker", values="high")
+            low_pivot = df.pivot(index="date", columns="ticker", values="low")
 
             if self.breadth_filter_mode == "nh_nl":
-                rolling_high = high_pivot.shift(1).rolling(252, min_periods=252).max()
-                rolling_low = low_pivot.shift(1).rolling(252, min_periods=252).min()
+                rolling_high = high_pivot.shift(1).rolling(252, min_periods=20).max()
+                rolling_low = low_pivot.shift(1).rolling(252, min_periods=20).min()
                 new_highs = (close_pivot >= rolling_high).sum(axis=1)
                 new_lows = (close_pivot <= rolling_low).sum(axis=1)
                 denom = (new_highs + new_lows).replace(0, np.nan)
-                ratio = (new_highs / denom).fillna(0.0)
-                gate = ratio >= self.breadth_filter_threshold
-                self.breadth_metric_series = ratio
+                ratio_series = (new_highs / denom).fillna(0.0)
             else:
                 sma20 = close_pivot.rolling(20, min_periods=20).mean()
                 above = (close_pivot > sma20).sum(axis=1)
                 universe_size = close_pivot.notna().sum(axis=1).replace(0, np.nan)
-                ratio = (above / universe_size).fillna(0.0)
-                gate = ratio >= self.breadth_filter_threshold
-                self.breadth_metric_series = ratio
+                ratio_series = (above / universe_size).fillna(0.0)
+
+            ratio = ratio_series.reindex(entries.index).fillna(0.0)
+            gate = ratio >= self.breadth_filter_threshold
+            self.breadth_metric_series = ratio
 
             self.breadth_stats = {
                 "mode": self.breadth_filter_mode,

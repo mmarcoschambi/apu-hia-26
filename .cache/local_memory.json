@@ -166,6 +166,22 @@
     "scope": "project",
     "topic_key": "vps-telegram-alerts-fix",
     "content": "Se resolvio la inactividad de finviz-live-promoter.service en el VPS corrigiendo la falta de privilegios (sudo) en el crontab para llamadas a systemctl de inicio/fin. En paralelo, se resolvio un bucle de reinicios (mas de 504.000 fallos) en el servicio telegram-bot-listener.service originado por caracteres CRLF de Windows en scripts/run_telegram_listener.sh. Se configuro git core.autocrlf=input de forma global en la maquina local para evitar que se reintroduzcan CRLF al hacer checkouts en WSL2, se convirtieron todos los shell scripts a LF, se redesplego y se reiniciaron ambos servicios con exito, liberando 2.2GB de espacio en el disco del VPS."
+  },
+  {
+    "timestamp": "2026-07-08T06:18:00Z",
+    "title": "Experimento y descarte de salidas por salud a 6 años",
+    "type": "discovery",
+    "scope": "project",
+    "topic_key": "market-health-exits-validation",
+    "content": "Se validó la inyección de salidas por salud de mercado (fase-aware y binarias) a 6 años (2019-2025) en el Russell 1000 PIT. Veredicto: NO-GO absoluto. Las salidas dinámicas degradan el retorno (37.5% vs 222.3% baseline) y cuadruplican la fricción transaccional (1091 trades). Se guardó el reporte detallado en sandbox_results.md y se actualizó SYSTEM_CONTEXT.md."
+  },
+  {
+    "timestamp": "2026-07-13T12:45:00Z",
+    "title": "Resolucion de bugs del Breadth Gate (Issue #43)",
+    "type": "bugfix",
+    "scope": "project",
+    "topic_key": "breadth-gate-bugs-fix",
+    "content": "Se resolvieron los dos bugs core del Breadth Gate (Exp#5b) en vectorbt_engine_advanced.py. Se removió el sesgo de selección en SQL consultando todo el universo cargado en la base de datos (no solo entries.columns). Se corrigió la pérdida de warm-up calculando las MAs y los máximos rodantes de 252 días sobre la matriz de pivot completa antes de reindexar por entries.index. Se agregó tests/test_breadth_gate.py con metodología TDD Red-to-Green, logrando que la suite completa de 34 tests pase en verde al 100%."
   }
 ]
 
