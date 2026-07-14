@@ -1,0 +1,551 @@
+[
+  {
+    "id_extraccion": "ATR-001",
+    "tickers": [
+      "VST"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Entrada impulsada por catalizador fundamental. VST presentó un movimiento explosivo ('explotó VST, se sostuvo') sugeriendo un Episodic Pivot o breakout con impulso de noticias. Ricky confirma: 'Si VST viene con catalizador'. El catalizador fue compartido previamente en el canal #catalizadores.",
+    "risk_management": "No se detalla stop loss ni tamaño de posición específico para VST en este trade. Sin embargo, el marco general del grupo indica riesgo máximo del 1% de la cuenta por operación y cierre de parciales en niveles de TP predefinidos (33% en cada TP).",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-002",
+    "tickers": [
+      "LTH"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "LTH destacada en la watchlist del día. El trader bpo28 señala: 'Vaya forma de respetar las medias que ha mostrado', indicando que el precio está respetando las medias móviles (EMA/SMA) como soporte dinámico, lo cual es una señal de tendencia alcista saludable según la metodología Minervini/Growth.",
+    "risk_management": "null",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-003",
+    "tickers": [
+      "ALAB"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "ALAB (Astera Labs, semiconductores para IA) mostró un patrón de doble suelo con posible ruptura alcista. kiliaitor identificó: 'Parece que ha hecho un doble suelo y puede romper hacia arriba'. Cristianara confirmó: 'Esa ALAB me gusta ahi' y la añadió a su watchlist. Posteriormente, river_trades señaló: '$ALAB en buen punto de compra, rompiendo el vwap de máximos', confirmando entrada en ruptura del AVWAP anclado a máximos. Ricky menciona '$ALAB' como seguimiento del setup.",
+    "risk_management": "null",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-004",
+    "tickers": [
+      "NNE"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "NNE (Nano Nuclear Energy) - Sector uranio caliente. Cristianara identifica: 'NNE en diario tiene un VCP brutal' (Volatility Contraction Pattern). Entrada técnica: 'entramos cuando recuperó el VWAP diario'. Cristianara también reporta: 'NNE rompió el AVWAP de IPO'. El patrón VCP con ruptura del AVWAP de IPO y recuperación del VWAP diario sirvieron como confirmaciones de entrada. bpo28 confirma: 'De lo poco que vi con volumen duro. Esa NNE y poco más'.",
+    "risk_management": "Ricky reporta: 'NNE que cae un 13% es un 1% de la cuenta', demostrando que el tamaño de posición se ajustó según el ADR/volatilidad para limitar el riesgo al 1% de la cuenta. Esto implica position sizing inversamente proporcional al ADR del activo.",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-005",
+    "tickers": [
+      "PDD"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Ricky confirma: 'Por cierto muy buena entrada en $PDD' y revela que la entrada fue impulsada por un catalizador de China: 'lo enviamos esta noche el catalizador de China, por eso entramos en NIO'. El setup combina la metodología de breakout con catalizador macro (estímulos chino). PDD se posicionó como play de momentum sobre el tema China.",
+    "risk_management": "Ricky advierte sobre la gestión de PDD a medio plazo: 'Todo esto hablo según mi perspectiva si pretendéis mantener $PDD meses y aceptáis la volatilidad'. Sugiere que la posición requiere tolerancia a la volatilidad dada la naturaleza del catalizador geopolítico.",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-006",
+    "tickers": [
+      "GEV"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "GEV (GE Vernova) - Play de resultados/earnings. Ricky indica: 'Hoy presenta resultados nuestra querida $GEV, al tener poco size en ella y algo de margen hemos querido mantener'. La estrategia fue mantener posición pequeña antes de earnings. Plan de salida definido: 'Si $GEV abre gap down, cerraremos'. Ale confirma que entró en GEV previamente.",
+    "risk_management": "Posición reducida ('poco size') ante la incertidumbre de earnings. Plan de stop loss claro: cierre total si gap down al abrir. Ricky también menciona: 'al tener poco size en ella y algo de margen hemos querido mantener', indicando gestión conservadora del riesgo ante evento binario.",
+    "trader_sentiment": "Neutral"
+  },
+  {
+    "id_extraccion": "ATR-007",
+    "tickers": [
+      "OKLO"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "OKLO (energía nuclear) mostró un movimiento explosivo de +37%. Ricky advierte sobre su volatilidad: 'Después tampoco vas a ir con mucho size en $OKLO que tiene 13,46% de ADR'. El ADR extremo requiere ajuste de tamaño. OKLO mueve '26 Millones de $ al día' en volumen. inma_._ entró el día anterior cuando la mencionó en el chat. Kingluis comparte que es tema de una masterclass posterior.",
+    "risk_management": "ADR de 13.46% implica position size muy reducido. Ricky enfatiza: 'no es correcto aumentar size cuando está extendido, se aumenta size cuando la acción está rompiendo bases'. La lógica es: entrar con size completo en el punto de breakout de la base, no después de que ya se haya extendido.",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-008",
+    "tickers": [
+      "SHOP"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Ale identifica: '$SHOP quebrando trendline en pre', señalando una ruptura de línea de tendencia en pre-mercado. Esto constituye una señal de entrada tipo breakout donde la rotura de la trendline con volumen confirma el cambio de tendencia. Posteriormente Ale reitera: '$SHOP me gusta', manteniendo la convicción alcista.",
+    "risk_management": "null",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-009",
+    "tickers": [
+      "PLTR"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "PLTR mostró un Episodic Pivot tras resultados: '$PLTR Episodic'. Ricky clasifica el movimiento como Episodic Pivot, que es un patrón de Qullamaggie donde el precio hace un gap o movimiento explosivo impulsado por un evento (earnings). Kingluis confirma: 'como que $PLTR reporto bien, esta 11% arriba para el día'. Posteriormente, Ale cierra parcial: 'cierro el 50 de $PLTR', tomando ganancias en mitad de la posición.",
+    "risk_management": "Gestión de salida por parciales: cierre del 50% de la posición en un nivel de toma de ganancias, siguiendo la filosofía del grupo de ir tomando parciales (33% en cada TP o en este caso 50%).",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-010",
+    "tickers": [
+      "ZM"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Ale identifica: '$ZM genera un shakeout testeando el avwap de [earnings]'. Un shakeout es un patrón donde el precio rompe brevemente un soporte para luego recuperarse rápidamente, limpiando stops débiles antes de continuar alcista. La prueba del AVWAP anclado a earnings sirve como zona de soporte clave. La combinación shakeout + test AVWAP genera una señal de entrada con alta probabilidad según la metodología del grupo.",
+    "risk_management": "null",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-011",
+    "tickers": [
+      "CEG"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "CEG (Constellation Energy) - Ricky menciona: 'Se me escapó el EP (Episodic Pivot) en $CEG'. Posteriormente, CEG presenta catalizador de adquisición: '$CEG ha cerrado una adquisición y viene bastante'. Ale señala recuperación técnica: '$CEG recuperó el VWAP' y 'mucha vola $CEG hoy'. Ricky reporta gaps bajo sus stops: '$VST $CRDO $CEG abiertas con un gap por debajo de mis stops'.",
+    "risk_management": "Ricky menciona haber tenido posiciones con gap por debajo de sus stops, lo que generó pérdidas no controladas (gap risk). Esto es un riesgo inherente en swing trading con stops overnight.",
+    "trader_sentiment": "Neutral"
+  },
+  {
+    "id_extraccion": "ATR-012",
+    "tickers": [
+      "CROX"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Ale identifica: '$CROX esta justo en el AVWAP de los earnings'. El AVWAP anclado al evento de earnings sirve como nivel técnico clave. Cuando el precio testa este nivel, puede actuar como soporte o resistencia. Ale confirma: 'Esta luchando con el avwap de earnings', indicando que el precio está en una zona de decisión técnica donde la superación del AVWAP confirmaría la continuación alcista.",
+    "risk_management": "null",
+    "trader_sentiment": "Neutral"
+  },
+  {
+    "id_extraccion": "ATR-013",
+    "tickers": [
+      "IONQ"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "IONQ (computación cuántica) - Ricky confirma: '$IONQ ya nos ha tocado el primer TP!', indicando que la posición alcanzó el primer objetivo de toma de ganancias. Ricky también menciona: '$IONQ También va' en contexto de momentum en el sector cuántico junto con QUBT.",
+    "risk_management": "La gestión de TP sigue la regla del grupo: cerrar 33% de la posición en cada TP predefinido. Al alcanzar el primer TP, se cierra un tercio de la posición y se ajusta el stop a breakeven o al siguiente nivel de soporte.",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-014",
+    "tickers": [
+      "SMR"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Ricky reporta: 'God Candle $SMR'. Una 'God Candle' es una vela de gran tamaño (marubozu o similar) que indica un movimiento direccional masivo con presión compradora extrema. Generalmente ocurre tras un catalizador o en un punto de aceleración de momentum. SMR (NuScale Power, energía nuclear modular pequeña) se beneficia del tema nuclear/energía limpia.",
+    "risk_management": "null",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-015",
+    "tickers": [
+      "RDDT"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Cristianara identifica: 'Ese VCP de RDDT ES HERMOSO'. VCP (Volatility Contraction Pattern) es un patrón de Mark Minervini donde la volatilidad del precio se contrae progresivamente en una base antes de un breakout. La contracción decreciente indica acumulación institucional. La entrada se produce en la ruptura del último contracción con volumen.",
+    "risk_management": "null",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-016",
+    "tickers": [
+      "GSHD"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Cristianara identifica: 'GSHD también es hermosa, ese VCP es brutal'. Otro VCP (Volatility Contraction Pattern) de alta calidad. La estructura de contracción de volatilidad en GSHD sugiere una base de acumulación antes de un potencial breakout con volumen.",
+    "risk_management": "null",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-017",
+    "tickers": [
+      "NVAX"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Cristianara identifica: 'NVAX la mandé temprano, lindo VCP'. VCP en NVAX (Novavax) identificado temprano en la sesión. El patrón VCP implica contracción progresiva de rangos de precio con volúmenes decrecientes, seguido de un breakout con expansión de volumen.",
+    "risk_management": "null",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-018",
+    "tickers": [
+      "XYZ"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Ale describe un setup intradía: 'Si $XYZ deja envolvente en M15 junto con el vwap reclaim, me parece una buena posición'. Señal compuesta: (1) patrón de vela envolvente alcista en timeframe de 15 minutos, (2) recuperación del VWAP (VWAP Reclaim). La confirmación dual de patrón de velas + reclaim del VWAP genera una señal de entrada de alta probabilidad para trade intradía.",
+    "risk_management": "Ale menciona 'un buen [riesgo]' en contexto de que el setup ofrece un buen risk-reward ratio gracias a la proximidad del stop al VWAP recién recuperado.",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-019",
+    "tickers": [
+      "CRWV"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "morae_0 identifica: 'CRWV puede tener una explosión de amplitud; marcó doble suelo hoy y rompió canal bajista'. Señal compuesta: (1) doble suelo como patrón de reversión, (2) ruptura de canal bajista como confirmación de cambio de tendencia. La combinación de ambos patrones refuerza la tesis alcista.",
+    "risk_management": "null",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-020",
+    "tickers": [
+      "HIMS"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "river_trades plantea: 'Si HIMS rompe el trendline con volumen quizá le entre'. La señal de entrada requiere: (1) ruptura de línea de tendencia bajista, (2) confirmación de volumen por encima de la media. La confirmación de volumen es esencial para validar el breakout y evitar señales falsas.",
+    "risk_management": "null",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-021",
+    "tickers": [
+      "MMM"
+    ],
+    "strategy_type": "Swing Trading",
+    "signals_and_parameters": "panxo pregunta sobre MMM. Ricky rechaza el setup: '$MMM no me gusta, 1.75 de ADR'. Un ADR (Average Daily Range) de 1.75% es demasiado bajo para la metodología del grupo, que busca ADR mayor a 3% para garantizar suficiente movimiento intradía que justifique el riesgo del trade. La falta de volatilidad elimina el interés.",
+    "risk_management": "Filtro de ADR mínimo de 3% como requisito para considerar un trade. Un ADR bajo implica que el potencial de ganancia es insuficiente en relación al riesgo asumido.",
+    "trader_sentiment": "Bearish"
+  },
+  {
+    "id_extraccion": "ATR-022",
+    "tickers": [
+      "MSTR",
+      "BTC"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Ale nota la correlación crypto: '$MSTR se había adelantado a la suba de $BTC hasta más arriba de que ATH'. MSTR como proxy de Bitcoin mostró liderazgo alcista antes del ATH de BTC. Sin embargo, la reversión fue severa: '$MSTR -40% desde el máximo reciente'. Ricky reporta: 'Crypto devolviéndose $MSTR CORZ WULF y también SOFI TSLA', mostrando la correlación sectorial en la corrección.",
+    "risk_management": "La caída del 40% desde máximos demuestra el riesgo de volatilidad extrema en activos correlacionados con crypto. Se requiere gestión de tamaño conservadora dada la alta volatilidad del sector.",
+    "trader_sentiment": "Neutral"
+  },
+  {
+    "id_extraccion": "ATR-023",
+    "tickers": [
+      "OPEN"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Ricky confirma: 'Entramos en $OPEN en la comunidad privada y ya cerca del 1er [TP]'. OPEN (Opendoor Technologies) alcanzó casi el primer take profit poco después de la entrada, indicando un setup bien temporizado. El ticker también fue mencionado previamente como oportunidad.",
+    "risk_management": "Gestión por TPs: posición dividida en tercios (33% cada TP), cerca de alcanzar el primer objetivo.",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-024",
+    "tickers": [
+      "SMH",
+      "IGV",
+      "AVGO"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Ricky observa una rotación sectorial: 'Correlacion Software $IGV vs Semiconductores $SMH, Break the [correlation]'. El análisis compara el rendimiento relativo del sector software (IGV) vs semiconductores (SMH) para identificar rotación de capital. También señala: 'Observa lo choppy que está $SMH' y '$AVGO sin [confirmación]'. La falta de definición en SMH y AVGO sugiere cautela en el sector semi.",
+    "risk_management": "null",
+    "trader_sentiment": "Neutral"
+  },
+  {
+    "id_extraccion": "ATR-025",
+    "tickers": [
+      "APP"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Ricky identifica: '$APP es un buen setup para [swing]'. APP (AppLovin) mostró un setup técnico válido. Sin embargo, la ejecución fue problemática: '$APP termina cerrando -' indicando que el trade no funcionó. Cristianara después menciona un catalizador fundamental: 'interés de $APP en adquirir TikTok', que podría generar un nuevo Episodic Pivot.",
+    "risk_management": "null",
+    "trader_sentiment": "Neutral"
+  },
+  {
+    "id_extraccion": "ATR-026",
+    "tickers": [
+      "TLN"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Ricky recomienda: 'Revisar el estudio de $TLN Recent IPO en #daily-focus no tiene [mala pinta]'. TLN (Talen Energy) como Recent IPO setup. Las Recent IPOs son un patrón específico donde acciones recién listadas con fundamentos fuertes pueden generar movimientos explosivos tras un período de consolidación post-IPO.",
+    "risk_management": "null",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-027",
+    "tickers": [
+      "QUBT"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Ricky menciona: '$QUBT sigue siendo una muy buena [oportunidad]'. QUBT (Quantum Computing) como play de momentum en el tema cuántico. Eltradino también lo sigue. El sector cuántico mostró momentum continuo durante el período analizado, junto con IONQ.",
+    "risk_management": "null",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-028",
+    "tickers": [
+      "BFLY"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Eltradino menciona: 'la que puse $BFLY'. BFLY fue compartido como idea de trading en el chat. Ricky añade: 'Si, tiene noticia hoy $RGTI', vinculando el setup con un catalizador de noticias.",
+    "risk_management": "null",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-029",
+    "tickers": [
+      "HOOD"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Múltiples interacciones con HOOD: Ricky reporta: 'La cartera seguirá estando en máximos $HOOD cayendo un -8% ahora'. darksalsa identifica: 'buen rebote de $HOOD en la media', señalando un pullback a la media móvil como oportunidad de entrada. Posteriormente, HOOD sufre otro gap: 'No S&P 500 inclusion for Robinhood. Stock drops -7% after hours'. Ricky finalmente reporta: '$HOOD +7,38%' en recuperación.",
+    "risk_management": "Los gaps de -7% y -8% representan riesgo significativo en swing trading. El rebote 'en la media' implica uso de la media móvil como nivel de soporte dinámico para entradas.",
+    "trader_sentiment": "Neutral"
+  },
+  {
+    "id_extraccion": "ATR-030",
+    "tickers": [
+      "DOCS"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Ale reporta: 'Reduzco 50% en $DOCS'. Cierre de la mitad de la posición en DOCS (Doximity), tomando ganancias parciales. La reducción del 50% sugiere que el trade ya ha generado ganancias suficientes para asegurar parcialmente el resultado, pero mantiene exposición al upside potencial.",
+    "risk_management": "Gestión de parciales: cierre del 50% (en lugar del 33% estándar) sugiere mayor cautela o que el precio se ha extendido significativamente desde el punto de entrada.",
+    "trader_sentiment": "Neutral"
+  },
+  {
+    "id_extraccion": "ATR-031",
+    "tickers": [
+      "SERV"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Ricky reporta riesgo controlado: '$SERV un 3.5%' de la cuenta. Aunque SERV tuvo un movimiento adverso significativo, el riesgo por posición se mantuvo dentro del marco del grupo. La combinación de ADR alto con position sizing apropiado limitó el impacto en la cartera.",
+    "risk_management": "Impacto del 3.5% de la cuenta en SERV, superior al 1% objetivo. Ricky lo menciona como excepción o lección, ya que el ideal es máximo 1% de riesgo por posición.",
+    "trader_sentiment": "Neutral"
+  },
+  {
+    "id_extraccion": "ATR-032",
+    "tickers": [
+      "LQDA"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "darksalsa identifica: 'Me gusta $LQDA, a ver si deja un buen breakout hoy. Ha estado mostrando mucha fuerza relativa'. Señal compuesta: (1) fuerza relativa vs mercado, (2) potencial breakout al alza. La fuerza relativa es un concepto clave de Minervini donde una acción outperforma el mercado general antes de un breakout.",
+    "risk_management": "null",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-033",
+    "tickers": [
+      "TEM"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Ricky identifica: '$TEM está en un setup parecido al de hace días en [otro activo]'. Reconocimiento de patrón repetido donde TEM muestra una configuración técnica similar a un setup previo exitoso. La identificación de patrones recurrentes es parte de la metodología cuantitativa del grupo.",
+    "risk_management": "null",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-034",
+    "tickers": [
+      "SOFI"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Ricky destaca: '$SOFI es buenísima y encima viene con unos resultados explosivos EPS +266% Sales [crecimiento]'. El crecimiento fundamental explosivo (EPS +266%) combinado con una estructura técnica favorable genera un setup de Growth Investing. Ale reporta después: 'Le dieron duro a $SOFI', indicando corrección posterior.",
+    "risk_management": "null",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-035",
+    "tickers": [
+      "VKTX"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Ricky reporta la volatilidad de VKTX: '+24% arriba $VKTX' en pre-market, seguido de '$VKTX de llegar a estar un +24 en pre market a caer un -5%'. Este es un ejemplo extremo de la diferencia entre el movimiento de pre-market y la sesión regular, ilustrando el riesgo de entrar en pre-market sin confirmación.",
+    "risk_management": "La reversión de +24% a -5% demuestra el peligro de ejecutar entradas en pre-market. La metodología del grupo prioriza entradas durante RTH (Regular Trading Hours) con confirmación de volumen.",
+    "trader_sentiment": "Neutral"
+  },
+  {
+    "id_extraccion": "ATR-036",
+    "tickers": [
+      "ACHR"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Eltradino sigue ACHR (Archer Aviation, eVTOL): 'os acordáis de la que comenté de EVTOL? $ACHR'. Posteriormente: '$ACHR imparable, no me deja [salir/vender]'. El momentum fuerte impide salir parcialmente, lo que es tanto positivo (ganancias acumuladas) como un riesgo (necesidad de gestionar la salida). Ricky incluye ACHR en la lista de earnings: '$DELL $SOUN $ACHR $RKLB' a la baja.",
+    "risk_management": "null",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-037",
+    "tickers": [
+      "BBAI"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "kriptopepino identifica: '$BBAI empresa de AI ha firmado un acuerdo con PALANTIR y lleva [momentum]'. Catalizador fundamental: acuerdo con Palantir que genera sinergia en el tema de IA. El catalizador corporativo combinado con el tema sectorial AI genera una tesis de momentum.",
+    "risk_management": "null",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-038",
+    "tickers": [
+      "QQQ",
+      "SPY",
+      "FFTY",
+      "IWM"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Múltiples referencias a ETFs como indicadores de mercado: Ale señala '$QQQ test DEMA10' (DEMA de 10 períodos como soporte dinámico). '$FFTY debajo de la DEMA 10 y casi de la 20' (FFTY = Innovator IBD 50, indicador de momentum growth). '$SPY cerca de [soporte/resistencia]'. Ricky identifica '$IWM Rompemos' (Russels 2000 breakout). inversornovat0 toma 'Long $QQQ'. El FFTY como proxy del estilo Growth/Minervini es un indicador clave.",
+    "risk_management": "null",
+    "trader_sentiment": "Neutral"
+  },
+  {
+    "id_extraccion": "ATR-039",
+    "tickers": [
+      "LUNR"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Kingluis reporta: '$LUNR me saco en el primer SL'. LUNR (Intuitive Machines) activó el stop loss en la primera oportunidad, indicando que el setup falló. La ejecución disciplinada del stop loss es un pilar de la metodología del grupo.",
+    "risk_management": "Ejecución disciplinada de stop loss. El trade falló y se salió automáticamente, protegiendo el capital. Esto es consistente con la filosofía de gestión de riesgo del grupo: aceptar las pérdidas pequeñas como parte del sistema.",
+    "trader_sentiment": "Bearish"
+  },
+  {
+    "id_extraccion": "ATR-040",
+    "tickers": [
+      "SANA"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "boy__plunger reporta: 'Buen after de $SANA'. Movimiento significativo en after-hours para SANA (Sana Biotechnology). Los movimientos en after-hours pueden anticipar gaps al día siguiente y generar oportunidades de Episodic Pivots.",
+    "risk_management": "null",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-041",
+    "tickers": [
+      "GLXY"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Ricky monitorea: 'GLXY la estoy vigilando, igual cierro antes del stop si veo que no termina de aguantar el vwap'. Gestión proactiva de la posición: si el precio no sostiene el VWAP como soporte, se cierra antes de que el stop loss formal sea alcanzado. El VWAP funciona como indicador de salida dinámico.",
+    "risk_management": "Salida anticipada basada en pérdida del VWAP como soporte, antes de que se active el stop loss formal. Esto es una técnica de gestión activa para reducir pérdidas cuando la acción del precio deteriora la tesis del trade.",
+    "trader_sentiment": "Neutral"
+  },
+  {
+    "id_extraccion": "ATR-042",
+    "tickers": [
+      "BNTX"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "panxo reporta: 'BNTX barrió mi stop y luego se recuperó, esto AM'. Un caso de stop sweep (o shakeout) donde el precio rompe el stop loss para luego recuperarse, generando una pérdida realizada que se habría evitado con un stop más amplio. Esto genera la disyuntiva entre stops ajustados (más tamaño) vs stops amplios (más riesgo por trade).",
+    "risk_management": "Cristianara comenta sobre este tema: 'Él busca stops más ajustados, lo que implica que la acción necesita moverse un menor porcentaje para [alcanzar el target]'. Stops ajustados permiten mayor tamaño de posición pero incrementan la probabilidad de ser stopped out por ruido.",
+    "trader_sentiment": "Neutral"
+  },
+  {
+    "id_extraccion": "ATR-043",
+    "tickers": [
+      "SCCO",
+      "TW",
+      "CVNA"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Ale menciona sus posiciones: '$SCCO $TW $CVNA llevo yo'. Múltiples posiciones abiertas en tickers de distintos sectores. Destaca '$TW' como 'Hermosa' y '$SCCO' como posición activa. CVNA (Carvana) es un clásico growth/momentum stock. La diversificación entre sectores reduce la correlación de la cartera.",
+    "risk_management": "null",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-044",
+    "tickers": [
+      "NVDA",
+      "ARM"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Ricky posiciona la cartera: 'nos hemos posicionado en $NVDA $ARM con la estructura [correcta]'. Entrada conjunta en los dos líderes de semiconductores con enfoque en la estructura del gráfico (bases, breakouts). Ricky confirma: 'Si, $ARM +3.5% $NVDA'. ARM muestra liderazgo relativo. Posteriormente: '$ARM volando' confirma aceleración del momentum.",
+    "risk_management": "null",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-045",
+    "tickers": [
+      "DJT"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Ricky observa: 'También hay que observar $DJT Trump Media & Technology como [posible play]'. DJT como play de momentum político/especulativo. La naturaleza especulativa del ticker requiere cautela extra en el tamaño de posición.",
+    "risk_management": "null",
+    "trader_sentiment": "Neutral"
+  },
+  {
+    "id_extraccion": "ATR-046",
+    "tickers": [
+      "INSG"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Ricky recomienda: 'Recomiendo leer el post sobre $INSG en #daily-focus para entender cuando es óptimo entrar en una [posición]'. INSG como caso de estudio para el timing de entrada óptimo, posiblemente relacionado con un breakout de base o pullback a soporte.",
+    "risk_management": "null",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-047",
+    "tickers": [
+      "CLLS"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Ricky reporta: 'Ya sacándole un 17% a $CLLS'. Trade exitoso con ganancia del 17%, lo cual representa aproximadamente 2-4R dependiendo del stop loss utilizado. El porcentaje de ganancia sugiere un swing trade exitoso con holding de varios días.",
+    "risk_management": "null",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-048",
+    "tickers": [
+      "ROOT"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "ron_smt muestra convicción: 'Siempre te tuve fe $ROOT'. ROOT (Root Inc., insurtech) como posición mantenida con convicción a pesar de posibles altibajos. La fe en el ticker sugiere que los fundamentos o la estructura técnica soportan la tesis de inversión.",
+    "risk_management": "null",
+    "trader_sentiment": "Bullish"
+  },
+  {
+    "id_extraccion": "ATR-049",
+    "tickers": [
+      "MELI"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Mencionado en el contexto de la discusión general como ticker de referencia. Mercado Libre como líder latinoamericano con estructura de growth.",
+    "risk_management": "null",
+    "trader_sentiment": "Neutral"
+  },
+  {
+    "id_extraccion": "ATR-050",
+    "tickers": [
+      "JNVR"
+    ],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Kingluis reporta: 'esta se nos escapó $JNVR'. Oportunidad de trading perdida donde el setup se ejecutó sin ellos. Las oportunidades perdidas son parte del trading y el grupo las usa como lección para mejorar el proceso de screening y ejecución.",
+    "risk_management": "null",
+    "trader_sentiment": "Neutral"
+  },
+  {
+    "id_extraccion": "ATR-051",
+    "tickers": [],
+    "strategy_type": "Swing Trading / Growth Investing",
+    "signals_and_parameters": "Filosofía del grupo basada en CAN SLIM, Minervini, Qullamaggie y Dan Zanger. Cristianara: 'Nosotros seguimos la gestión de RISK que hace Minervini o Qullamaggie'. Estilo principal: Swing Trading de 3 a 15 días. Cristianara: 'de 3 a 15 días más o menos, depende del mercado, si es un mercado de los buenos, se puede aguantar un poco más, pero vamos tomando parciales'. Señales de entrada principales: (1) AVWAP Reclaim - recuperación del AVWAP como señal de continuación alcista, (2) Pullback al VWAP/AVWAP con volumen - retroceso a zona de soporte dinámico con confirmación de volumen, (3) VCP (Volatility Contraction Pattern) - contracción progresiva de rangos de precio, entrada en breakout del último contracción, (4) Pocket Pivot - señal de entrada dentro de una base antes del breakout, (5) Episodic Pivot - gap o movimiento explosivo tras evento/catalizador, (6) Shakeout + recuperación AVWAP - limpieza de stops débiles seguida de recuperación, (7) Breakout de trendline con volumen, (8) Breakout de energía limpia con catalizador. Ricky: 'Por eso el growth con momentum es lo óptimo para el swing'.",
+    "risk_management": "Marco de gestión de riesgo del grupo: (1) Máximo 1% de riesgo por posición - Cristianara: 'que el stop de la operación no supere el 1% de tu cuenta'. (2) ADR mínimo de 3% para considerar entradas - Cristianara: 'por eso es mejor buscar ADR mayor a 3'. (3) Cierre de parciales en 33% por cada TP - 'Normalmente cerramos el 33% en cada TP'. (4) Sistema de R-múltiplos para salidas - Ricky: 'cuanto hayas ganado un 2R de tu riesgo sales con un parcial, en 4R otro'. (5) Position sizing basado en ADR y Stop Loss - Cristianara: 'El Size se calcula con el SL y el ADR'. Ricky: 'lo mejor es controlar el size por STOP y ADR'. (6) No aumentar size cuando la acción está extendida - Ricky: 'no es correcto aumentar size cuando está extendido, se aumenta size cuando la acción está rompiendo bases'. (7) Opciones: LONG CALLS con 30 DTE como alternativa - Cristianara: 'con LONG CALLS también funciona 30dte'. (8) Dos stops por posición (uno cerca, otro bajo AVWAP) - Cristianara: 'Yo puse 2 stops, uno cerca y otro debajo del AVWAP de máximos'. (9) Salida anticipada si se pierde el VWAP - Ricky: 'igual cierro antes del stop si veo que no termina de aguantar el vwap'. (10) Stop Profit o trailing stop en momentum - Ricky: 'Podrías cerrar algún parcial en stop profit si pierde el momentum en 1H. Que pierda la EMA de 10, 20'.",
+    "trader_sentiment": "Neutral"
+  },
+  {
+    "id_extraccion": "ATR-052",
+    "tickers": [],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Uso de indicadores técnicos del grupo: (1) AVWAP (Anchored VWAP) - anclado a puntos de referencia como earnings, IPO, máximos con alto volumen. Cristianara: 'el AVWAP lo anclas en un punto de referencia donde hubo alto volumen'. Se usan múltiples AVWAPs conforme la tendencia se desarrolla. (2) DEMA (Double EMA) - Ricky: 'Qullamaggie habla sobre la DEMA, cuando habla de respetar el momentum'. La DEMA de 10 y 20 periodos como soportes dinámicos. (3) EMA 200 como filtro de tendencia mayor - yuniormentado: 'La de 200 está sobre $56'. (4) Vol Trigger como indicador de volatilidad del mercado - Ricky: 'También a comentar que seguimos cerrando por encima del Vol Trigger'. (5) Vol Buzz (TC2000) como screening de volumen anómalo - Ricky: 'Para hacer una compra swing mira el Vol Buzz de TC2000'. (6) IV Rank para medir volatilidad implícita. (7) Call Wall / Put Wall como niveles de opciones - Cristianara: 'El Call Wall y el Put Wall son niveles donde se concentra un gran volumen de opciones call y put'.",
+    "risk_management": "null",
+    "trader_sentiment": "Neutral"
+  },
+  {
+    "id_extraccion": "ATR-053",
+    "tickers": [],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Patrones de salida identificados en el chat: (1) Salida por pérdida de momentum - Ricky: 'Podrías cerrar algún parcial en stop profit si pierde el momentum en 1H. Que pierda la EMA de 10,20'. (2) Salida por pérdida de AVWAP - Cristianara: 'lo que pierda los avwap ire [cortando]'. (3) Salida por R-múltiplo - Ricky: 'cuanto hayas ganado un 2R de tu riesgo sales con un parcial, en 4R otro'. (4) Salida por gap down post-earnings - Ricky: 'Si $GEV abre gap down, cerraremos'. (5) Stop Profit / trailing stop - toninavarro: 'lo que hago es poner stop profit'. (6) Reducción de exposición antes de earnings - river_trades: 'creo que voy a reducir exposición o incluso cerrar antes de los resultados'. (7) Optimización de stop usando AVWAP de tendencia - Cristianara: 'Usa el AVWAP de la tendencia por lo menos'. (8) Cierre de parciales en 33% por TP - Cristianara/Ricky: 'Normalmente cerramos el 33% en cada TP'.",
+    "risk_management": "null",
+    "trader_sentiment": "Neutral"
+  },
+  {
+    "id_extraccion": "ATR-054",
+    "tickers": [],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Identificación de temas sectoriales (thematic momentum): (1) Energía limpia/nuclear - Ricky: 'Que bonitos los breakouts de energía limpia'. Incluye: NNE, SMR, OKLO, CEG, TLN. (2) IA/Semiconductores - ALAB, NVDA, ARM, AVGO. (3) China plays - PDD, NIO, JD. Ricky: 'China ahora mismo es un HOT theme'. (4) Computación cuántica - IONQ, QUBT. (5) Crypto proxy - MSTR correlacionado con BTC. (6) eVTOL - ACHR. (7) Biotech - NVAX, BNTX, SANA. La rotación entre temas es clave para identificar oportunidades.",
+    "risk_management": "Ricky advierte sobre China: 'no recomendaría comprar Chinas' a pesar del momentum, debido al riesgo de corrección. 'Los recientes catalizadores de China creo que [no son suficientes]'.",
+    "trader_sentiment": "Neutral"
+  },
+  {
+    "id_extraccion": "ATR-055",
+    "tickers": [],
+    "strategy_type": "Momentum",
+    "signals_and_parameters": "Herramientas de screening y análisis utilizadas: (1) Deepvue - Ricky: 'Deepvue es más para los datos de la empresa (EPS, Ventas, Ranking de industria, Sector)'. (2) TC2000 - para Vol Buzz, screening de volumen, análisis técnico. (3) TOS (Thinkorswim) - plataforma de trading con DAS Pro. (4) Briefing.com - noticias y catalizadores. (5) Seeking Alpha - análisis fundamental. (6) MarketSmith (IBD) - screening CAN SLIM. (7) Tradytics - análisis cuantitativo. (8) TraderSync - journaling y tracking de trades. (9) TradingView - para AVWAP/VWAP y análisis técnico. (10) Fewmoredays.io - enciclopedia de Qullamaggie. Cristianara recomienda: 'Aprende primero Swing en largos, hasta que lo domines. Domina 1 sola cosa y le vas metiendo más'.",
+    "risk_management": "Cristianara enfatiza la importancia de recopilar datos del sistema: 'revisar si el sistema funciona, cuál es su win rate, cuántos stops seguidos puede tener'. Ricky: 'Calcular cuál podría ser tu stop max por posición y ajustas con el size que le metas'.",
+    "trader_sentiment": "Neutral"
+  }
+]
