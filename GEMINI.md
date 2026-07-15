@@ -15,3 +15,12 @@ The system is **Auto-Aware** of its environment:
 - **Torre de Control (VPS)**: No DB → **Finviz Live** promoted to primary decision source for 24/7 monitoring.
 - **Deploy to VPS**: `./deploy_vps.sh`
 - **Data Sync from VPS**: `./sync_from_vps.sh`
+
+## Session Close Protocol (CRITICAL)
+Always output session summaries implementing:
+1. Git diff range via `git diff <commit>~N..<commit> --stat`.
+2. System state JSON from `python3 scripts/dump_state.py`.
+3. Architecture decisions log in `DECISIONS.md`.
+4. Statistical significance verification via `python3 scratch/run_variants.py`.
+5. Duplication checks via pre-commit hook (`python3 scripts/check_git_duplicates.py`).
+
