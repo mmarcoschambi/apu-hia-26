@@ -64,9 +64,9 @@ except ImportError as e:
     sys.exit(1)
 
 
-COMBOS_DIR = Path(__file__).resolve().parent / "config" / "combos"
-OUTPUT_DIR = Path(__file__).resolve().parent / "config" / "combo_results"
-OUTPUT_DIR.mkdir(exist_ok=True)
+COMBOS_DIR = Path(__file__).resolve().parent.parent / "config" / "combos"
+OUTPUT_DIR = Path(__file__).resolve().parent.parent / "config" / "combo_results"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 SCREENER_CACHE = ScreenerCacheManager()
 
 
@@ -552,7 +552,7 @@ def phase3_optimize_tier1(
     _extra_fixed = (
         _pattern_config.get("extra_fixed_params", {}) if _pattern_config else {}
     )
-    optuna_space = combo["tier1_optuna_space"]
+    optuna_space = combo.get("tier1_optuna_space", {})
 
     # =========================================================
     # PRE-LOAD ENGINE TEMPLATE (PERF)
@@ -966,7 +966,7 @@ def run_combo_optimization(
     ]
     min_windows_required = 2  # research (2/3); production strict use 3
 
-    validation_passed = True
+    validation_passed = False  # Safe default: only real OOS validation sets True
     validation_result = None
     oos_score = score
 
