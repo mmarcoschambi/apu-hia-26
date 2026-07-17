@@ -14,3 +14,5 @@ Este archivo registra las decisiones clave de arquitectura y el valor esperado e
 | 2026-07-17 | Corregir cálculo de `total_trades` en vectorbt avanzado | `src/backtest/vectorbt_engine_advanced.py` | `total_trades` mapea a posiciones de entrada reales ejecutadas y no a señales de entrada únicas |
 | 2026-07-17 | Unificación de cargadores de configuración de producción | `src/config/dynamic_config.py` y `src/config/config_loader.py` | `dynamic_config.py` delega la carga en `config_loader.py` con validación de schema centralizada |
 | 2026-07-17 | Inyección de período y tamaño de universo reales en el optimizador | `scripts/optimize_combo.py` | `export_combo_result` escribe `period` y `universe_size` reales, evitando defaults erróneos |
+| 2026-07-17 | Blindaje de gate de validación por default en optimizador | `scripts/optimize_combo.py` | `validation_passed` inicializa en `False` para bloquear la promoción silenciosa de corridas sin validación real |
+| 2026-07-17 | Activación formal de ejecución real de capital | `config/combos/combo_pure_momentum.json` | `capital_enabled` cambiado de `false` a `true` tras mitigar falsos positivos y anomalías en Optuna |
