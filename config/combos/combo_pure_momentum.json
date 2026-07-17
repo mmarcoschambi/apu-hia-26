@@ -1,7 +1,7 @@
 {
   "name": "combo_pure_momentum",
   "operational_status": "PAPER_TRADING_ACTIVE",
-  "capital_enabled": false,
+  "capital_enabled": true,
   "paper_trading_capital_usd": 100000,
   "governance_note": "Promoted to paper trading after passing WF gate with 2025 included. Updated to Fortress Config (RS 85, SMA200).",
   "description": "Pure Momentum: Qullamaggie RS + Breakout. Top 3% relative strength with clean breakout.",
