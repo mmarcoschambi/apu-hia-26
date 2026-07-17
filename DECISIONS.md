@@ -16,3 +16,4 @@ Este archivo registra las decisiones clave de arquitectura y el valor esperado e
 | 2026-07-17 | Inyección de período y tamaño de universo reales en el optimizador | `scripts/optimize_combo.py` | `export_combo_result` escribe `period` y `universe_size` reales, evitando defaults erróneos |
 | 2026-07-17 | Blindaje de gate de validación por default en optimizador | `scripts/optimize_combo.py` | `validation_passed` inicializa en `False` para bloquear la promoción silenciosa de corridas sin validación real |
 | 2026-07-17 | Activación formal de ejecución real de capital | `config/combos/combo_pure_momentum.json` | `capital_enabled` cambiado de `false` a `true` tras mitigar falsos positivos y anomalías en Optuna |
+| 2026-07-17 | Normalización de claves en la rúbrica del comité de inversiones | `config/ic_rubric.yaml` | Unificación homogénea de los campos `capital_enabled` y `paper_trading_capital_usd` en todos los combos |
