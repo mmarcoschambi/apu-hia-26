@@ -3769,8 +3769,19 @@ class AdvancedVectorBTEngine:
             else:
                 profit_factor = 0.0
 
+            # Count unique executed entry positions (real trades)
+            if trades_df is not None and not trades_df.empty:
+                if "entry_day_idx" in trades_df.columns and "symbol" in trades_df.columns:
+                    real_trades_count = int(len(trades_df.groupby(["entry_day_idx", "symbol"])))
+                elif "entry_day_idx" in trades_df.columns and "col_idx" in trades_df.columns:
+                    real_trades_count = int(len(trades_df.groupby(["entry_day_idx", "col_idx"])))
+                else:
+                    real_trades_count = int(len(trades_df))
+            else:
+                real_trades_count = 0
+
             logger.info(
-                f"   📊 BASELINE trades: {int(unique_entries)} entries -> {all_exits_count} exits"
+                f"   📊 BASELINE trades: {real_trades_count} executed ({int(unique_entries)} entries) -> {all_exits_count} exits"
             )
             logger.info(
                 f"   Return: {total_return * 100:.2f}%, Sharpe: {sharpe:.2f}, Max DD: {max_dd * 100:.2f}%"
@@ -3780,7 +3791,8 @@ class AdvancedVectorBTEngine:
                 "total_return": total_return,
                 "sharpe_ratio": sharpe,
                 "max_drawdown": max_dd,
-                "total_trades": int(unique_entries),
+                "total_trades": real_trades_count,
+                "unique_entries": int(unique_entries),
                 "all_exits": int(all_exits_count),
                 "win_rate": win_rate,
                 "profit_factor": profit_factor,
@@ -4662,6 +4674,17 @@ class AdvancedVectorBTEngine:
         else:
             profit_factor = 0.0
 
+        # Count unique executed entry positions (real trades)
+        if trades_df is not None and not trades_df.empty:
+            if "entry_day_idx" in trades_df.columns and "symbol" in trades_df.columns:
+                real_trades_count = int(len(trades_df.groupby(["entry_day_idx", "symbol"])))
+            elif "entry_day_idx" in trades_df.columns and "col_idx" in trades_df.columns:
+                real_trades_count = int(len(trades_df.groupby(["entry_day_idx", "col_idx"])))
+            else:
+                real_trades_count = int(len(trades_df))
+        else:
+            real_trades_count = 0
+
         results = {
             "total_return": total_return,
             "sharpe_ratio": sharpe,
@@ -4669,7 +4692,8 @@ class AdvancedVectorBTEngine:
             "annualized_return": annualized_return,
             "mar_ratio": mar_ratio,
             "calmar_ratio": calmar_ratio,
-            "total_trades": int(unique_entries),  # For convergence with THOR
+            "total_trades": real_trades_count,
+            "unique_entries": int(unique_entries),
             "all_exits": int(all_exits_count),  # Total including partial exits
             "win_rate": win_rate,
             "profit_factor": profit_factor,

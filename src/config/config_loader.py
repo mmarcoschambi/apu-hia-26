@@ -1,22 +1,23 @@
 import json
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 CONFIG_PATH = Path("config/production_config.json")
 
-def load_production_config() -> Dict[str, Any]:
+def load_production_config(config_file: Optional[str] = None) -> Dict[str, Any]:
     """
-    Loads config/production_config.json and performs strict schema validation.
+    Loads production configuration and performs strict schema validation.
     Raises FileNotFoundError if missing, or KeyError if required sections/keys are absent.
     """
-    if not CONFIG_PATH.exists():
-        raise FileNotFoundError(f"Missing production configuration at: {CONFIG_PATH}")
+    path = Path(config_file) if config_file else CONFIG_PATH
+    if not path.exists():
+        raise FileNotFoundError(f"Missing production configuration at: {path}")
     
-    with open(CONFIG_PATH, "r") as f:
+    with open(path, "r") as f:
         try:
             config = json.load(f)
         except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON format in production_config.json: {e}")
+            raise ValueError(f"Invalid JSON format in config: {e}")
             
     # Schema validation
     required_sections = ["tier1_strategy", "tier2_filters", "tier3_risk", "market_regime", "risk_gate", "ml_entry_filter"]
