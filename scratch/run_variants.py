@@ -15,8 +15,15 @@ def check_significance(metrics_path: Path):
         print(f"Error al leer {metrics_path}: {e}", file=sys.stderr)
         return None
 
-    total_trades = metrics.get("total_trades", metrics.get("trades_count", 0))
-    return total_trades, metrics
+    # Intentar resolver anidamiento de validation (ej. resultados de optimización combo)
+    v_data = metrics.get("validation", {})
+    if isinstance(v_data, dict) and v_data:
+        resolved_metrics = {**metrics, **v_data}
+    else:
+        resolved_metrics = metrics
+
+    total_trades = resolved_metrics.get("total_trades", resolved_metrics.get("trades_count", 0))
+    return total_trades, resolved_metrics
 
 def main():
     parser = argparse.ArgumentParser(description="Compara variantes y valida significancia estadística.")
@@ -44,7 +51,7 @@ def main():
     best_metric = -999999.0
 
     for name, trades, metrics in results:
-        total_return = metrics.get("total_return", 0.0)
+        total_return = metrics.get("total_return", metrics.get("optimization_score", 0.0))
         sharpe = metrics.get("sharpe_ratio", 0.0)
         
         status = "OK"
@@ -52,7 +59,7 @@ def main():
             status = "⚠️ INSUFICIENTE EVIDENCIA"
         
         print(f"Variante: {name}")
-        print(f"  Trades: {trades} | Retorno: {total_return}% | Sharpe: {sharpe}")
+        print(f"  Trades: {trades} | Retorno/Score: {total_return}% | Sharpe: {sharpe}")
         print(f"  Estado: {status}")
         
         if trades >= args.min_trades and total_return > best_metric:
