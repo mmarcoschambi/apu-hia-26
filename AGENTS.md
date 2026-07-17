@@ -150,3 +150,15 @@ Un issue está CERRADO cuando:
 | 2026-06    | LightGBM sobre sklearn RF        | Velocidad + feature importance nativa       |
 | 2026-06    | Optuna sobre GridSearch          | Pruning eficiente, Pareto multi-objetivo    |
 | 2026-06    | Streamlit como UI principal      | Iteración rápida, sin frontend separado     |
+
+---
+
+## 9. PROTOCOLO DE SALIDA DE SESIÓN (OUTPUT FORMAT)
+
+Al dar la salida final de la sesión (donde se resumen goals, memoria de la sesión, accomplished, etc.), el agente DEBE incluir:
+1. **Rango de Git:** El diff exacto usando `git diff <commit>~N..<commit> --stat` o el hash del commit relevante en lugar de descripciones generales del árbol de archivos.
+2. **Estado del Sistema:** El output JSON de ejecutar `python3 scripts/dump_state.py`.
+3. **Decisiones de Arquitectura:** Las decisiones tomadas agregadas en `DECISIONS.md`.
+4. **Significancia Estadística:** El resultado de ejecutar `python3 scratch/run_variants.py` para validar significancia en backtests.
+5. **Control de Duplicados:** La verificación de que el hook de pre-commit `python3 scripts/check_git_duplicates.py` pasa correctamente.
+

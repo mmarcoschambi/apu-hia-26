@@ -57,7 +57,7 @@ if [[ -n "$COMBO" ]]; then
     echo ""
 
     cd "$ROOT"
-    python3 optimize_combo.py \
+    python3 scripts/optimize_combo.py \
         --combo "$COMBO" \
         --start "$START" \
         --end "$END" \
@@ -105,7 +105,7 @@ if [[ "$RUN_TOURNAMENT" == "true" || "$TOURNAMENT_ONLY" == "true" ]]; then
     echo ""
 
     cd "$ROOT"
-    python3 optimize_combos.py \
+    python3 scripts/optimize_combo.py --all \
         --start "$START" \
         --end "$END" \
         --trials "$TRIALS" \
