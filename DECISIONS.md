@@ -11,4 +11,6 @@ Este archivo registra las decisiones clave de arquitectura y el valor esperado e
 | 2026-07-16 | Implementar seguridad de escritura (Promotion Gates) y sanity limits | `scripts/optimize_combo.py` (bloqueo outputs/best_combos_run/) y `scripts/sync_combo_config.py` (requiere `--promote`, inyecta metadatos, valida `validation_passed=true` y aborta si `profit_factor >= 99.0` o `nan/inf`) | Bloqueo estricto de ruta en optimizador y uso explícito del flag `--promote` en el sync |
 | 2026-07-17 | Salvaguarda UTF-8 para consola de Windows en scripts de integridad y sync | `scripts/check_git_duplicates.py` y `scripts/sync_combo_config.py` | `sys.stdout.reconfigure(encoding='utf-8')` implementado (verificación en Windows real pendiente) |
 | 2026-07-17 | Advertencia: desincronización de `commit_head` en `dump_state.py` | `scripts/dump_state.py` | Causa no confirmada; monitorear desvíos en próximas sesiones. |
+| 2026-07-20 | Ingesta Resiliente (Tenacity con Jitter + DLQ) & Harness SDD Native Bridge | `src/data/ticker_cache.py`, `scripts/live_trading_scanner.py`, `scripts/sdd_verify_wrapper.py` | `@retry` con jitter exponencial, ruteo a `data/dlq_failures.json`, `PRAGMA journal_mode=WAL` y `sdd_verify_wrapper.py` con Popen streaming |
+
 

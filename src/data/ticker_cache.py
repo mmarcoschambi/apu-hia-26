@@ -1,3 +1,4 @@
+import json
 import sqlite3
 import threading
 import yfinance as yf
@@ -6,6 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
 import logging
+from tenacity import retry, wait_random_exponential, stop_after_attempt
 from config.settings import DATA_SOURCE, OPENBB_PROVIDER
 
 logger = logging.getLogger(__name__)
@@ -79,7 +81,7 @@ class TickerCache:
         # Migración automática para bases de datos existentes
         cursor = self.conn.execute("PRAGMA table_info(ohlcv_cache)")
         existing_cols = [row[1] for row in cursor.fetchall()]
-        
+
         for col in ["sma20", "sma50", "sma100", "sma200", "adr_pct_20"]:
             if col not in existing_cols:
                 logger.info(f"Migrating ticker_cache.db: adding column {col} to ohlcv_cache")
@@ -87,7 +89,6 @@ class TickerCache:
                     self.conn.execute(f"ALTER TABLE ohlcv_cache ADD COLUMN {col} REAL")
                 except Exception as e:
                     logger.warning(f"Failed to add column {col}: {e}")
-
 
         # Nueva tabla para guardar el Top 500 de cada mes y no recalcularlo
         self.conn.execute("""
@@ -209,9 +210,7 @@ class TickerCache:
             all_tickers.update(si.tickers_dow())
             logger.info(f"Fetched {len(all_tickers)} tickers from yahoo_fin")
         except Exception as e:
-            logger.warning(
-                f"Error fetching tickers from yahoo_fin: {e}. Trying fallback..."
-            )
+            logger.warning(f"Error fetching tickers from yahoo_fin: {e}. Trying fallback...")
 
             # Fallback to Wikipedia (more reliable)
             try:
@@ -237,9 +236,7 @@ class TickerCache:
                         all_tickers.update(table["Ticker"].tolist())
                         break
 
-                logger.info(
-                    f"Fetched {len(all_tickers)} tickers from Wikipedia fallback"
-                )
+                logger.info(f"Fetched {len(all_tickers)} tickers from Wikipedia fallback")
             except Exception as e2:
                 logger.error(f"Fallback also failed: {e2}")
                 return
@@ -286,9 +283,7 @@ class TickerCache:
             ticker = ticker.strip().upper().replace(".", "-")
 
             # Check if exists
-            cursor = self.conn.execute(
-                "SELECT 1 FROM universe WHERE ticker = ?", (ticker,)
-            )
+            cursor = self.conn.execute("SELECT 1 FROM universe WHERE ticker = ?", (ticker,))
             if not cursor.fetchone():
                 try:
                     self.conn.execute(
@@ -557,7 +552,9 @@ class TickerCache:
         )
         return result
 
-    def save_ohlcv_dataframe(self, ticker: str, df: pd.DataFrame, start_date: str, end_date: str) -> Optional[pd.DataFrame]:
+    def save_ohlcv_dataframe(
+        self, ticker: str, df: pd.DataFrame, start_date: str, end_date: str
+    ) -> Optional[pd.DataFrame]:
         if df is None or df.empty:
             return None
 
@@ -566,12 +563,14 @@ class TickerCache:
 
         try:
             # yf.Ticker.history returns timezone-aware index, remove timezone for SQLite
-            if getattr(df.index, 'tz', None) is not None:
+            if getattr(df.index, "tz", None) is not None:
                 df.index = df.index.tz_localize(None)
 
             # Tickers con historia mínima
             if len(df) < 10:
-                logger.warning(f"Ticker {ticker} tiene historia mínima ({len(df)} días). Guardando para evitar re-descarga.")
+                logger.warning(
+                    f"Ticker {ticker} tiene historia mínima ({len(df)} días). Guardando para evitar re-descarga."
+                )
 
             # Isolar ticker en DataFrame multi-columna de yfinance
             if isinstance(df.columns, pd.MultiIndex):
@@ -582,7 +581,7 @@ class TickerCache:
                         if ticker.upper() in df.columns.get_level_values("Ticker"):
                             df = df.loc[:, (slice(None), ticker.upper())]
                             df.columns = df.columns.droplevel("Ticker")
-                
+
                 if isinstance(df.columns, pd.MultiIndex):
                     try:
                         if ticker.upper() in df.columns:
@@ -592,15 +591,18 @@ class TickerCache:
                             if len(unique_tickers) == 1:
                                 df.columns = df.columns.droplevel(1)
                             else:
-                                logger.error(f"Ambiguity in yfinance data for {ticker}: {unique_tickers}")
+                                logger.error(
+                                    f"Ambiguity in yfinance data for {ticker}: {unique_tickers}"
+                                )
                                 return None
-                    except: pass
+                    except:
+                        pass
 
             # Asegurar que no hay columnas duplicadas y nombres limpios
             df = df.loc[:, ~df.columns.duplicated()]
             if not all(c in df.columns for c in ["Open", "High", "Low", "Close", "Volume"]):
                 df.rename(columns={c: c.capitalize() for c in df.columns}, inplace=True)
-            
+
             if isinstance(df["Close"], pd.DataFrame):
                 logger.error(f"Data corruption risk for {ticker}: Close is still a DataFrame")
                 return None
@@ -618,22 +620,25 @@ class TickerCache:
             elif pkl_path.exists():
                 try:
                     import pickle
+
                     with open(pkl_path, "rb") as f:
                         old_df = pickle.load(f)
                 except Exception:
                     pass
-            
+
             if old_df is None:
                 # Intentar cargar de SQLite
                 try:
                     with self.lock:
                         cursor = self.conn.execute(
                             "SELECT date, open, high, low, close, volume FROM ohlcv_cache WHERE ticker = ? ORDER BY date",
-                            (ticker,)
+                            (ticker,),
                         )
                         rows = cursor.fetchall()
                         if rows:
-                            old_df = pd.DataFrame(rows, columns=["date", "Open", "High", "Low", "Close", "Volume"])
+                            old_df = pd.DataFrame(
+                                rows, columns=["date", "Open", "High", "Low", "Close", "Volume"]
+                            )
                             old_df["date"] = pd.to_datetime(old_df["date"])
                             old_df.set_index("date", inplace=True)
                 except Exception as e:
@@ -642,14 +647,18 @@ class TickerCache:
             if old_df is not None and not old_df.empty:
                 old_df.rename(
                     columns={
-                        "open": "Open", "high": "High", "low": "Low", "close": "Close", "volume": "Volume"
+                        "open": "Open",
+                        "high": "High",
+                        "low": "Low",
+                        "close": "Close",
+                        "volume": "Volume",
                     },
-                    inplace=True
+                    inplace=True,
                 )
                 base_cols = ["Open", "High", "Low", "Close", "Volume"]
                 old_df_base = old_df[[c for c in base_cols if c in old_df.columns]].copy()
                 df_base = df[[c for c in base_cols if c in df.columns]].copy()
-                
+
                 combined_df = pd.concat([old_df_base, df_base])
                 combined_df = combined_df[~combined_df.index.duplicated(keep="last")].sort_index()
                 df = combined_df
@@ -662,19 +671,23 @@ class TickerCache:
                 volume_s = volume_s.iloc[:, 0]
 
             df["dollar_volume"] = close_s * volume_s
-            df["rolling_dollar_vol_20"] = df["dollar_volume"].rolling(window=20, min_periods=1).mean()
-            df['sma20'] = close_s.rolling(window=20).mean()
-            df['sma50'] = close_s.rolling(window=50).mean()
-            df['sma100'] = close_s.rolling(window=100).mean()
-            df['sma200'] = close_s.rolling(window=200).mean()
-            
+            df["rolling_dollar_vol_20"] = (
+                df["dollar_volume"].rolling(window=20, min_periods=1).mean()
+            )
+            df["sma20"] = close_s.rolling(window=20).mean()
+            df["sma50"] = close_s.rolling(window=50).mean()
+            df["sma100"] = close_s.rolling(window=100).mean()
+            df["sma200"] = close_s.rolling(window=200).mean()
+
             high_s = df["High"]
             low_s = df["Low"]
-            if isinstance(high_s, pd.DataFrame): high_s = high_s.iloc[:, 0]
-            if isinstance(low_s, pd.DataFrame): low_s = low_s.iloc[:, 0]
-            
-            df['daily_range_pct'] = ((high_s - low_s) / low_s) * 100
-            df['adr_pct_20'] = df['daily_range_pct'].rolling(window=20).mean()
+            if isinstance(high_s, pd.DataFrame):
+                high_s = high_s.iloc[:, 0]
+            if isinstance(low_s, pd.DataFrame):
+                low_s = low_s.iloc[:, 0]
+
+            df["daily_range_pct"] = ((high_s - low_s) / low_s) * 100
+            df["adr_pct_20"] = df["daily_range_pct"].rolling(window=20).mean()
 
             # Guardar únicamente las filas correspondientes al rango de descarga original
             start_dt = pd.to_datetime(start_date)
@@ -689,50 +702,63 @@ class TickerCache:
                     open_val = row["Open"].iloc[0] if hasattr(row["Open"], "iloc") else row["Open"]
                     high_val = row["High"].iloc[0] if hasattr(row["High"], "iloc") else row["High"]
                     low_val = row["Low"].iloc[0] if hasattr(row["Low"], "iloc") else row["Low"]
-                    close_val = row["Close"].iloc[0] if hasattr(row["Close"], "iloc") else row["Close"]
-                    vol_val = row["Volume"].iloc[0] if hasattr(row["Volume"], "iloc") else row["Volume"]
-                    dv_val = row["dollar_volume"].iloc[0] if hasattr(row["dollar_volume"], "iloc") else row["dollar_volume"]
+                    close_val = (
+                        row["Close"].iloc[0] if hasattr(row["Close"], "iloc") else row["Close"]
+                    )
+                    vol_val = (
+                        row["Volume"].iloc[0] if hasattr(row["Volume"], "iloc") else row["Volume"]
+                    )
+                    dv_val = (
+                        row["dollar_volume"].iloc[0]
+                        if hasattr(row["dollar_volume"], "iloc")
+                        else row["dollar_volume"]
+                    )
                     rv_raw = row["rolling_dollar_vol_20"]
                     rv_val = rv_raw.iloc[0] if hasattr(rv_raw, "iloc") else rv_raw
-                    
+
                     sma20 = row["sma20"]
                     sma50 = row["sma50"]
                     sma100 = row["sma100"]
                     sma200 = row["sma200"]
                     adr20 = row["adr_pct_20"]
-                    
+
                     sma20 = sma20.iloc[0] if hasattr(sma20, "iloc") else sma20
                     sma50 = sma50.iloc[0] if hasattr(sma50, "iloc") else sma50
                     sma100 = sma100.iloc[0] if hasattr(sma100, "iloc") else sma100
                     sma200 = sma200.iloc[0] if hasattr(sma200, "iloc") else sma200
                     adr20 = adr20.iloc[0] if hasattr(adr20, "iloc") else adr20
 
-                    records.append((
-                        ticker,
-                        date.strftime("%Y-%m-%d"),
-                        float(open_val),
-                        float(high_val),
-                        float(low_val),
-                        float(close_val),
-                        int(vol_val),
-                        float(dv_val),
-                        float(rv_val) if pd.notna(rv_val) else None,
-                        float(sma20) if pd.notna(sma20) else None,
-                        float(sma50) if pd.notna(sma50) else None,
-                        float(sma100) if pd.notna(sma100) else None,
-                        float(sma200) if pd.notna(sma200) else None,
-                        float(adr20) if pd.notna(adr20) else None,
-                    ))
+                    records.append(
+                        (
+                            ticker,
+                            date.strftime("%Y-%m-%d"),
+                            float(open_val),
+                            float(high_val),
+                            float(low_val),
+                            float(close_val),
+                            int(vol_val),
+                            float(dv_val),
+                            float(rv_val) if pd.notna(rv_val) else None,
+                            float(sma20) if pd.notna(sma20) else None,
+                            float(sma50) if pd.notna(sma50) else None,
+                            float(sma100) if pd.notna(sma100) else None,
+                            float(sma200) if pd.notna(sma200) else None,
+                            float(adr20) if pd.notna(adr20) else None,
+                        )
+                    )
                 except Exception as e:
                     logger.debug(f"Row prep error for {ticker} on {date}: {e}")
                     continue
 
             with self.lock:
-                self.conn.executemany("""
+                self.conn.executemany(
+                    """
                     INSERT OR REPLACE INTO ohlcv_cache
                     (ticker, date, open, high, low, close, volume, dollar_volume, rolling_dollar_vol_20, sma20, sma50, sma100, sma200, adr_pct_20)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, records)
+                """,
+                    records,
+                )
                 self.conn.commit()
 
             try:
@@ -744,6 +770,7 @@ class TickerCache:
             except Exception as e:
                 try:
                     import pickle
+
                     with open(pkl_path, "wb") as f:
                         pickle.dump(df, f)
                 except Exception as e2:
@@ -756,6 +783,61 @@ class TickerCache:
             logger.error(f"Error processing dataframe for {ticker}: {e}")
             return None
 
+    # ──────────────────────────────────────────────────────────────────────────
+    # RETRY: Tenacity exponential backoff with jitter for batch downloads
+    # ──────────────────────────────────────────────────────────────────────────
+    @retry(
+        wait=wait_random_exponential(min=1, max=10),
+        stop=stop_after_attempt(3),
+    )
+    def _download_chunk(self, chunk: List[str], start_date: str, end_date: str) -> "pd.DataFrame":
+        """Download a single chunk of tickers via yfinance with tenacity retry.
+
+        Args:
+            chunk: List of ticker symbols to download.
+            start_date: Start date string (YYYY-MM-DD).
+            end_date: End date string (YYYY-MM-DD).
+
+        Returns:
+            DataFrame from yfinance.download with MultiIndex columns.
+        """
+        return yf.download(
+            chunk,
+            start=start_date,
+            end=end_date,
+            group_by="ticker",
+            auto_adjust=True,
+            threads=True,
+            progress=False,
+        )
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # DLQ: Dead Letter Queue for failed tickers
+    # ──────────────────────────────────────────────────────────────────────────
+    def _write_dlq(self, failed_tickers: List[str]) -> None:
+        """Append failed ticker symbols to the DLQ file, deduplicating.
+
+        DLQ file lives at ``data/dlq_failures.json``, sibling to the database.
+
+        Args:
+            failed_tickers: Ticker symbols that failed to process.
+        """
+        if not failed_tickers:
+            return
+
+        dlq_path = Path(self.db_path).parent / "dlq_failures.json"
+        existing: List[str] = []
+        if dlq_path.exists():
+            try:
+                with open(dlq_path) as f:
+                    existing = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                existing = []
+
+        merged = list(dict.fromkeys(existing + failed_tickers))
+        with open(dlq_path, "w") as f:
+            json.dump(merged, f)
+
     def update_ohlcv_batch(self, tickers: List[str], start_date: str, end_date: str) -> int:
         """
         Descarga datos en lotes utilizando yfinance.download en grupos de 40 tickers,
@@ -763,35 +845,32 @@ class TickerCache:
         evitando rate-limits de Yahoo Finance.
         """
         import time
+
         if not tickers:
             return 0
-            
-        logger.info(f"Starting batch update for {len(tickers)} tickers from {start_date} to {end_date}...")
-        
+
+        logger.info(
+            f"Starting batch update for {len(tickers)} tickers from {start_date} to {end_date}..."
+        )
+
         # Agrupar tickers de a 40
         chunk_size = 40
-        chunks = [tickers[i:i + chunk_size] for i in range(0, len(tickers), chunk_size)]
-        
+        chunks = [tickers[i : i + chunk_size] for i in range(0, len(tickers), chunk_size)]
+
         success_count = 0
-        
+        failed_tickers: List[str] = []
+
         for idx, chunk in enumerate(chunks):
-            logger.info(f"Downloading chunk {idx+1}/{len(chunks)} ({len(chunk)} tickers)...")
+            logger.info(f"Downloading chunk {idx + 1}/{len(chunks)} ({len(chunk)} tickers)...")
             try:
-                # Descargar en lote
-                df_download = yf.download(
-                    chunk,
-                    start=start_date,
-                    end=end_date,
-                    group_by='ticker',
-                    auto_adjust=True,
-                    threads=True,
-                    progress=False
-                )
-                
+                # Descargar en lote con tenacity retry
+                df_download = self._download_chunk(chunk, start_date, end_date)
+
                 if df_download.empty:
-                    logger.warning(f"Empty download result for chunk {idx+1}")
+                    logger.warning(f"Empty download result for chunk {idx + 1}")
+                    failed_tickers.extend(chunk)
                     continue
-                    
+
                 # Guardar cada ticker del lote
                 for ticker in chunk:
                     df_ticker = None
@@ -804,7 +883,7 @@ class TickerCache:
                                 df_ticker = df_download[ticker.upper()].copy()
                     except Exception as e:
                         logger.debug(f"Failed to extract dataframe for {ticker} from batch: {e}")
-                        
+
                     if df_ticker is not None and not df_ticker.empty:
                         # Filtrar filas donde todos los valores son NaN
                         df_ticker.dropna(how="all", inplace=True)
@@ -812,17 +891,33 @@ class TickerCache:
                             res = self.save_ohlcv_dataframe(ticker, df_ticker, start_date, end_date)
                             if res is not None:
                                 success_count += 1
-                
+                            else:
+                                failed_tickers.append(ticker)
+                        else:
+                            failed_tickers.append(ticker)
+                    else:
+                        failed_tickers.append(ticker)
+
                 # Pequeño delay de cortesía
                 time.sleep(1.0)
             except Exception as e:
-                logger.error(f"Error downloading chunk {idx+1}: {e}")
+                logger.error(f"Error downloading chunk {idx + 1}: {e}")
+                failed_tickers.extend(chunk)
                 time.sleep(2.0)
-                
-        logger.info(f"Batch update completed: successfully updated {success_count}/{len(tickers)} tickers.")
+
+        # Write DLQ for all failed tickers in this batch
+        if failed_tickers:
+            self._write_dlq(failed_tickers)
+            logger.warning(f"DLQ updated: {len(failed_tickers)} tickers failed in this batch.")
+
+        logger.info(
+            f"Batch update completed: successfully updated {success_count}/{len(tickers)} tickers."
+        )
         return success_count
 
-    def get_ohlcv(self, ticker: str, start_date: str, end_date: str, offline: bool = False) -> Optional[pd.DataFrame]:
+    def get_ohlcv(
+        self, ticker: str, start_date: str, end_date: str, offline: bool = False
+    ) -> Optional[pd.DataFrame]:
         """
         Obtiene datos OHLCV con todas las métricas calculadas, usa cache o descarga.
         Prioriza archivos Parquet > Pickle > SQLite por velocidad.
@@ -853,9 +948,7 @@ class TickerCache:
                     if offline or last_date >= req_end or last_date >= yesterday:
                         return df_filtered
             except Exception as e:
-                logger.debug(
-                    f"Cache read error ({cache_path.suffix}) for {ticker}: {e}"
-                )
+                logger.debug(f"Cache read error ({cache_path.suffix}) for {ticker}: {e}")
 
         # ── NIVEL 2: BASE CACHE (SQLITE) ─────────────────────────────────────
         try:
