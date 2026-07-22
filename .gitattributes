@@ -1,0 +1,7 @@
+# Force LF line endings for text files to preserve code hash parity with Linux VPS
+* text=auto eol=lf
+*.py text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
+*.csv text eol=lf
