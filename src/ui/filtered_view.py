@@ -89,13 +89,13 @@ def get_scope_label(
         short: Si True, devuelve label corto sin emoji.
 
     Returns:
-        str, e.g. "🌐 Global", "🏦 AAPL", "🔍 AAPL · VCP"
+        str, e.g. "[U+1F310] Global", "[U+1F3E6] AAPL", "[U+1F50D] AAPL · VCP"
     """
     if asset == ALL_LABEL:
-        return "Global" if short else "🌐 Global"
+        return "Global" if short else "[U+1F310] Global"
     if pattern == ALL_LABEL:
-        return asset if short else f"🏦 {asset}"
-    return f"{asset} · {pattern}" if short else f"🔍 {asset} · {pattern}"
+        return asset if short else f"[U+1F3E6] {asset}"
+    return f"{asset} · {pattern}" if short else f"[U+1F50D] {asset} · {pattern}"
 
 
 def get_scope_info(

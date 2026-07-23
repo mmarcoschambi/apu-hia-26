@@ -5,7 +5,7 @@ Carga daily_triad_rankings desde la DB UNA SOLA VEZ al inicio del backtest
 y los convierte en arrays float32 listos para inyectar en el motor.
 
 Elimina el cálculo on-the-fly de RS en prepare_numba_arrays(), convirtiendo
-500 operaciones de rank() matricial por trial → 1 lectura de DB por backtest.
+500 operaciones de rank() matricial por trial -> 1 lectura de DB por backtest.
 
 Paridad garantizada: usa exactamente el mismo RS que live_trading_scanner.py
 """
@@ -64,7 +64,7 @@ def load_precomputed_signals(
     db = Path(db_path) if db_path else _DEFAULT_DB
 
     if not db.exists():
-        logger.warning(f"⚠️  signal_engine: DB not found at {db}. Falling back to on-the-fly RS.")
+        logger.warning(f"[WARN]  signal_engine: DB not found at {db}. Falling back to on-the-fly RS.")
         return {}
 
     # Columnas que queremos cargar
@@ -95,7 +95,7 @@ def load_precomputed_signals(
 
         if df_raw.empty:
             logger.warning(
-                f"⚠️  signal_engine: No ranking data found for "
+                f"[WARN]  signal_engine: No ranking data found for "
                 f"{len(tickers)} tickers between {start_date} and {end_date}."
             )
             return {}
@@ -107,14 +107,14 @@ def load_precomputed_signals(
         total = len(tickers)
         coverage_pct = covered / total * 100
         logger.info(
-            f"📊 signal_engine: Loaded {len(df_raw):,} rows | "
+            f"[CHART] signal_engine: Loaded {len(df_raw):,} rows | "
             f"Coverage: {covered}/{total} tickers ({coverage_pct:.1f}%) | "
-            f"Date range: {df_raw['date'].min().date()} → {df_raw['date'].max().date()}"
+            f"Date range: {df_raw['date'].min().date()} -> {df_raw['date'].max().date()}"
         )
 
         if coverage_pct < 50:
             logger.warning(
-                f"⚠️  signal_engine: Low coverage ({coverage_pct:.1f}%). "
+                f"[WARN]  signal_engine: Low coverage ({coverage_pct:.1f}%). "
                 f"Consider running populate_triad_rankings.py to expand universe."
             )
 
@@ -129,12 +129,12 @@ def load_precomputed_signals(
             result[col] = pivot
 
         elapsed = time.perf_counter() - t0
-        logger.info(f"✅ signal_engine: Signals loaded in {elapsed:.2f}s — {len(SIGNAL_COLS)} matrices ready")
+        logger.info(f"[OK] signal_engine: Signals loaded in {elapsed:.2f}s — {len(SIGNAL_COLS)} matrices ready")
 
         return result
 
     except Exception as e:
-        logger.error(f"❌ signal_engine: Failed to load rankings: {e}")
+        logger.error(f"[FAIL] signal_engine: Failed to load rankings: {e}")
         return {}
 
 
@@ -246,13 +246,13 @@ def build_entry_score_from_signals(
             entry_score = padded
 
         logger.info(
-            f"   ✅ entry_score (from DB): mean={entry_score.mean():.3f}, "
+            f"   [OK] entry_score (from DB): mean={entry_score.mean():.3f}, "
             f"std={entry_score.std():.3f} | shape={entry_score.shape}"
         )
         return entry_score
 
     except Exception as e:
-        logger.error(f"❌ build_entry_score_from_signals failed: {e}")
+        logger.error(f"[FAIL] build_entry_score_from_signals failed: {e}")
         return None
 
 
@@ -278,7 +278,7 @@ def get_signal_array(
         close_index:    DatetimeIndex del engine
         tickers:        Tickers del engine
         default_value:  Valor de relleno si el signal no existe
-        normalize_100:  Si True, divide por 100 (para percentiles 0-100 → 0-1)
+        normalize_100:  Si True, divide por 100 (para percentiles 0-100 -> 0-1)
 
     Returns:
         np.ndarray float32 (n_dates × n_tickers)
@@ -344,6 +344,6 @@ def inject_precomputed_signals(engine):
         # en el futuro para filtros adaptativos
         engine._precomputed_signals = signals
         
-        logger.info("🚀 [A+B] Señales inyectadas con éxito desde daily_triad_rankings.")
+        logger.info("[ROCKET] [A+B] Señales inyectadas con éxito desde daily_triad_rankings.")
     else:
-        logger.warning("⚠️ [A+B] No se pudo construir el entry_score a partir de las señales.")
+        logger.warning("[WARN] [A+B] No se pudo construir el entry_score a partir de las señales.")

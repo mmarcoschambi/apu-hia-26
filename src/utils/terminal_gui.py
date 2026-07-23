@@ -103,7 +103,7 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
         (universe_val, "white"),
         ("Signals: ", "cyan"),
         (f"{len(signals)}\n\n", "white"),
-        ("⚠️  ", "yellow"),
+        ("[WARN]  ", "yellow"),
         ("MANUAL REVIEW - NO AUTO ENTRY", "bold yellow"),
     )
 
@@ -111,7 +111,7 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
     console.print(
         Panel(
             stats_text,
-            title="[bold magenta]🚀 MOMENTUM V2 - DAILY BRIEF[/bold magenta]",
+            title="[bold magenta][U+1F680] MOMENTUM V2 - DAILY BRIEF[/bold magenta]",
             border_style="bright_blue",
             box=box.ROUNDED,
         )
@@ -120,7 +120,7 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
     # 2. Signals Table
     if signals:
         table = Table(
-            title="\n[bold fire]🔥 TOP CONFIRMED SIGNALS[/bold fire]",
+            title="\n[bold fire][U+1F525] TOP CONFIRMED SIGNALS[/bold fire]",
             box=box.SIMPLE_HEAD,
             title_justify="left",
         )
@@ -148,7 +148,7 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
 
     hot_sectors = _build_hot_sectors(date, top_n=5)
     if hot_sectors:
-        console.print("\n[bold cyan]🔥 HOT SECTORS[/bold cyan]")
+        console.print("\n[bold cyan][U+1F525] HOT SECTORS[/bold cyan]")
         hs = Table(box=box.SIMPLE_HEAD, title_justify="left")
         hs.add_column("ETF", style="bold yellow")
         hs.add_column("Rank", justify="right")
@@ -162,7 +162,7 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
                 str(row.get("rank", "-")),
                 f"{row.get('rs', 0):.2%}",
                 row.get("strength", "-"),
-                "✓" if row.get("tradeable") else "✗",
+                "[U+2713]" if row.get("tradeable") else "[U+2717]",
             )
 
         console.print(hs)
@@ -174,7 +174,7 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
         watchlist.sort(key=lambda x: x[1], reverse=True)
 
         if watchlist:
-            console.print("\n[bold cyan]🔭 WATCHLIST (NEAR-ENTRIES - TOP RS)[/bold cyan]")
+            console.print("\n[bold cyan][U+1F52D] WATCHLIST (NEAR-ENTRIES - TOP RS)[/bold cyan]")
 
             # Crear pequeños paneles para los top 12 de la watchlist
             wl_items = []
@@ -196,7 +196,7 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
                 )
 
     if watchlist_detail:
-        console.print("\n[bold cyan]🧪 WATCHLIST DIAGNOSTIC[/bold cyan]")
+        console.print("\n[bold cyan][U+1F9EA] WATCHLIST DIAGNOSTIC[/bold cyan]")
         diag = Table(box=box.SIMPLE_HEAD, title_justify="left")
         diag.add_column("Ticker", style="bold yellow")
         diag.add_column("RS", justify="right")
@@ -236,13 +236,13 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
             diag.add_row(
                 ticker,
                 f"[bold]{data.get('rs_pct', data.get('score', 0)):.1f}[/bold]",
-                f"[green]✓[/green]" if data.get("breakout") else "[red]✗[/red]",
+                f"[green][U+2713][/green]" if data.get("breakout") else "[red][U+2717][/red]",
                 _fmt_num(data.get("breakout_level")),
-                f"[green]✓[/green]" if data.get("ma_stack") else "[red]✗[/red]",
+                f"[green][U+2713][/green]" if data.get("ma_stack") else "[red][U+2717][/red]",
                 str(data.get("ma_trigger", "OK")),
                 _fmt_num(data.get("rvol")),
                 _fmt_num(data.get("dist_sma20_pct"), "%"),
-                f"[green]✓[/green]" if data.get("sector_etf_ok", True) else "[red]✗[/red]",
+                f"[green][U+2713][/green]" if data.get("sector_etf_ok", True) else "[red][U+2717][/red]",
                 t_rs_txt,
                 str(data.get("waiting_for", "OK")),
                 data.get("primary_reason") or (", ".join(data.get("reasons", [])[:3]) or "OK"),
@@ -281,7 +281,7 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
 
         def _estado(data):
             if data.get("_display_status") == "warn":
-                return "[yellow]⚠ Data incompleta[/yellow]"
+                return "[yellow][WARN] Data incompleta[/yellow]"
 
             max_dist = 6.77
             try:
@@ -298,17 +298,17 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
                 if (rvol is None or float(rvol) >= 1.0) and (
                     dist is None or abs(float(dist)) <= max_dist
                 ):
-                    return "⏳ Breakout"
+                    return "[HOURGLASS] Breakout"
             if data.get("breakout") and data.get("dist_sma20_pct") is not None:
                 try:
                     if abs(float(data.get("dist_sma20_pct"))) > max_dist:
-                        return "📉 Consolidar"
+                        return "[U+1F4C9] Consolidar"
                 except Exception:
                     pass
-            return "🔧 Setup incompleto"
+            return "[U+1F527] Setup incompleto"
 
         if nearest_ok:
-            console.print("\n[bold cyan]🎯 SECTORES CON CANDIDATOS (NEAREST TO SIGNAL)[/bold cyan]")
+            console.print("\n[bold cyan][U+1F3AF] SECTORES CON CANDIDATOS (NEAREST TO SIGNAL)[/bold cyan]")
 
             # Agrupar por sector
             by_sector = {}
@@ -339,15 +339,15 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
                 hs_info = hot_sector_map.get(sec, {})
                 rs_txt = f" | RS {hs_info.get('rs', 0):.1%}" if "rs" in hs_info else ""
                 s1_txt = (
-                    " | S1 ✓"
+                    " | S1 [U+2713]"
                     if hs_info.get("tradeable")
-                    else " | S1 ✗"
+                    else " | S1 [U+2717]"
                     if "tradeable" in hs_info
                     else ""
                 )
 
                 console.print(
-                    f"\n[bold yellow]── [ {sec} {SECTOR_NAMES.get(sec, '')}{rs_txt}{s1_txt} ] ────────────────────────────────[/bold yellow]"
+                    f"\n[bold yellow]-- [ {sec} {SECTOR_NAMES.get(sec, '')}{rs_txt}{s1_txt} ] --------------------------------[/bold yellow]"
                 )
 
                 near = Table(box=box.SIMPLE_HEAD, title_justify="left")
@@ -374,13 +374,13 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
                     f_row = flow_data.get(ticker, {})
                     drift = f_row.get("rank_drift", 0)
                     if drift == "NEW":
-                        trend = "🆕"
+                        trend = "[U+1F195]"
                     else:
                         try:
                             dv = int(drift)
-                            trend = "⬆️" if dv > 0 else "⬇️" if dv < 0 else "➡️"
+                            trend = "[UP]" if dv > 0 else "[DOWN]" if dv < 0 else "[RIGHT]"
                         except:
-                            trend = "➡️"
+                            trend = "[RIGHT]"
 
                     prev_rank = str(f_row.get("previous_rank", "-"))
 
@@ -401,7 +401,7 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
 
         if nearest_warn:
             console.print(
-                "\n[bold yellow]📡 DATA INCOMPLETE RADAR (VIGILANCIA - REVISAR MANAL)[/bold yellow]"
+                "\n[bold yellow][U+1F4E1] DATA INCOMPLETE RADAR (VIGILANCIA - REVISAR MANAL)[/bold yellow]"
             )
             near_w = Table(box=box.SIMPLE_HEAD, title_justify="left", border_style="dim")
             near_w.add_column("#", justify="right", style="dim")
@@ -425,7 +425,7 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
         flow_rows = nearest_flow.get("rows") or []
         if flow_rows:
             prev_date = nearest_flow.get("previous_date", "previo")
-            console.print(f"\n[bold cyan]🔁 NEAREST FLOW ({prev_date} → {date})[/bold cyan]")
+            console.print(f"\n[bold cyan][U+1F501] NEAREST FLOW ({prev_date} -> {date})[/bold cyan]")
             flow = Table(box=box.SIMPLE_HEAD, title_justify="left")
             flow.add_column("Ticker", style="bold yellow")
             flow.add_column("Estado")
@@ -461,37 +461,37 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
                 # Indicador de tendencia basado en drift de ranking
                 drift = row.get("rank_drift", 0)
                 if drift == "NEW":
-                    trend = "🆕"
+                    trend = "[U+1F195]"
                 elif drift == "OUT":
-                    trend = "❌"
+                    trend = "[FAIL]"
                 else:
                     try:
                         drift_val = int(drift)
                         if drift_val > 0:
-                            trend = f"⬆️{drift_val:+} "
+                            trend = f"[UP]{drift_val:+} "
                         elif drift_val < 0:
-                            trend = f"⬇️{drift_val:+} "
+                            trend = f"[DOWN]{drift_val:+} "
                         else:
-                            trend = "➡️  "
+                            trend = "[RIGHT]  "
                     except:
-                        trend = "➡️  "
+                        trend = "[RIGHT]  "
 
                 ticker_txt = f"{trend}{row.get('ticker', '?')} (R{row.get('previous_rank', '-')})"
 
                 prox_txt = (
                     f"{_fmt_num(row.get('previous_proximity'))}"
-                    f"→{_fmt_num(row.get('current_proximity'))}"
+                    f"->{_fmt_num(row.get('current_proximity'))}"
                 )
                 gap_txt = (
                     f"{_fmt_delta(row.get('previous_breakout_gap_pct'), '%')}"
-                    f"→{_fmt_delta(row.get('current_breakout_gap_pct'), '%')}"
+                    f"->{_fmt_delta(row.get('current_breakout_gap_pct'), '%')}"
                 )
                 dist_txt = (
                     f"{_fmt_delta(row.get('previous_dist_sma20_pct'), '%')}"
-                    f"→{_fmt_delta(row.get('current_dist_sma20_pct'), '%')}"
+                    f"->{_fmt_delta(row.get('current_dist_sma20_pct'), '%')}"
                 )
                 rvol_txt = (
-                    f"{_fmt_num(row.get('previous_rvol'))}→{_fmt_num(row.get('current_rvol'))}"
+                    f"{_fmt_num(row.get('previous_rvol'))}->{_fmt_num(row.get('current_rvol'))}"
                 )
                 flow.add_row(
                     ticker_txt,
@@ -510,7 +510,7 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
         sector_flow = snapshot.get("sector_flow") or {}
         sf_rows = sector_flow.get("rows") or []
         if sf_rows:
-            console.print("\n[bold cyan]🏛️ SECTOR MONEY FLOW (DINERO INSTITUCIONAL)[/bold cyan]")
+            console.print("\n[bold cyan][U+1F3DB] SECTOR MONEY FLOW (DINERO INSTITUCIONAL)[/bold cyan]")
             sf = Table(box=box.SIMPLE_HEAD, title_justify="left")
             sf.add_column("ETF", style="bold yellow")
             sf.add_column("Tendencia", justify="center")
@@ -520,16 +520,16 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
 
             for row in sf_rows:
                 drift = row.get("rank_drift", 0)
-                trend = "🔥 ⬆️" if drift > 0 else "❄️ ⬇️" if drift < 0 else "➡️"
+                trend = "[U+1F525] [UP]" if drift > 0 else "[SNOW] [DOWN]" if drift < 0 else "[RIGHT]"
                 rs_drift = row.get("rs_drift", 0)
                 rs_txt = f"{rs_drift:+.2%}" if rs_drift != 0 else "="
 
                 sf.add_row(
                     row["sector_etf"],
                     trend,
-                    f"{row.get('previous_rank') or '-'}→{row.get('current_rank') or '-'}",
+                    f"{row.get('previous_rank') or '-'}->{row.get('current_rank') or '-'}",
                     rs_txt,
-                    "✅ Tradeable" if row.get("tradeable") else "⚠️ Blocked",
+                    "[OK] Tradeable" if row.get("tradeable") else "[WARN] Blocked",
                 )
             console.print(sf)
 
@@ -563,7 +563,7 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
             reverse=True,
         )
         if high_quality:
-            console.print("\n[bold cyan]🏆 HIGH QUALITY SETUPS[/bold cyan]")
+            console.print("\n[bold cyan][U+1F3C6] HIGH QUALITY SETUPS[/bold cyan]")
             hq = Table(box=box.SIMPLE_HEAD, title_justify="left")
             hq.add_column("Ticker", style="bold yellow")
             hq.add_column("RS", justify="right")
@@ -577,7 +577,7 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
                 hq.add_row(
                     ticker,
                     f"{data.get('rs_pct', data.get('score', 0)):.1f}",
-                    "✓" if data.get("breakout") else "✗",
+                    "[U+2713]" if data.get("breakout") else "[U+2717]",
                     _fmt_num(data.get("breakout_level")),
                     _fmt_num(data.get("dist_sma20_pct"), "%"),
                     _fmt_num(data.get("rvol")),
@@ -586,7 +586,7 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
 
             console.print(hq)
 
-    console.print("\n" + "─" * console.width + "\n", style="dim")
+    console.print("\n" + "-" * console.width + "\n", style="dim")
 
 
 def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple[str, list]:
@@ -599,7 +599,7 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
     breadth = snapshot.get("breadth", {})
 
     date_esc = html.escape(str(date))
-    header_date = f"🚀 <b>MOMENTUM V2 | {date_esc}</b>"
+    header_date = f"[U+1F680] <b>MOMENTUM V2 | {date_esc}</b>"
     if data_as_of and data_as_of != date:
         data_as_of_esc = html.escape(str(data_as_of))
         header_date += f" (Data: {data_as_of_esc})"
@@ -609,37 +609,37 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
     if breadth:
         data_status = breadth.get("data_status", "OK")
         vix = breadth.get("vix")
-        vix_status = "🟢" if (vix and vix < 20) else "🟡" if (vix and vix < 30) else "🔴"
+        vix_status = "[U+1F7E2]" if (vix and vix < 20) else "[U+1F7E1]" if (vix and vix < 30) else "[U+1F534]"
 
         if data_status == "STALE" or breadth.get("sample_size", 0) == 0:
             breadth_lines = [
-                f"\n📊 <b>BREADTH HEALTH: ⚪ N/A</b>",
+                f"\n[U+1F4CA] <b>BREADTH HEALTH: [CIRCLE-W] N/A</b>",
                 f"• VIX: <code>{vix if vix else 'N/A'}</code> {vix_status}",
-                f"• Status: <code>DATA STALE (0/0)</code> ⚠️",
+                f"• Status: <code>DATA STALE (0/0)</code> [WARN]",
             ]
         else:
             nh = breadth.get("new_highs", 0)
             nl = breadth.get("new_lows", 0)
             nh_nl_ratio = nh / (nl if nl > 0 else 1)
-            nh_status = "🟢" if nh_nl_ratio > 1.5 else "🟡" if nh_nl_ratio > 0.7 else "🔴"
+            nh_status = "[U+1F7E2]" if nh_nl_ratio > 1.5 else "[U+1F7E1]" if nh_nl_ratio > 0.7 else "[U+1F534]"
 
             adv = breadth.get("advances", 0)
             dec = breadth.get("declines", 0)
             ad_ratio = adv / (dec if dec > 0 else 1)
-            ad_status = "🟢" if ad_ratio > 1.2 else "🟡" if ad_ratio > 0.8 else "🔴"
+            ad_status = "[U+1F7E2]" if ad_ratio > 1.2 else "[U+1F7E1]" if ad_ratio > 0.8 else "[U+1F534]"
 
             verdict = breadth.get("verdict", "NEUTRAL")
             v_emoji = (
-                "✅ GREEN"
+                "[OK] GREEN"
                 if verdict == "GREEN"
-                else "⚠️ CAUTION"
+                else "[WARN] CAUTION"
                 if verdict == "CAUTION"
-                else "⚖️ NEUTRAL"
+                else "[SCALE] NEUTRAL"
             )
             sample = breadth.get("sample_size", 0)
 
             breadth_lines = [
-                f"\n📊 <b>BREADTH HEALTH: {v_emoji}</b>",
+                f"\n[U+1F4CA] <b>BREADTH HEALTH: {v_emoji}</b>",
                 f"• VIX: <code>{vix if vix else 'N/A'}</code> {vix_status}",
                 f"• NH/NL: <code>{nh}/{nl}</code> {nh_status} | A/D: <code>{adv}/{dec}</code> {ad_status}",
                 f"• Sample: <code>{sample} tickers</code>",
@@ -654,10 +654,10 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
     if gamma_data:
         dix = gamma_data["dix"]
         gex = gamma_data["gex"] / 1e9  # Convertir a Billones para legibilidad
-        dix_status = "🔥" if dix > 0.45 else "❄️"
-        gex_status = "✅" if gex > 0 else "⚠️"
+        dix_status = "[U+1F525]" if dix > 0.45 else "[SNOW]"
+        gex_status = "[OK]" if gex > 0 else "[WARN]"
         gamma_str = (
-            f"\n💎 <b>MARKET ALPHA (Gamma/DIX)</b>\n"
+            f"\n[U+1F48E] <b>MARKET ALPHA (Gamma/DIX)</b>\n"
             f"• DIX: <code>{dix:.1%}</code> {dix_status} (Dark Pool Buy %)\n"
             f"• GEX: <code>${gex:.1f}B</code> {gex_status} (Gamma Exposure)\n"
         )
@@ -687,7 +687,7 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
         systems = e25_audit.get("systems", {})
         finviz = systems.get("finviz_vps", {})
         local = systems.get("local_pit", {})
-        lines.append("\n🧪 <b>SHADOW / E25 AUDIT</b>")
+        lines.append("\n[U+1F9EA] <b>SHADOW / E25 AUDIT</b>")
         lines.append(
             f"• FINVIZ/VPS: <code>{finviz.get('signals', 0)}</code> | avg SF <code>{finviz.get('avg_sizing_factor', 1.0):.2f}</code> | blocked <code>{finviz.get('blocked_extremes', 0)}</code> | ultra <code>{finviz.get('ultralight', 0)}</code>"
         )
@@ -707,13 +707,13 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
     hot_sectors = _build_hot_sectors(date, top_n=5)
     hot_sector_order = {}
     if hot_sectors:
-        lines.append("\n🔥 <b>HOT SECTORS</b>")
+        lines.append("\n[U+1F525] <b>HOT SECTORS</b>")
         for idx, row in enumerate(hot_sectors):
             etf = row["sector_etf"]
             hot_sector_order[etf] = idx
             name = html.escape(SECTOR_NAMES.get(etf, ""))
             lines.append(
-                f"• <b>{etf} {name}</b> | RS {row.get('rs', 0):.1%} | S1 {'✓' if row.get('tradeable') else '✗'}"
+                f"• <b>{etf} {name}</b> | RS {row.get('rs', 0):.1%} | S1 {'[U+2713]' if row.get('tradeable') else '[U+2717]'}"
             )
 
     # Resolve all sectors at once for efficiency
@@ -742,7 +742,7 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
 
     def _estado_simple(data):
         if data.get("_display_status") == "warn":
-            return "⚠ Data incompleta"
+            return "[WARN] Data incompleta"
 
         # Calculate sizing factor for E25_v2
         dist = data.get("dist_sma20_pct")
@@ -778,15 +778,15 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
 
         # Lógica mejorada según plan
         if waiting == "OK" and reason == "OK":
-            return "✅ Trigger listo"
+            return "[OK] Trigger listo"
         if reason == "Extendido de SMA20" or (is_extendido and sf_val <= 0):
-            return "📉 Consolidar"
+            return "[U+1F4C9] Consolidar"
         if reason == "Falta breakout" or not breakout:
-            return "⏳ Esperar breakout"
+            return "[HOURGLASS] Esperar breakout"
         if reason == "RVOL bajo" or (rvol is not None and float(rvol) < 1.0):
-            return "📡 Esperar volumen"
+            return "[U+1F4E1] Esperar volumen"
 
-        return "🔧 Setup incompleto"
+        return "[U+1F527] Setup incompleto"
 
     buttons = []
 
@@ -811,7 +811,7 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
         rendered_tickers = []
 
         if nearest_ok:
-            lines.append("\n🎯 <b>SECTORES CON CANDIDATOS</b>")
+            lines.append("\n[U+1F3AF] <b>SECTORES CON CANDIDATOS</b>")
 
             # Agrupar por SECTOR primero
             by_sector = {}
@@ -840,7 +840,7 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
                 for hs in hot_sectors:
                     if hs["sector_etf"] == sec:
                         sec_rs_txt = (
-                            f" | RS {hs.get('rs', 0):.1%} {'🔥' if hs.get('tradeable') else ''}"
+                            f" | RS {hs.get('rs', 0):.1%} {'[U+1F525]' if hs.get('tradeable') else ''}"
                         )
                         break
 
@@ -873,7 +873,7 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
                     dist_val = data.get("dist_sma20_pct", 0)
                     dist = _fmt_val(dist_val, "%")
                     max_dist = _fmt_val(data.get("max_dist_sma20", 6.77), "%")
-                    htf_badge = " 🔥 HTF" if data.get("htf_candidate") else ""
+                    htf_badge = " [U+1F525] HTF" if data.get("htf_candidate") else ""
 
                     themes = data.get("themes", [])
                     theme_txt = f" [Tema: {', '.join(themes).upper()}]" if themes else ""
@@ -882,15 +882,15 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
                     f_row = flow_data.get(ticker, {})
                     drift = f_row.get("rank_drift", 0)
                     if drift == "NEW":
-                        trend = "🆕 "
+                        trend = "[U+1F195] "
                     elif drift == "OUT":
-                        trend = "❌ "
+                        trend = "[FAIL] "
                     else:
                         try:
                             dv = int(drift)
-                            trend = "⬆️ " if dv > 0 else "⬇️ " if dv < 0 else "➡️ "
+                            trend = "[UP] " if dv > 0 else "[DOWN] " if dv < 0 else "[RIGHT] "
                         except:
-                            trend = "➡️ "
+                            trend = "[RIGHT] "
 
                     # Calculate sizing factor for E25_v2 shadow
                     try:
@@ -949,7 +949,7 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
 
         # 2. TOP GLOBAL (TOTAL RANKING) - Absolute leaders regardless of sector
         if nearest_ok:
-            lines.append("\n🏆 <b>TOP GLOBAL (TOTAL RANKING)</b>")
+            lines.append("\n[U+1F3C6] <b>TOP GLOBAL (TOTAL RANKING)</b>")
             for ticker, data in nearest_ok[:5]:
                 ticker_esc = html.escape(str(ticker))
                 rs = data.get("rs_pct", data.get("score", 0))
@@ -967,7 +967,7 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
                 variant_e_candidates.append((ticker, data))
 
         if variant_e_candidates:
-            lines.append("\n🛡️ <b>VARIANTE E (DIVERGENCIA TEMÁTICA)</b>")
+            lines.append("\n[U+1F6E1] <b>VARIANTE E (DIVERGENCIA TEMÁTICA)</b>")
             lines.append("<i>Temas fuertes en sectores débiles (Plan E11)</i>")
             for ticker, data in sorted(
                 variant_e_candidates, key=lambda x: x[1].get("theme_vs_sector", 0), reverse=True
@@ -983,7 +983,7 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
             # Crear el teclado inline
             row = []
             for ticker in rendered_tickers[:6]:
-                row.append({"text": f"🔎 {ticker}", "callback_data": f"detail:{ticker}"})
+                row.append({"text": f"[U+1F50E] {ticker}", "callback_data": f"detail:{ticker}"})
                 if len(row) == 2:
                     buttons.append(row)
                     row = []
@@ -991,7 +991,7 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
                 buttons.append(row)
 
         if nearest_warn:
-            lines.append("\n📡 <b>DATA INCOMPLETE RADAR</b>")
+            lines.append("\n[U+1F4E1] <b>DATA INCOMPLETE RADAR</b>")
             quality_map = {
                 "rvol_1.0_default": "RVOL premarket no confiable",
                 "adr_0": "ADR faltante",
@@ -1077,7 +1077,7 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
                 )
 
             lines.append(
-                f"\n🚨 <b>ALERTA TOP: Sector {top_sec}</b>\n"
+                f"\n[U+1F6A8] <b>ALERTA TOP: Sector {top_sec}</b>\n"
                 f"Candidatos: <code>{html.escape(top_names)}</code>\n"
                 f"Blocker: <b>{html.escape(str(main_blocker))}</b>\n"
                 f"Acción: <b>{html.escape(str(action))}</b>"
@@ -1086,14 +1086,14 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
         sector_flow = snapshot.get("sector_flow") or {}
         sf_rows = sector_flow.get("rows") or []
         if sf_rows:
-            lines.append("\n🏛️ <b>SECTOR MONEY FLOW</b>")
+            lines.append("\n[U+1F3DB] <b>SECTOR MONEY FLOW</b>")
             flow_secs = []
             for row in sf_rows[:5]:
                 etf = row["sector_etf"]
                 flow_secs.append(etf)
                 name = html.escape(SECTOR_NAMES.get(etf, ""))
                 drift = row.get("rank_drift", 0)
-                trend = "🔥 ⬆️" if drift > 0 else "❄️ ⬇️" if drift < 0 else "➡️"
+                trend = "[U+1F525] [UP]" if drift > 0 else "[SNOW] [DOWN]" if drift < 0 else "[RIGHT]"
                 rs_drift = row.get("rs_drift", 0)
                 rs_txt = f"{rs_drift:+.2%}" if rs_drift != 0 else "="
                 lines.append(f"• <b>{etf} {name}</b> | {trend} | RS {rs_txt}")
@@ -1122,7 +1122,7 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
                     gen_lines.append(f"• {etf}: " + ", ".join(formatted_gen))
 
             if gen_lines:
-                lines.append("\n🔭 <b>TOP WATCHLIST POR FLOW</b>")
+                lines.append("\n[U+1F52D] <b>TOP WATCHLIST POR FLOW</b>")
                 lines.append(
                     "<i>Top por score sectorial; no necesariamente listos para trigger.</i>"
                 )
@@ -1132,7 +1132,7 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
         flow_rows = nearest_flow.get("rows") or []
         if flow_rows:
             prev_date = html.escape(str(nearest_flow.get("previous_date", "previo")))
-            lines.append(f"\n🔁 <b>NEAREST FLOW {prev_date} → {date_esc}</b>")
+            lines.append(f"\n[U+1F501] <b>NEAREST FLOW {prev_date} -> {date_esc}</b>")
             state_map = {
                 "SIGNAL": "Signal",
                 "STILL_NEAR": "Sigue top",
@@ -1147,15 +1147,15 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
                 state = html.escape(state_map.get(row.get("state"), str(row.get("state", "-"))))
                 drift = row.get("rank_drift", 0)
                 if drift == "NEW":
-                    trend = "🆕 "
+                    trend = "[U+1F195] "
                 elif drift == "OUT":
-                    trend = "❌ "
+                    trend = "[FAIL] "
                 else:
                     try:
                         dv = int(drift)
-                        trend = f"⬆️{dv:+} " if dv > 0 else f"⬇️{dv:+} " if dv < 0 else "➡️ "
+                        trend = f"[UP]{dv:+} " if dv > 0 else f"[DOWN]{dv:+} " if dv < 0 else "[RIGHT] "
                     except:
-                        trend = "➡️ "
+                        trend = "[RIGHT] "
 
                 prev_rank = row.get("previous_rank", "-")
                 waiting = html.escape(str(row.get("current_waiting_for", "N/A")))
@@ -1200,17 +1200,17 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
     if scanner_uni_count is not None:
         status_parts.append(f"{scanner_uni_count} DB")
     if is_stale:
-        status_parts.append("⚠️ DB stale")
+        status_parts.append("[WARN] DB stale")
 
     status_line = " | ".join(status_parts)
-    lines.append(f"\n🔧 <b>PIPELINE STATUS</b>\nScanner: {status_line}")
+    lines.append(f"\n[U+1F527] <b>PIPELINE STATUS</b>\nScanner: {status_line}")
 
     # Botones finales
     buttons.append(
         [
-            {"text": "🔄 Refresh", "callback_data": "refresh:market"},
-            {"text": "⚡ Regen All", "callback_data": "regenerate:market"},
-            {"text": "🧪 Shadow Audit", "callback_data": "shadow_audit:market"},
+            {"text": "[U+1F504] Refresh", "callback_data": "refresh:market"},
+            {"text": "[BOLT] Regen All", "callback_data": "regenerate:market"},
+            {"text": "[U+1F9EA] Shadow Audit", "callback_data": "shadow_audit:market"},
         ]
     )
 

@@ -192,7 +192,7 @@ class ShadowReplayEngine:
                 "|--------|--------|------------|--------|--------|--------|"
             )
             for r in self.records:
-                cap_ok = "✅" if r.within_ticker_cap else "⚠️ Exceeds"
+                cap_ok = "[OK]" if r.within_ticker_cap else "[WARN] Exceeds"
                 lines.append(
                     f"| {r.date} | {r.ticker} | {r.sector_etf} | {r.rs} "
                     f"| {r.entry_price:.2f} | {r.stop_price:.4f} | {r.tp1:.2f} | {r.tp2:.2f} "

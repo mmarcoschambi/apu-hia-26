@@ -28,7 +28,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Sector mapping (ticker → sector ETF)
+# Sector mapping (ticker -> sector ETF)
 SECTOR_MAP = {
     # Technology & Semi-conductors
     'AAPL': 'XLK', 'MSFT': 'XLK', 'NVDA': 'XLK', 'GOOGL': 'XLK', 'META': 'XLK',
@@ -161,7 +161,7 @@ class SectorRotationAnalyzer:
         Load price data for all sector ETFs and SPY.
         Returns True if successful.
         """
-        logger.info("📊 Loading sector ETF data...")
+        logger.info("[U+1F4CA] Loading sector ETF data...")
         
         try:
             # Load SPY
@@ -191,7 +191,7 @@ class SectorRotationAnalyzer:
                 except Exception as e:
                     logger.warning(f"Failed to load {sector_etf}: {e}")
             
-            logger.info(f"✅ Loaded {len(self.sector_data)} sector ETFs")
+            logger.info(f"[OK] Loaded {len(self.sector_data)} sector ETFs")
             return len(self.sector_data) > 0
             
         except Exception as e:
@@ -208,7 +208,7 @@ class SectorRotationAnalyzer:
         
         Returns DataFrame with RS for each sector per day.
         """
-        logger.info(f"📈 Calculating sector relative strength ({lookback_days}d lookback)...")
+        logger.info(f"[U+1F4C8] Calculating sector relative strength ({lookback_days}d lookback)...")
         
         rs_data = {}
         
@@ -228,7 +228,7 @@ class SectorRotationAnalyzer:
         
         self.sector_strength = pd.DataFrame(rs_data)
         
-        logger.info("✅ Relative strength calculated")
+        logger.info("[OK] Relative strength calculated")
         return self.sector_strength
     
     def rank_sectors_by_strength(self, date: pd.Timestamp) -> Dict[str, Dict]:
@@ -410,7 +410,7 @@ class SectorRotationAnalyzer:
             # Create DataFrame with all scores
             scores_df = pd.DataFrame(all_scores)
             
-            logger.info(f"✅ Pre-calculated composite scores for {len(scores_df)} dates, {len(all_scores)} sectors")
+            logger.info(f"[OK] Pre-calculated composite scores for {len(scores_df)} dates, {len(all_scores)} sectors")
             return scores_df
             
         except Exception as e:

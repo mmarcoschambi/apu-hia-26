@@ -442,7 +442,7 @@ def compute_daily_analytics(
     Returns:
         Dict con schema canónico de analytics
     """
-    logger.info(f"📊 Computing analytics for {date}...")
+    logger.info(f"[U+1F4CA] Computing analytics for {date}...")
 
     # Capital actual (de último snapshot si existe)
     capital = initial_capital
@@ -530,7 +530,7 @@ def compute_daily_analytics(
     }
 
     logger.info(
-        f"  ✅ Analytics computed: {len(trades)} trades, WR={trade_stats['win_rate']}%, PF={overall_quality['profit_factor']}"
+        f"  [OK] Analytics computed: {len(trades)} trades, WR={trade_stats['win_rate']}%, PF={overall_quality['profit_factor']}"
     )
 
     return payload

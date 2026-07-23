@@ -1,4 +1,4 @@
-﻿import sqlite3
+import sqlite3
 import pandas as pd
 from pathlib import Path
 import logging
@@ -257,7 +257,7 @@ class CandidateTracker:
         """, rows)
         conn.commit()
 
-        logger.info(f"✅ {date_str}: {len(rows)} filas insertadas.")
+        logger.info(f"[OK] {date_str}: {len(rows)} filas insertadas.")
 
         self._update_sector_etfs(date_str)
         self._update_setup_metrics(date_str)

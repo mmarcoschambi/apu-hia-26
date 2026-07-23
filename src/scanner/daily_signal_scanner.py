@@ -363,7 +363,7 @@ def main():
         if not args.quiet and i % 500 == 0:
             print(f"  [{i}/{len(universe)}] signals: {len(signals)}")
 
-    signals.sort(key=lambda x: x["entry_score"], reverse=True)
+    signals.sort(key=lambda x: (x["entry_score"], x["ticker"]), reverse=True)
 
     # Display
     print(f"\n{'=' * 70}")

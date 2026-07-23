@@ -44,10 +44,10 @@ class BacktestVisualizer:
             # Find the absolute index of the entry date
             entry_idx_abs = daily_df.index.get_indexer([entry_date_pd], method='nearest')[0]
             if entry_idx_abs == -1:
-                print(f"❌ Date {entry_date} not found for {symbol}")
+                print(f"[FAIL] Date {entry_date} not found for {symbol}")
                 return
         except Exception as e:
-            print(f"❌ Error finding date {entry_date} for {symbol}: {e}")
+            print(f"[FAIL] Error finding date {entry_date} for {symbol}: {e}")
             return
         
         start_idx = max(0, entry_idx_abs - days_before)
@@ -116,7 +116,7 @@ class BacktestVisualizer:
         filename = f"{symbol}_{entry_date}_{camino}.png"
         output_path = output_dir / filename
         plt.savefig(output_path, dpi=100, bbox_inches='tight')
-        print(f"✅ Chart saved: {output_path}")
+        print(f"[OK] Chart saved: {output_path}")
         
         plt.close()
 
@@ -186,7 +186,7 @@ class BacktestVisualizer:
                 ax.axhline(entry_price, color='cyan', linestyle='--', alpha=0.5, label=f'Entry Level: ${entry_price:.2f}')
 
             # Formatting
-            ax.set_title(f"🔍 Intraday 5m Action - {target_day_str} (VWAP Defense)", fontsize=12, fontweight='bold')
+            ax.set_title(f"[U+1F50D] Intraday 5m Action - {target_day_str} (VWAP Defense)", fontsize=12, fontweight='bold')
             ax.set_ylabel('Price ($)')
             ax.grid(True, alpha=0.3)
             ax.legend(loc='upper left')
@@ -327,7 +327,7 @@ class BacktestVisualizer:
         results_df = pd.read_csv(results_csv)
         results_df['date'] = pd.to_datetime(results_df['date'])
         
-        print(f"\n📊 Generating charts for {min(len(results_df), max_trades)} trades...")
+        print(f"\n[U+1F4CA] Generating charts for {min(len(results_df), max_trades)} trades...")
         
         for i, row in results_df.head(max_trades).iterrows():
             print(f"[{i+1}/{min(max_trades, len(results_df))}] {row['symbol']} - {row['date'].date()}")
@@ -351,7 +351,7 @@ class BacktestVisualizer:
                 days_after=15
             )
         
-        print(f"\n✅ Charts in ./backtest_charts/")
+        print(f"\n[OK] Charts in ./backtest_charts/")
     
     def create_summary_dashboard(self, results_csv: str):
         """Create summary dashboard"""
@@ -457,7 +457,7 @@ Date Range:          {results_df['date'].min().date()}
         # Save
         output_path = Path("backtest_charts") / "summary_dashboard.png"
         plt.savefig(output_path, dpi=100, bbox_inches='tight')
-        print(f"\n✅ Dashboard saved: {output_path}")
+        print(f"\n[OK] Dashboard saved: {output_path}")
         
         plt.close()
 
@@ -476,20 +476,20 @@ def main():
     args = parser.parse_args()
     
     if not Path(args.results_csv).exists():
-        print(f"❌ File not found: {args.results_csv}")
+        print(f"[FAIL] File not found: {args.results_csv}")
         sys.exit(1)
     
     visualizer = BacktestVisualizer()
     
     # Summary dashboard
-    print("📊 Creating summary dashboard...")
+    print("[U+1F4CA] Creating summary dashboard...")
     visualizer.create_summary_dashboard(args.results_csv)
     
     # Individual charts
     if not args.summary_only:
         visualizer.visualize_all_trades(args.results_csv, max_trades=args.max_trades)
     
-    print("\n✅ Complete! Check ./backtest_charts/")
+    print("\n[OK] Complete! Check ./backtest_charts/")
 
 
 if __name__ == "__main__":

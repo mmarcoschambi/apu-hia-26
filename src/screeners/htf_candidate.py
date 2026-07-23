@@ -1,4 +1,4 @@
-﻿"""
+"""
 src/screeners/htf_candidate.py
 High Tight Flag (HTF) — Filtro de Prioridad para el Scanner Live.
 
@@ -92,7 +92,7 @@ class HTFCandidateScreener(BaseScreener):
         high  = df[h_col]
         price = float(close.iloc[-1])
 
-        # ── 1. POLO ──────────────────────────────────────────────────────────
+        # -- 1. POLO ----------------------------------------------------------
         pole_days = int(p["pole_days"])
         flag_days = int(p["flag_days"])  # definido aqui para usar en search_window
         if len(close) < pole_days + 1:
@@ -116,13 +116,13 @@ class HTFCandidateScreener(BaseScreener):
         pole_ret = float(rolling_ret.max())
         pole_ok  = pole_ret >= p["pole_ret_pct"]
 
-        # ── 2. CALIDAD DEL POLO (Trend Intensity) ────────────────────────────
+        # -- 2. CALIDAD DEL POLO (Trend Intensity) ----------------------------
         ma13 = float(close.rolling(13).mean().iloc[-1])
         ma65 = float(close.rolling(65).mean().iloc[-1])
         trend_intensity = (ma13 / ma65 * 100) if ma65 > 0 else 0.0
         ti_ok = trend_intensity >= p["min_trend_intensity"]
 
-        # ── 3. FLAG: correccion medida sobre close del dia ANTERIOR ──────────
+        # -- 3. FLAG: correccion medida sobre close del dia ANTERIOR ----------
         # Usando close[-2] (ayer) para que el dia de breakout no produzca
         # correction negativa y bloquee la senal.
         flag_window = high.iloc[-(flag_days + 1):-1]  # excluye hoy
@@ -134,12 +134,12 @@ class HTFCandidateScreener(BaseScreener):
         correction  = (flag_high - close_prev) / flag_high if flag_high > 0 else 1.0
         flag_ok     = (0.0 <= correction < p["flag_corr_max"])
 
-        # ── 4. STAGE 2: MA Stack minimo (SMA50 > SMA200) ─────────────────────
+        # -- 4. STAGE 2: MA Stack minimo (SMA50 > SMA200) ---------------------
         sma50  = float(self.ensure_ma(df, 50).iloc[-1])
         sma200 = float(self.ensure_ma(df, 200).iloc[-1])
         stage2_ok = (price > sma50 > sma200)
 
-        # ── Criterios y resultado ────────────────────────────────────────────
+        # -- Criterios y resultado --------------------------------------------
         criteria = {
             "polo_50pct_120d":      pole_ok,
             "trend_intensity_108":  ti_ok,

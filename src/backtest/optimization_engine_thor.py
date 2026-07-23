@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-⚠️  DEPRECATED - DO NOT USE FOR PRODUCTION ⚠️
+[WARN]  DEPRECATED - DO NOT USE FOR PRODUCTION [WARN]
 ===============================================
 
 This engine (THOR/Divo) is DEPRECATED as of 2025-02-11.
@@ -21,7 +21,7 @@ The Advanced engine includes:
 - Full production rule fidelity (costs, slippage, liquidity limits)
 - Survivorship handling and regime/sector filters
 - Adaptive position sizing
-- 3-phase research gate (Discovery → Validation → Productionization)
+- 3-phase research gate (Discovery -> Validation -> Productionization)
 - Robustness metrics (PBO, CSCV, Walk-Forward, bootstrap percentiles)
 - Stress testing suite
 
@@ -82,9 +82,9 @@ class OptimizationEngineTHOR:
         use_float32: bool = True,
         chunk_size: int = 100,
     ):
-        logger.info("⚡🔨 BUGATTI THOR (W16) igniting...")
-        logger.info(f"📅 Period: {start_date} to {end_date}")
-        logger.info(f"🎯 Tickers: {len(tickers)}")
+        logger.info("[BOLT][U+1F528] BUGATTI THOR (W16) igniting...")
+        logger.info(f"[U+1F4C5] Period: {start_date} to {end_date}")
+        logger.info(f"[U+1F3AF] Tickers: {len(tickers)}")
 
         self.tickers = tickers
         self.start_date = pd.to_datetime(start_date)
@@ -136,16 +136,16 @@ class OptimizationEngineTHOR:
         # Load data
         self._load_data_chunked()
 
-        logger.info(f"✅ THOR ready: {len(self.valid_tickers)} tickers")
+        logger.info(f"[OK] THOR ready: {len(self.valid_tickers)} tickers")
         logger.info(
-            f"💾 RAM mode: {'Float32 (50% saving)' if use_float32 else 'Float64'}"
+            f"[U+1F4BE] RAM mode: {'Float32 (50% saving)' if use_float32 else 'Float64'}"
         )
 
     def _load_data_chunked(self):
         """Cargar datos en chunks para evitar RAM spike."""
         extended_start = self.start_date - timedelta(days=self.lookback_days)
 
-        logger.info(f"📥 Loading data in chunks of {self.chunk_size}...")
+        logger.info(f"[U+1F4E5] Loading data in chunks of {self.chunk_size}...")
 
         all_close = []
         all_open = []
@@ -226,8 +226,8 @@ class OptimizationEngineTHOR:
 
             self.valid_tickers = valid_tickers
 
-            logger.info(f"✅ Loaded {len(self.valid_tickers)} tickers")
-            logger.info(f"📊 Shape: {self.close.shape}")
+            logger.info(f"[OK] Loaded {len(self.valid_tickers)} tickers")
+            logger.info(f"[U+1F4CA] Shape: {self.close.shape}")
 
             mem_mb = (
                 (
@@ -240,7 +240,7 @@ class OptimizationEngineTHOR:
                 / 1024
                 / 1024
             )
-            logger.info(f"💾 Core data memory: {mem_mb:.1f} MB")
+            logger.info(f"[U+1F4BE] Core data memory: {mem_mb:.1f} MB")
         else:
             raise ValueError("No data loaded!")
 
@@ -254,35 +254,35 @@ class OptimizationEngineTHOR:
     @property
     def sma20(self):
         if self._sma20 is None:
-            logger.debug("   💤 Calculating SMA20...")
+            logger.debug("   [U+1F4A4] Calculating SMA20...")
             self._sma20 = self.close.rolling(20).mean().astype(self.dtype)
         return self._sma20
 
     @property
     def sma50(self):
         if self._sma50 is None:
-            logger.debug("   💤 Calculating SMA50...")
+            logger.debug("   [U+1F4A4] Calculating SMA50...")
             self._sma50 = self.close.rolling(50).mean().astype(self.dtype)
         return self._sma50
 
     @property
     def sma200(self):
         if self._sma200 is None:
-            logger.debug("   💤 Calculating SMA200...")
+            logger.debug("   [U+1F4A4] Calculating SMA200...")
             self._sma200 = self.close.rolling(200).mean().astype(self.dtype)
         return self._sma200
 
     @property
     def ema8(self):
         if self._ema8 is None:
-            logger.debug("   💤 Calculating EMA8...")
+            logger.debug("   [U+1F4A4] Calculating EMA8...")
             self._ema8 = self.close.ewm(span=8, adjust=False).mean().astype(self.dtype)
         return self._ema8
 
     @property
     def ema21(self):
         if self._ema21 is None:
-            logger.debug("   💤 Calculating EMA21...")
+            logger.debug("   [U+1F4A4] Calculating EMA21...")
             self._ema21 = (
                 self.close.ewm(span=21, adjust=False).mean().astype(self.dtype)
             )
@@ -291,7 +291,7 @@ class OptimizationEngineTHOR:
     @property
     def dist_sma20(self):
         if self._dist_sma20 is None:
-            logger.debug("   💤 Calculating distance to SMA20...")
+            logger.debug("   [U+1F4A4] Calculating distance to SMA20...")
             self._dist_sma20 = ((self.close - self.sma20) / self.sma20 * 100).astype(
                 self.dtype
             )
@@ -300,14 +300,14 @@ class OptimizationEngineTHOR:
     @property
     def vol_sma20(self):
         if self._vol_sma20 is None:
-            logger.debug("   💤 Calculating Volume SMA20...")
+            logger.debug("   [U+1F4A4] Calculating Volume SMA20...")
             self._vol_sma20 = self.volume.rolling(20).mean().astype(self.dtype)
         return self._vol_sma20
 
     @property
     def rvol(self):
         if self._rvol is None:
-            logger.debug("   💤 Calculating RVOL...")
+            logger.debug("   [U+1F4A4] Calculating RVOL...")
             raw_rvol = TechnicalIndicators.rvol(self.volume, period=20)
             # CONVERGENCE FIX: Apply same sanitization as Advanced engine
             # Force RVOL = 1.0 where avg_volume <= 500 (to match Advanced behavior)
@@ -321,7 +321,7 @@ class OptimizationEngineTHOR:
     @property
     def adr(self):
         if self._adr is None:
-            logger.debug("   💤 Calculating ADR (20-day Rolling Mean)...")
+            logger.debug("   [U+1F4A4] Calculating ADR (20-day Rolling Mean)...")
             # CHANGED: Now using the rolling mean (ADR) instead of single-day range
             # to match the Advanced engine logic as requested.
             self._adr = TechnicalIndicators.adr(
@@ -332,7 +332,7 @@ class OptimizationEngineTHOR:
     @property
     def atr(self):
         if self._atr is None:
-            logger.debug("   💤 Calculating ATR...")
+            logger.debug("   [U+1F4A4] Calculating ATR...")
             # FIXED: Correcto cálculo de ATR
             hl = self.high - self.low
             hc = (self.high - self.close.shift()).abs()
@@ -358,7 +358,7 @@ class OptimizationEngineTHOR:
     @property
     def consolidation_range(self):
         if self._consolidation_range is None:
-            logger.debug("   💤 Calculating consolidation range...")
+            logger.debug("   [U+1F4A4] Calculating consolidation range...")
             high_20 = self.high.rolling(20).max()
             low_20 = self.low.rolling(20).min()
             self._consolidation_range = ((high_20 - low_20) / low_20 * 100).astype(
@@ -369,7 +369,7 @@ class OptimizationEngineTHOR:
     @property
     def consolidation_days(self):
         if self._consolidation_days is None:
-            logger.debug("   💤 Calculating consolidation days...")
+            logger.debug("   [U+1F4A4] Calculating consolidation days...")
             # Contar días dentro de BB
             bb_period = 20
             bb_std = 2
@@ -419,7 +419,7 @@ class OptimizationEngineTHOR:
         """Lazy load SPY and VIX using centralized loader"""
         from src.utils.market_regime import load_spy_vix_data
 
-        logger.debug("   💤 Loading Market Regime Data (SPY/VIX)...")
+        logger.debug("   [U+1F4A4] Loading Market Regime Data (SPY/VIX)...")
 
         extended_start = self.start_date - timedelta(days=self.lookback_days)
 
@@ -450,7 +450,7 @@ class OptimizationEngineTHOR:
     def rs_21d(self):
         """Lazy calculation de Relative Strength vs SPY"""
         if self._rs_21d is None:
-            logger.debug("   💤 Calculating RS 21d...")
+            logger.debug("   [U+1F4A4] Calculating RS 21d...")
             stock_ret = self.close.pct_change(21)
             spy_ret = self.spy_close.pct_change(21)
             # Fix: usar .sub() con axis=0 para broadcast correcto
@@ -479,7 +479,7 @@ class OptimizationEngineTHOR:
         self._vix_close = None
         self._rs_21d = None
         gc.collect()
-        logger.debug("   🧹 Indicator cache cleared")
+        logger.debug("   [U+1F9F9] Indicator cache cleared")
 
     # ========================================================================
     # BACKTEST ENGINE
@@ -547,7 +547,7 @@ class OptimizationEngineTHOR:
             # STEP 1: LIQUIDITY FILTERS (SIEMPRE aplicar)
             # ============================================================
 
-            # 🔥 THOR: Usar vol_sma20 para liquidez estructural (anti-trap)
+            # [U+1F525] THOR: Usar vol_sma20 para liquidez estructural (anti-trap)
             avg_dollar_volume = (
                 (self.close * self.vol_sma20).fillna(0).astype(self.dtype)
             )
@@ -1094,7 +1094,7 @@ def create_memory_safe_objective(engine, metric="sharpe", clear_cache_every=20):
 
         # Limpieza periódica
         if trial_count[0] % clear_cache_every == 0:
-            logger.info(f"🧹 Clearing cache (trial {trial_count[0]})")
+            logger.info(f"[U+1F9F9] Clearing cache (trial {trial_count[0]})")
             engine.clear_indicator_cache()
             gc.collect()
 
@@ -1116,7 +1116,7 @@ def create_memory_safe_objective(engine, metric="sharpe", clear_cache_every=20):
 
 if __name__ == "__main__":
     # Quick test
-    logger.info("⚡🔨 BUGATTI THOR - Benchmarking W16 Engine")
+    logger.info("[BOLT][U+1F528] BUGATTI THOR - Benchmarking W16 Engine")
 
     tickers = ["AAPL", "MSFT", "GOOGL", "NVDA", "TSLA"]
 
@@ -1154,4 +1154,4 @@ if __name__ == "__main__":
     print(f"  Max DD: {stats['max_drawdown_pct']:.2f}%")
 
     engine.clear_indicator_cache()
-    print(f"\n✅ THOR is roaring! ⚡🔨")
+    print(f"\n[OK] THOR is roaring! [BOLT][U+1F528]")

@@ -396,7 +396,7 @@ def _render_signal_line(signal: dict[str, Any]) -> str:
         "source_badge", _source_badge(signal.get("source_system", "local_pit"))
     )
     return (
-        f"{badge} ★{score:.0f} Dist:<code>{dist:+.1f}%</code> SF:<code>{factor:.2f}</code> {bucket}"
+        f"{badge} [U+2605]{score:.0f} Dist:<code>{dist:+.1f}%</code> SF:<code>{factor:.2f}</code> {bucket}"
     )
 
 
@@ -473,8 +473,8 @@ def _resolve_live_signals_date(date: str | None = None) -> str | None:
 
 
 def _map_premarket_detail_to_signal(ticker: str, detail: dict, date: str) -> dict[str, Any]:
-    # El combo en pre-market es siempre "Pre-A→B" — la cascada corre en live
-    combo_label = "Pre-A→B"
+    # El combo en pre-market es siempre "Pre-A->B" — la cascada corre en live
+    combo_label = "Pre-A->B"
 
     reasons = detail.get("reasons", [])
     waiting = detail.get("waiting_for", "")
@@ -665,7 +665,7 @@ def _classify_urgency(signal: dict, system: str | None = None) -> tuple[str, str
     dist_trend = signal.get("_dist_trend_5d")  # negativo = consolidando
     near_bo = signal.get("_near_breakout", False)
 
-    # ── Umbral de extensión según sistema ─────────────────────────────────
+    # -- Umbral de extensión según sistema ---------------------------------
     # System B (E25) permite hasta 35.0% (extensión mitigada por sizing).
     # System A (Padre) usa _MAX_DIST_SMA20 (6.77%).
     if system == "B":
@@ -678,39 +678,39 @@ def _classify_urgency(signal: dict, system: str | None = None) -> tuple[str, str
     has_bkout = any("breakout" in r.lower() for r in reasons)
     has_rvol = any("RVOL" in r for r in reasons)
 
-    # ── Badge de evolución ────────────────────────────────────────────────
+    # -- Badge de evolución ------------------------------------------------
     evo_badge = ""
 
     if setup_age >= 3:
         if dist_trend is not None and dist_trend <= -5.0:
-            # Consolidando activamente — dist bajó ≥5% en 5 días
-            evo_badge = f"📈 <i>Consolidando {abs(dist_trend):.1f}% en 5d</i>"
+            # Consolidando activamente — dist bajó >=5% en 5 días
+            evo_badge = f"[U+1F4C8] <i>Consolidando {abs(dist_trend):.1f}% en 5d</i>"
         elif near_bo or db_status == "NEAR":
-            evo_badge = f"⚡ <i>Cerca del trigger ({setup_age}d en lista)</i>"
+            evo_badge = f"[BOLT] <i>Cerca del trigger ({setup_age}d en lista)</i>"
         elif db_status == "CONFIRMED":
-            evo_badge = f"🏆 <i>Confirmado ({setup_age}d)</i>"
+            evo_badge = f"[U+1F3C6] <i>Confirmado ({setup_age}d)</i>"
         elif setup_age >= 7:
             # Lleva mucho tiempo sin moverse — puede estar perdiendo momentum
-            evo_badge = f"⏳ <i>{setup_age}d en lista</i>"
+            evo_badge = f"[HOURGLASS] <i>{setup_age}d en lista</i>"
 
-    # ── Clasificación principal ───────────────────────────────────────────
+    # -- Clasificación principal -------------------------------------------
     if gate == "PASS":
-        return "A", "🟢 <b>ACTIVO</b>", evo_badge
+        return "A", "[U+1F7E2] <b>ACTIVO</b>", evo_badge
 
     if has_rvol and not has_dist and not has_ma and not has_bkout:
-        return "A", "🟢 <b>RVOL pendiente</b>", evo_badge
+        return "A", "[U+1F7E2] <b>RVOL pendiente</b>", evo_badge
 
     if has_bkout and not has_dist and not has_ma:
-        return "A", "🟡 <b>Esperar breakout</b>", evo_badge
+        return "A", "[U+1F7E1] <b>Esperar breakout</b>", evo_badge
 
     if has_dist and not has_ma and dist_sma <= _DIST_MODERATE:
-        badge = "🟡 <b>Consolidar + RVOL</b>" if has_rvol else "🟡 <b>Consolidar</b>"
+        badge = "[U+1F7E1] <b>Consolidar + RVOL</b>" if has_rvol else "[U+1F7E1] <b>Consolidar</b>"
         return "B", badge, evo_badge
 
     if has_rvol and dist_sma <= _DIST_MODERATE and not has_ma:
-        return "B", "🟡 <b>Consolidar + RVOL</b>", evo_badge
+        return "B", "[U+1F7E1] <b>Consolidar + RVOL</b>", evo_badge
 
-    return "C", "🔴 <b>Radar largo plazo</b>", evo_badge
+    return "C", "[U+1F534] <b>Radar largo plazo</b>", evo_badge
 
 
 def load_watchlist_signals(date: str | None = None) -> tuple[str | None, list[dict[str, Any]]]:
@@ -817,30 +817,30 @@ def build_market_message(date: str | None = None) -> tuple[str, list]:
     # Fallback al mensaje corto si no hay brief
     resolved, snapshot = load_monitor_snapshot(date)
     if not resolved or not snapshot:
-        return "⚠️ <b>MARKET</b>\nNo monitor data available yet.", []
+        return "[WARN] <b>MARKET</b>\nNo monitor data available yet.", []
 
     warnings = snapshot.get("finviz_warnings") or []
     signals = snapshot.get("signals") or []
     top = signals[:5]
 
-    status_icon = "🟢" if snapshot.get("regime_ok") else "🔴"
+    status_icon = "[U+1F7E2]" if snapshot.get("regime_ok") else "[U+1F534]"
 
     lines = [
-        f"🌐 <b>MARKET OVERVIEW | {resolved}</b>",
-        "🧪 <b>SHADOW / E25</b>",
+        f"[U+1F310] <b>MARKET OVERVIEW | {resolved}</b>",
+        "[U+1F9EA] <b>SHADOW / E25</b>",
         f"STATUS: <code>SHADOW</code>",
         f"<i>Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</i>\n",
         f"{status_icon} <b>Regime Status:</b> {'<b>OK</b>' if snapshot.get('regime_ok') else '<b>BLOCKED</b>'}",
-        f"📊 Universe Size: <code>{snapshot.get('universe_size', 0)}</code>",
-        f"🛰 Monitor Signals: <code>{len(signals)}</code>",
-        f"🛑 Demo Kill Switch: <code>{'ON' if state.kill_switch else 'OFF'}</code>",
+        f"[U+1F4CA] Universe Size: <code>{snapshot.get('universe_size', 0)}</code>",
+        f"[U+1F6F0] Monitor Signals: <code>{len(signals)}</code>",
+        f"[U+1F6D1] Demo Kill Switch: <code>{'ON' if state.kill_switch else 'OFF'}</code>",
     ]
     if warnings:
-        lines.append("\n⚠️ <b>Warnings:</b>")
+        lines.append("\n[WARN] <b>Warnings:</b>")
         for warning in warnings[:3]:
             lines.append(f"• {warning}")
     if top:
-        lines.append("\n🔥 <b>Top Candidates:</b>")
+        lines.append("\n[U+1F525] <b>Top Candidates:</b>")
         lines.append("<pre>")
         lines.append(f"{'Ticker':<7} {'Combo':<12} {'Entry':<8} {'Stop'}")
         lines.append(f"{'-' * 7} {'-' * 12} {'-' * 8} {'-' * 6}")
@@ -857,7 +857,7 @@ def build_market_message(date: str | None = None) -> tuple[str, list]:
         systems = e25_audit.get("systems", {})
         finviz = systems.get("finviz_vps", {})
         local = systems.get("local_pit", {})
-        lines.append("\n🧪 <b>SHADOW / E25 AUDIT</b>")
+        lines.append("\n[U+1F9EA] <b>SHADOW / E25 AUDIT</b>")
         lines.append(
             f"• FINVIZ/VPS: <code>{finviz.get('signals', 0)}</code> | avg SF <code>{finviz.get('avg_sizing_factor', 1.0):.2f}</code> | blocked <code>{finviz.get('blocked_extremes', 0)}</code> | ultra <code>{finviz.get('ultralight', 0)}</code>"
         )
@@ -922,7 +922,7 @@ def _build_grouped_signals_lines(signals: list, date: str, limit: int = 15) -> l
         s_dist_text = ""
         if s_status is not None:
             ok, dist = s_status
-            s_icon = " 🟢" if ok else " 🔴"
+            s_icon = " [U+1F7E2]" if ok else " [U+1F534]"
             s_dist_text = f" ({dist:+.1%})"
 
         lines.append(f"<b>{etf} — {sector_name}</b>{s_icon}{s_dist_text}")
@@ -938,7 +938,7 @@ def _build_grouped_signals_lines(signals: list, date: str, limit: int = 15) -> l
             rs_text = ""
             if theme_rs is not None:
                 # Theme RS is vs Sector ETF
-                rs_icon = " ✅" if theme_rs > 0 else " ⚠️"
+                rs_icon = " [OK]" if theme_rs > 0 else " [WARN]"
                 rs_text = f" | RS vs Sector: {theme_rs:+.1%}"
 
             lines.append(f"  <code>{ticker:<5}</code> RS:{rs_val} | {theme_str}{rs_text}{rs_icon}")
@@ -958,7 +958,7 @@ def build_watchlist_message(date: str | None = None, page: int = 1, system: str 
     """Build paginated watchlist message. Returns (text, buttons)."""
     resolved, signals = load_watchlist_signals(date)
     if not resolved:
-        return "⚠️ <b>WATCHLIST</b>\nNo signal data available yet.", []
+        return "[WARN] <b>WATCHLIST</b>\nNo signal data available yet.", []
 
     if system is not None:
         filtered_signals = []
@@ -977,7 +977,7 @@ def build_watchlist_message(date: str | None = None, page: int = 1, system: str 
     if not signals:
         sys_prefix = "[SISTEMA A] " if system == "A" else "[SISTEMA B] " if system == "B" else ""
         return (
-            f"🧭 <b>{sys_prefix}WATCHLIST | {resolved}</b>\n"
+            f"[U+1F9ED] <b>{sys_prefix}WATCHLIST | {resolved}</b>\n"
             f"<i>(Manual Review)</i>\n\n"
             f"No watchlist candidates for this date.",
             [],
@@ -990,7 +990,7 @@ def build_watchlist_message(date: str | None = None, page: int = 1, system: str 
         tier, badge, evo_badge = _classify_urgency(s, system=system)
         s["_urgency_tier"]  = tier
         s["_urgency_badge"] = badge
-        s["_evo_badge"] = evo_badge  # ← NUEVO
+        s["_evo_badge"] = evo_badge  # <- NUEVO
 
     cnt = {"A": 0, "B": 0, "C": 0}
     for s in signals:
@@ -1015,10 +1015,10 @@ def build_watchlist_message(date: str | None = None, page: int = 1, system: str 
     # Header enriquecido con conteo por tier
     sys_prefix = "[SISTEMA A] " if system == "A" else "[SISTEMA B] " if system == "B" else ""
     lines = [
-        f"🧭 <b>{sys_prefix}WATCHLIST | {resolved}</b>",
+        f"[U+1F9ED] <b>{sys_prefix}WATCHLIST | {resolved}</b>",
         f"<i>Grouped by Sector · Page {page}/{total_pages}</i>\n",
-        f"🔍 Candidates: <code>{total}</code>  "
-        f"🟢<code>{cnt['A']}</code> 🟡<code>{cnt['B']}</code> 🔴<code>{cnt['C']}</code>\n",
+        f"[U+1F50D] Candidates: <code>{total}</code>  "
+        f"[U+1F7E2]<code>{cnt['A']}</code> [U+1F7E1]<code>{cnt['B']}</code> [U+1F534]<code>{cnt['C']}</code>\n",
     ]
     lines = _build_shadow_audit_lines(resolved) + lines
 
@@ -1029,7 +1029,7 @@ def build_watchlist_message(date: str | None = None, page: int = 1, system: str 
     scores = [float(s.get("entry_score", 0) or 0) for s in signals]
     if scores:
         lines.append(
-            f"\n📊 Top: <code>{max(scores):.0f}</code> | "
+            f"\n[U+1F4CA] Top: <code>{max(scores):.0f}</code> | "
             f"Avg: <code>{sum(scores) / len(scores):.0f}</code> | "
             f"Showing {start_idx + 1}-{min(end_idx, total)} of {total}"
         )
@@ -1062,7 +1062,7 @@ def _build_watchlist_grouped_lines(signals: list, date: str, system: str | None 
         s_dist_text = ""
         if s_status is not None:
             ok, dist = s_status
-            s_icon = " 🟢" if ok else " 🔴"
+            s_icon = " [U+1F7E2]" if ok else " [U+1F534]"
             s_dist_text = f" ({dist:+.1%})"
 
         lines.append(f"<b>{etf} — {sector_name}</b>{s_icon}{s_dist_text}")
@@ -1073,7 +1073,7 @@ def _build_watchlist_grouped_lines(signals: list, date: str, system: str | None 
             entry = float(s.get("entry_price", 0) or 0)
             adr = float(s.get("gate_adr_pct", 0) or 0)
             gate_status = s.get("entry_gate_status", "")
-            gate_icon = "✅" if gate_status == "PASS" else "⛔"
+            gate_icon = "[OK]" if gate_status == "PASS" else "[NO]"
             urgency_badge = s.get("_urgency_badge", "")
             evo_badge = s.get("_evo_badge", "")
 
@@ -1085,9 +1085,9 @@ def _build_watchlist_grouped_lines(signals: list, date: str, system: str | None 
                 theme_names = ", ".join(themes[:2])
                 rs_part = ""
                 if theme_rs is not None:
-                    rs_icon = "✅" if theme_rs > 0 else "⚠️"
+                    rs_icon = "[OK]" if theme_rs > 0 else "[WARN]"
                     rs_part = f" {rs_icon} RS:{theme_rs:+.1%}"
-                theme_line = f"\n         └ {theme_names}{rs_part}"
+                theme_line = f"\n         + {theme_names}{rs_part}"
 
             # Badge de sizing para el Sistema B
             sizing_lbl = ""
@@ -1110,7 +1110,7 @@ def _build_watchlist_grouped_lines(signals: list, date: str, system: str | None 
                 evo_line = f"\n         {evo_badge}"
 
             lines.append(
-                f"  <code>{ticker:<5}</code> ★{score:.0f}  "
+                f"  <code>{ticker:<5}</code> [U+2605]{score:.0f}  "
                 f"Entry:<code>{entry:.2f}</code>{sizing_lbl}  "
                 f"ADR:<code>{adr:.1f}%</code> {gate_icon}"
                 f"{theme_line}"
@@ -1125,7 +1125,7 @@ def _build_watchlist_grouped_lines(signals: list, date: str, system: str | None 
             ticker = s.get("ticker", "?")
             score = float(s.get("entry_score", 0) or 0)
             entry = float(s.get("entry_price", 0) or 0)
-            lines.append(f"  <code>{ticker:<5}</code> ★{score:.0f}  Entry:<code>{entry:.2f}</code>")
+            lines.append(f"  <code>{ticker:<5}</code> [U+2605]{score:.0f}  Entry:<code>{entry:.2f}</code>")
         lines.append("")
 
     return lines
@@ -1146,7 +1146,7 @@ def _build_dual_watchlist_header(signals: list[dict[str, Any]], resolved: str) -
     local_only = sorted(local - finviz)
     finviz_only = sorted(finviz - local)
     lines = [
-        f"🧭 <b>DUAL VIEW | {resolved}</b>",
+        f"[U+1F9ED] <b>DUAL VIEW | {resolved}</b>",
         f"LOCAL/PIT: <code>{len(local)}</code> | FINVIZ/VPS: <code>{len(finviz)}</code>",
         f"Overlap: <code>{len(overlap)}</code> | Local-only: <code>{len(local_only)}</code> | Finviz-only: <code>{len(finviz_only)}</code>",
         f"Badges: [LOCAL] [FINVIZ]",
@@ -1172,7 +1172,7 @@ def _build_shadow_audit_lines(date: str | None) -> list[str]:
     local = systems.get("local_pit", {})
     overlap = e25_audit.get("overlap_tickers") or []
     lines = [
-        "🧪 <b>SHADOW / E25 AUDIT</b>",
+        "[U+1F9EA] <b>SHADOW / E25 AUDIT</b>",
         f"FINVIZ/VPS: <code>{finviz.get('signals', 0)}</code> | SF <code>{finviz.get('avg_sizing_factor', 1.0):.2f}</code> | blocked <code>{finviz.get('blocked_extremes', 0)}</code> | ultra <code>{finviz.get('ultralight', 0)}</code>",
         f"LOCAL/PIT: <code>{local.get('signals', 0)}</code> | SF <code>{local.get('avg_sizing_factor', 1.0):.2f}</code> | blocked <code>{local.get('blocked_extremes', 0)}</code> | ultra <code>{local.get('ultralight', 0)}</code>",
     ]
@@ -1184,15 +1184,15 @@ def _build_shadow_audit_lines(date: str | None) -> list[str]:
 def _watchlist_pagination_buttons(page: int, total_pages: int) -> list[list[dict]]:
     """Build pagination buttons for watchlist."""
     if total_pages <= 1:
-        return [[{"text": "🔄 Refresh", "callback_data": "refresh:watchlist"}]]
+        return [[{"text": "[U+1F504] Refresh", "callback_data": "refresh:watchlist"}]]
 
     nav_row: list[dict] = []
     if page > 1:
-        nav_row.append({"text": "◀️", "callback_data": f"watchlist_page:{page - 1}"})
+        nav_row.append({"text": "[REV]", "callback_data": f"watchlist_page:{page - 1}"})
     nav_row.append({"text": f"{page}/{total_pages}", "callback_data": "noop"})
     if page < total_pages:
-        nav_row.append({"text": "▶️", "callback_data": f"watchlist_page:{page + 1}"})
-    nav_row.append({"text": "🔄", "callback_data": "refresh:watchlist"})
+        nav_row.append({"text": "[PLAY]", "callback_data": f"watchlist_page:{page + 1}"})
+    nav_row.append({"text": "[U+1F504]", "callback_data": "refresh:watchlist"})
     return [nav_row]
 
 
@@ -1200,7 +1200,7 @@ def build_watchlist_detail(ticker: str, date: str | None = None) -> str:
     """Build detailed card for a single ticker from watchlist signals."""
     resolved, signals = load_watchlist_signals(date)
     if not resolved or not signals:
-        return f"⚠️ <b>WATCHLIST</b>\nNo data for <code>{ticker.upper()}</code>."
+        return f"[WARN] <b>WATCHLIST</b>\nNo data for <code>{ticker.upper()}</code>."
 
     # Find the ticker in signals
     match = None
@@ -1211,7 +1211,7 @@ def build_watchlist_detail(ticker: str, date: str | None = None) -> str:
 
     if not match:
         return (
-            f"⚠️ <b>WATCHLIST | {resolved}</b>\n"
+            f"[WARN] <b>WATCHLIST | {resolved}</b>\n"
             f"<code>{ticker.upper()}</code> not found in today's candidates."
         )
 
@@ -1245,7 +1245,7 @@ def build_watchlist_detail(ticker: str, date: str | None = None) -> str:
     primary_reason = html.escape(match.get("primary_reason", ""))
     gate_sector_dist = match.get("gate_sector_etf_dist", "")
 
-    gate_icon = "✅" if gate == "PASS" else "⛔"
+    gate_icon = "[OK]" if gate == "PASS" else "[NO]"
     local_panel = (
         f"[LOCAL] {_render_signal_line(dict(local_match, **_e25_fields(local_match)))}"
         if local_match
@@ -1263,7 +1263,7 @@ def build_watchlist_detail(ticker: str, date: str | None = None) -> str:
         s_status = _get_sector_status(etf, resolved)
         if s_status is not None:
             ok, dist = s_status
-            s_ico = "🟢" if ok else "🔴"
+            s_ico = "[U+1F7E2]" if ok else "[U+1F534]"
             sector_line = f"Sector: <code>{etf}</code> {s_ico} ({dist:+.1%})"
 
     # Theme info
@@ -1274,27 +1274,27 @@ def build_watchlist_detail(ticker: str, date: str | None = None) -> str:
         theme_names = ", ".join(themes[:3])
         theme_line = f"Theme: <code>{theme_names}</code>"
         if theme_rs is not None:
-            rs_ico = "✅" if theme_rs > 0 else "⚠️"
+            rs_ico = "[OK]" if theme_rs > 0 else "[WARN]"
             theme_line += f" {rs_ico} RS:{theme_rs:+.1%}"
             # Variant E check
             if etf and etf != "n/a":
                 s_status_e = _get_sector_status(etf, resolved)
                 if s_status_e is not None and theme_rs > 0 and not s_status_e[0]:
-                    theme_line += "\nVariant E: <b>✅ Theme OK, Sector NO</b>"
+                    theme_line += "\nVariant E: <b>[OK] Theme OK, Sector NO</b>"
 
     lines = [
-        f"📋 <b>WATCHLIST DETAIL | {ticker.upper()}</b>",
+        f"[U+1F4CB] <b>WATCHLIST DETAIL | {ticker.upper()}</b>",
         f"<i>{resolved}</i>\n",
-        f"{'─' * 28}",
+        f"{'-' * 28}",
         local_panel,
         finviz_panel,
-        f"{'─' * 28}",
-        f"Score:  ★ <code>{score:.0f}</code>",
-        f"Prox:   ★ <code>{proximity:.0f}</code>",
+        f"{'-' * 28}",
+        f"Score:  [U+2605] <code>{score:.0f}</code>",
+        f"Prox:   [U+2605] <code>{proximity:.0f}</code>",
         f"Combo:  <code>{combo}</code>",
         f"Entry:  <code>${entry:.2f}</code>",
         f"Brkout: <code>${breakout:.2f}</code>",
-        f"{'─' * 28}",
+        f"{'-' * 28}",
         f"ADR:    <code>{adr:.1f}%</code>",
         f"RVOL:   <code>{rvol:.1f}x</code>",
         f"RS:     <code>P{rs:.0f}</code>",
@@ -1305,10 +1305,10 @@ def build_watchlist_detail(ticker: str, date: str | None = None) -> str:
         f"Risk:   <code>${float(match.get('risk_budget_usd', 0) or 0):.2f}</code>",
         f"InitSz: <code>{int(float(match.get('initial_size', match.get('position_size', 0)) or 0))}</code>",
         f"$Vol:   <code>${dvol:.1f}M</code>",
-        f"{'─' * 28}",
+        f"{'-' * 28}",
         sector_line,
         theme_line,
-        f"{'─' * 28}",
+        f"{'-' * 28}",
         f"Gate:   {gate_icon} <code>{gate}</code>",
     ]
     if gate_reason:
@@ -1323,7 +1323,7 @@ def build_watchlist_detail(ticker: str, date: str | None = None) -> str:
         lines.append(f"Setup:  <code>{primary_reason[:60]}</code>")
 
     tv_url = f"https://www.tradingview.com/symbols/{ticker.upper()}/"
-    lines.append(f'\n📈 <a href="{tv_url}">Ver en TradingView</a>')
+    lines.append(f'\n[U+1F4C8] <a href="{tv_url}">Ver en TradingView</a>')
 
     return "\n".join(lines)
 
@@ -1331,12 +1331,12 @@ def build_watchlist_detail(ticker: str, date: str | None = None) -> str:
 def build_monitor_signals_message(date: str | None = None, limit: int = 10) -> str:
     resolved, signals = load_prealerts(date)
     if not resolved:
-        return "⚠️ <b>SIGNALS</b>\nNo monitor signals available yet."
+        return "[WARN] <b>SIGNALS</b>\nNo monitor signals available yet."
 
     lines = [
-        f"🧭 <b>MONITOR SIGNALS | {resolved}</b>",
+        f"[U+1F9ED] <b>MONITOR SIGNALS | {resolved}</b>",
         f"<i>(Observation Mode - Grouped by Sector)</i>\n",
-        f"📡 Candidates: <code>{len(signals)}</code>\n",
+        f"[U+1F4E1] Candidates: <code>{len(signals)}</code>\n",
     ]
 
     if not signals:
@@ -1350,20 +1350,20 @@ def build_monitor_signals_message(date: str | None = None, limit: int = 10) -> s
 def build_signals_message(date: str | None = None, limit: int = 5) -> str:
     resolved, ctx = load_demo_context(date)
     if not resolved:
-        return "⚠️ <b>SIGNALS</b>\nNo demo candidates available yet."
+        return "[WARN] <b>SIGNALS</b>\nNo demo candidates available yet."
     intents = ctx.get("intents", pd.DataFrame())
     if intents.empty:
-        return f"🎯 <b>PENDING SIGNALS (DEMO) | {resolved}</b>\nNo demo candidates available."
+        return f"[U+1F3AF] <b>PENDING SIGNALS (DEMO) | {resolved}</b>\nNo demo candidates available."
     pending = intents[intents["status"].astype(str).isin(["pending", "snoozed"])].copy()
     if pending.empty:
-        return f"🎯 <b>PENDING SIGNALS (DEMO) | {resolved}</b>\nNo pending demo candidates."
+        return f"[U+1F3AF] <b>PENDING SIGNALS (DEMO) | {resolved}</b>\nNo pending demo candidates."
 
     lines = [
-        f"🎯 <b>PENDING SIGNALS (DEMO) | {resolved}</b>",
-        "🧪 <b>SHADOW / E25</b>",
+        f"[U+1F3AF] <b>PENDING SIGNALS (DEMO) | {resolved}</b>",
+        "[U+1F9EA] <b>SHADOW / E25</b>",
         f"STATUS: <code>SHADOW</code>",
         f"<i>Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</i>\n",
-        f"⏱ Pending: <code>{len(pending)}</code>",
+        f"[STOPWATCH] Pending: <code>{len(pending)}</code>",
     ]
 
     shadow_lines = _build_shadow_audit_lines(resolved)
@@ -1391,7 +1391,7 @@ def build_signals_message(date: str | None = None, limit: int = 5) -> str:
 def build_portfolio_message(date: str | None = None) -> str:
     resolved, ctx = load_demo_context(date)
     if not resolved:
-        return "⚠️ <b>PORTFOLIO</b>\nNo demo portfolio state available yet."
+        return "[WARN] <b>PORTFOLIO</b>\nNo demo portfolio state available yet."
     state = ctx.get("portfolio_state") or {}
     metrics = state.get("metrics") or {}
     positions = ctx.get("positions", pd.DataFrame())
@@ -1402,22 +1402,22 @@ def build_portfolio_message(date: str | None = None) -> str:
     )
 
     pnl = float(metrics.get("realized_pnl", 0) or 0)
-    pnl_icon = "🟢" if pnl >= 0 else "🔴"
+    pnl_icon = "[U+1F7E2]" if pnl >= 0 else "[U+1F534]"
 
     lines = [
-        f"💼 <b>PORTFOLIO STATUS | {resolved}</b>",
+        f"[U+1F4BC] <b>PORTFOLIO STATUS | {resolved}</b>",
         f"<i>Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</i>\n",
-        f"🔹 Status: <code>{state.get('status', 'idle')}</code>",
-        f"🛑 Kill switch: <code>{'ON' if state.get('kill_switch') else 'OFF'}</code>",
-        f"⏸ Entries paused: <code>{'ON' if state.get('entries_paused') else 'OFF'}</code>\n",
-        f"📂 Open: <code>{metrics.get('open_positions', 0)}</code> | "
-        f"🔒 Closed: <code>{metrics.get('closed_positions', 0)}</code>",
-        f"⏱ Pending: <code>{metrics.get('pending_intents', 0)}</code> | "
-        f"💤 Snoozed: <code>{metrics.get('snoozed_intents', 0)}</code>",
+        f"[U+1F539] Status: <code>{state.get('status', 'idle')}</code>",
+        f"[U+1F6D1] Kill switch: <code>{'ON' if state.get('kill_switch') else 'OFF'}</code>",
+        f"[PAUSE] Entries paused: <code>{'ON' if state.get('entries_paused') else 'OFF'}</code>\n",
+        f"[U+1F4C2] Open: <code>{metrics.get('open_positions', 0)}</code> | "
+        f"[U+1F512] Closed: <code>{metrics.get('closed_positions', 0)}</code>",
+        f"[STOPWATCH] Pending: <code>{metrics.get('pending_intents', 0)}</code> | "
+        f"[U+1F4A4] Snoozed: <code>{metrics.get('snoozed_intents', 0)}</code>",
         f"{pnl_icon} Realized PnL: <b>${pnl:.2f}</b>",
     ]
     if not open_positions.empty:
-        lines.append("\n📈 <b>Open Positions:</b>")
+        lines.append("\n[U+1F4C8] <b>Open Positions:</b>")
         lines.append("<pre>")
         lines.append(f"{'Ticker':<7} {'Qty':<4} {'Entry':<8} {'Stop'}")
         lines.append(f"{'-' * 7} {'-' * 4} {'-' * 8} {'-' * 6}")
@@ -1434,19 +1434,19 @@ def build_portfolio_message(date: str | None = None) -> str:
 def build_position_message(ticker: str, date: str | None = None) -> str:
     resolved, ctx = load_demo_context(date)
     if not resolved:
-        return f"⚠️ <b>POSITION</b>\nNo portfolio data for <code>{ticker}</code>."
+        return f"[WARN] <b>POSITION</b>\nNo portfolio data for <code>{ticker}</code>."
     positions = ctx.get("positions", pd.DataFrame())
     if positions.empty:
-        return f"⚠️ <b>POSITION | {resolved}</b>\nNo positions for <code>{ticker}</code>."
+        return f"[WARN] <b>POSITION | {resolved}</b>\nNo positions for <code>{ticker}</code>."
     mask = positions["ticker"].astype(str).str.upper() == ticker.upper()
     if not mask.any():
-        return f"⚠️ <b>POSITION | {resolved}</b>\nNo positions for <code>{ticker}</code>."
+        return f"[WARN] <b>POSITION | {resolved}</b>\nNo positions for <code>{ticker}</code>."
     row = positions[mask].iloc[0]
 
-    status_icon = "🟢" if row.get("status", "") == "open" else "🔒"
+    status_icon = "[U+1F7E2]" if row.get("status", "") == "open" else "[U+1F512]"
 
     lines = [
-        f"📊 <b>POSITION DETAILS | {resolved}</b>",
+        f"[U+1F4CA] <b>POSITION DETAILS | {resolved}</b>",
         f"Ticker: <b>{row['ticker']}</b>",
         f"Status: {status_icon} <code>{row.get('status', 'unknown')}</code>",
         f"Qty: <code>{int(float(row.get('qty', 0) or 0))}</code>\n",
@@ -1464,25 +1464,25 @@ def build_position_message(ticker: str, date: str | None = None) -> str:
 def build_paper_run_message(date: str | None = None) -> str:
     resolved, ctx = load_demo_context(date)
     if not resolved:
-        return "⚠️ <b>PAPER RUN</b>\nNo demo run available yet."
+        return "[WARN] <b>PAPER RUN</b>\nNo demo run available yet."
     report = ctx.get("run_report") or {}
     metrics = report.get("metrics") or {}
 
     pnl = float(metrics.get("realized_pnl", 0) or 0)
-    pnl_icon = "🟢" if pnl >= 0 else "🔴"
+    pnl_icon = "[U+1F7E2]" if pnl >= 0 else "[U+1F534]"
 
     lines = [
-        f"📝 <b>PAPER RUN REPORT | {resolved}</b>",
-        "🧪 <b>SHADOW / E25</b>",
+        f"[U+1F4DD] <b>PAPER RUN REPORT | {resolved}</b>",
+        "[U+1F9EA] <b>SHADOW / E25</b>",
         f"STATUS: <code>SHADOW</code>",
         f"<i>Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</i>\n",
-        f"🔹 Status: <code>{report.get('status', 'idle')}</code>",
-        f"✅ Approved intents: <code>{report.get('approved_intents', 0)}</code>",
-        f"❌ Rejected intents: <code>{report.get('rejected_intents', 0)}</code>",
-        f"💤 Snoozed intents: <code>{report.get('snoozed_intents', 0)}</code>\n",
-        f"📂 Open positions: <code>{report.get('open_positions', 0)}</code>",
-        f"🔒 Closed positions: <code>{report.get('closed_positions', 0)}</code>",
-        f"🛒 Orders: <code>{metrics.get('orders', 0)}</code> | 🔄 Fills: <code>{metrics.get('fills', 0)}</code>",
+        f"[U+1F539] Status: <code>{report.get('status', 'idle')}</code>",
+        f"[OK] Approved intents: <code>{report.get('approved_intents', 0)}</code>",
+        f"[FAIL] Rejected intents: <code>{report.get('rejected_intents', 0)}</code>",
+        f"[U+1F4A4] Snoozed intents: <code>{report.get('snoozed_intents', 0)}</code>\n",
+        f"[U+1F4C2] Open positions: <code>{report.get('open_positions', 0)}</code>",
+        f"[U+1F512] Closed positions: <code>{report.get('closed_positions', 0)}</code>",
+        f"[U+1F6D2] Orders: <code>{metrics.get('orders', 0)}</code> | [U+1F504] Fills: <code>{metrics.get('fills', 0)}</code>",
         f"{pnl_icon} Realized PnL: <b>${pnl:.2f}</b>",
     ]
 
@@ -1509,7 +1509,7 @@ def build_signal_cards(date: str | None = None, limit: int = 5) -> list[dict[str
         adr = float(row.get("adr_pct", row.get("gate_adr_pct", 0)) or 0)
         factor, reason = calculate_dynamic_sizing_factor(dist, adr, load_production_config())
         text = (
-            f"🎯 <b>{row['ticker']}</b> | {row['strategy_id']}\n"
+            f"[U+1F3AF] <b>{row['ticker']}</b> | {row['strategy_id']}\n"
             f"Entry: <code>{float(row.get('entry_price_ref', 0) or 0):.2f}</code>\n"
             f"Stop: <code>{float(row.get('stop_price', 0) or 0):.2f}</code>\n"
             f"TP1: <code>{float(row.get('tp1_price', 0) or 0):.2f}</code> | "
@@ -1523,12 +1523,12 @@ def build_signal_cards(date: str | None = None, limit: int = 5) -> list[dict[str
                 "text": text,
                 "buttons": [
                     [
-                        {"text": "✅ Approve", "callback_data": f"approve_trade:{signal_id}"},
-                        {"text": "❌ Reject", "callback_data": f"reject_trade:{signal_id}"},
+                        {"text": "[OK] Approve", "callback_data": f"approve_trade:{signal_id}"},
+                        {"text": "[FAIL] Reject", "callback_data": f"reject_trade:{signal_id}"},
                     ],
                     [
-                        {"text": "💤 Snooze", "callback_data": f"snooze_trade:{signal_id}"},
-                        {"text": "🔄 Refresh", "callback_data": "refresh:signals"},
+                        {"text": "[U+1F4A4] Snooze", "callback_data": f"snooze_trade:{signal_id}"},
+                        {"text": "[U+1F504] Refresh", "callback_data": "refresh:signals"},
                     ],
                 ],
             }
@@ -1548,7 +1548,7 @@ def build_position_cards(date: str | None = None, limit: int = 5) -> list[dict[s
     for _, row in open_positions.head(limit).iterrows():
         position_id = str(row["position_id"])
         text = (
-            f"📈 <b>{row['ticker']}</b>\n"
+            f"[U+1F4C8] <b>{row['ticker']}</b>\n"
             f"Qty: <code>{int(float(row.get('qty', 0) or 0))}</code>\n"
             f"Entry: <code>{float(row.get('entry_price', 0) or 0):.2f}</code>\n"
             f"Stop: <code>{float(row.get('stop_price', 0) or 0):.2f}</code>\n"
@@ -1560,8 +1560,8 @@ def build_position_cards(date: str | None = None, limit: int = 5) -> list[dict[s
                 "text": text,
                 "buttons": [
                     [
-                        {"text": "🔒 Close", "callback_data": f"close_position:{position_id}"},
-                        {"text": "🔄 Refresh", "callback_data": "refresh:portfolio"},
+                        {"text": "[U+1F512] Close", "callback_data": f"close_position:{position_id}"},
+                        {"text": "[U+1F504] Refresh", "callback_data": "refresh:portfolio"},
                     ]
                 ],
             }

@@ -62,7 +62,7 @@ def optimized_filter_entries_adaptive(entries_df, close_df, sma20_df, volume_df,
         spy_sma50_series = spy_close_series.rolling(window=50).mean()
     
     # Vectorized TIER 1: Market Safety Filter
-    logger.info("🔍 Applying TIER 1: Market Safety Filter (vectorized)...")
+    logger.info("[U+1F50D] Applying TIER 1: Market Safety Filter (vectorized)...")
     
     # Get market context for all dates (vectorized)
     dates_for_filtering = vix_series.index.intersection(entries_df.index)
@@ -83,12 +83,12 @@ def optimized_filter_entries_adaptive(entries_df, close_df, sma20_df, volume_df,
             rejected_by_tier['TIER1'] += len(entries_df.columns)
             for ticker in entries_df.columns:
                 rejection_details.append((date, 'TIER1_MarketSafety', 'Market Safety Filter', ticker, 1))
-            logger.debug(f"   🚫 {date.date()}: Market Safety Filter - All tickers blocked")
+            logger.debug(f"   [U+1F6AB] {date.date()}: Market Safety Filter - All tickers blocked")
     
-    logger.info(f"   📊 TIER 1 completed. Blocked: {rejected_by_tier['TIER1']} entries")
+    logger.info(f"   [U+1F4CA] TIER 1 completed. Blocked: {rejected_by_tier['TIER1']} entries")
     
     # Vectorized TIER 2: Dynamic Quality Filter
-    logger.info("📈 Applying TIER 2: Dynamic Quality Filter (vectorized)...")
+    logger.info("[U+1F4C8] Applying TIER 2: Dynamic Quality Filter (vectorized)...")
     
     # Prepare arrays for vectorized operations
     dates_to_filter = entries_df.index.intersection(spy_close_series.index)
@@ -162,10 +162,10 @@ def optimized_filter_entries_adaptive(entries_df, close_df, sma20_df, volume_df,
             
         except Exception as e:
             import traceback as tb
-            logger.warning(f"   ⚠️ Error applying TIER 2 filters on {date}: {e}")
+            logger.warning(f"   [WARN] Error applying TIER 2 filters on {date}: {e}")
             logger.warning(f"   Traceback: {tb.format_exc()}")
     
-    logger.info(f"   📊 TIER 2 completed. Blocked: {rejected_by_tier['TIER2']} entries")
+    logger.info(f"   [U+1F4CA] TIER 2 completed. Blocked: {rejected_by_tier['TIER2']} entries")
     
     # TIER 3 is skipped for now (would need sector_rs and consolidation_days data)
     # For now, we can implement a simple TIER 3 based on available data
@@ -174,10 +174,10 @@ def optimized_filter_entries_adaptive(entries_df, close_df, sma20_df, volume_df,
     total_entries_post_filter = filtered_entries.sum().sum()
     rejected_entries = total_entries_pre_filter - total_entries_post_filter
     
-    logger.info(f"   📊 Total antes de filtros: {total_entries_pre_filter}")
-    logger.info(f"   ❌ Total rechazadas: {rejected_entries}")
-    logger.info(f"   ✅ Total finales: {total_entries_post_filter}")
-    logger.info(f"   📈 Mejora estimada: ~60x más rápido (vectorizado vs iterativo)")
+    logger.info(f"   [U+1F4CA] Total antes de filtros: {total_entries_pre_filter}")
+    logger.info(f"   [FAIL] Total rechazadas: {rejected_entries}")
+    logger.info(f"   [OK] Total finales: {total_entries_post_filter}")
+    logger.info(f"   [U+1F4C8] Mejora estimada: ~60x más rápido (vectorizado vs iterativo)")
     
     # Save rejection details
     if rejection_details:

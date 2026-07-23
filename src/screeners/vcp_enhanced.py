@@ -77,7 +77,7 @@ class VCPEnhancedScreener(BaseScreener):
             compression_ratio = (
                 atr_short / atr_long
             )  # 0 < ratio <= 1 cuando hay contracción
-            # Invertimos: ratio bajo → score alto
+            # Invertimos: ratio bajo -> score alto
             a_score = max(0.0, min(1.0, 1.0 - compression_ratio))
         else:
             a_score = 0.0
@@ -98,7 +98,7 @@ class VCPEnhancedScreener(BaseScreener):
             vol_ratio = vol_recent / vol_avg
             c_score = max(
                 0.0, min(1.0, 1.0 - vol_ratio * 0.5)
-            )  # 50% reducción → score=0.75
+            )  # 50% reducción -> score=0.75
         else:
             c_score = 0.0
 
@@ -122,7 +122,7 @@ class VCPEnhancedScreener(BaseScreener):
         else:
             d_score = 0.0
 
-        # Score final ponderado → 0-100
+        # Score final ponderado -> 0-100
         total = (
             p["w_price_compression"] * a_score
             + p["w_price_stability"] * b_score

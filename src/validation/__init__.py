@@ -6,7 +6,7 @@ This package provides comprehensive validation for trading strategies
 before they are promoted to production.
 
 Modules:
-    research_gate: Three-phase validation (Discovery → Validation → Productionization)
+    research_gate: Three-phase validation (Discovery -> Validation -> Productionization)
     stress_testing: Comprehensive stress test suite
     robustness_metrics: Robust objective functions for optimization
 

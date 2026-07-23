@@ -30,8 +30,8 @@ def get_dynamic_sizing(path: Path):
         return None
 
 def get_trade_count():
-    # Last reference backtest metrics (by default tag "gold_standard_variant_e")
-    ref_path = Path("outputs/backtests/gold_standard_variant_e_metrics.json")
+    # Last reference backtest metrics
+    ref_path = Path("outputs/backtests/baseline_phase1_20260723_metrics.json")
     if ref_path.exists():
         try:
             with open(ref_path, "r") as f:

@@ -34,7 +34,7 @@ class IndicatorCache:
         # Cache en memoria para acceso rápido
         self._memory_cache: Dict[str, pd.DataFrame] = {}
 
-        logger.info(f"📦 IndicatorCache inicializado en: {self.cache_dir}")
+        logger.info(f"[U+1F4E6] IndicatorCache inicializado en: {self.cache_dir}")
 
     def _get_cache_key(
         self, ticker: str, indicator_name: str, data_hash: str, **params
@@ -76,7 +76,7 @@ class IndicatorCache:
         if mem_key in self._memory_cache:
             cached_df = self._memory_cache[mem_key]
             if self._validate_cache(cached_df, data.index):
-                logger.debug(f"💾 Cache hit (memoria): {ticker} {indicator_name}")
+                logger.debug(f"[U+1F4BE] Cache hit (memoria): {ticker} {indicator_name}")
                 return cached_df
 
         # Verificar cache en disco
@@ -87,21 +87,21 @@ class IndicatorCache:
 
                 # Validar que el cache sea compatible
                 if self._validate_cache(cached_df, data.index):
-                    logger.info(f"💾 Cache hit (disco): {ticker} {indicator_name}")
+                    logger.info(f"[U+1F4BE] Cache hit (disco): {ticker} {indicator_name}")
 
                     # Guardar en memoria
                     self._memory_cache[mem_key] = cached_df
                     return cached_df
                 else:
                     logger.debug(
-                        f"🗑️ Cache inválido, recalcular: {ticker} {indicator_name}"
+                        f"[U+1F5D1] Cache inválido, recalcular: {ticker} {indicator_name}"
                     )
                     cache_path.unlink()
             except Exception as e:
-                logger.warning(f"⚠️ Error leyendo cache: {e}")
+                logger.warning(f"[WARN] Error leyendo cache: {e}")
 
         # Calcular indicador
-        logger.debug(f"🧮 Calculando: {ticker} {indicator_name}")
+        logger.debug(f"[U+1F9EE] Calculando: {ticker} {indicator_name}")
         result = compute_fn(data, **params)
 
         # Guardar en cache
@@ -111,9 +111,9 @@ class IndicatorCache:
 
             # Guardar en memoria
             self._memory_cache[mem_key] = result
-            logger.debug(f"💾 Guardado en cache: {ticker} {indicator_name}")
+            logger.debug(f"[U+1F4BE] Guardado en cache: {ticker} {indicator_name}")
         except Exception as e:
-            logger.warning(f"⚠️ Error guardando cache: {e}")
+            logger.warning(f"[WARN] Error guardando cache: {e}")
 
         return result
 
@@ -168,9 +168,9 @@ class IndicatorCache:
         for file_path in self.cache_dir.glob(f"{ticker}_*.pkl"):
             try:
                 file_path.unlink()
-                logger.info(f"🗑️ Cache limpiado: {file_path.name}")
+                logger.info(f"[U+1F5D1] Cache limpiado: {file_path.name}")
             except Exception as e:
-                logger.warning(f"⚠️ Error borrando cache: {e}")
+                logger.warning(f"[WARN] Error borrando cache: {e}")
 
     def clear_all(self):
         """Limpia todo el cache."""
@@ -180,9 +180,9 @@ class IndicatorCache:
             try:
                 file_path.unlink()
             except Exception as e:
-                logger.warning(f"⚠️ Error borrando cache: {e}")
+                logger.warning(f"[WARN] Error borrando cache: {e}")
 
-        logger.info("🗑️ Todo el cache ha sido limpiado")
+        logger.info("[U+1F5D1] Todo el cache ha sido limpiado")
 
     def get_cache_stats(self) -> Dict[str, Any]:
         """Devuelve estadísticas del cache."""
@@ -289,14 +289,14 @@ if __name__ == "__main__":
     sma20 = cache.get_or_compute(
         "TEST", "sma20", data, PrecomputedIndicators.sma, window=20
     )
-    print(f"✅ SMA20 shape: {sma20.shape}")
+    print(f"[OK] SMA20 shape: {sma20.shape}")
 
     # Calcular SMA20 (debería venir del cache)
     print("\nSegundo cálculo de SMA20 (del cache)...")
     sma20_cached = cache.get_or_compute(
         "TEST", "sma20", data, PrecomputedIndicators.sma, window=20
     )
-    print(f"✅ SMA20 (cached) shape: {sma20_cached.shape}")
+    print(f"[OK] SMA20 (cached) shape: {sma20_cached.shape}")
 
     # Estadísticas del cache
-    print(f"\n📊 Cache stats: {cache.get_cache_stats()}")
+    print(f"\n[U+1F4CA] Cache stats: {cache.get_cache_stats()}")

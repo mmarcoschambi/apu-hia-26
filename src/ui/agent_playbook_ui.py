@@ -8,7 +8,7 @@ def render_agent_playbook():
     Renderiza el Playbook de Desarrollo con Agentes y ScrumBan Memory Board
     de forma didáctica y visual en Streamlit.
     """
-    st.title("🤖 Agent Developer Center")
+    st.title("[U+1F916] Agent Developer Center")
     st.caption("Guía interactiva y protocolo operativo para el desarrollo asistido por Agentes de IA")
 
     st.markdown(
@@ -21,23 +21,23 @@ def render_agent_playbook():
 
     # Tabs principales
     tab_memory, tab_workflow, tab_tdd, tab_research, tab_backlog, tab_first_principles, tab_evolution, tab_prompts, tab_safeguards = st.tabs([
-        "🧠 Memory Board (ScrumBan)", 
-        "🔄 Ciclo de Vida del Ticket", 
-        "🧪 Test Harness & TDD", 
-        "🔬 Ciclo de Investigación (Hipótesis)",
-        "📋 Backlog de Experimentos",
-        "📐 Primeros Principios",
-        "📈 Evolución & Arquitectura",
-        "💬 Cheat Sheet de Prompts",
-        "🛡️ Salvaguardas & Salida"
+        "[U+1F9E0] Memory Board (ScrumBan)", 
+        "[U+1F504] Ciclo de Vida del Ticket", 
+        "[U+1F9EA] Test Harness & TDD", 
+        "[U+1F52C] Ciclo de Investigación (Hipótesis)",
+        "[U+1F4CB] Backlog de Experimentos",
+        "[U+1F4D0] Primeros Principios",
+        "[U+1F4C8] Evolución & Arquitectura",
+        "[U+1F4AC] Cheat Sheet de Prompts",
+        "[U+1F6E1] Salvaguardas & Salida"
     ])
 
 
-    # ──────────────────────────────────────────────────────────────────────
+    # ----------------------------------------------------------------------
     # TAB 1: MEMORY BOARD (ScrumBan)
-    # ──────────────────────────────────────────────────────────────────────
+    # ----------------------------------------------------------------------
     with tab_memory:
-        st.subheader("🧠 Historial de Avances y Decisiones (local_memory.json)")
+        st.subheader("[U+1F9E0] Historial de Avances y Decisiones (local_memory.json)")
         st.markdown(
             "Cargado en tiempo real desde `.cache/local_memory.json`. Registra las decisiones "
             "de arquitectura, descubrimientos y refactorizaciones realizadas en cada sesión."
@@ -66,7 +66,7 @@ def render_agent_playbook():
                             default=df["type"].unique()
                         )
                     with col2:
-                        search_query = st.text_input("🔍 Buscar en el contenido", "")
+                        search_query = st.text_input("[U+1F50D] Buscar en el contenido", "")
 
                     # Aplicar filtros
                     filtered_df = df[df["type"].isin(selected_type)]
@@ -81,13 +81,13 @@ def render_agent_playbook():
                     for _, row in filtered_df.iterrows():
                         time_str = row["timestamp"].strftime("%d %b %Y, %H:%M")
                         type_emojis = {
-                            "bugfix": "🐞 BUGFIX",
-                            "discovery": "💡 DISCOVERY",
-                            "pattern": "📐 PATTERN",
-                            "decision": "🏛 DECISION",
-                            "architecture": "🏗 ARCHITECTURE"
+                            "bugfix": "[U+1F41E] BUGFIX",
+                            "discovery": "[U+1F4A1] DISCOVERY",
+                            "pattern": "[U+1F4D0] PATTERN",
+                            "decision": "[U+1F3DB] DECISION",
+                            "architecture": "[U+1F3D7] ARCHITECTURE"
                         }
-                        emoji = type_emojis.get(row["type"], "📝 RECORD")
+                        emoji = type_emojis.get(row["type"], "[U+1F4DD] RECORD")
                         
                         with st.expander(f"{emoji} · {row['title']} ({time_str})"):
                             st.markdown(f"**Tema Clave:** `{row['topic_key']}` | **Alcance:** `{row['scope']}`")
@@ -97,11 +97,11 @@ def render_agent_playbook():
             except Exception as e:
                 st.error(f"Error al cargar local_memory.json: {e}")
         else:
-            st.warning("⚠️ No se encontró el archivo `.cache/local_memory.json` en el repositorio.")
+            st.warning("[WARN] No se encontró el archivo `.cache/local_memory.json` en el repositorio.")
 
         # PROMPT MOCK PARA ESTE TAB
         st.markdown("---")
-        st.markdown("#### 💬 Prompt para pedir al Agente que registre una Decisión/Avance:")
+        st.markdown("#### [U+1F4AC] Prompt para pedir al Agente que registre una Decisión/Avance:")
         st.code(
             """
 Completamos esta tarea. Por favor, agregá un nuevo registro a nuestro archivo `.cache/local_memory.json`.
@@ -118,11 +118,11 @@ El registro debe seguir este formato JSON exacto:
             language="markdown"
         )
 
-    # ──────────────────────────────────────────────────────────────────────
+    # ----------------------------------------------------------------------
     # TAB 2: CICLO DE VIDA DEL TICKET (VISUAL)
-    # ──────────────────────────────────────────────────────────────────────
+    # ----------------------------------------------------------------------
     with tab_workflow:
-        st.subheader("🔄 Protocolo ScrumBan Paso a Paso")
+        st.subheader("[U+1F504] Protocolo ScrumBan Paso a Paso")
         st.markdown(
             "El flujo mandatorio para cualquier modificación de código. Garantiza que el "
             "repositorio no acumule entropía o archivos duplicados."
@@ -139,7 +139,7 @@ El registro debe seguir este formato JSON exacto:
         ]
         
         selected_fase = st.select_slider(
-            "💡 Navegá las fases del Ciclo de Vida del Ticket para ver el flujo y los prompts correspondientes:",
+            "[U+1F4A1] Navegá las fases del Ciclo de Vida del Ticket para ver el flujo y los prompts correspondientes:",
             options=fases_opciones
         )
 
@@ -174,7 +174,7 @@ El registro debe seguir este formato JSON exacto:
         col_flow, col_details = st.columns([1, 1])
 
         with col_flow:
-            st.markdown("#### 📊 Diagrama de Flujo del Proceso")
+            st.markdown("#### [U+1F4CA] Diagrama de Flujo del Proceso")
             
             dot_flow = f"""
             digraph G {{
@@ -201,12 +201,12 @@ El registro debe seguir este formato JSON exacto:
 
         with col_details:
             if fase_clave == "apertura":
-                st.markdown("### 🔑 Fase 1: Apertura & Branch")
+                st.markdown("### [U+1F511] Fase 1: Apertura & Branch")
                 st.markdown(
                     "**Regla de Oro:** Nunca dejes que el agente empiece a programar sin un ticket de issue "
                     "abierto en GitHub. Esto nos permite hacer el seguimiento en el backlog sin perder el norte."
                 )
-                st.markdown("**💻 Comandos recomendados en consola:**")
+                st.markdown("**[U+1F4BB] Comandos recomendados en consola:**")
                 st.code(
                     """
 gh issue list --state open       # Ver issues abiertos en el backlog
@@ -215,7 +215,7 @@ git checkout -b feat/<ID>-name   # Crear la rama limpia de trabajo
                     """,
                     language="bash"
                 )
-                st.markdown("**💬 Prompt de Inicialización:**")
+                st.markdown("**[U+1F4AC] Prompt de Inicialización:**")
                 st.code(
                     """
 Hola. Vamos a iniciar el desarrollo del Issue #<ID>.
@@ -229,18 +229,18 @@ Por favor, seguí este protocolo:
                 )
 
             elif fase_clave == "plan":
-                st.markdown("### 🗺️ Fase 2: Plan & Diseño (SDD)")
+                st.markdown("### [U+1F5FA] Fase 2: Plan & Diseño (SDD)")
                 st.markdown(
                     "**Regla de Oro:** Antes de escribir una sola línea de código, el agente debe "
                     "plantear el diseño de la solución técnica detallada. Esto evita que escriba código "
                     "que no entienda o que rompa las dependencias."
                 )
-                st.markdown("**🔍 Verificación estructural:**")
+                st.markdown("**[U+1F50D] Verificación estructural:**")
                 st.markdown(
                     "El agente debe consultar `SYSTEM_CONTEXT.md` para entender qué archivos son la verdad "
                     "canónica y el impacto que tendrá el cambio en el simulador o el Live Scanner."
                 )
-                st.markdown("**💬 Prompt de Control de Planificación:**")
+                st.markdown("**[U+1F4AC] Prompt de Control de Planificación:**")
                 st.code(
                     """
 Leé el código de los archivos involucrados en la propuesta para el Issue #<ID>. 
@@ -253,19 +253,19 @@ Antes de modificar nada:
                 )
 
             elif fase_clave == "tdd_red":
-                st.markdown("### 🧪 Fase 3: TDD Red (Escribir Test)")
+                st.markdown("### [U+1F9EA] Fase 3: TDD Red (Escribir Test)")
                 st.markdown(
                     "**Regla de Oro:** Escribir el test ANTES del código de producción (Fase RED). "
                     "Si no hay test que falle para el bug o feature, no entendemos el problema real."
                 )
-                st.markdown("**💻 Comandos de consola:**")
+                st.markdown("**[U+1F4BB] Comandos de consola:**")
                 st.code(
                     """
 pytest tests/test_modulo_especifico.py  # Ejecutar el test recién creado (debe fallar)
                     """,
                     language="bash"
                 )
-                st.markdown("**💬 Prompt para forzar TDD Red:**")
+                st.markdown("**[U+1F4AC] Prompt para forzar TDD Red:**")
                 st.code(
                     """
 Quiero que implementemos este feature siguiendo estrictamente la metodología TDD:
@@ -277,18 +277,18 @@ Quiero que implementemos este feature siguiendo estrictamente la metodología TD
                 )
 
             elif fase_clave == "tdd_green":
-                st.markdown("### 🟢 Fase 4: Implementación (TDD Green)")
+                st.markdown("### [U+1F7E2] Fase 4: Implementación (TDD Green)")
                 st.markdown(
                     "**Regla de Oro:** Escribir el mínimo código de producción necesario en `src/` para que "
                     "los tests pasen a verde (Fase GREEN). Luego, refactorizar de forma segura."
                 )
-                st.markdown("**📂 Estructura de archivos requerida:**")
+                st.markdown("**[U+1F4C2] Estructura de archivos requerida:**")
                 st.markdown(
                     "- Producción: `src/` (ej: `src/signals/`, `src/backtest/`)\\n"
                     "- Tests: `tests/` (ej: `tests/test_signal_engine.py`)\\n"
                     "- Scripts temporales: Únicamente dentro de `scratch/`"
                 )
-                st.markdown("**💬 Prompt para pasar a Verde:**")
+                st.markdown("**[U+1F4AC] Prompt para pasar a Verde:**")
                 st.code(
                     """
 Now that the test fails:
@@ -300,17 +300,17 @@ Now that the test fails:
                 )
 
             elif fase_clave == "docs":
-                st.markdown("### 📝 Fase 5: Documentar (Local Memory)")
+                st.markdown("### [U+1F4DD] Fase 5: Documentar (Local Memory)")
                 st.markdown(
                     "**Regla de Oro:** Si un cambio no se documenta en la memoria local, no existe para "
                     "las siguientes sesiones. La documentación de arquitectura e hitos previene la entropía."
                 )
-                st.markdown("**📂 Archivos a actualizar:**")
+                st.markdown("**[U+1F4C2] Archivos a actualizar:**")
                 st.markdown(
                     "- **Decisiones locales:** `.cache/local_memory.json` (ScrumBan Memory Board)\\n"
                     "- **Modificaciones mayores de arquitectura:** `SYSTEM_CONTEXT.md`"
                 )
-                st.markdown("**💬 Prompt de Documentación:**")
+                st.markdown("**[U+1F4AC] Prompt de Documentación:**")
                 st.code(
                     """
 El desarrollo técnico y los tests están listos. Por favor:
@@ -321,22 +321,22 @@ El desarrollo técnico y los tests están listos. Por favor:
                 )
 
             elif fase_clave == "commit":
-                st.markdown("### 🏁 Fase 6: Commit & Cierre")
+                st.markdown("### [U+1F3C1] Fase 6: Commit & Cierre")
                 st.markdown(
                     "**Regla de Oro:** Confirmar los cambios con un mensaje de commit convencional y "
                     "cerrar el ticket de GitHub informando la performance del cambio."
                 )
-                st.markdown("**💻 Comandos recomendados:**")
+                st.markdown("**[U+1F4BB] Comandos recomendados:**")
                 st.code(
                     """
 git commit -m "[Signals] Agregar filtro de volumen. Fixes #ID"
 git push origin feat/ID-nombre
-gh issue comment <ID> --body "✅ Desarrollado y testeado en la rama..."
+gh issue comment <ID> --body "[OK] Desarrollado y testeado en la rama..."
 gh issue close <ID>
                     """,
                     language="bash"
                 )
-                st.markdown("**💬 Prompt de Cierre:**")
+                st.markdown("**[U+1F4AC] Prompt de Cierre:**")
                 st.code(
                     """
 Hacé el commit convencional con el formato `[Módulo] Breve descripción. Fixes #<ID>`.
@@ -345,18 +345,18 @@ Si el pre-commit hook falla localmente por argumentos demasiado largos, usá la 
                     language="markdown"
                 )
 
-    # ──────────────────────────────────────────────────────────────────────
+    # ----------------------------------------------------------------------
     # TAB 3: TEST HARNESS & TDD
-    # ──────────────────────────────────────────────────────────────────────
+    # ----------------------------------------------------------------------
     with tab_tdd:
-        st.subheader("🧪 Protegiendo la Calidad con Pruebas Unitarias")
+        st.subheader("[U+1F9EA] Protegiendo la Calidad con Pruebas Unitarias")
         st.markdown(
             "El sistema cuenta con una robusta suite de pruebas unitarias que previene "
             "regresiones en el motor de señales y en el simulador."
         )
 
         st.success(
-            "🚀 **Baseline actual: 255/255 pruebas pasando (100% green).**"
+            "[U+1F680] **Baseline actual: 255/255 pruebas pasando (100% green).**"
         )
 
         st.markdown(
@@ -377,7 +377,7 @@ Si el pre-commit hook falla localmente por argumentos demasiado largos, usá la 
 
         # PROMPT MOCK PARA TDD
         st.markdown("---")
-        st.markdown("#### 💬 Prompt para guiar al Agente en Strict TDD Mode:")
+        st.markdown("#### [U+1F4AC] Prompt para guiar al Agente en Strict TDD Mode:")
         st.code(
             """
 Quiero que implementemos este feature siguiendo estrictamente la metodología TDD (Test-Driven Development):
@@ -389,11 +389,11 @@ Ejecutá `pytest` en cada paso para validar el estado.
             language="markdown"
         )
 
-    # ──────────────────────────────────────────────────────────────────────
+    # ----------------------------------------------------------------------
     # TAB 4: CICLO DE INVESTIGACIÓN (HIPÓTESIS)
-    # ──────────────────────────────────────────────────────────────────────
+    # ----------------------------------------------------------------------
     with tab_research:
-        st.subheader("🔬 El Pipeline Cuantitativo Profesional (QUANT-FEATURE.md)")
+        st.subheader("[U+1F52C] El Pipeline Cuantitativo Profesional (QUANT-FEATURE.md)")
         st.markdown(
             "Este es el flujo de trabajo metodológico para validar y evaluar nuevas "
             "hipótesis cuantitativas sin comprometer el motor ni la estabilidad del sistema en vivo."
@@ -426,7 +426,7 @@ Ejecutá `pytest` en cada paso para validar el estado.
 
         # PROMPT MOCK PARA INVESTIGACIÓN DE HIPÓTESIS
         st.markdown("---")
-        st.markdown("#### 💬 Prompt para guiar al Agente en la Sandbox (Etapa 1 - Hipótesis):")
+        st.markdown("#### [U+1F4AC] Prompt para guiar al Agente en la Sandbox (Etapa 1 - Hipótesis):")
         st.code(
             """
 Quiero investigar la siguiente hipótesis cuantitativa:
@@ -441,11 +441,11 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
             language="markdown"
         )
 
-    # ──────────────────────────────────────────────────────────────────────
+    # ----------------------------------------------------------------------
     # TAB 5: BACKLOG DE EXPERIMENTOS (DINÁMICO & INTERACTIVO)
-    # ──────────────────────────────────────────────────────────────────────
+    # ----------------------------------------------------------------------
     with tab_backlog:
-        st.subheader("📋 Backlog & Pipeline de Experimentos")
+        st.subheader("[U+1F4CB] Backlog & Pipeline de Experimentos")
         st.markdown(
             "Visualizá la cola de hipótesis pendientes y registrá nuevas ideas cuantitativas "
             "con una estructura de plantilla estándar para evitar la entropía."
@@ -461,7 +461,7 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
                     {
                         "id": "EXP-01",
                         "title": "Track 1: Sandbox Shadow en Vivo (Joya Russell)",
-                        "status": "🟡 Shadow / Monitoreo",
+                        "status": "[U+1F7E1] Shadow / Monitoreo",
                         "universe": "Russell 1000 + E25 + ex-XLV + ticker-cap 20%",
                         "metric": "Convergencia del backtest vs live & Sharpe >= 1.5",
                         "description": "Crear un sandbox separado para el flujo real de las últimas ~5 semanas. Fuente: scrape Finviz/VPS real, fechas reales y tickers reales detectados ese día, sin usar universo histórico 'limpio' ni selección retrospectiva. Comparar contra el sistema paper actual del VPS, Russell E25 sin ex-XLV y el combo/system A actual. Output semanal: señales nuevas, señales filtradas por XLV, bloqueadas por ticker cap, exposición por ticker/sector, PnL simulado y divergencia vs backtest esperado.",
@@ -470,7 +470,7 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
                     {
                         "id": "EXP-02",
                         "title": "Track 2: Russell Refit (S5 Optuna)",
-                        "status": "🔴 Pendiente / Backlog",
+                        "status": "[U+1F534] Pendiente / Backlog",
                         "universe": "Russell 1000",
                         "metric": "Sharpe robusto sin overfitting, PBO < 40%",
                         "description": "Si Russell funciona mejor que SP500/PIT, entonces Trial 380 queda como 'parámetro heredado'. Primero auditar qué parámetros actuales vienen de S4 Optuna sobre 200 tickers/PIT, cuáles sobrevivieron a Russell y cuáles dependen del universo chico. Luego lanzar 'S5 Russell Optuna' con diseño congelado (Russell 1000, baseline sin Variant E, E25 opcional como sizing overlay, ex-XLV como regla candidata, ticker cap 20 como risk constraint, buscando objetivo robusto, no retorno bruto). Gate mínimo para aceptar: supera al candidato actual en PF/MDD/consistencia, no depende de PYPL/XLK de forma extrema y pasa ventanas 2019-2020, 2021-2022, 2023-2024, 2025.",
@@ -479,7 +479,7 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
                     {
                         "id": "EXP-03",
                         "title": "Track 3: Auditoría de Exits (Sistema A)",
-                        "status": "🔴 Pendiente / Backlog",
+                        "status": "[U+1F534] Pendiente / Backlog",
                         "universe": "N/A",
                         "metric": "Consistencia de parámetros del backtest",
                         "description": "Realizar una auditoría corta para verificar si el backtest Russell/E25 actual está usando realmente la misma salida TP1/TP2/runner; qué 'tp1_r', 'tp2_r', 'tp1_pct', 'tp2_pct', 'runner_pct' usa; si 'use_trailing_stop' está apagado o prendido; y si el runner sale por EMA 8/21, ATR trail, stop o cierre completo. No asumir 'solo TP/SL' hasta auditar el comando/config efectivo.",
@@ -488,7 +488,7 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
                     {
                         "id": "EXP-04",
                         "title": "Track 4: Experimento E26 (Exits - Trimming & Scaling)",
-                        "status": "🔴 Pendiente / Backlog",
+                        "status": "[U+1F534] Pendiente / Backlog",
                         "universe": "Russell 1000 + E25",
                         "metric": "Profit Factor +0.10 mínimo sin bajar WR del 50%",
                         "description": "Hipótesis: Implementar salidas parciales mejorará tu Profit Factor en al menos +0.10 sin bajar tu Win Rate por debajo del 50%. Qué vamos a probar: Tu salida base vs. Salidas parciales (TP1/TP2) + Runner vs. Trimming (recortar al subir) vs. Salida por tiempo (estilo Atlas que corta perdedores rápido pero cobra ganancias en hasta 32 fracciones dejando un 'runner' con trailing stop para capturar tendencia). Diseño E26: baseline actual, TP1/TP2/runner actual, trailing runner más agresivo, trimming incremental, time exit, Atlas-like scale-out. Gate E26: PF +0.10 mínimo, WR no baja de 50%, MDD no empeora, no aumenta demasiado turnover y mejora 2025/live-like.",
@@ -497,7 +497,7 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
                     {
                         "id": "EXP-05",
                         "title": "Track 5: Cobertura QuantConnect (ETFs Temáticos)",
-                        "status": "🔴 Pendiente / Backlog",
+                        "status": "[U+1F534] Pendiente / Backlog",
                         "universe": "Style / Thematic ETFs",
                         "metric": "Generación de Alfa mediante filtros sectoriales/temáticos",
                         "description": "La carpeta quantconnect/ tiene datos PIT de SP500, QQQ, IWB, IWM, MDY, ETFs sectoriales y style ETFs. No asumir que eso equivale a Russell 1000 PIT completo. Uso recomendado: benchmark/regime, filtros sectoriales, auditoría PIT vs no-PIT, proxies temáticos/sectoriales y validación externa de señales. Próxima auditoría: confirmar si hay Russell/IWB enough coverage, mapear ETFs disponibles por tipo: sector, style, index, thematic y decidir si sirven para E11/E26 o solo para contexto.",
@@ -519,16 +519,16 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
                 st.error(f"Error al cargar backlog: {e}")
 
         # Mostrar backlog
-        st.markdown("### 🚦 Estado de los Experimentos")
+        st.markdown("### [U+1F6A6] Estado de los Experimentos")
         col_f1, col_f2 = st.columns(2)
         with col_f1:
             status_filter = st.multiselect(
                 "Filtrar por Estado",
-                options=["🟡 Shadow / Monitoreo", "🔴 Pendiente / Backlog", "✅ Completado / Integrado"],
-                default=["🟡 Shadow / Monitoreo", "🔴 Pendiente / Backlog"]
+                options=["[U+1F7E1] Shadow / Monitoreo", "[U+1F534] Pendiente / Backlog", "[OK] Completado / Integrado"],
+                default=["[U+1F7E1] Shadow / Monitoreo", "[U+1F534] Pendiente / Backlog"]
             )
         with col_f2:
-            search_exp = st.text_input("🔍 Buscar experimento", "")
+            search_exp = st.text_input("[U+1F50D] Buscar experimento", "")
 
         filtered_exps = [e for e in backlog_data if e.get("status") in status_filter]
         if search_exp:
@@ -539,7 +539,7 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
 
         if filtered_exps:
             for exp in filtered_exps:
-                status_emoji = "🟡" if "Shadow" in exp["status"] else ("🔴" if "Pendiente" in exp["status"] else "✅")
+                status_emoji = "[U+1F7E1]" if "Shadow" in exp["status"] else ("[U+1F534]" if "Pendiente" in exp["status"] else "[OK]")
                 with st.expander(f"{status_emoji} **{exp['id']}** · {exp['title']}"):
                     st.markdown(f"**Universo:** `{exp['universe']}` | **Métrica Objetivo:** `{exp['metric']}` | **Fecha:** `{exp['date']}`")
                     st.info(exp['description'])
@@ -549,18 +549,18 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
         st.markdown("---")
         
         # Formulario para nuevo experimento
-        st.markdown("### 💡 Registrar Nueva Hipótesis / Idea")
+        st.markdown("### [U+1F4A1] Registrar Nueva Hipótesis / Idea")
         with st.form("new_hypothesis_form", clear_on_submit=True):
             new_title = st.text_input("Título del Experimento (ej: E26 Exits - Trimming)")
             new_universe = st.text_input("Universo de Activos (ej: Russell 1000 / ADV Top 200)", "Russell 1000")
             new_metric = st.text_input("Métrica Objetivo (ej: Profit Factor +0.15, Win Rate >= 52%)")
             new_status = st.selectbox(
                 "Estado Inicial",
-                options=["🔴 Pendiente / Backlog", "🟡 Shadow / Monitoreo"]
+                options=["[U+1F534] Pendiente / Backlog", "[U+1F7E1] Shadow / Monitoreo"]
             )
             new_description = st.text_area("Descripción de la Hipótesis o Idea de Implementación")
             
-            submit_btn = st.form_submit_button("💾 Registrar Experimento")
+            submit_btn = st.form_submit_button("[U+1F4BE] Registrar Experimento")
             
             if submit_btn:
                 if not new_title or not new_description:
@@ -585,15 +585,15 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
                     try:
                         with open(backlog_file, "w", encoding="utf-8") as f:
                             json.dump(backlog_data, f, indent=2)
-                        st.success(f"🎉 ¡Experimento **{new_id}** registrado con éxito! Recargá la página para verlo en la lista.")
+                        st.success(f"[U+1F389] ¡Experimento **{new_id}** registrado con éxito! Recargá la página para verlo en la lista.")
                     except Exception as e:
                         st.error(f"Error al guardar la hipótesis: {e}")
 
-    # ──────────────────────────────────────────────────────────────────────
+    # ----------------------------------------------------------------------
     # TAB 6: PRIMEROS PRINCIPIOS (SISTEMAS A Y B EN PAPER)
-    # ──────────────────────────────────────────────────────────────────────
+    # ----------------------------------------------------------------------
     with tab_first_principles:
-        st.subheader("📐 Primeros Principios Cuantitativos")
+        st.subheader("[U+1F4D0] Primeros Principios Cuantitativos")
         st.markdown(
             "Descomposición física y matemática de la operativa de Momentum V2. "
             "Entender el edge, el riesgo y el escalamiento desde sus bases fundamentales."
@@ -874,29 +874,29 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
             st.plotly_chart(fig, use_container_width=True)
 
             # 5. Dashboard Multicriterio de TradingView companion (Pine Script)
-            st.markdown("#### 🛠️ Dashboard Multicriterio companion (`bugatti_momentum.pine`)")
+            st.markdown("#### [U+1F6E0] Dashboard Multicriterio companion (`bugatti_momentum.pine`)")
             col_tv1, col_tv2, col_tv3, col_tv4 = st.columns(4)
             
             with col_tv1:
                 st.markdown("**Screener Qullamaggie**")
-                st.markdown("• MA Stack: 🟢 ALIGNED\n• RS Percentile: 🟢 92.1%\n• Trend Intensity: 🟢 112")
+                st.markdown("• MA Stack: [U+1F7E2] ALIGNED\n• RS Percentile: [U+1F7E2] 92.1%\n• Trend Intensity: [U+1F7E2] 112")
             with col_tv2:
                 st.markdown("**Stage 2 Minervini**")
-                st.markdown("• Stage 2 Criterios: 🟢 7/7\n• Trend Direction: 🟢 BULLISH\n• Vol. Expansion: 🟢 PASS")
+                st.markdown("• Stage 2 Criterios: [U+1F7E2] 7/7\n• Trend Direction: [U+1F7E2] BULLISH\n• Vol. Expansion: [U+1F7E2] PASS")
             with col_tv3:
                 st.markdown("**Tier 2 & Sector (XLK/SMH)**")
-                st.markdown("• RVOL (1.25x): 🟢 PASS\n• ADR% (3.5%): 🟢 PASS\n• Sector ETF > SMA20: 🟢 YES")
+                st.markdown("• RVOL (1.25x): [U+1F7E2] PASS\n• ADR% (3.5%): [U+1F7E2] PASS\n• Sector ETF > SMA20: [U+1F7E2] YES")
             with col_tv4:
                 st.markdown("**Composite Signal**")
                 if "Fase 1" in trade_step:
-                    st.markdown("<div style='background-color:#7f1d1d; color:#fca5a5; padding:8px 12px; border-radius:6px; font-weight:bold; text-align:center;'>❌ BLOCKED (Wait Open)</div>", unsafe_allow_html=True)
+                    st.markdown("<div style='background-color:#7f1d1d; color:#fca5a5; padding:8px 12px; border-radius:6px; font-weight:bold; text-align:center;'>[FAIL] BLOCKED (Wait Open)</div>", unsafe_allow_html=True)
                 else:
-                    st.markdown("<div style='background-color:#064e3b; color:#6ee7b7; padding:8px 12px; border-radius:6px; font-weight:bold; text-align:center;'>⚡ SIGNAL LONG</div>", unsafe_allow_html=True)
+                    st.markdown("<div style='background-color:#064e3b; color:#6ee7b7; padding:8px 12px; border-radius:6px; font-weight:bold; text-align:center;'>[BOLT] SIGNAL LONG</div>", unsafe_allow_html=True)
 
 
 
         # 1. Ecuación Fundamental del Retorno
-        st.markdown("### 🔬 1. Ecuación Fundamental del Retorno")
+        st.markdown("### [U+1F52C] 1. Ecuación Fundamental del Retorno")
         st.markdown(
             "Todo sistema cuantitativo se reduce a la expectativa matemática de ganancias "
             "por cada dólar arriesgado. La fórmula del valor esperado ($EV$) es:"
@@ -914,7 +914,7 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
         )
 
         st.info(
-            "💡 **El secreto de la Asimetría:** Si controlás que $AvgLoss$ sea chico y acotado (gracias a "
+            "[U+1F4A1] **El secreto de la Asimetría:** Si controlás que $AvgLoss$ sea chico y acotado (gracias a "
             "stops firmes), no necesitás un $WR$ del 80% para ser extremadamente rentable. Un $WR$ del 50% con un "
             "Ratio R:R ($AvgWin / AvgLoss$) de 2.0 genera una expectativa matemática brutal."
         )
@@ -922,7 +922,7 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
         st.markdown("---")
 
         # 2. Comparación de los 2 Sistemas en Paper
-        st.markdown("### ⚖️ 2. Los Dos Sistemas Activos en Paper")
+        st.markdown("### [SCALE] 2. Los Dos Sistemas Activos en Paper")
         
         sistema_seleccionado = st.radio(
             "Seleccioná el sistema para desglosar sus Primeros Principios:",
@@ -933,7 +933,7 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
         if "Sistema A" in sistema_seleccionado:
             col_l, col_r = st.columns([1, 1])
             with col_l:
-                st.markdown("#### 🚀 Sistema A: Torneo de Combos & Rupturas")
+                st.markdown("#### [U+1F680] Sistema A: Torneo de Combos & Rupturas")
                 st.markdown(
                     """
                     *   **Universo Original:** SP500 / ADV Top 200 (PIT).
@@ -944,7 +944,7 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
                     """
                 )
             with col_r:
-                st.markdown("#### 📊 Estructura de Salidas de Sistema A")
+                st.markdown("#### [U+1F4CA] Estructura de Salidas de Sistema A")
                 dot_a = """
                 digraph G {
                     bgcolor="transparent";
@@ -967,7 +967,7 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
         else:
             col_l, col_r = st.columns([1, 1])
             with col_l:
-                st.markdown("#### 🛡️ Sistema B: Joya E25 (Russell Shadow)")
+                st.markdown("#### [U+1F6E1] Sistema B: Joya E25 (Russell Shadow)")
                 st.markdown(
                     """
                     *   **Universo de Trabajo:** Russell 1000 + ex-XLV.
@@ -979,7 +979,7 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
                     """
                 )
             with col_r:
-                st.markdown("#### 📊 Flujo de Control de Riesgo de la Joya E25")
+                st.markdown("#### [U+1F4CA] Flujo de Control de Riesgo de la Joya E25")
                 dot_b = """
                 digraph G {
                     bgcolor="transparent";
@@ -1003,7 +1003,7 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
         st.markdown("---")
 
         # 3. Simulador de Expectativa Dinámico y Asimetría
-        st.markdown("### 🎛️ 3. Simulador de Expectativa Matemática & Exits")
+        st.markdown("### [U+1F39B] 3. Simulador de Expectativa Matemática & Exits")
         st.markdown(
             "Probá dinámicamente cómo afecta la estrategia de salidas al valor esperado de tu cartera. "
             "Compara un sistema con salidas de golpe (Joya actual) vs. salidas parciales con Runner (Sistema A / Atlas)."
@@ -1046,21 +1046,21 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
             st.caption("Cobrás TP1 (1:1), TP2 (2:1) y dejas correr un Runner a 4:1 promedio (E26 / Atlas).")
             diff_ev = ev_runner - ev_plano
             if diff_ev > 0:
-                st.success(f"🔥 ¡El Runner agrega +{diff_ev:.2f}% de expectativa por trade arriesgado!")
+                st.success(f"[U+1F525] ¡El Runner agrega +{diff_ev:.2f}% de expectativa por trade arriesgado!")
             else:
                 st.warning("En este escenario no hay beneficio extra notable.")
 
         st.markdown("---")
         
         # 4. Anatomía de un Trade Paso a Paso (Con Logs & Telegram)
-        st.markdown("### 📈 4. Anatomía de un Trade Paso a Paso (Con Logs & Telegram)")
+        st.markdown("### [U+1F4C8] 4. Anatomía de un Trade Paso a Paso (Con Logs & Telegram)")
         st.markdown(
             "Desglosá la secuencia completa de cómo se gesta, ejecuta y sella un trade real en el VPS, "
             "visualizando los reportes automatizados de Telegram y las validaciones de backtest."
         )
 
         trade_step = st.select_slider(
-            "📍 Seleccioná la fase temporal del Trade para ver su comportamiento y los reportes de Telegram correspondientes:",
+            "[U+1F4CD] Seleccioná la fase temporal del Trade para ver su comportamiento y los reportes de Telegram correspondientes:",
             options=[
                 "Fase 1: Pre-Market Report (09:00 EST)", 
                 "Fase 2: Watchlist & Market Open (09:30 EST)", 
@@ -1074,7 +1074,7 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
 
         if "Fase 1" in trade_step:
             with col_left_trade:
-                st.markdown("#### 📢 Fase 1: Pre-Market Report")
+                st.markdown("#### [U+1F4E2] Fase 1: Pre-Market Report")
                 st.markdown(
                     """
                     *   **Qué ocurre en el VPS:** El cron ejecuta el pipeline a primera hora para emitir el **Premarket Brief / Reporte consolidado**. Contiene el régimen general del mercado, las métricas de amplitud de sectores y la lista preliminar de candidatos.
@@ -1085,7 +1085,7 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
                     """
                 )
                 # Mostrar tabla con datos reales del log
-                st.markdown("**📋 Logs del Pre-Market (Extraídos de `snapshot.json`):**")
+                st.markdown("**[U+1F4CB] Logs del Pre-Market (Extraídos de `snapshot.json`):**")
                 df_mock = pd.DataFrame([
                     {"Ticker": "QCOM", "Score ML": 0.749, "Price": 215.11, "Rvol": 1.16, "Vol $ (M)": 2247.7},
                     {"Ticker": "TSM", "Score ML": 0.734, "Price": 173.69, "Rvol": 1.33, "Vol $ (M)": 2425.3},
@@ -1094,33 +1094,33 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
                 st.dataframe(df_mock, use_container_width=True)
 
             with col_right_trade:
-                watchlist_html = """🚀 <b>SIGNAL WATCHLIST | 2024-06-17</b>
+                watchlist_html = """[U+1F680] <b>SIGNAL WATCHLIST | 2024-06-17</b>
 <i>Generated: 2024-06-17 09:00:15</i>
 
-⚠️ <b>MANUAL REVIEW:</b> <i>Validar Radar Sectorizado + Live Trigger antes de operar.</i>
-🟢 <b>Market Bullish</b> (SPY > SMA200)
+[WARN] <b>MANUAL REVIEW:</b> <i>Validar Radar Sectorizado + Live Trigger antes de operar.</i>
+[U+1F7E2] <b>Market Bullish</b> (SPY > SMA200)
 
-📊 <b>Stats:</b>
+[U+1F4CA] <b>Stats:</b>
 • Total candidates: 3
 • Unique tickers: 3
 • Source: <code>Finviz Live</code>
 
-🔥 <b>TOP CANDIDATES:</b>
+[U+1F525] <b>TOP CANDIDATES:</b>
 • <b>QCOM</b> (Semiconductors): Price $215.11 | Score 0.749 | Vol 2247M
 • <b>TSM</b> (Semiconductors): Price $173.69 | Score 0.734 | Vol 2425M
 • <b>SMH</b> (Semiconductors): Price $228.40 | Score 0.729 | Vol 1845M"""
-                render_telegram_bubble("💬 Reporte de Pre-Market en Telegram (Formato Real)", watchlist_html)
+                render_telegram_bubble("[U+1F4AC] Reporte de Pre-Market en Telegram (Formato Real)", watchlist_html)
 
         elif "Fase 2" in trade_step:
             with col_left_trade:
-                st.markdown("#### 🧭 Fase 2: Watchlist Sectorizada al Market Open")
+                st.markdown("#### [U+1F9ED] Fase 2: Watchlist Sectorizada al Market Open")
                 st.markdown(
                     """
                     *   **Qué ocurre en vivo:** Al abrir el mercado a las 09:30 EST, el scanner del VPS publica la **Watchlist oficial sectorizada y agrupada**. Esto le permite al trader o al robot de ejecución alinear los triggers de breakout sectoriales de forma instantánea.
                     *   **Organización:** Agrupa los candidatos según su respectivo ETF de sector y lista el Score de ML y el ADR% de cada activo para priorizar el trigger.
                     """
                 )
-                st.markdown("**📋 Parámetros de Apertura:**")
+                st.markdown("**[U+1F4CB] Parámetros de Apertura:**")
                 df_open = pd.DataFrame([
                     {"Ticker": "QCOM", "Sector ETF": "SMH", "Entry Breakout": 215.11, "ADR (14)": "4.2%", "Status": "READY"},
                     {"Ticker": "TSM", "Sector ETF": "SMH", "Entry Breakout": 173.69, "ADR (14)": "3.5%", "Status": "READY"},
@@ -1129,22 +1129,22 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
                 st.dataframe(df_open, use_container_width=True)
 
             with col_right_trade:
-                open_watchlist_html = """🧭 <b>[SISTEMA A] WATCHLIST | 2024-06-17</b>
+                open_watchlist_html = """[U+1F9ED] <b>[SISTEMA A] WATCHLIST | 2024-06-17</b>
 <i>Grouped by Sector · Page 1/1</i>
 
-🔍 Candidates: <code>3</code>  🟢<code>3</code> 🟡<code>0</code> 🔴<code>0</code>
+[U+1F50D] Candidates: <code>3</code>  [U+1F7E2]<code>3</code> [U+1F7E1]<code>0</code> [U+1F534]<code>0</code>
 
-<b>SMH — Semiconductors 🟢 (+1.5%)</b>
-  <code>QCOM </code> ★75  Entry:<code>215.11</code>  ADR:<code>4.2%</code> ✅
-  <code>TSM  </code> ★73  Entry:<code>173.69</code>  ADR:<code>3.5%</code> ✅
-  <code>SMH  </code> ★73  Entry:<code>228.40</code>  ADR:<code>3.2%</code> ✅
+<b>SMH — Semiconductors [U+1F7E2] (+1.5%)</b>
+  <code>QCOM </code> [U+2605]75  Entry:<code>215.11</code>  ADR:<code>4.2%</code> [OK]
+  <code>TSM  </code> [U+2605]73  Entry:<code>173.69</code>  ADR:<code>3.5%</code> [OK]
+  <code>SMH  </code> [U+2605]73  Entry:<code>228.40</code>  ADR:<code>3.2%</code> [OK]
 
-📊 Top: <code>75</code> | Avg: <code>74</code> | Showing 1-3 of 3"""
-                render_telegram_bubble("💬 Watchlist Sectorizada en la Apertura", open_watchlist_html)
+[U+1F4CA] Top: <code>75</code> | Avg: <code>74</code> | Showing 1-3 of 3"""
+                render_telegram_bubble("[U+1F4AC] Watchlist Sectorizada en la Apertura", open_watchlist_html)
 
         elif "Fase 3" in trade_step:
             with col_left_trade:
-                st.markdown("#### 🏹 Fase 3: Trigger de Entrada e Inyección de Riesgo")
+                st.markdown("#### [U+1F3F9] Fase 3: Trigger de Entrada e Inyección de Riesgo")
                 st.markdown(
                     """
                     *   **Qué ocurre en vivo:** A las 09:35 EST, `QCOM` supera el nivel de breakout en `$215.11` con volumen expandido, disparando el trigger en el motor.
@@ -1173,7 +1173,7 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
                 st.graphviz_chart(dot_sizing)
 
             with col_right_trade:
-                trigger_html = """🛒 <b>POSITION ESTABLISHED | live_trading_scanner</b>
+                trigger_html = """[U+1F6D2] <b>POSITION ESTABLISHED | live_trading_scanner</b>
 <i>Executed at: 2024-06-17 09:35:12 EST</i>
 
 • <b>Asset:</b> QCOM (Qualcomm Inc.)
@@ -1183,23 +1183,23 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
 • <b>Sizing:</b> 77 shares (ATR adjusted)
 • <b>Capital Allocated:</b> $16,563.47 (16.5% portfolio)
 
-🚨 <b>Initial Stop Loss:</b> $202.20 (6.0% below entry)
-🎯 <b>Targets Configured (Sistema A):</b>
+[U+1F6A8] <b>Initial Stop Loss:</b> $202.20 (6.0% below entry)
+[U+1F3AF] <b>Targets Configured (Sistema A):</b>
   - TP1 (1/3): $236.62 (+10.0%)
   - TP2 (1/3): $258.13 (+20.0%)
   - Runner (1/3): Trailing EMA 8"""
-                render_telegram_bubble("💬 Alerta Recibida en Telegram (Alertas Live)", trigger_html)
+                render_telegram_bubble("[U+1F4AC] Alerta Recibida en Telegram (Alertas Live)", trigger_html)
 
         elif "Fase 4" in trade_step:
             with col_left_trade:
-                st.markdown("#### 📝 Fase 4: Post-Market & Portfolio Ledger")
+                st.markdown("#### [U+1F4DD] Fase 4: Post-Market & Portfolio Ledger")
                 st.markdown(
                     """
                     *   **Qué ocurre al cierre:** El bot actualiza la base de datos de posiciones abiertas (`active_positions.json`) y realiza el balance diario a las 16:30 EST.
                     *   **Monitoreo del VPS:** El VPS calcula la exposición sectorial global consolidada, cuidando que ningún sector supere el Ticker Cap de riesgo del 20% para el día siguiente.
                     """
                 )
-                st.markdown("**📋 Estado del Portafolio al Cierre:**")
+                st.markdown("**[U+1F4CB] Estado del Portafolio al Cierre:**")
                 df_portfolio = pd.DataFrame([
                     {"Ticker": "QCOM", "Shares": 77, "Entry": 215.11, "Current Price": 218.40, "Unrealized P&L": "+$253.33 (+1.53%)"},
                     {"Ticker": "TSM", "Shares": 90, "Entry": 173.69, "Current Price": 174.10, "Unrealized P&L": "+$36.90 (+0.23%)"}
@@ -1207,23 +1207,23 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
                 st.dataframe(df_portfolio, use_container_width=True)
 
             with col_right_trade:
-                portfolio_html = """📊 <b>DAILY PORTFOLIO UPDATE | 2024-06-17</b>
+                portfolio_html = """[U+1F4CA] <b>DAILY PORTFOLIO UPDATE | 2024-06-17</b>
 <i>Time: 16:30:00 EST</i>
 
-🏦 <b>Open Positions:</b>
-• <b>QCOM:</b> 77 shares @ $215.11 | Current: $218.40 | P&L: 🟢 +1.53%
-• <b>TSM:</b> 90 shares @ $173.69 | Current: $174.10 | P&L: 🟢 +0.23%
+[U+1F3E6] <b>Open Positions:</b>
+• <b>QCOM:</b> 77 shares @ $215.11 | Current: $218.40 | P&L: [U+1F7E2] +1.53%
+• <b>TSM:</b> 90 shares @ $173.69 | Current: $174.10 | P&L: [U+1F7E2] +0.23%
 
-📦 <b>Sector Exposure:</b>
+[U+1F4E6] <b>Sector Exposure:</b>
 • Semiconductors: 31.2% (Warning: Ticker Cap > 20% limit)
 • Cash: 68.8%
 
-🔥 <b>Net Unrealized P&L:</b> 🟢 +$290.23 (+0.29% Account)"""
-                render_telegram_bubble("💬 Reporte Diario en Telegram (Portfolio Status)", portfolio_html)
+[U+1F525] <b>Net Unrealized P&L:</b> [U+1F7E2] +$290.23 (+0.29% Account)"""
+                render_telegram_bubble("[U+1F4AC] Reporte Diario en Telegram (Portfolio Status)", portfolio_html)
 
         elif "Fase 5" in trade_step:
             with col_left_trade:
-                st.markdown("#### 🏁 Fase 5: Ejecución de Exits & Scaling")
+                st.markdown("#### [U+1F3C1] Fase 5: Ejecución de Exits & Scaling")
                 st.markdown(
                     """
                     *   **El flujo del scaling (Sistema A):**
@@ -1234,42 +1234,42 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
                 )
                 
                 # Gráfico interactivo o tabla con P&L final
-                st.markdown("**📋 Liquidación Final del Trade (Backtest Log):**")
+                st.markdown("**[U+1F4CB] Liquidación Final del Trade (Backtest Log):**")
                 df_exits = pd.DataFrame([
                     {"Parte": "Parte 1 (TP1)", "Porcentaje": "33.3%", "Precio Venta": 236.62, "P&L": "+10.00%"},
                     {"Parte": "Parte 2 (TP2)", "Porcentaje": "33.3%", "Precio Venta": 258.13, "P&L": "+20.00%"},
                     {"Parte": "Parte 3 (Runner)", "Porcentaje": "33.4%", "Precio Venta": 285.40, "P&L": "+32.68%"}
                 ])
                 st.dataframe(df_exits, use_container_width=True)
-                st.success("🔥 **Retorno Combinado Neto del Trade: +20.89%**")
+                st.success("[U+1F525] **Retorno Combinado Neto del Trade: +20.89%**")
 
             with col_right_trade:
-                exits_html = """🔔 <b>PARTIAL EXIT CONFIRMED (TP1) | combo_aggressive_momentum</b>
-• Asset: QCOM | Action: SELL 33% @ $236.62 | P&L: 🟢 +10.0%
+                exits_html = """[U+1F514] <b>PARTIAL EXIT CONFIRMED (TP1) | combo_aggressive_momentum</b>
+• Asset: QCOM | Action: SELL 33% @ $236.62 | P&L: [U+1F7E2] +10.0%
 • Action: Stop Loss of remaining 66% moved to Break Even ($215.11)
 
-🔔 <b>PARTIAL EXIT CONFIRMED (TP2) | combo_aggressive_momentum</b>
-• Asset: QCOM | Action: SELL 33% @ $258.13 | P&L: 🟢 +20.0%
+[U+1F514] <b>PARTIAL EXIT CONFIRMED (TP2) | combo_aggressive_momentum</b>
+• Asset: QCOM | Action: SELL 33% @ $258.13 | P&L: [U+1F7E2] +20.0%
 
-🏁 <b>TRADE CLOSED (Runner Exit) | combo_aggressive_momentum</b>
-• Asset: QCOM | Action: SELL REMAINING 34% @ $285.40 | P&L: 🟢 +32.68%
+[U+1F3C1] <b>TRADE CLOSED (Runner Exit) | combo_aggressive_momentum</b>
+• Asset: QCOM | Action: SELL REMAINING 34% @ $285.40 | P&L: [U+1F7E2] +32.68%
 • Reason: Trailing Stop (Price crossed below EMA 8)
 
-📊 <b>Trade Recap:</b>
-• Net Return: 🟢 +20.89%
+[U+1F4CA] <b>Trade Recap:</b>
+• Net Return: [U+1F7E2] +20.89%
 • Average Holding Time: 18 days"""
-                render_telegram_bubble("💬 Alertas de Cierre en Telegram", exits_html)
+                render_telegram_bubble("[U+1F4AC] Alertas de Cierre en Telegram", exits_html)
 
         # Gráfico de velas dinámico de la operación en el ancho completo
         st.markdown("---")
-        st.markdown("#### 📊 Comportamiento Gráfico (Velas Japonesas del Trade con Medias Móviles y Dashboard de TradingView)")
+        st.markdown("#### [U+1F4CA] Comportamiento Gráfico (Velas Japonesas del Trade con Medias Móviles y Dashboard de TradingView)")
         render_dynamic_candlestick(trade_step)
 
-    # ──────────────────────────────────────────────────────────────────────
+    # ----------------------------------------------------------------------
     # TAB 7: EVOLUCIÓN & ARQUITECTURA (DINÁMICO)
-    # ──────────────────────────────────────────────────────────────────────
+    # ----------------------------------------------------------------------
     with tab_evolution:
-        st.subheader("📈 Evolución y Arquitectura Dinámica del Sistema")
+        st.subheader("[U+1F4C8] Evolución y Arquitectura Dinámica del Sistema")
         st.markdown(
             "Visualizá la estructura viva del repositorio reconstruida desde Git "
             "y el estado actual de la documentación de los archivos core."
@@ -1278,7 +1278,7 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
         col_left, col_right = st.columns([1, 1])
 
         with col_left:
-            st.markdown("#### 🏗️ Arquitectura de Momentum V2")
+            st.markdown("#### [U+1F3D7] Arquitectura de Momentum V2")
             st.markdown(
                 "Flujo de datos y dependencias entre los distintos módulos del sistema:"
             )
@@ -1319,7 +1319,7 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
             st.graphviz_chart(dot_code)
 
         with col_right:
-            st.markdown("#### 🔬 Cobertura de Documentación")
+            st.markdown("#### [U+1F52C] Cobertura de Documentación")
             st.markdown(
                 "Estado de docstrings en los archivos prioritarios de Phase 6:"
             )
@@ -1351,18 +1351,18 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
                         doc_stats.append({
                             "Archivo": name,
                             "Ruta": relative_path,
-                            "Módulo": "✅ Sí" if module_doc else "❌ No",
+                            "Módulo": "[OK] Sí" if module_doc else "[FAIL] No",
                             "Items": total,
                             "Doc": documented,
                             "Cobertura": (documented / total * 100) if total > 0 else 100.0
                         })
                     except Exception as e:
                         doc_stats.append({
-                            "Archivo": name, "Ruta": relative_path, "Módulo": "⚠️ Error", "Items": 0, "Doc": 0, "Cobertura": 0.0
+                            "Archivo": name, "Ruta": relative_path, "Módulo": "[WARN] Error", "Items": 0, "Doc": 0, "Cobertura": 0.0
                         })
                 else:
                     doc_stats.append({
-                        "Archivo": name, "Ruta": relative_path, "Módulo": "🚫 N/A", "Items": 0, "Doc": 0, "Cobertura": 0.0
+                        "Archivo": name, "Ruta": relative_path, "Módulo": "[U+1F6AB] N/A", "Items": 0, "Doc": 0, "Cobertura": 0.0
                     })
 
             for stat in doc_stats:
@@ -1376,7 +1376,7 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
                     st.caption(f"**{stat['Cobertura']:.1f}%**")
 
         st.markdown("---")
-        st.markdown("#### ⏳ Historial de Evolución del Código (Git Log)")
+        st.markdown("#### [HOURGLASS] Historial de Evolución del Código (Git Log)")
         st.markdown(
             "Últimos cambios registrados en la rama activa (`git log` ejecutado dinámicamente):"
         )
@@ -1396,31 +1396,31 @@ Por favor, seguí la Etapa 1 (Sandbox) del ciclo de investigación:
                 if len(parts) >= 4:
                     commit_hash, commit_date, author, message = parts[0], parts[1], parts[2], "|".join(parts[3:])
                     
-                    badge = "📝"
+                    badge = "[U+1F4DD]"
                     if "[UI]" in message:
-                        badge = "🎨 [UI]"
+                        badge = "[U+1F3A8] [UI]"
                     elif "[Signals]" in message:
-                        badge = "📈 [Signals]"
+                        badge = "[U+1F4C8] [Signals]"
                     elif "[ML]" in message or "[Machine Learning]" in message:
-                        badge = "🧠 [ML]"
+                        badge = "[U+1F9E0] [ML]"
                     elif "[Chore]" in message:
-                        badge = "⚙️ [Chore]"
+                        badge = "[GEAR] [Chore]"
                     elif "[Docs]" in message:
-                        badge = "📄 [Docs]"
+                        badge = "[U+1F4C4] [Docs]"
                     elif "fix" in message.lower():
-                        badge = "🐞 [Fix]"
+                        badge = "[U+1F41E] [Fix]"
                     
                     st.markdown(
-                        f"🔹 **{commit_date}** · `{commit_hash}` · **{badge}** {message} *(por {author})*"
+                        f"[U+1F539] **{commit_date}** · `{commit_hash}` · **{badge}** {message} *(por {author})*"
                     )
         except Exception as e:
             st.warning(f"No se pudo cargar el historial de Git: {e}")
 
-    # ──────────────────────────────────────────────────────────────────────
+    # ----------------------------------------------------------------------
     # TAB 6: CHEAT SHEET GENERAL DE PROMPTS
-    # ──────────────────────────────────────────────────────────────────────
+    # ----------------------------------------------------------------------
     with tab_prompts:
-        st.subheader("💬 Cheat Sheet de Prompts Rápidos")
+        st.subheader("[U+1F4AC] Cheat Sheet de Prompts Rápidos")
         st.markdown(
             "Una recopilación rápida de plantillas didácticas para alinear a cualquier "
             "agente en una sesión de desarrollo."
@@ -1503,11 +1503,11 @@ Estuve haciendo pruebas locales y quedaron archivos temporales, backups o logs n
                 language="markdown"
             )
 
-    # ──────────────────────────────────────────────────────────────────────
+    # ----------------------------------------------------------------------
     # TAB 9: SALVAGUARDAS DE ENTORNO & PROTOCOLO UNIFICADO
-    # ──────────────────────────────────────────────────────────────────────
+    # ----------------------------------------------------------------------
     with tab_safeguards:
-        st.subheader("🛡️ Salvaguardas de Entorno, Hashes y Protocolo de Salida")
+        st.subheader("[U+1F6E1] Salvaguardas de Entorno, Hashes y Protocolo de Salida")
         st.markdown(
             "Visualizador interactivo de las salvaguardas mecánicas del repositorio, "
             "hashes de configuración canónica y la **Plantilla Unificada de Salida de 11 Secciones**."
@@ -1516,8 +1516,8 @@ Estuve haciendo pruebas locales y quedaron archivos temporales, backups o logs n
         col1, col2 = st.columns(2)
 
         with col1:
-            st.markdown("### 📊 Estado Canónico del Sistema (`dump_state.py`)")
-            if st.button("🔄 Ejecutar dump_state.py", key="btn_dump_state"):
+            st.markdown("### [U+1F4CA] Estado Canónico del Sistema (`dump_state.py`)")
+            if st.button("[U+1F504] Ejecutar dump_state.py", key="btn_dump_state"):
                 try:
                     import subprocess
                     out = subprocess.check_output(["python3", "scripts/dump_state.py"]).decode("utf-8")
@@ -1534,19 +1534,19 @@ Estuve haciendo pruebas locales y quedaron archivos temporales, backups o logs n
                     except Exception:
                         st.info("Hacé clic en 'Ejecutar dump_state.py' para inspeccionar el JSON de estado.")
                 else:
-                    st.warning("⚠️ `scripts/dump_state.py` no existe en este clon.")
+                    st.warning("[WARN] `scripts/dump_state.py` no existe en este clon.")
 
         with col2:
-            st.markdown("### 🔍 Chequeo de Duplicados & Pre-commit")
-            if st.button("🛡️ Validar Estructura (check_git_duplicates.py)", key="btn_check_duplicates"):
+            st.markdown("### [U+1F50D] Chequeo de Duplicados & Pre-commit")
+            if st.button("[U+1F6E1] Validar Estructura (check_git_duplicates.py)", key="btn_check_duplicates"):
                 try:
                     import subprocess
                     res = subprocess.run(["python3", "scripts/check_git_duplicates.py"], capture_output=True, text=True)
                     if res.returncode == 0:
-                        st.success("✅ Estructura del repositorio limpia: Sin duplicados activos ni carpetas recursivas.")
+                        st.success("[OK] Estructura del repositorio limpia: Sin duplicados activos ni carpetas recursivas.")
                         st.code(res.stdout, language="text")
                     else:
-                        st.error("💥 Falla de Integridad: Se detectaron duplicados o rutas anidadas.")
+                        st.error("[U+1F4A5] Falla de Integridad: Se detectaron duplicados o rutas anidadas.")
                         st.code(res.stderr or res.stdout, language="text")
                 except Exception as e:
                     st.error(f"Error al ejecutar chequeo de duplicados: {e}")
@@ -1554,7 +1554,7 @@ Estuve haciendo pruebas locales y quedaron archivos temporales, backups o logs n
                 st.info("Validá en tiempo real si hay archivos `combo_loader.py` duplicados o directorios anidados `vps_snapshot/vps_snapshot`.")
 
         st.markdown("---")
-        st.markdown("### 📋 Plantilla Unificada de Salida de Sesión (11 Secciones)")
+        st.markdown("### [U+1F4CB] Plantilla Unificada de Salida de Sesión (11 Secciones)")
         st.markdown(
             "Copiá y pegá esta plantilla en el chat o pedile al agente: "
             "`'Aplicá la Plantilla Unificada de Salida de 11 Secciones'`."
@@ -1562,22 +1562,22 @@ Estuve haciendo pruebas locales y quedaron archivos temporales, backups o logs n
 
         st.code(
             """
-## 🎯 Goal
+## [U+1F3AF] Goal
 [Propósito de la sesión]
 
-## 📋 Instructions
+## [U+1F4CB] Instructions
 [Restricciones o preferencias recibidas]
 
-## 💡 Discoveries
+## [U+1F4A1] Discoveries
 [Hallazgos técnicos o sorpresas]
 
-## ✅ Accomplished
+## [OK] Accomplished
 [Hitos logrados]
 
-## 🚀 Next Steps
+## [U+1F680] Next Steps
 [Próximos pasos]
 
-## 📂 Relevant Files
+## [U+1F4C2] Relevant Files
 [Archivos clave afectados]
 
 ### 1. Rango de Git

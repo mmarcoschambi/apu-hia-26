@@ -104,7 +104,7 @@ class QullamaggieMomentumScreener(BaseScreener):
             used_fallback = True
 
         if rs_pct is None:
-            rs_pct = 50.0  # desconocido → neutral
+            rs_pct = 50.0  # desconocido -> neutral
 
         rs_ok = rs_pct >= p["min_rs_percentile"]
         

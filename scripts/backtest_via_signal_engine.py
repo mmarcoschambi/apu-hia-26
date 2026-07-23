@@ -161,7 +161,7 @@ def run_backtest(
         if tok.strip()
     }
     logger.info(
-        f"🚀 BACKTEST (PARITY{' + VAR-E' if use_variant_e else ''}{' + E25-SIZING (' + e25_version + ')' if use_e25_sizing else ''}) | Index: {index_name} | Range: {start_date} -> {end_date}"
+        f"[BACKTEST] BACKTEST (PARITY{' + VAR-E' if use_variant_e else ''}{' + E25-SIZING (' + e25_version + ')' if use_e25_sizing else ''}) | Index: {index_name} | Range: {start_date} -> {end_date}"
         f"{' | Excluding Tickers: ' + ','.join(sorted(exclude_set)) if exclude_set else ''}"
         f"{' | Excluding Sectors: ' + ','.join(sorted(exclude_sectors_set)) if exclude_sectors_set else ''}"
     )
@@ -170,7 +170,7 @@ def run_backtest(
         return
 
     # --- FASE 1: PRE-CARGA Y CONFIGURACIÓN ---
-    logger.info("📦 Loading configs and pre-loading superset...")
+    logger.info("[LOADING] Loading configs and pre-loading superset...")
 
     # Load production config for backtest constants and E25 dynamic extension sizing
     prod_cfg = load_production_config()
@@ -228,7 +228,7 @@ def run_backtest(
             # Reemplazar el bloqueo de max_dist_sma20 en tier2_filters (Experimento 2 de E25)
             cfg["tier2_filters"]["use_dynamic_extension"] = True
 
-    logger.info(f"🔭 Building PIT universes for each date (Index: {index_name})...")
+    logger.info(f"[SCANNING] Building PIT universes for each date (Index: {index_name})...")
     
     # Load disk cache for universe builder to speed up consecutive backtest runs
     cache_dir = Path(".cache")
@@ -340,10 +340,10 @@ def run_backtest(
     if pre_evaluated_total > 0:
         pre_coverage_pct = round((pre_available_count / pre_evaluated_total) * 100, 2)
     
-    logger.info(f"📊 Pre-run RS Coverage Check: {pre_coverage_pct}% ({pre_available_count}/{pre_evaluated_total} lookups succeeded)")
+    logger.info(f"[METRICS] Pre-run RS Coverage Check: {pre_coverage_pct}% ({pre_available_count}/{pre_evaluated_total} lookups succeeded)")
     if pre_coverage_pct < 95.0:
         logger.warning(
-            f"⚠️ PROMINENT WARNING: RS Coverage is low ({pre_coverage_pct}%). "
+            f"[WARN] PROMINENT WARNING: RS Coverage is low ({pre_coverage_pct}%). "
             f"There are {pre_evaluated_total - pre_available_count} missing RS lookups."
         )
         if pre_missing_tickers:
@@ -364,7 +364,7 @@ def run_backtest(
     lookback_start = (pd.to_datetime(start_date) - timedelta(days=400)).strftime("%Y-%m-%d")
     all_ohlcv = load_ohlcv_batch_memory(list(superset_tickers), lookback_start, end_date)
 
-    logger.info("⚡ Pre-calculating indicators (MA stack, ATR, ADR%, Consolidation) for all tickers...")
+    logger.info("[INDICATORS] Pre-calculating indicators (MA stack, ATR, ADR%, Consolidation) for all tickers...")
     for t_sym, t_df in all_ohlcv.items():
         if len(t_df) < 5:
             continue
@@ -411,7 +411,7 @@ def run_backtest(
 
     theme_metrics_full = {}
     if use_variant_e:
-        logger.info("🧪 Pre-calculating Dynamic Theme Indices for Variant E...")
+        logger.info("[THEMES] Pre-calculating Dynamic Theme Indices for Variant E...")
         from src.data.theme_taxonomy import THEME_MAP_2020, THEME_MAP_2022, THEME_MAP_CURRENT
 
         all_theme_tickers = (
@@ -686,7 +686,7 @@ def run_backtest(
                             results_a.append(res_a)
                     except Exception as e:
                         logger.error(
-                            f"❌ Exception in evaluate_ticker {ticker} (System A) on {d_str}: {e}",
+                            f"[ERROR] Exception in evaluate_ticker {ticker} (System A) on {d_str}: {e}",
                             exc_info=True
                         )
 
@@ -705,7 +705,7 @@ def run_backtest(
                             results_b.append(res_b)
                     except Exception as e:
                         logger.error(
-                            f"❌ Exception in evaluate_ticker {ticker} (System B) on {d_str}: {e}",
+                            f"[ERROR] Exception in evaluate_ticker {ticker} (System B) on {d_str}: {e}",
                             exc_info=True
                         )
 
@@ -720,10 +720,10 @@ def run_backtest(
     if evaluated_rs_total > 0:
         rs_coverage_pct = round((available_rs_count / evaluated_rs_total) * 100, 2)
     
-    logger.info(f"📊 RS Coverage Metric: {rs_coverage_pct}% ({available_rs_count}/{evaluated_rs_total} lookups succeeded)")
+    logger.info(f"[METRICS] RS Coverage Metric: {rs_coverage_pct}% ({available_rs_count}/{evaluated_rs_total} lookups succeeded)")
     if rs_coverage_pct < 95.0:
         logger.warning(
-            f"⚠️ PROMINENT WARNING: RS Coverage is low ({rs_coverage_pct}%). "
+            f"[WARN] PROMINENT WARNING: RS Coverage is low ({rs_coverage_pct}%). "
             f"There are {evaluated_rs_total - available_rs_count} missing RS lookups."
         )
         if missing_rs_count:
@@ -735,7 +735,7 @@ def run_backtest(
     with open(OUTPUT_DIR / f"{tag}_metrics.json", "w") as f:
         json.dump(metrics, f, indent=2)
     logger.info(
-        f"✅ DONE | Return: {metrics.get('total_return')}% | MDD: {metrics.get('max_drawdown')}% | Trades: {len(df_trades)}"
+        f"[DONE] DONE | Return: {metrics.get('total_return')}% | MDD: {metrics.get('max_drawdown')}% | Trades: {len(df_trades)}"
     )
 
     # Calculate comprehensive robustness report (Issue #11)
@@ -759,16 +759,16 @@ def run_backtest(
                 json.dump(robustness_report, f, indent=2)
                 
             logger.info(
-                f"🛡️  Robustness Metrics | Sortino: {robustness_report['risk_adjusted']['sortino']:.2f} | "
+                f"[SHIELD]  Robustness Metrics | Sortino: {robustness_report['risk_adjusted']['sortino']:.2f} | "
                 f"Omega: {robustness_report['risk_adjusted']['omega']:.2f} | "
                 f"Calmar: {robustness_report['risk_adjusted']['calmar']:.2f} | "
                 f"Tail Ratio: {robustness_report['risk_adjusted']['tail_ratio']:.2f} | "
                 f"Prob of Loss: {robustness_report['probability_of_loss']*100:.1f}%"
             )
         except Exception as e:
-            logger.warning(f"⚠️  Could not calculate robustness metrics: {e}")
+            logger.warning(f"[WARN]  Could not calculate robustness metrics: {e}")
     else:
-        logger.warning(f"⚠️  Equity curve demasiado corta para robustez ({len(equity_series)} puntos). Mínimo requerido: 30.")
+        logger.warning(f"[WARN]  Equity curve demasiado corta para robustez ({len(equity_series)} puntos). Mínimo requerido: 30.")
 
 
 if __name__ == "__main__":

@@ -30,7 +30,7 @@ def ticker_to_signal_decision(
     Wrapper para que daily_engine genere una SignalDecision
     a partir del mismo flujo que live.
 
-    Si df < 65 filas o falla el screener/tier2 → decision.passed=False.
+    Si df < 65 filas o falla el screener/tier2 -> decision.passed=False.
     """
     return evaluate_ticker(
         ticker=symbol,

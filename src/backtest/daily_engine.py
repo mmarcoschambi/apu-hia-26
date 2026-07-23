@@ -92,7 +92,7 @@ class DailyBacktestEngine:
         self.portfolio = Portfolio(risk_manager.account_equity)
         self.pending_orders: List[PendingOrder] = []
         
-        # ⚡ OPTIMIZACIÓN: No cargar todos los datos en memoria
+        # [BOLT] OPTIMIZACIÓN: No cargar todos los datos en memoria
         # Solo guardar el universo válido y cargar datos bajo demanda
         self.market_data: Dict[str, pd.DataFrame] = {}
         self.validated_universe: List[str] = []  # Universo que pasó filtros
@@ -112,7 +112,7 @@ class DailyBacktestEngine:
         
         print(f"Initializing Engine for {len(universe)} symbols...")
         if self.skip_filters:
-            print("⚠️ Filters DISABLED (Direct Input Mode)")
+            print("[WARN] Filters DISABLED (Direct Input Mode)")
         else:
             print(f"Filters: Mcap ${min_mcap/1e9:.1f}B-${max_mcap/1e9:.1f}B | Min Vol {min_avg_volume/1000:.0f}k | ADR > {min_adr}% | RVOL > {min_rvol}x")
         self._preload_market_data()
@@ -160,7 +160,7 @@ class DailyBacktestEngine:
                 self.universe = filtered_universe
                 print(f"Universe after Funda Filter: {len(self.universe)} symbols")
             else:
-                 print("⚠️ Offline Mode: Skipping live fundamental checks (Mcap). Reliance on cached price/volume data.")
+                 print("[WARN] Offline Mode: Skipping live fundamental checks (Mcap). Reliance on cached price/volume data.")
 
         # 2. Preload SPY
         try:
@@ -180,7 +180,7 @@ class DailyBacktestEngine:
         for i, symbol in enumerate(self.universe):
             # Progress indicator for large universes
             if i % 10 == 0 or i == total_symbols - 1:
-                # print(f"📊 Loading data: {i+1}/{total_symbols} ({valid_data_count} valid so far)")
+                # print(f"[U+1F4CA] Loading data: {i+1}/{total_symbols} ({valid_data_count} valid so far)")
                 print(f"__PROGRESS__{i+1}/{total_symbols}__Loading {symbol}...", flush=True)
             
             try:
@@ -234,7 +234,7 @@ class DailyBacktestEngine:
                                 print(f"Skipping {symbol}: Low Rolling Dollar Vol (${rolling_dollar_vol/1e6:.1f}M < ${self.min_dollar_vol/1e6:.1f}M)")
                                 continue
 
-                        print(f"✅ {symbol} Loaded. Price: ${current_price:.2f}, $Vol: ${avg_dollar_vol/1e6:.1f}M")
+                        print(f"[OK] {symbol} Loaded. Price: ${current_price:.2f}, $Vol: ${avg_dollar_vol/1e6:.1f}M")
                         # NO cargar datos en memoria, solo validar que existen
                         # df = self.triad_logic._calculate_indicators(df)
                         # self.market_data[symbol] = df
@@ -304,7 +304,7 @@ class DailyBacktestEngine:
             gc.collect()
 
     def run(self):
-        print("🚀 Starting Daily Simulation...")
+        print("[U+1F680] Starting Daily Simulation...")
         date_range = pd.date_range(start=self.start_date, end=self.end_date, freq='B')
         total_days = len(date_range)
 
@@ -329,7 +329,7 @@ class DailyBacktestEngine:
             if i % 5 == 0 or i == total_days - 1:
                 print(f"__PROGRESS__{i+1}/{total_days}__{today.date()}", flush=True)
             
-            # 🗑️ Limpiar cache de días anteriores para liberar memoria
+            # [U+1F5D1] Limpiar cache de días anteriores para liberar memoria
             if i > 0:
                 self._cleanup_old_cache(today)
             
@@ -361,7 +361,7 @@ class DailyBacktestEngine:
             if not df.empty and final_date in df.index:
                 final_price = df.loc[final_date]['close']
                 self._close_position(symbol, final_price, final_date, "END_OF_BACKTEST")
-                print(f"⚠️ Closed open position: {symbol} at ${final_price:.2f}")
+                print(f"[WARN] Closed open position: {symbol} at ${final_price:.2f}")
         
         # Retornar tanto closed_trades como partial_exits
         trades_df = pd.DataFrame(self.portfolio.closed_trades)
@@ -370,7 +370,7 @@ class DailyBacktestEngine:
         if self.portfolio.partial_exits:
             partial_df = pd.DataFrame(self.portfolio.partial_exits)
             partial_df.to_csv('outputs/backtests/partial_exits.csv', index=False)
-            print(f"📊 Salidas parciales guardadas: {len(partial_df)} registros en outputs/backtests/partial_exits.csv")
+            print(f"[U+1F4CA] Salidas parciales guardadas: {len(partial_df)} registros en outputs/backtests/partial_exits.csv")
         
         return trades_df
 
@@ -387,7 +387,7 @@ class DailyBacktestEngine:
             
             daily_bar = df.loc[today]
             
-            # ✅ GREEN CANDLE CONFIRMATION: Solo ejecutar en velas alcistas
+            # [OK] GREEN CANDLE CONFIRMATION: Solo ejecutar en velas alcistas
             # Basado en backtest comparativo que mostró +37.26% mejor performance
             # con win rate de 66.7% vs 50% en entrada inmediata
             is_green_candle = daily_bar['close'] > daily_bar['open']
@@ -551,7 +551,7 @@ class DailyBacktestEngine:
                             position=pos
                         )
                         
-                        logger.info(f"✅ FASE 1: {symbol} - 40% vendido en {trigger_reason} (${exit_price:.2f}), Stop → BE (${pos.entry_price:.2f}), PnL: ${pnl_partial:.2f}")
+                        logger.info(f"[OK] FASE 1: {symbol} - 40% vendido en {trigger_reason} (${exit_price:.2f}), Stop -> BE (${pos.entry_price:.2f}), PnL: ${pnl_partial:.2f}")
             
             # FASE 2: TOMA DE BENEFICIOS EN RESISTENCIA/ADR (+2.5R o ADR completo)
             # Condición: TP1 ya ejecutado Y precio alcanza resistencia técnica o ADR
@@ -571,7 +571,7 @@ class DailyBacktestEngine:
                 
                 # DEBUG: Log cuando tp1_hit pero no trigger fase2
                 if not trigger_fase2:
-                    logger.debug(f"🔍 {symbol} {today.date()}: TP1 activo pero NO FASE_2 | High:{daily_bar['high']:.2f} vs 2R:{precio_2R:.2f} | Gain:{ganancia_desde_entrada:.2f} vs 1.5ADR:{pos.adr_valor*1.5:.2f}")
+                    logger.debug(f"[U+1F50D] {symbol} {today.date()}: TP1 activo pero NO FASE_2 | High:{daily_bar['high']:.2f} vs 2R:{precio_2R:.2f} | Gain:{ganancia_desde_entrada:.2f} vs 1.5ADR:{pos.adr_valor*1.5:.2f}")
                 
                 if trigger_fase2:
                     # Vender 30% de la posición ORIGINAL (no de lo que queda)
@@ -608,7 +608,7 @@ class DailyBacktestEngine:
                             position=pos
                         )
                         
-                        logger.info(f"✅ FASE 2: {symbol} - 30% vendido en {trigger_reason} (${exit_price:.2f}), PnL: ${pnl_partial:.2f}")
+                        logger.info(f"[OK] FASE 2: {symbol} - 30% vendido en {trigger_reason} (${exit_price:.2f}), PnL: ${pnl_partial:.2f}")
             
             # FASE 3: RUNNER CON TRAILING STOP (EMA 8/21 o MA 20)
             # Solo se activa si TP1 ya fue ejecutado (posición risk-free)
@@ -702,7 +702,7 @@ class DailyBacktestEngine:
             trade_record['context_price'] = pos.context_data.get('current_price', 0)
             trade_record['context_sma20'] = pos.context_data.get('sma_20', 0)
             trade_record['context_rvol'] = pos.context_data.get('rvol', 0)  # Usar RVOL guardado del screener
-            # 🛡️ Nuevas métricas de riesgo
+            # [U+1F6E1] Nuevas métricas de riesgo
             trade_record['dist_sma20_pct'] = pos.context_data.get('dist_sma20_pct', 0)
             trade_record['vol_trig'] = pos.context_data.get('vol_trig', 'Unknown')
             trade_record['days_to_next_earnings'] = pos.context_data.get('days_to_next_earnings', -1)
@@ -858,9 +858,9 @@ class DailyBacktestEngine:
                 
                 # DEBUG: Verificar que dist_sma20_pct se mantenga
                 if 'dist_sma20_pct' in cand:
-                    logger.info(f"✅ {cand['symbol']} mantiene dist_sma20_pct={cand['dist_sma20_pct']:.2f}%")
+                    logger.info(f"[OK] {cand['symbol']} mantiene dist_sma20_pct={cand['dist_sma20_pct']:.2f}%")
                 else:
-                    logger.warning(f"⚠️ {cand['symbol']} NO TIENE dist_sma20_pct!")
+                    logger.warning(f"[WARN] {cand['symbol']} NO TIENE dist_sma20_pct!")
                 
                 refined_candidates.append(cand)
             elif signal.action == 'WAIT' and signal.camino == Camino.SAFETY_CHECK:
@@ -872,24 +872,24 @@ class DailyBacktestEngine:
         for cand in candidates:
             if cand['symbol'] in self.portfolio.positions: continue
             
-            # ═══════════════════════════════════════════════════════════════
-            # 🛡️ FILTROS DE RIESGO DUROS (BASADOS EN ESTADÍSTICAS)
-            # ═══════════════════════════════════════════════════════════════
+            # ===============================================================
+            # [U+1F6E1] FILTROS DE RIESGO DUROS (BASADOS EN ESTADÍSTICAS)
+            # ===============================================================
             
-            # 🚫 FILTRO 1: SOBREEXTENSIÓN (Dist SMA20 > 7%)
+            # [U+1F6AB] FILTRO 1: SOBREEXTENSIÓN (Dist SMA20 > 7%)
             # Regla: Si el precio está >7% sobre SMA20, RECHAZAR trade
             # Razón: Estos son los peores perdedores estadísticamente
             dist_sma20 = cand.get('dist_sma20_pct', 0)
             
             # DEBUG: Mostrar SIEMPRE el valor para verificar
             if dist_sma20 != 0:
-                logger.info(f"🔍 {cand['symbol']} dist_sma20_pct={dist_sma20:.2f}%")
+                logger.info(f"[U+1F50D] {cand['symbol']} dist_sma20_pct={dist_sma20:.2f}%")
             
             if dist_sma20 > 7.0:
-                logger.info(f"❌ {cand['symbol']} REJECTED: Sobreextendido {dist_sma20:.2f}% > 7% de SMA20")
+                logger.info(f"[FAIL] {cand['symbol']} REJECTED: Sobreextendido {dist_sma20:.2f}% > 7% de SMA20")
                 continue  # SKIP este trade
             
-            # ⚠️ FILTRO 2: VolTrig = Danger (RVOL >= 3x)
+            # [WARN] FILTRO 2: VolTrig = Danger (RVOL >= 3x)
             # Regla: Si VolTrig == 'Danger', reducir tamaño al 50%
             # Razón: El edge desaparece con volumen extremo
             vol_trig = cand.get('vol_trig', 'Safe')
@@ -898,10 +898,10 @@ class DailyBacktestEngine:
             
             if vol_trig == 'Danger':
                 vol_trig_reduction = 0.5  # Reducir a 50%
-                vol_trig_note = f"⚠️ VolTrig=DANGER (RVOL={cand.get('rvol', 0):.2f}x) - Size reduced 50%"
-                logger.info(f"⚠️ {cand['symbol']} {vol_trig_note}")
+                vol_trig_note = f"[WARN] VolTrig=DANGER (RVOL={cand.get('rvol', 0):.2f}x) - Size reduced 50%"
+                logger.info(f"[WARN] {cand['symbol']} {vol_trig_note}")
             
-            # ═══════════════════════════════════════════════════════════════
+            # ===============================================================
             
             trigger_price = cand['entry_trigger'] * 1.005
             technical_stop = cand['stop_loss']
@@ -943,9 +943,9 @@ class DailyBacktestEngine:
                 market_regime_factor=regime_factor  # dinamico por Stage 1/2/3/4
             )
             
-            # ═══════════════════════════════════════════════════════════════
-            # 🛡️ APLICAR REDUCCIÓN POR VolTrig (antes de otras reducciones)
-            # ═══════════════════════════════════════════════════════════════
+            # ===============================================================
+            # [U+1F6E1] APLICAR REDUCCIÓN POR VolTrig (antes de otras reducciones)
+            # ===============================================================
             if vol_trig_reduction < 1.0:
                 original_shares = sizing['shares']
                 sizing['shares'] = int(original_shares * vol_trig_reduction)
@@ -963,7 +963,7 @@ class DailyBacktestEngine:
                     days_to_earning = (next_earning - pd.to_datetime(today)).days
                     
                     if 0 <= days_to_earning < 5:
-                        # ⚠️ EARNINGS RISK: Reduce size to 1/4
+                        # [WARN] EARNINGS RISK: Reduce size to 1/4
                         original_shares = sizing['shares']
                         sizing['shares'] = int(original_shares * 0.25)
                         earnings_note = f"EARNINGS_RISK ({days_to_earning}d away) - Size reduced 75% ({original_shares}->{sizing['shares']})"

@@ -10,8 +10,8 @@ Caché de dos niveles para el dashboard:
            Evita recomputar agrupaciones caras en cada rerun de Streamlit.
 
 Tiempos objetivo:
-  - Cambio de filtro UI → <300ms en payload típico
-  - Recarga completa → significativamente menor que sin caché
+  - Cambio de filtro UI -> <300ms en payload típico
+  - Recarga completa -> significativamente menor que sin caché
 
 Uso:
     from src.ui.dashboard_cache import DashboardCache
@@ -74,16 +74,16 @@ class DashboardCache:
     def __init__(self) -> None:
         self._adapter = DashboardDataAdapter()
         # Nivel 1: caché de archivos en memoria de la sesión
-        # key: cache_key_string → value: data
+        # key: cache_key_string -> value: data
         self._file_cache: Dict[str, Any] = {}
         # Nivel 2: caché de computo filtrado
-        # key: (df_hash, asset, pattern) → filtered_df
+        # key: (df_hash, asset, pattern) -> filtered_df
         self._compute_cache: Dict[Tuple, pd.DataFrame] = {}
         self._timings: Dict[str, float] = {}
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     # Nivel 1 — caché de archivo
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
 
     def get_optimizer_config(self, path: str) -> Dict[str, Any]:
         """
@@ -127,7 +127,7 @@ class DashboardCache:
 
     def get_asset_pattern_index(self, trades_df: pd.DataFrame) -> Dict[str, Any]:
         """
-        Construye el índice asset→patterns con caché de computo.
+        Construye el índice asset->patterns con caché de computo.
         """
         h = _df_hash(trades_df, "index")
         cache_key = ("index", h)
@@ -144,9 +144,9 @@ class DashboardCache:
         logger.debug(f"[Cache L2 MISS] asset_pattern_index ({elapsed*1000:.1f}ms)")
         return index
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     # Nivel 2 — caché de computo filtrado
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
 
     def get_filtered_view(
         self,
@@ -173,7 +173,7 @@ class DashboardCache:
         self._timings[f"filter:{asset}:{pattern}"] = elapsed
         logger.debug(
             f"[Cache L2 MISS] filtered_view asset={asset} pattern={pattern} "
-            f"({elapsed*1000:.1f}ms) → {len(filtered)} filas"
+            f"({elapsed*1000:.1f}ms) -> {len(filtered)} filas"
         )
         return filtered
 
@@ -201,9 +201,9 @@ class DashboardCache:
         logger.debug(f"[Cache L2 MISS] segment_metrics {group_by_cols} ({elapsed*1000:.1f}ms)")
         return metrics
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     # Telemetría
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
 
     def render_timing_sidebar(self) -> None:
         """
@@ -214,7 +214,7 @@ class DashboardCache:
             return
 
         import streamlit as st
-        with st.sidebar.expander("⏱️ Cache Timings", expanded=False):
+        with st.sidebar.expander("[STOPWATCH] Cache Timings", expanded=False):
             for op, elapsed in sorted(self._timings.items()):
                 st.text(f"{op}: {elapsed*1000:.1f}ms")
 
@@ -245,10 +245,10 @@ class DashboardCache:
             logger.debug(f"[Cache] Invalidadas {len(keys_to_del)} entradas para {path}")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Integración con Streamlit cache_data
 # Funciones standalone decoradas para uso directo desde app.py
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -274,7 +274,7 @@ def cached_load_trades(path: str) -> pd.DataFrame:
 @st.cache_data(show_spinner=False)
 def cached_build_index(trades_json: str) -> Dict[str, Any]:
     """
-    Versión cacheada del índice asset→patterns.
+    Versión cacheada del índice asset->patterns.
     Recibe trades como JSON string (requerido por st.cache_data que no serializa DataFrames).
     """
     import json

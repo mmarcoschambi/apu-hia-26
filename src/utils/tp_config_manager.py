@@ -114,11 +114,11 @@ class TPConfigManager:
                     }
                 else:
                     print(
-                        f"⚠️  Saved TP config is {days_old} days old, consider re-optimizing"
+                        f"[WARN]  Saved TP config is {days_old} days old, consider re-optimizing"
                     )
 
             except Exception as e:
-                print(f"⚠️  Could not load saved TP config: {e}")
+                print(f"[WARN]  Could not load saved TP config: {e}")
 
         return None
 
@@ -165,7 +165,7 @@ class TPConfigManager:
             json.dump(config, f, indent=2)
 
         print(
-            f"💾 Optimal TP saved: {tp1_pct:.0%}/{tp2_pct:.0%}/{runner_pct:.0%} (Sharpe: {sharpe:.3f})"
+            f"[U+1F4BE] Optimal TP saved: {tp1_pct:.0%}/{tp2_pct:.0%}/{runner_pct:.0%} (Sharpe: {sharpe:.3f})"
         )
         print(f"   Location: {cls.CONFIG_PATH}")
 
@@ -180,7 +180,7 @@ class TPConfigManager:
         """Elimina configuración óptima guardada (forzar re-optimización)."""
         if cls.CONFIG_PATH.exists():
             cls.CONFIG_PATH.unlink()
-            print(f"🗑️  Cleared saved TP config: {cls.CONFIG_PATH}")
+            print(f"[U+1F5D1]  Cleared saved TP config: {cls.CONFIG_PATH}")
 
 
 # Inicializar

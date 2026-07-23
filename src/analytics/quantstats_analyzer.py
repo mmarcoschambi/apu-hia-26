@@ -64,7 +64,7 @@ class TradeGrouper:
             return pd.DataFrame()
 
         logger.info(
-            f"📊 Grouping {len(trade_log)} trade events into complete trades..."
+            f"[U+1F4CA] Grouping {len(trade_log)} trade events into complete trades..."
         )
 
         # Ensure dates are datetime — handle epoch ms (from read_json) vs ns
@@ -185,7 +185,7 @@ class TradeGrouper:
         grouped["hit_tp2"] = grouped["exit_phases"].str.contains("TP2")
         grouped["had_runner"] = grouped["exit_phases"].str.contains("RUNNER")
 
-        logger.info(f"✅ Grouped into {len(grouped)} complete trades")
+        logger.info(f"[OK] Grouped into {len(grouped)} complete trades")
         logger.info(f"   Winners: {grouped['is_winner'].sum()}")
         logger.info(f"   Losers: {(~grouped['is_winner']).sum()}")
         logger.info(f"   Stopped Out: {grouped['was_stopped_out'].sum()}")
@@ -252,7 +252,7 @@ class EquityCurveBuilder:
         daily_returns = equity.pct_change().fillna(0)
 
         logger.info(
-            f"📈 Built equity curve: ${equity.iloc[0]:,.0f} → ${equity.iloc[-1]:,.0f}"
+            f"[U+1F4C8] Built equity curve: ${equity.iloc[0]:,.0f} -> ${equity.iloc[-1]:,.0f}"
         )
         logger.info(
             f"   Total Return: {((equity.iloc[-1] / equity.iloc[0] - 1) * 100):.2f}%"
@@ -565,12 +565,12 @@ class QuantStatsAnalyzer:
                     else:
                         benchmark = bench_data["Close"].pct_change().fillna(0)
 
-                    logger.info(f"✅ Loaded benchmark: {benchmark_ticker}")
+                    logger.info(f"[OK] Loaded benchmark: {benchmark_ticker}")
             except Exception as e:
                 logger.warning(f"Could not load benchmark {benchmark_ticker}: {e}")
 
         # Generate report
-        logger.info(f"📊 Generating QuantStats tearsheet...")
+        logger.info(f"[U+1F4CA] Generating QuantStats tearsheet...")
 
         # Ensure alignment between strategy returns and benchmark
         if benchmark is not None:
@@ -596,7 +596,7 @@ class QuantStatsAnalyzer:
             title=f"Trading Strategy Performance Report - {timestamp}",
         )
 
-        logger.info(f"✅ Report saved: {report_file}")
+        logger.info(f"[OK] Report saved: {report_file}")
         return str(report_file)
 
     def generate_pdf_report(
@@ -653,7 +653,7 @@ class QuantStatsAnalyzer:
         # Get comprehensive metrics
         metrics = self.get_quantstats_metrics(benchmark_data=benchmark)
 
-        logger.info(f"📊 Generating QuantStats PDF tearsheet...")
+        logger.info(f"[U+1F4CA] Generating QuantStats PDF tearsheet...")
 
         try:
             with PdfPages(report_file) as pdf:
@@ -662,9 +662,9 @@ class QuantStatsAnalyzer:
                     fig = self._create_metrics_summary_page(metrics, benchmark_ticker)
                     pdf.savefig(fig, bbox_inches="tight")
                     plt.close(fig)
-                    logger.info("✅ Page 1: Metrics Summary")
+                    logger.info("[OK] Page 1: Metrics Summary")
                 except Exception as e:
-                    logger.warning(f"⚠️  Skipped Metrics Summary page: {e}")
+                    logger.warning(f"[WARN]  Skipped Metrics Summary page: {e}")
 
                 # Page 2: Snapshot (Summary) - SKIP IF PROBLEMATIC
                 if not skip_snapshot:
@@ -677,13 +677,13 @@ class QuantStatsAnalyzer:
                         )
                         pdf.savefig(fig)
                         plt.close(fig)
-                        logger.info("✅ Page 2: Snapshot")
+                        logger.info("[OK] Page 2: Snapshot")
                     except Exception as e:
                         logger.warning(
-                            f"⚠️  Skipped Snapshot page (known quantiles issue): {e}"
+                            f"[WARN]  Skipped Snapshot page (known quantiles issue): {e}"
                         )
                         logger.info(
-                            "   💡 Tip: Use skip_snapshot=True to avoid this warning"
+                            "   [U+1F4A1] Tip: Use skip_snapshot=True to avoid this warning"
                         )
 
                 # Page 3: Returns and Drawdown
@@ -693,34 +693,34 @@ class QuantStatsAnalyzer:
                     )
                     pdf.savefig(fig)
                     plt.close(fig)
-                    logger.info("✅ Page 3: Returns")
+                    logger.info("[OK] Page 3: Returns")
                 except Exception as e:
-                    logger.warning(f"⚠️  Skipped Returns plot: {e}")
+                    logger.warning(f"[WARN]  Skipped Returns plot: {e}")
 
                 try:
                     fig = qs.plots.drawdown(self.daily_returns, show=False)
                     pdf.savefig(fig)
                     plt.close(fig)
-                    logger.info("✅ Page 4: Drawdown")
+                    logger.info("[OK] Page 4: Drawdown")
                 except Exception as e:
-                    logger.warning(f"⚠️  Skipped Drawdown plot: {e}")
+                    logger.warning(f"[WARN]  Skipped Drawdown plot: {e}")
 
                 # Page 4: Heatmap and Annual Returns
                 try:
                     fig = qs.plots.monthly_heatmap(self.daily_returns, show=False)
                     pdf.savefig(fig)
                     plt.close(fig)
-                    logger.info("✅ Page 5: Monthly Heatmap")
+                    logger.info("[OK] Page 5: Monthly Heatmap")
                 except Exception as e:
-                    logger.warning(f"⚠️  Skipped Monthly Heatmap: {e}")
+                    logger.warning(f"[WARN]  Skipped Monthly Heatmap: {e}")
 
                 try:
                     fig = qs.plots.yearly_returns(self.daily_returns, show=False)
                     pdf.savefig(fig)
                     plt.close(fig)
-                    logger.info("✅ Page 6: Yearly Returns")
+                    logger.info("[OK] Page 6: Yearly Returns")
                 except Exception as e:
-                    logger.warning(f"⚠️  Skipped Yearly Returns: {e}")
+                    logger.warning(f"[WARN]  Skipped Yearly Returns: {e}")
 
                 # Page 5: Risk Metrics
                 if len(self.daily_returns) > 30:
@@ -728,9 +728,9 @@ class QuantStatsAnalyzer:
                         fig = qs.plots.rolling_sharpe(self.daily_returns, show=False)
                         pdf.savefig(fig)
                         plt.close(fig)
-                        logger.info("✅ Page 7: Rolling Sharpe")
+                        logger.info("[OK] Page 7: Rolling Sharpe")
                     except Exception as e:
-                        logger.warning(f"⚠️  Skipped Rolling Sharpe: {e}")
+                        logger.warning(f"[WARN]  Skipped Rolling Sharpe: {e}")
 
                     try:
                         fig = qs.plots.rolling_volatility(
@@ -738,9 +738,9 @@ class QuantStatsAnalyzer:
                         )
                         pdf.savefig(fig)
                         plt.close(fig)
-                        logger.info("✅ Page 8: Rolling Volatility")
+                        logger.info("[OK] Page 8: Rolling Volatility")
                     except Exception as e:
-                        logger.warning(f"⚠️  Skipped Rolling Volatility: {e}")
+                        logger.warning(f"[WARN]  Skipped Rolling Volatility: {e}")
 
                 if benchmark is not None and len(self.daily_returns) > 60:
                     try:
@@ -749,26 +749,26 @@ class QuantStatsAnalyzer:
                         )
                         pdf.savefig(fig)
                         plt.close(fig)
-                        logger.info("✅ Page 9: Rolling Beta")
+                        logger.info("[OK] Page 9: Rolling Beta")
                     except Exception as e:
-                        logger.warning(f"⚠️  Skipped Rolling Beta: {e}")
+                        logger.warning(f"[WARN]  Skipped Rolling Beta: {e}")
 
                 # Page 6: Distributions - WITH FALLBACK
                 try:
                     fig = qs.plots.distribution(self.daily_returns, show=False)
                     pdf.savefig(fig)
                     plt.close(fig)
-                    logger.info("✅ Page 10: Distribution (QuantStats)")
+                    logger.info("[OK] Page 10: Distribution (QuantStats)")
                 except Exception as e:
-                    logger.warning(f"⚠️  QuantStats distribution failed: {e}")
-                    logger.info("📊 Generating simple distribution plot...")
+                    logger.warning(f"[WARN]  QuantStats distribution failed: {e}")
+                    logger.info("[U+1F4CA] Generating simple distribution plot...")
                     try:
                         fig = self._create_simple_distribution_plot()
                         pdf.savefig(fig)
                         plt.close(fig)
-                        logger.info("✅ Page 10: Distribution (Simple Fallback)")
+                        logger.info("[OK] Page 10: Distribution (Simple Fallback)")
                     except Exception as e2:
-                        logger.error(f"❌ Both distribution plots failed: {e2}")
+                        logger.error(f"[FAIL] Both distribution plots failed: {e2}")
 
                 # Page 11: Trade Analytics (Entry Score, RS, Position Sizing)
                 try:
@@ -783,12 +783,12 @@ class QuantStatsAnalyzer:
                         pdf.savefig(fig, bbox_inches="tight")
                         plt.close(fig)
                         logger.info(
-                            "✅ Page 11: Trade Analytics (Entry Score, RS, Position Sizing)"
+                            "[OK] Page 11: Trade Analytics (Entry Score, RS, Position Sizing)"
                         )
                 except Exception as e:
-                    logger.warning(f"⚠️ Skipped Trade Analytics page: {e}")
+                    logger.warning(f"[WARN] Skipped Trade Analytics page: {e}")
 
-            logger.info(f"✅ PDF Report saved: {report_file}")
+            logger.info(f"[OK] PDF Report saved: {report_file}")
             return str(report_file)
         except Exception as e:
             logger.error(f"Error generating PDF report: {e}")
@@ -1067,7 +1067,7 @@ class QuantStatsAnalyzer:
         print("=" * 80 + "\n")
 
         # Trade-based metrics
-        print("📊 TRADE METRICS (Complete Trades)")
+        print("[U+1F4CA] TRADE METRICS (Complete Trades)")
         print("-" * 80)
         trade_metrics = self.get_trade_metrics()
 
@@ -1102,7 +1102,7 @@ class QuantStatsAnalyzer:
 
         # QuantStats metrics
         print("\n" + "-" * 80)
-        print("📈 QUANTSTATS METRICS (Time-Series)")
+        print("[U+1F4C8] QUANTSTATS METRICS (Time-Series)")
         print("-" * 80)
         qs_metrics = self.get_quantstats_metrics()
 
@@ -1176,7 +1176,7 @@ class QuantStatsAnalyzer:
 
         self.complete_trades.to_csv(output_file, index=False)
         logger.info(
-            f"✅ Exported {len(self.complete_trades)} complete trades to: {output_file}"
+            f"[OK] Exported {len(self.complete_trades)} complete trades to: {output_file}"
         )
 
     def _calculate_avg_drawdown(self, returns):
@@ -1234,7 +1234,7 @@ def analyze_backtest_with_quantstats(
     """
     # Load trade log
     trade_log = pd.read_csv(trade_log_path)
-    logger.info(f"📂 Loaded {len(trade_log)} trade events from {trade_log_path}")
+    logger.info(f"[U+1F4C2] Loaded {len(trade_log)} trade events from {trade_log_path}")
 
     # Create analyzer
     analyzer = QuantStatsAnalyzer(
@@ -1253,7 +1253,7 @@ def analyze_backtest_with_quantstats(
             output_dir=output_dir, benchmark_ticker=benchmark
         )
         if report_path:
-            print(f"📊 Full report available at: {report_path}")
+            print(f"[U+1F4CA] Full report available at: {report_path}")
 
     return analyzer
 
@@ -1288,7 +1288,7 @@ if __name__ == "__main__":
             es_data = [
                 ["Entry Score - PnL Corr", fmt(es.get("corr_entry_score_vs_pnl"))],
                 [
-                    "High Score (≥0.7)",
+                    "High Score (>=0.7)",
                     f"{es['high_score_trades'].get('count', 0)} trades, {es['high_score_trades'].get('win_rate', 0)}% WR",
                 ],
                 [
@@ -1338,7 +1338,7 @@ if __name__ == "__main__":
             rs_data = [
                 ["RS Percentile - PnL Corr", fmt(rs.get("corr_rs_vs_pnl"))],
                 [
-                    "RS ≥80 (Top 20%)",
+                    "RS >=80 (Top 20%)",
                     f"{rs['high_rs_trades'].get('count', 0)} trades, {rs['high_rs_trades'].get('win_rate', 0)}% WR",
                 ],
                 [
@@ -1378,8 +1378,8 @@ if __name__ == "__main__":
                 ["Mean R-Multiple", fmt(rd.get("mean_r"))],
                 ["Median R-Multiple", fmt(rd.get("median_r"))],
                 ["Positive R Trades", fmt(rd.get("positive_r_pct"), "%")],
-                ["Big Wins (≥2R)", fmt(rd.get("big_wins_pct"), "%")],
-                ["Big Losses (≤-1R)", fmt(rd.get("big_losses_pct"), "%")],
+                ["Big Wins (>=2R)", fmt(rd.get("big_wins_pct"), "%")],
+                ["Big Losses (<=-1R)", fmt(rd.get("big_losses_pct"), "%")],
             ]
             table3 = ax3.table(
                 cellText=ps_data,

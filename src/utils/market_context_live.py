@@ -6,7 +6,7 @@ Helper para obtener contexto de mercado (SPY/VIX) de forma robusta.
 
 Funcionalidades:
 - Limpieza robusta de MultiIndex de yfinance
-- Cadena de fallback para VIX: ^VIX → VIXY → cache → PASS_WARNING
+- Cadena de fallback para VIX: ^VIX -> VIXY -> cache -> PASS_WARNING
 - Diagnóstico de calidad del dato (OK | LOW)
 - Recomendaciones para decisiones de gate
 """

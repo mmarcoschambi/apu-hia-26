@@ -102,7 +102,7 @@ class ParallelScanner:
         else:
             self.n_workers = n_workers
         
-        logger.info(f"🚀 ParallelScanner initialized with {self.n_workers} workers")
+        logger.info(f"[U+1F680] ParallelScanner initialized with {self.n_workers} workers")
     
     def scan_universe(self, tickers: List[str], date, market_context, 
                      pattern_screener_class, data_provider_class) -> List[dict]:
@@ -119,7 +119,7 @@ class ParallelScanner:
         Returns:
             Lista de setups encontrados
         """
-        logger.info(f"🔍 Scanning {len(tickers)} tickers with {self.n_workers} workers...")
+        logger.info(f"[U+1F50D] Scanning {len(tickers)} tickers with {self.n_workers} workers...")
         
         # Preparar argumentos para workers
         args_list = [
@@ -143,7 +143,7 @@ class ParallelScanner:
             # Filtrar None results
             setups = [r for r in results if r is not None]
         
-        logger.info(f"✅ Found {len(setups)} setups")
+        logger.info(f"[OK] Found {len(setups)} setups")
         
         return setups
 
@@ -224,7 +224,7 @@ def print_performance_analysis(n_tickers: int = 200, n_days: int = 100):
     Imprime análisis de performance con diferentes configuraciones
     """
     print("\n" + "="*80)
-    print("📊 PERFORMANCE ANALYSIS")
+    print("[U+1F4CA] PERFORMANCE ANALYSIS")
     print("="*80)
     print(f"Configuration: {n_tickers} tickers x {n_days} days")
     print()
@@ -255,7 +255,7 @@ def print_performance_analysis(n_tickers: int = 200, n_days: int = 100):
     
     # Mostrar recomendación
     best = estimate_speedup(n_tickers, n_days, use_cache=True, use_parallel=True, n_workers=8)
-    print(f"\n✅ RECOMMENDED: Cache + Parallel (8 cores)")
+    print(f"\n[OK] RECOMMENDED: Cache + Parallel (8 cores)")
     print(f"   Time: {best['optimized_time_str']}")
     print(f"   Speedup: {best['total_speedup']:.0f}x faster")
     print()

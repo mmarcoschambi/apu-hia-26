@@ -145,7 +145,7 @@ def update_production_config(
     with open(path, "w") as f:
         json.dump(config, f, indent=2)
 
-    print(f"✅ Config updated: {path}")
+    print(f"[OK] Config updated: {path}")
 
 
 def get_engine_params(config_file: Optional[str] = None) -> Dict[str, Any]:
@@ -230,7 +230,7 @@ def migrate_from_validated(
     with open(output_file, "w") as f:
         json.dump(new_config, f, indent=2)
 
-    print(f"✅ Migrated config to: {output_file}")
+    print(f"[OK] Migrated config to: {output_file}")
 
 
 if __name__ == "__main__":

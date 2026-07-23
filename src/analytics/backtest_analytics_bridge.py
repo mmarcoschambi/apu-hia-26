@@ -323,7 +323,7 @@ def compute_backtest_analytics(
     Returns:
         Dict con schema canónico extendido con regime_cards
     """
-    logger.info(f"📊 Computing backtest analytics for run {run_id}...")
+    logger.info(f"[U+1F4CA] Computing backtest analytics for run {run_id}...")
 
     # Convert trades to R-múltiplos
     trades_r = backtest_trades_to_r(
@@ -481,10 +481,10 @@ def compute_backtest_analytics(
     }
 
     logger.info(
-        f"  ✅ Backtest analytics computed: {n_trades} trades, WR={win_rate * 100:.1f}%, PF={profit_factor:.2f}"
+        f"  [OK] Backtest analytics computed: {n_trades} trades, WR={win_rate * 100:.1f}%, PF={profit_factor:.2f}"
     )
     logger.info(
-        f"  📊 Regime cards: {len(regime_cards)} bins, total_trades={total_in_cards}"
+        f"  [U+1F4CA] Regime cards: {len(regime_cards)} bins, total_trades={total_in_cards}"
     )
 
     return payload

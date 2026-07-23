@@ -215,7 +215,7 @@ def analyze_rs_percentile_performance(trades_df: pd.DataFrame) -> Dict:
     low_rs = df_clean[df_clean["rs_percentile"] < 50]
 
     results["high_rs_trades"] = {
-        "label": "RS≥80 (Top 20%)",
+        "label": "RS>=80 (Top 20%)",
         "count": len(high_rs),
         "win_rate": round((high_rs["pnl"] > 0).sum() / len(high_rs) * 100, 1)
         if len(high_rs) > 0
@@ -523,7 +523,7 @@ def generate_full_trade_analysis(trades_df: pd.DataFrame) -> Dict:
     Returns:
         Dict con análisis completo
     """
-    logger.info("📊 Generando análisis completo de trades...")
+    logger.info("[U+1F4CA] Generando análisis completo de trades...")
 
     analysis = {
         "entry_score": analyze_entry_score_correlation(trades_df),
@@ -543,18 +543,18 @@ def generate_full_trade_analysis(trades_df: pd.DataFrame) -> Dict:
         corr = analysis["entry_score"]["corr_entry_score_vs_pnl"]
         if corr > 0.2:
             insights.append(
-                f"✅ Entry Score correlaciona positivamente con PnL (r={corr:.2f})"
+                f"[OK] Entry Score correlaciona positivamente con PnL (r={corr:.2f})"
             )
         elif corr < -0.1:
             insights.append(
-                f"⚠️ Entry Score correlaciona negativamente con PnL (r={corr:.2f}) - revisar lógica"
+                f"[WARN] Entry Score correlaciona negativamente con PnL (r={corr:.2f}) - revisar lógica"
             )
 
     # RS Insights
     if "corr_rs_vs_pnl" in analysis.get("rs_percentile", {}):
         corr_rs = analysis["rs_percentile"]["corr_rs_vs_pnl"]
         if corr_rs > 0.15:
-            insights.append(f"✅ RS Percentile correlaciona con PnL (r={corr_rs:.2f})")
+            insights.append(f"[OK] RS Percentile correlaciona con PnL (r={corr_rs:.2f})")
 
     # Win Rate Comparison
     if "high_score_trades" in analysis.get(
@@ -564,12 +564,12 @@ def generate_full_trade_analysis(trades_df: pd.DataFrame) -> Dict:
         low_wr = analysis["entry_score"]["low_score_trades"].get("win_rate", 0)
         if high_wr > low_wr + 10:
             insights.append(
-                f"✅ High Score trades tienen Win Rate {high_wr:.0f}% vs {low_wr:.0f}% Low Score"
+                f"[OK] High Score trades tienen Win Rate {high_wr:.0f}% vs {low_wr:.0f}% Low Score"
             )
 
     analysis["insights"] = insights
 
-    logger.info(f"   ✅ Análisis completado: {len(insights)} insights generados")
+    logger.info(f"   [OK] Análisis completado: {len(insights)} insights generados")
 
     return analysis
 
@@ -724,7 +724,7 @@ def analyze_pattern_performance(trades_df: pd.DataFrame) -> Dict:
         }
 
     logger.info(
-        f"   ✅ Pattern analysis: {trades_with_pattern}/{total_trades} trades with pattern"
+        f"   [OK] Pattern analysis: {trades_with_pattern}/{total_trades} trades with pattern"
     )
 
     return result

@@ -39,14 +39,14 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # CONTRATO DE DATOS — Defaults y alias
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 
 SCHEMA_VERSION_CURRENT = "2.1"
 SCHEMA_VERSION_MIN = "1.0"
 
-# Mapeo legacy → canónico para keys de primer nivel del JSON
+# Mapeo legacy -> canónico para keys de primer nivel del JSON
 _JSON_KEY_ALIASES: Dict[str, str] = {
     "tier1_exits": "tier1_strategy",
     "tier3_fixed": "tier3_risk",
@@ -55,7 +55,7 @@ _JSON_KEY_ALIASES: Dict[str, str] = {
     "risk": "tier3_risk",
 }
 
-# Mapeo legacy → canónico para columnas de trades DataFrame
+# Mapeo legacy -> canónico para columnas de trades DataFrame
 _TRADES_COL_ALIASES: Dict[str, str] = {
     "ticker": "symbol",
     "Ticker": "symbol",
@@ -158,9 +158,9 @@ _OPTIM_DEFAULTS: Dict[str, Any] = {
 VALID_SIGNAL_TYPES = {"any", "breakout", "vcp", "pocket_pivot", "flat_base", "NONE"}
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # ADAPTER PRINCIPAL
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 
 
 class DashboardDataAdapter:
@@ -177,9 +177,9 @@ class DashboardDataAdapter:
         self._last_csv_mtime: Optional[float] = None
         self._last_csv_path: Optional[str] = None
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     # JSON del optimizer
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
 
     def load_optimizer_json(self, path: str) -> Dict[str, Any]:
         """
@@ -236,7 +236,7 @@ class DashboardDataAdapter:
         normalized = dict(raw)
         for legacy_key, canonical_key in _JSON_KEY_ALIASES.items():
             if legacy_key in normalized and canonical_key not in normalized:
-                logger.debug(f"[Adapter] Renombrando key: '{legacy_key}' → '{canonical_key}'")
+                logger.debug(f"[Adapter] Renombrando key: '{legacy_key}' -> '{canonical_key}'")
                 normalized[canonical_key] = normalized.pop(legacy_key)
         return normalized
 
@@ -317,9 +317,9 @@ class DashboardDataAdapter:
         """Config vacía con todos los defaults."""
         return self._build_canonical_config({}, {})
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     # CSV de trades
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
 
     def load_trades_csv(self, path: str) -> pd.DataFrame:
         """
@@ -397,7 +397,7 @@ class DashboardDataAdapter:
             logger.warning("[Adapter] Columna 'symbol' no encontrada en trades CSV")
             df["symbol"] = "UNKNOWN"
 
-        # signal_type → normalizar a minúsculas, default "any"
+        # signal_type -> normalizar a minúsculas, default "any"
         if "signal_type" not in df.columns:
             if "pattern_type" in df.columns:
                 df["signal_type"] = df["pattern_type"].str.lower().fillna("any")
@@ -479,15 +479,15 @@ class DashboardDataAdapter:
 
         return df
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # Índice activo → patrones
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
+    # Índice activo -> patrones
+    # --------------------------------------------------------------------------
 
     def build_asset_pattern_index(
         self, trades_df: pd.DataFrame
     ) -> Dict[str, List[str]]:
         """
-        Construye índice {asset → [patterns]} desde el DataFrame de trades.
+        Construye índice {asset -> [patterns]} desde el DataFrame de trades.
 
         Returns:
             Dict con key "ALL" para todos los activos y keys individuales
@@ -515,9 +515,9 @@ class DashboardDataAdapter:
 
         return index
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     # Multi-run: cargar todos los JSONs de una carpeta de optimizaciones
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
 
     def load_optimization_runs(
         self, folder: str = "outputs/3tier_optimization"
@@ -565,9 +565,9 @@ class DashboardDataAdapter:
         runs.sort(key=lambda r: r.get("_last_updated", ""), reverse=True)
         return runs
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     # Helper: métricas por activo/patrón desde trades_df
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
 
     @staticmethod
     def compute_segment_metrics(
@@ -639,9 +639,9 @@ class DashboardDataAdapter:
             return pd.DataFrame()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Instancia singleton (lazy) para uso desde app.py
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 
 _adapter_instance: Optional[DashboardDataAdapter] = None
 

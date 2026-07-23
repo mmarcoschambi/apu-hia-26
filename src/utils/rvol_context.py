@@ -107,7 +107,7 @@ def integrate_with_unified_position_size(
                            f'Near_High={distance_from_high:.1f}%, '
                            f'Extension={extension:.1f}%')
             
-            logger.info(f"🚀 EPISODIC PIVOT DETECTED: {rvol_details}")
+            logger.info(f"[U+1F680] EPISODIC PIVOT DETECTED: {rvol_details}")
     
     # If not Episodic Pivot, check for other contexts
     if not is_episodic_pivot:
@@ -203,13 +203,13 @@ def integrate_with_unified_position_size(
     # Ensure minimum 1 share if we had shares before
     if base_shares == 0 and original_shares > 0:
         base_shares = 1
-        size_reductions.append('MIN_SHARE_CAP: 0→1')
+        size_reductions.append('MIN_SHARE_CAP: 0->1')
     
     # Apply max position size constraint
     position_value = base_shares * entry_price
     if position_value > max_position_value:
         base_shares = int(max_position_value / entry_price)
-        size_reductions.append(f'MAX_POSITION_CAP: ${position_value:.0f}→${max_position_value:.0f}')
+        size_reductions.append(f'MAX_POSITION_CAP: ${position_value:.0f}->${max_position_value:.0f}')
     
     # Ensure non-negative shares
     base_shares = max(0, base_shares)
@@ -267,21 +267,21 @@ def analyze_rvol_context(
     # Build analysis
     analysis = f"""
 {ticker} RVOL Analysis:
-├─ RVOL: {current_rvol:.2f}x {'✅' if current_rvol >= 2.5 else '❌ (need ≥2.5x)'}
-├─ Consolidation: {consolidation_pct:.1f}% {'✅' if consolidation_pct < 15 else '❌ (need <15%)'}
-├─ Near High: {distance_from_high:.1f}% below 20d high {'✅' if distance_from_high < 3 else '❌ (need <3%)'}
-├─ Above SMA20: {'✅' if is_above_sma20 else '❌'}
-├─ Extension: {extension:.1f}% {'✅' if extension < 10 else '❌ (need <10%)'}
-└─ Volume dried: {vol_change:+.1f}% {'✅' if vol_change < -20 else '❌ (need volume decline)'}
++- RVOL: {current_rvol:.2f}x {'[OK]' if current_rvol >= 2.5 else '[FAIL] (need >=2.5x)'}
++- Consolidation: {consolidation_pct:.1f}% {'[OK]' if consolidation_pct < 15 else '[FAIL] (need <15%)'}
++- Near High: {distance_from_high:.1f}% below 20d high {'[OK]' if distance_from_high < 3 else '[FAIL] (need <3%)'}
++- Above SMA20: {'[OK]' if is_above_sma20 else '[FAIL]'}
++- Extension: {extension:.1f}% {'[OK]' if extension < 10 else '[FAIL] (need <10%)'}
++- Volume dried: {vol_change:+.1f}% {'[OK]' if vol_change < -20 else '[FAIL] (need volume decline)'}
 
-Verdict: {'🚀 EPISODIC PIVOT' if all([
+Verdict: {'[U+1F680] EPISODIC PIVOT' if all([
     current_rvol >= 2.5,
     consolidation_pct < 15,
     distance_from_high < 3,
     is_above_sma20,
     extension < 10,
     vol_change < -20
-]) else '❌ Not Episodic Pivot'}
+]) else '[FAIL] Not Episodic Pivot'}
 """
     
     return analysis.strip()

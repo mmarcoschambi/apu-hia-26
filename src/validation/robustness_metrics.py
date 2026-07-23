@@ -84,7 +84,7 @@ class RobustObjectiveConfig:
     # Without normalization they dominate the score (p5*1.0 can be ~30 points)
     # while Sharpe (0-3)*0.3 = ~0.9 is decorative.
     # Dividing by this scale puts bootstrap on the same order as risk-adjusted ratios.
-    # 20% annualized = "good" → contributes 1.0 before weighting.
+    # 20% annualized = "good" -> contributes 1.0 before weighting.
     bootstrap_normalization_scale: float = 20.0
 
 

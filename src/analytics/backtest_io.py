@@ -35,7 +35,7 @@ def save_backtest_analytics(run_id: str, payload: Dict) -> Path:
     out_path = BACKTEST_OUTPUTS / f"analytics_{run_id}.json"
     with open(out_path, "w") as f:
         json.dump(payload, f, indent=2, default=str)
-    logger.info(f"  ✅ Saved backtest analytics: {out_path}")
+    logger.info(f"  [OK] Saved backtest analytics: {out_path}")
     return out_path
 
 

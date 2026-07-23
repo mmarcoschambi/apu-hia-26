@@ -41,7 +41,7 @@ class HistoricalBacktester:
         daily_df = self.data_provider.get_daily_data(symbol, period="max")
         
         if daily_df.empty:
-            print(f"❌ No data for {symbol}")
+            print(f"[FAIL] No data for {symbol}")
             return pd.DataFrame()
         
         # Filter by date range FIRST
@@ -62,13 +62,13 @@ class HistoricalBacktester:
         date_range_df = daily_df[mask]
         
         if date_range_df.empty:
-            print(f"❌ No data in range {start_date} to {end_date} for {symbol}")
+            print(f"[FAIL] No data in range {start_date} to {end_date} for {symbol}")
             print(f"   Available range: {daily_df.index.min().date()} to {daily_df.index.max().date()}")
             return pd.DataFrame()
         
-        # ═══════════════════════════════════════════════════════════════
+        # ===============================================================
         # STOCK QUALITY FILTERS - Evaluate at END of backtest period
-        # ═══════════════════════════════════════════════════════════════
+        # ===============================================================
         print("Checking stock quality filters at end of period...")
         # Get data up to end_date + 200 days buffer for SMA200
         filter_end_date = end_dt + pd.Timedelta(days=200)
@@ -83,17 +83,17 @@ class HistoricalBacktester:
             )
             
             if not filter_result['passed']:
-                print(f"❌ {symbol} FAILS quality filters at {end_date}:")
+                print(f"[FAIL] {symbol} FAILS quality filters at {end_date}:")
                 print(f"   {filter_result['details']}")
                 print(f"   Skipping backtest for this symbol.")
                 return pd.DataFrame()
             
-            print(f"✅ {symbol} passes quality filters at {end_date}")
+            print(f"[OK] {symbol} passes quality filters at {end_date}")
             print(f"   Dollar Volume: ${filter_result['metrics']['dollar_volume']/1e6:.0f}M")
             print(f"   ADR: {filter_result['metrics']['adr_pct']:.2f}%")
             print(f"   Trend: Price ${filter_result['metrics']['price']:.2f} > SMA50 ${filter_result['metrics']['sma50']:.2f} > SMA200 ${filter_result['metrics']['sma200']:.2f}")
         else:
-            print(f"⚠️  Insufficient data for quality filters, proceeding anyway...")
+            print(f"[WARN]  Insufficient data for quality filters, proceeding anyway...")
         
         # Load SPY/QQQ for market regime filters
         print("Loading SPY/QQQ for market filters...")
@@ -116,9 +116,9 @@ class HistoricalBacktester:
             # Get data up to this date
             historical_data = daily_df.loc[:date]
             
-            # ═══════════════════════════════════════════════════════════════
+            # ===============================================================
             # MARKET REGIME FILTER (NEW)
-            # ═══════════════════════════════════════════════════════════════
+            # ===============================================================
             spy_historical = spy_df.loc[:date] if not spy_df.empty else pd.DataFrame()
             qqq_historical = qqq_df.loc[:date] if not qqq_df.empty else pd.DataFrame()
             
@@ -141,9 +141,9 @@ class HistoricalBacktester:
                     signals_blocked_by_filter += 1
                     continue
             
-            # ═══════════════════════════════════════════════════════════════
+            # ===============================================================
             # Continue with normal signal detection
-            # ═══════════════════════════════════════════════════════════════
+            # ===============================================================
             
             # Calculate indicators
             base_data = self.indicators.detect_base(historical_data, lookback=20)
@@ -227,19 +227,19 @@ class HistoricalBacktester:
         results_df = pd.DataFrame(signals)
         
         if not results_df.empty:
-            print(f"\n✅ Found {len(results_df)} signals")
+            print(f"\n[OK] Found {len(results_df)} signals")
             print(f"   Camino 1: {len(results_df[results_df['camino'] == 'BLUE_SKY'])}")
             print(f"   Camino 2: {len(results_df[results_df['camino'] == 'VWAP_RECLAIM'])}")
-            print(f"   🛡️  Blocked by market filter: {signals_blocked_by_filter}")
+            print(f"   [U+1F6E1]  Blocked by market filter: {signals_blocked_by_filter}")
             
             wins = len(results_df[results_df['outcome'] == 'WIN'])
             losses = len(results_df[results_df['outcome'] == 'LOSS'])
             print(f"\n   Wins: {wins} | Losses: {losses} | Win Rate: {wins/(wins+losses)*100:.1f}%")
             print(f"   Avg Return: {results_df['return_pct'].mean():.2f}%")
         else:
-            print(f"\n⚠️  No signals found")
+            print(f"\n[WARN]  No signals found")
             if signals_blocked_by_filter > 0:
-                print(f"   🛡️  {signals_blocked_by_filter} potential signals blocked by market filter")
+                print(f"   [U+1F6E1]  {signals_blocked_by_filter} potential signals blocked by market filter")
         
         return results_df
     
@@ -341,7 +341,7 @@ class HistoricalBacktester:
                 if not results.empty:
                     all_results.append(results)
             except Exception as e:
-                print(f"❌ Error with {symbol}: {e}")
+                print(f"[FAIL] Error with {symbol}: {e}")
         
         if all_results:
             combined = pd.concat(all_results, ignore_index=True)
@@ -358,7 +358,7 @@ class HistoricalBacktester:
         output_path = Path(output_file)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         results_df.to_csv(output_path, index=False)
-        print(f"\n✅ Results saved to {output_path}")
+        print(f"\n[OK] Results saved to {output_path}")
 
 
 def main():
@@ -400,7 +400,7 @@ def main():
         
         backtester.save_results(results, args.output)
         
-        print(f"\n💡 Next: Visualize with:")
+        print(f"\n[U+1F4A1] Next: Visualize with:")
         print(f"   python3 src/backtest/visualizer.py {args.output}")
 
 

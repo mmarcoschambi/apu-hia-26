@@ -74,7 +74,7 @@ def save_universe_snapshot(
             for t in sorted(tickers):
                 writer.writerow([t])
 
-        logger.info(f"✅ Snapshot guardado: {json_path} ({len(tickers)} tickers)")
+        logger.info(f"[OK] Snapshot guardado: {json_path} ({len(tickers)} tickers)")
 
         return SnapshotResult(
             snapshot_path=json_path,

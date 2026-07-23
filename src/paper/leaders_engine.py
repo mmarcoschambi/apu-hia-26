@@ -63,7 +63,7 @@ def compute_sector_leaders(date: str) -> pd.DataFrame:
     lookback_monthly = SECTOR_CFG.get("lookback_monthly", 20)
     top_percentile = SECTOR_CFG.get("top_percentile", 0.40)
 
-    logger.info(f"🔍 Computing sector leaders for {date}...")
+    logger.info(f"[U+1F50D] Computing sector leaders for {date}...")
 
     analyzer = SectorRotationAnalyzer(start_date, end_date)
 
@@ -132,10 +132,10 @@ def compute_sector_leaders(date: str) -> pd.DataFrame:
 
     out_path = OUTPUTS_DIR / f"sector_leaders_{date}.csv"
     df.to_csv(out_path, index=False)
-    logger.info(f"  ✅ Sector leaders saved: {out_path} ({len(df)} sectors)")
+    logger.info(f"  [OK] Sector leaders saved: {out_path} ({len(df)} sectors)")
 
     top_sectors = df[df["is_top_tier"]]["sector_etf"].tolist()
-    logger.info(f"  📊 Top sectors ({len(top_sectors)}): {top_sectors}")
+    logger.info(f"  [U+1F4CA] Top sectors ({len(top_sectors)}): {top_sectors}")
 
     return df
 
@@ -176,7 +176,7 @@ def compute_daily_leaders(
     rs_quality_check = QUALITY_GATES.get("rs_quality_check", True)
     rs_std_min = QUALITY_GATES.get("rs_std_min_threshold", 15.0)
 
-    logger.info(f"🔍 Computing daily leaders for {date}...")
+    logger.info(f"[U+1F50D] Computing daily leaders for {date}...")
 
     if sector_leaders is None:
         sector_path = OUTPUTS_DIR / f"sector_leaders_{date}.csv"
@@ -246,7 +246,7 @@ def compute_daily_leaders(
 
     if rs_quality_low:
         logger.warning(
-            f"  ⚠️ RS quality LOW (std={rs_std:.1f} < {rs_std_min}), reducing RS weight"
+            f"  [WARN] RS quality LOW (std={rs_std:.1f} < {rs_std_min}), reducing RS weight"
         )
         w_rs_adj = w_rs * 0.5
     else:
@@ -302,7 +302,7 @@ def compute_daily_leaders(
         )
 
     if not combined:
-        logger.warning("  ℹ️ No combined candidates for daily leaders")
+        logger.warning("  [INFO] No combined candidates for daily leaders")
         return pd.DataFrame()
 
     df = pd.DataFrame(combined)
@@ -310,7 +310,7 @@ def compute_daily_leaders(
 
     out_path = OUTPUTS_DIR / f"daily_leaders_{date}.csv"
     df.to_csv(out_path, index=False)
-    logger.info(f"  ✅ Daily leaders saved: {out_path} ({len(df)} tickers)")
+    logger.info(f"  [OK] Daily leaders saved: {out_path} ({len(df)} tickers)")
 
     top_5 = df.head(5)
     for _, row in top_5.iterrows():
@@ -350,7 +350,7 @@ def compute_weekly_leaders(
     w_rank = weights.get("best_rank", 0.20)
     w_sector = weights.get("sector_persistence", 0.15)
 
-    logger.info(f"🔍 Computing weekly leaders (lookback={lookback} days)...")
+    logger.info(f"[U+1F50D] Computing weekly leaders (lookback={lookback} days)...")
 
     dt = pd.to_datetime(end_date)
 
@@ -363,10 +363,10 @@ def compute_weekly_leaders(
             daily_files.append((date_str, f))
 
     if not daily_files:
-        logger.warning(f"  ⚠️ No daily leader files found for last {lookback} days")
+        logger.warning(f"  [WARN] No daily leader files found for last {lookback} days")
         return pd.DataFrame()
 
-    logger.info(f"  📂 Found {len(daily_files)} daily leader files")
+    logger.info(f"  [U+1F4C2] Found {len(daily_files)} daily leader files")
 
     all_daily = []
     for date_str, f in daily_files:
@@ -424,7 +424,7 @@ def compute_weekly_leaders(
         }
 
     if not ticker_stats:
-        logger.warning("  ℹ️ No tickers met minimum appearances threshold")
+        logger.warning("  [INFO] No tickers met minimum appearances threshold")
         return pd.DataFrame()
 
     df = pd.DataFrame(list(ticker_stats.values()))
@@ -432,7 +432,7 @@ def compute_weekly_leaders(
 
     out_path = OUTPUTS_DIR / f"weekly_leaders_{end_date}.csv"
     df.to_csv(out_path, index=False)
-    logger.info(f"  ✅ Weekly leaders saved: {out_path} ({len(df)} tickers)")
+    logger.info(f"  [OK] Weekly leaders saved: {out_path} ({len(df)} tickers)")
 
     top_5 = df.head(5)
     for _, row in top_5.iterrows():
@@ -495,7 +495,7 @@ def run_full_leaders_pipeline(
     manifest_path = OUTPUTS_DIR / f"leaders_manifest_{date}.json"
     with open(manifest_path, "w") as f:
         json.dump(manifest, f, indent=2)
-    logger.info(f"  ✅ Manifest saved: {manifest_path}")
+    logger.info(f"  [OK] Manifest saved: {manifest_path}")
 
     return {
         "sector": sector_df,

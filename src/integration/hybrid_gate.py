@@ -120,8 +120,8 @@ def evaluate_hybrid_mode(
     Evalúa todos los folds de un modo y decide PROMOTE/HOLD/REJECT.
 
     Reglas de decisión:
-      - PROMOTE: ≥ min_oos_verdicts folds PROMOTE, total trades ≥ min_trades * folds
-      - HOLD:    ninguno PROMOTE pero ≥ 1 fold tiene trades suficientes
+      - PROMOTE: >= min_oos_verdicts folds PROMOTE, total trades >= min_trades * folds
+      - HOLD:    ninguno PROMOTE pero >= 1 fold tiene trades suficientes
       - REJECT:  todos los folds REJECT o muy pocos trades
     """
     if thresholds is None:
@@ -182,7 +182,7 @@ def evaluate_hybrid_mode(
     if promote_count >= thresholds.min_oos_verdicts:
         decision: PromotionDecision = "PROMOTE"
         reasons_out.append(
-            f"{promote_count} folds PROMOTE (≥ {thresholds.min_oos_verdicts} required)"
+            f"{promote_count} folds PROMOTE (>= {thresholds.min_oos_verdicts} required)"
         )
     elif hold_count > 0 and reject_count == 0:
         decision = "HOLD"

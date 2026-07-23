@@ -94,7 +94,7 @@ def build_universe_for_fold(
             if db_date_row:
                 pit_date = db_date_row[0]
                 use_pit_filter = True
-                logger.info(f"🎯 PIT filter enabled for {cutoff_date} (Index: {index_name}, using snapshot {pit_date})")
+                logger.info(f"PIT filter enabled for {cutoff_date} (Index: {index_name}, using snapshot {pit_date})")
 
         if use_pit_filter:
             hist_rows = conn.execute(

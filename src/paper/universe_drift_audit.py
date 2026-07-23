@@ -178,7 +178,7 @@ def save_drift_audit(
         with open(output_path, "w") as f:
             json.dump(report, f, indent=2, default=str)
 
-        logger.info(f"✅ Drift audit guardado: {output_path}")
+        logger.info(f"[OK] Drift audit guardado: {output_path}")
         return output_path
 
     except Exception as e:

@@ -59,10 +59,10 @@ class TriadStrategy:
         Main decision engine - routes to appropriate Camino
         
         Decision Tree:
-        1. Check if AVWAP is far above (>5-10%) → Camino 3 (WAIT)
-        2. Check if Base + AVWAP converge → Camino 1 (BLUE SKY)
-        3. Check if gap down + weak market → Camino 2 (VWAP RECLAIM)
-        4. Otherwise → NO SETUP
+        1. Check if AVWAP is far above (>5-10%) -> Camino 3 (WAIT)
+        2. Check if Base + AVWAP converge -> Camino 1 (BLUE SKY)
+        3. Check if gap down + weak market -> Camino 2 (VWAP RECLAIM)
+        4. Otherwise -> NO SETUP
         """
         
         # Validate data
@@ -83,7 +83,7 @@ class TriadStrategy:
         distance_to_avwap_pct = abs(avwap_data['distance_to_avwap_pct'])
         
         # ============================================
-        # 🛡️ ALPHA SECTOR FILTER (Main)
+        # [U+1F6E1] ALPHA SECTOR FILTER (Main)
         # ============================================
         # Solo permitir trades en los Top 3 Sectores del día.
         # Si no es líder, degradar a MANUAL_WATCH o NO_SETUP.
@@ -101,7 +101,7 @@ class TriadStrategy:
             is_leading = market_context.get('is_leading_sector', True) # Default to True if not provided
             
             if not is_leading:
-                logger.info(f"⚠️ REJECTED Alpha Sector: {stock_symbol} is not in a Top 3 Sector today.")
+                logger.info(f"[WARN] REJECTED Alpha Sector: {stock_symbol} is not in a Top 3 Sector today.")
                 return Signal(
                     camino=None,
                     action='NO_SETUP',
@@ -122,7 +122,7 @@ class TriadStrategy:
         # Monster Stocks must be caught before they are > 6.77% extended from pivot
         extension_from_base = (current_price / base_high) - 1
         if extension_from_base > self.max_extension:
-            logger.info(f"🚫 REJECTED: Extension Gate. Price ${current_price:.2f} is {extension_from_base*100:.2f}% "
+            logger.info(f"[U+1F6AB] REJECTED: Extension Gate. Price ${current_price:.2f} is {extension_from_base*100:.2f}% "
                        f"extended from Base High ${base_high:.2f} (Limit: {self.max_extension*100:.2f}%)")
             return Signal(
                 camino=None,
@@ -177,7 +177,7 @@ class TriadStrategy:
             # FILTER 1: Reject if Weak Trend
             if trend == 'Weak':
                 # REJECT: Blue Sky with Weak trend is a trap
-                logger.info(f"🚫 REJECTED Blue Sky Breakout: Trend 'Weak' - Price below SMA20. "
+                logger.info(f"[U+1F6AB] REJECTED Blue Sky Breakout: Trend 'Weak' - Price below SMA20. "
                            f"Base: {base_high:.2f}, AVWAP: {avwap_price:.2f}, "
                            f"Current: {current_price:.2f}, SMA20: {market_context.get('sma_20', 'N/A')}")
                 return Signal(
@@ -205,7 +205,7 @@ class TriadStrategy:
             # Rule: "¿El RVOL es mayor a 1.5x y la Tendencia es Fuerte? Si NO -> NO HAY TRADE"
             if rvol < 1.5:
                 # REJECT: Blue Sky without institutional volume confirmation
-                logger.info(f"🚫 REJECTED Blue Sky Breakout: RVOL too low ({rvol:.2f}x < 1.5x). "
+                logger.info(f"[U+1F6AB] REJECTED Blue Sky Breakout: RVOL too low ({rvol:.2f}x < 1.5x). "
                            f"Base: {base_high:.2f}, AVWAP: {avwap_price:.2f}, "
                            f"Trend: {trend}. Need >1.5x volume for institutional confirmation.")
                 return Signal(
@@ -239,7 +239,7 @@ class TriadStrategy:
             stop_adr = entry - adr
             stop_loss = max(stop, stop_adr)  # Use the higher stop
             
-            logger.info(f"✅ APPROVED Blue Sky Breakout: Trend '{trend}', RVOL {rvol:.2f}x. "
+            logger.info(f"[OK] APPROVED Blue Sky Breakout: Trend '{trend}', RVOL {rvol:.2f}x. "
                        f"Entry: {entry:.2f}, Stop: {stop_loss:.2f}, "
                        f"Base: {base_high:.2f}, AVWAP: {avwap_price:.2f}")
             

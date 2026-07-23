@@ -5,9 +5,9 @@ Canonical Signal Engine — único motor usado por live y backtest.
 Contrato: (ticker, df, spy_df, combo_cfg, mode) -> SignalDecision
 
 Modes:
-    A        → combo_pure_momentum (qullamaggie + breakout)
-    B        → combo_stage2_breakout (minervini + breakout)
-    A_BOTH   → Union de A y B, ranking por score
+    A        -> combo_pure_momentum (qullamaggie + breakout)
+    B        -> combo_stage2_breakout (minervini + breakout)
+    A_BOTH   -> Union de A y B, ranking por score
 
 El engine ES EL MISMO para live y backtest. Si diverge, el test de paridad falla.
 """
@@ -226,25 +226,25 @@ def calculate_dynamic_sizing_factor(dist_sma20: float, adr_pct: float, combo_cfg
     if version == "v2_atlas_informed":
         # Curva no monotónica informada por los datos de Atlas Trading Room
         if dist_sma20 <= valley:
-            # [comfort..valley] -> Valle de muerte: penalización fuerte 1.0→0.3
+            # [comfort..valley] -> Valle de muerte: penalización fuerte 1.0->0.3
             ratio = (dist_sma20 - comfort) / (valley - comfort)
             factor = 1.0 - (ratio * (1.0 - 0.3))
             return round(factor, 2), f"v2_valley_penalty:{factor:.2f}"
             
         elif dist_sma20 <= mid:
-            # [valley..mid] -> Sweetspot Atlas Room: recupera tamaño 0.3→0.5
+            # [valley..mid] -> Sweetspot Atlas Room: recupera tamaño 0.3->0.5
             ratio = (dist_sma20 - valley) / (mid - valley)
             factor = 0.3 + (ratio * (0.5 - 0.3))
             return round(factor, 2), f"v2_atlas_sweetspot:{factor:.2f}"
             
         elif dist_sma20 <= high:
-            # [mid..high] -> Extensión moderada alta: penalización 0.5→0.3
+            # [mid..high] -> Extensión moderada alta: penalización 0.5->0.3
             ratio = (dist_sma20 - mid) / (high - mid)
             factor = 0.5 - (ratio * (0.5 - 0.3))
             return round(factor, 2), f"v2_high_ext_penalty:{factor:.2f}"
             
         elif dist_sma20 <= extreme_cutoff:
-            # [high..extreme_cutoff] -> Extensión extrema: penalización 0.3→0.1
+            # [high..extreme_cutoff] -> Extensión extrema: penalización 0.3->0.1
             ratio = (dist_sma20 - high) / (extreme_cutoff - high)
             factor = 0.3 - (ratio * (0.3 - 0.1))
             return round(factor, 2), f"v2_extreme_ext_penalty:{factor:.2f}"
@@ -818,7 +818,7 @@ def scan_universe(
         if decision.passed:
             results.append(decision)
 
-    results.sort(key=lambda x: x.entry_score, reverse=True)
+    results.sort(key=lambda x: (x.entry_score, x.ticker), reverse=True)
     return results
 
 
@@ -864,7 +864,7 @@ def merge_ab_signals(
                 existing.mode = "A_BOTH"
 
     merged = list(seen.values())
-    merged.sort(key=lambda x: x.entry_score, reverse=True)
+    merged.sort(key=lambda x: (x.entry_score, x.ticker), reverse=True)
     return merged
 
 

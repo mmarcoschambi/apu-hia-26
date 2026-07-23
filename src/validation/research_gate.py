@@ -233,7 +233,7 @@ class CSCVAnalyzer:
             is_optimal_oos_rank = oos_ranks[is_optimal_idx]
 
             # Calculate logit
-            # logit = log(ω/(1-ω)) where ω = (rank - 0.5) / N
+            # logit = log([U+03C9]/(1-[U+03C9])) where [U+03C9] = (rank - 0.5) / N
             N = n_trials
             omega = (is_optimal_oos_rank - 0.5) / N
 
@@ -366,12 +366,12 @@ class ResearchGate:
         self.bootstrap_analyzer = BootstrapAnalyzer(n_bootstrap=1000)
         # Default block size for block bootstrap.
         # Daily equity returns have serial correlation (momentum, mean-reversion
-        # at daily scale).  Simple i.i.d. bootstrap underestimates variance →
-        # overconfident percentiles.  5 trading days ≈ 1 week captures the
+        # at daily scale).  Simple i.i.d. bootstrap underestimates variance ->
+        # overconfident percentiles.  5 trading days ~ 1 week captures the
         # short-term autocorrelation structure.
         self.bootstrap_block_size = 5
 
-    # ── PERF helper ────────────────────────────────────────────────────────
+    # -- PERF helper --------------------------------------------------------
     @staticmethod
     def _inject_template_data(engine, template_engine) -> None:
         """Copia DataFrames pre-cargados del template al engine destino.
@@ -445,7 +445,7 @@ class ResearchGate:
 
         if verbose:
             logger.info("=" * 70)
-            logger.info("🔬 THREE-PHASE RESEARCH GATE")
+            logger.info("[U+1F52C] THREE-PHASE RESEARCH GATE")
             logger.info("=" * 70)
             logger.info(f"Universe: {len(universe)} tickers")
             logger.info(f"Training: {train_dates[0]} to {train_dates[1]}")
@@ -453,7 +453,7 @@ class ResearchGate:
 
         # Phase 1: Discovery (structure validation)
         if verbose:
-            logger.info("\n📋 PHASE 1: DISCOVERY (Structure Validation)")
+            logger.info("\n[U+1F4CB] PHASE 1: DISCOVERY (Structure Validation)")
 
         result.discovery_passed = self._run_discovery_phase(params)
 
@@ -464,11 +464,11 @@ class ResearchGate:
             return result
 
         if verbose:
-            logger.info("   ✅ Discovery phase passed")
+            logger.info("   [OK] Discovery phase passed")
 
         # Phase 2: Validation (CSCV + Bootstrap + Performance metrics)
         if verbose:
-            logger.info("\n📊 PHASE 2: VALIDATION (CSCV/PBO + Bootstrap + Metrics)")
+            logger.info("\n[U+1F4CA] PHASE 2: VALIDATION (CSCV/PBO + Bootstrap + Metrics)")
 
         # Run backtest on training period
         if verbose:
@@ -670,11 +670,11 @@ class ResearchGate:
                 )
 
         if verbose and result.validation_passed:
-            logger.info("   ✅ Validation phase passed")
+            logger.info("   [OK] Validation phase passed")
 
         # Phase 3: Productionization (Stress tests)
         if verbose:
-            logger.info("\n🔥 PHASE 3: PRODUCTIONIZATION (Stress Testing)")
+            logger.info("\n[U+1F525] PHASE 3: PRODUCTIONIZATION (Stress Testing)")
 
         result.stress_passed, result.stress_scenarios = self._run_stress_tests(
             engine_class=engine_class,
@@ -694,7 +694,7 @@ class ResearchGate:
         if not result.productionization_passed:
             result.rejection_reasons.append("Stress tests failed")
         elif verbose:
-            logger.info("   ✅ Productionization phase passed")
+            logger.info("   [OK] Productionization phase passed")
 
         # Final verdict
         result.promotion_approved = (
@@ -706,9 +706,9 @@ class ResearchGate:
         if verbose:
             logger.info("\n" + "=" * 70)
             if result.promotion_approved:
-                logger.info("🎉 STRATEGY APPROVED FOR PRODUCTION")
+                logger.info("[U+1F389] STRATEGY APPROVED FOR PRODUCTION")
             else:
-                logger.info("❌ STRATEGY REJECTED")
+                logger.info("[FAIL] STRATEGY REJECTED")
                 for reason in result.rejection_reasons:
                     logger.info(f"   • {reason}")
             logger.info("=" * 70)

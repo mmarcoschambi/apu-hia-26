@@ -35,7 +35,7 @@ class TickerCache:
         # Enable WAL mode for better concurrency
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA synchronous=NORMAL")  # Faster writes, still safe
-        # PERF: aumentar cache de páginas en memoria (4MB → 64MB)
+        # PERF: aumentar cache de páginas en memoria (4MB -> 64MB)
         self.conn.execute("PRAGMA cache_size = -65536")
         # PERF: guardar tmp en memoria (evita I/O en operaciones temporales)
         self.conn.execute("PRAGMA temp_store = MEMORY")
@@ -442,9 +442,9 @@ class TickerCache:
         except Exception as e:
             logger.error(f"Error saving monthly cache: {e}")
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     # PERF TAREA 1.2: Batch query — carga N tickers en 1 sola query SQL
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     def get_ohlcv_batch(
         self,
         tickers: List[str],
@@ -459,8 +459,8 @@ class TickerCache:
         y el overhead de 800 roundtrips a SQLite.
 
         Estrategia de 2 capas:
-          1. Parquet / Pickle  → los que están en disco se cargan sin tocar SQLite
-          2. SQLite batch      → el resto en una sola query
+          1. Parquet / Pickle  -> los que están en disco se cargan sin tocar SQLite
+          2. SQLite batch      -> el resto en una sola query
 
         Returns: dict {ticker: DataFrame} con índice DatetimeIndex y
                  columnas Open/High/Low/Close/Volume (+ métricas precalculadas).
@@ -473,7 +473,7 @@ class TickerCache:
         result: Dict[str, pd.DataFrame] = {}
         missing_from_disk: List[str] = []
 
-        # ── Capa 1: Parquet (nuevo) o Pickle (legado) ──────────────────────
+        # -- Capa 1: Parquet (nuevo) o Pickle (legado) ----------------------
         for ticker in tickers:
             parquet_path = self.cache_dir / f"{ticker}.parquet"
             pkl_path = self.cache_dir / f"{ticker}.pkl"
@@ -506,7 +506,7 @@ class TickerCache:
         if not missing_from_disk:
             return result
 
-        # ── Capa 2: SQLite — 1 sola query para todos los tickers restantes ─
+        # -- Capa 2: SQLite — 1 sola query para todos los tickers restantes -
         placeholders = ",".join(["?"] * len(missing_from_disk))
         query = f"""
             SELECT ticker, date, open, high, low, close, volume,
@@ -766,7 +766,7 @@ class TickerCache:
                 df.to_parquet(parquet_path, engine="pyarrow", compression="snappy")
                 if pkl_path.exists():
                     pkl_path.unlink()
-                    logger.debug(f"Migrated {ticker}: pkl → parquet")
+                    logger.debug(f"Migrated {ticker}: pkl -> parquet")
             except Exception as e:
                 try:
                     import pickle
@@ -783,9 +783,9 @@ class TickerCache:
             logger.error(f"Error processing dataframe for {ticker}: {e}")
             return None
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     # RETRY: Tenacity exponential backoff with jitter for batch downloads
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     @retry(
         wait=wait_random_exponential(min=1, max=10),
         stop=stop_after_attempt(3),
@@ -811,9 +811,9 @@ class TickerCache:
             progress=False,
         )
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     # DLQ: Dead Letter Queue for failed tickers
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     def _write_dlq(self, failed_tickers: List[str]) -> None:
         """Append failed ticker symbols to the DLQ file, deduplicating.
 
@@ -927,7 +927,7 @@ class TickerCache:
         if isinstance(end_date, datetime):
             end_date = end_date.strftime("%Y-%m-%d")
 
-        # ── NIVEL 1: FAST CACHE — Parquet (nuevo) o Pickle (legado) ─────────
+        # -- NIVEL 1: FAST CACHE — Parquet (nuevo) o Pickle (legado) ---------
         parquet_path = self.cache_dir / f"{ticker}.parquet"
         pkl_path = self.cache_dir / f"{ticker}.pkl"
 
@@ -950,7 +950,7 @@ class TickerCache:
             except Exception as e:
                 logger.debug(f"Cache read error ({cache_path.suffix}) for {ticker}: {e}")
 
-        # ── NIVEL 2: BASE CACHE (SQLITE) ─────────────────────────────────────
+        # -- NIVEL 2: BASE CACHE (SQLITE) -------------------------------------
         try:
             with self.lock:
                 cursor = self.conn.execute(
@@ -1013,7 +1013,7 @@ class TickerCache:
         if offline:
             return None
 
-        # ── NIVEL 3: DESCARGA INDIVIDUAL ──────────────────────────────────────
+        # -- NIVEL 3: DESCARGA INDIVIDUAL --------------------------------------
         logger.info(
             f"Downloading {ticker} data from {start_date} to {end_date} using {DATA_SOURCE}..."
         )

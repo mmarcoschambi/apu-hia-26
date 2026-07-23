@@ -44,7 +44,7 @@ class AdaptiveFilterEngine:
         self.use_dynamic = use_dynamic
         self.rejection_stats = {}
         self.logger = logger_obj or logger
-        self.logger.info("🔧 AdaptiveFilterEngine initialized")
+        self.logger.info("[WRENCH] AdaptiveFilterEngine initialized")
         
     def get_market_regime_thresholds(self, 
                                      vix_value: float, 
@@ -208,11 +208,11 @@ class AdaptiveFilterEngine:
     def print_report(self):
         """Print rejection statistics."""
         print("\n" + "="*60)
-        print("📊 ADAPTIVE FILTER ENGINE - REJECTION DIAGNOSTICS")
+        print("[CHART] ADAPTIVE FILTER ENGINE - REJECTION DIAGNOSTICS")
         print("="*60)
         
         if not self.rejection_stats:
-            print("✅ No rejections logged")
+            print("[OK] No rejections logged")
             return
         
         # Group by tier
@@ -222,22 +222,22 @@ class AdaptiveFilterEngine:
         
         total_rejections = sum(self.rejection_stats.values())
         
-        print(f"\n📊 Total Rejections: {total_rejections}")
+        print(f"\n[CHART] Total Rejections: {total_rejections}")
         
         if tier1:
-            print(f"\n🛡️ TIER 1 (Hard Floors): {sum(tier1.values())}")
+            print(f"\n[SHIELD] TIER 1 (Hard Floors): {sum(tier1.values())}")
             for reason, count in sorted(tier1.items(), key=lambda x: x[1], reverse=True):
-                print(f"   ❌ {reason}: {count}")
+                print(f"   [FAIL] {reason}: {count}")
         
         if tier2:
-            print(f"\n📈 TIER 2 (Dynamic Quality): {sum(tier2.values())}")
+            print(f"\n[UP] TIER 2 (Dynamic Quality): {sum(tier2.values())}")
             for reason, count in sorted(tier2.items(), key=lambda x: x[1], reverse=True):
-                print(f"   ❌ {reason}: {count}")
+                print(f"   [FAIL] {reason}: {count}")
         
         if tier3:
-            print(f"\n⚙️ TIER 3 (Optional): {sum(tier3.values())}")
+            print(f"\n[GEAR] TIER 3 (Optional): {sum(tier3.values())}")
             for reason, count in sorted(tier3.items(), key=lambda x: x[1], reverse=True):
-                print(f"   ❌ {reason}: {count}")
+                print(f"   [FAIL] {reason}: {count}")
         
         print("\n" + "="*60)
     
@@ -261,9 +261,9 @@ class AdaptiveFilterEngine:
         Shows base params and regime multipliers for transparency.
         """
         print("\n" + "="*70)
-        print("📊 ADAPTIVE FILTER THRESHOLDS (Based on Validated Params)")
+        print("[CHART] ADAPTIVE FILTER THRESHOLDS (Based on Validated Params)")
         print("="*70)
-        print(f"\n✅ BASE PARAMS (NEUTRAL VIX 20-30):")
+        print(f"\n[OK] BASE PARAMS (NEUTRAL VIX 20-30):")
         print(f"   min_rvol:             {base_min_rvol:.1f}x")
         print(f"   min_adr:              {base_min_adr:.1f}%")
         print(f"   max_dist_sma20:       {base_max_dist_sma20:.1f}%")
@@ -281,17 +281,17 @@ class AdaptiveFilterEngine:
                                                  base_max_dist_sma20, base_min_dollar_volume,
                                                  base_min_consolidation)
         
-        print(f"\n📈 BULL REGIME (VIX < 20) - Relaxed:")
+        print(f"\n[UP] BULL REGIME (VIX < 20) - Relaxed:")
         print(f"   min_rvol:    {bull['min_rvol']:.1f}x  (base × 1.0)")
         print(f"   min_adr:     {bull['min_adr']:.1f}%  (base × 1.0)")
         print(f"   max_dist:    {bull['max_dist_sma20']:.1f}%  (base × 1.15)")
         print(f"   min_$vol:    ${bull['min_dollar_volume']/1e6:.1f}M  (base × 0.67)")
         print(f"   min_consol:  {bull['min_consolidation']}d  (base × 0.6)")
         
-        print(f"\n📊 NEUTRAL REGIME (VIX 20-30) - Base Params:")
+        print(f"\n[CHART] NEUTRAL REGIME (VIX 20-30) - Base Params:")
         print(f"   (Uses validated params as-is)")
         
-        print(f"\n📉 BEAR REGIME (VIX > 30) - Tightened:")
+        print(f"\n[DOWN] BEAR REGIME (VIX > 30) - Tightened:")
         print(f"   min_rvol:    {bear['min_rvol']:.1f}x  (base × 1.2)")
         print(f"   min_adr:     {bear['min_adr']:.1f}%  (base × 1.6)")
         print(f"   max_dist:    {bear['max_dist_sma20']:.1f}%  (base × 0.71)")

@@ -45,7 +45,7 @@ class DataCache:
         # En-memory cache para velocidad
         self.memory_cache: Dict[str, pd.DataFrame] = {}
         
-        logger.info(f"📦 DataCache initialized: {self.cache_dir}")
+        logger.info(f"[U+1F4E6] DataCache initialized: {self.cache_dir}")
     
     def _load_metadata(self) -> dict:
         """Carga metadata del cache"""
@@ -169,10 +169,10 @@ class DataCache:
             force_refresh: Si True, re-descarga incluso si está en cache
         """
         logger.info(f"\n{'='*80}")
-        logger.info(f"📥 PRE-LOADING DATA CACHE")
+        logger.info(f"[U+1F4E5] PRE-LOADING DATA CACHE")
         logger.info(f"{'='*80}")
         logger.info(f"Tickers: {len(tickers)}")
-        logger.info(f"Period: {start_date} → {end_date}")
+        logger.info(f"Period: {start_date} -> {end_date}")
         logger.info(f"Cache dir: {self.cache_dir}")
         
         # Determinar qué tickers necesitan descarga
@@ -184,15 +184,15 @@ class DataCache:
         
         already_cached = len(tickers) - len(to_download)
         
-        logger.info(f"\n✅ Already cached: {already_cached}")
-        logger.info(f"📥 To download: {len(to_download)}")
+        logger.info(f"\n[OK] Already cached: {already_cached}")
+        logger.info(f"[U+1F4E5] To download: {len(to_download)}")
         
         if not to_download:
-            logger.info("🎉 All data already cached!")
+            logger.info("[U+1F389] All data already cached!")
             return
         
         # Descargar con progress bar
-        logger.info(f"\n⏳ Downloading {len(to_download)} tickers...")
+        logger.info(f"\n[HOURGLASS] Downloading {len(to_download)} tickers...")
         
         success_count = 0
         fail_count = 0
@@ -215,7 +215,7 @@ class DataCache:
                 logger.debug(f"Failed to download {ticker}: {e}")
                 fail_count += 1
         
-        logger.info(f"\n✅ Download complete!")
+        logger.info(f"\n[OK] Download complete!")
         logger.info(f"   Success: {success_count}")
         logger.info(f"   Failed: {fail_count}")
         logger.info(f"   Total cached: {len(self.metadata)}")
@@ -244,7 +244,7 @@ class DataCache:
                 del self.metadata[ticker]
                 self._save_metadata()
             
-            logger.info(f"🗑️  Cleared cache for {ticker}")
+            logger.info(f"[U+1F5D1]  Cleared cache for {ticker}")
         else:
             # Limpiar todo
             for f in self.cache_dir.glob('*.pkl'):
@@ -253,7 +253,7 @@ class DataCache:
             self.metadata = {}
             self._save_metadata()
             
-            logger.info(f"🗑️  Cleared entire cache")
+            logger.info(f"[U+1F5D1]  Cleared entire cache")
     
     def get_stats(self) -> dict:
         """Obtiene estadísticas del cache"""
@@ -286,13 +286,13 @@ class DataCache:
         stats = self.get_stats()
         
         print(f"\n{'='*80}")
-        print(f"📊 DATA CACHE STATISTICS")
+        print(f"[U+1F4CA] DATA CACHE STATISTICS")
         print(f"{'='*80}")
         print(f"Tickers cached: {stats['total_tickers']}")
         print(f"Files on disk: {stats['total_files']}")
         print(f"Total size: {stats['size_mb']:.1f} MB")
         
         if stats['earliest_date']:
-            print(f"Date range: {stats['earliest_date']} → {stats['latest_date']}")
+            print(f"Date range: {stats['earliest_date']} -> {stats['latest_date']}")
         
         print(f"{'='*80}\n")

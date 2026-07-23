@@ -105,7 +105,7 @@ class PatternDetectionEngine:
                 result = detection_func()
                 if result.detected:
                     patterns_detected.append(result)
-                    logger.info(f"✅ {self.symbol}: {result.pattern_type.value} detected "
+                    logger.info(f"[OK] {self.symbol}: {result.pattern_type.value} detected "
                               f"(confidence: {result.confidence:.2f})")
             except Exception as e:
                 logger.error(f"Error detecting {pattern_name} for {self.symbol}: {e}")

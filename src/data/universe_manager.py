@@ -34,7 +34,7 @@ class UniverseManager:
             tickers = [t.replace('.', '-') for t in tickers]
             return tickers
         except Exception as e:
-            print(f"⚠️  Error descargando S&P 500: {e}")
+            print(f"[WARN]  Error descargando S&P 500: {e}")
             return []
     
     def get_nasdaq100(self):
@@ -46,7 +46,7 @@ class UniverseManager:
             tickers = df['Ticker'].tolist()
             return tickers
         except Exception as e:
-            print(f"⚠️  Error descargando NASDAQ 100: {e}")
+            print(f"[WARN]  Error descargando NASDAQ 100: {e}")
             return []
     
     def add_custom_tickers(self, tickers):
@@ -75,7 +75,7 @@ class UniverseManager:
                 'updated': datetime.now().isoformat()
             }, f, indent=2)
         
-        print(f"✅ Agregados {len(tickers)} tickers. Total custom: {len(custom)}")
+        print(f"[OK] Agregados {len(tickers)} tickers. Total custom: {len(custom)}")
         
         return custom
     
@@ -104,10 +104,10 @@ class UniverseManager:
             
             # Cache válido por 7 días
             if datetime.now() - cache_date < timedelta(days=7):
-                print(f"✅ Usando cache del {cache_date.strftime('%Y-%m-%d')}")
+                print(f"[OK] Usando cache del {cache_date.strftime('%Y-%m-%d')}")
                 return self.load_universe()
         
-        print("📥 Descargando universo completo...")
+        print("[U+1F4E5] Descargando universo completo...")
         
         # Descargar índices
         sp500 = self.get_sp500()
@@ -139,7 +139,7 @@ class UniverseManager:
             'total_tickers': len(universe)
         })
         
-        print(f"✅ Universo construido: {len(universe)} tickers")
+        print(f"[OK] Universo construido: {len(universe)} tickers")
         print(f"   S&P 500: {len(sp500)}")
         print(f"   NASDAQ 100: {len(nasdaq)}")
         print(f"   Custom: {len(custom)}")

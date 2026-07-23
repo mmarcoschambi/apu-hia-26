@@ -104,7 +104,7 @@ class PatternScreener:
             if best_pattern.stop_loss:
                 enriched_result['stop_loss'] = best_pattern.stop_loss
             
-            logger.info(f"✅ {symbol}: {best_pattern.pattern_type.value} "
+            logger.info(f"[OK] {symbol}: {best_pattern.pattern_type.value} "
                        f"(confidence: {best_pattern.confidence:.2f})")
             
             return enriched_result

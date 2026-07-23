@@ -63,7 +63,7 @@ class ChunkedBacktestEngine:
         # Generar chunks
         self.chunks = self._generate_chunks()
 
-        logger.info(f"📊 ChunkedBacktestEngine inicializado")
+        logger.info(f"[U+1F4CA] ChunkedBacktestEngine inicializado")
         logger.info(f"   Periodo total: {start_date} a {end_date}")
         logger.info(f"   Chunks {chunk_period}: {len(self.chunks)}")
 
@@ -93,7 +93,7 @@ class ChunkedBacktestEngine:
         Returns:
             DataFrame con todos los trades del período completo.
         """
-        logger.info(f"🚀 Iniciando backtest chunked ({len(self.chunks)} chunks)")
+        logger.info(f"[U+1F680] Iniciando backtest chunked ({len(self.chunks)} chunks)")
         logger.info(f"   Capital inicial: ${self.initial_capital:,.2f}")
 
         all_trades = []
@@ -175,7 +175,7 @@ class ChunkedBacktestEngine:
                     gc.collect()
 
             except Exception as e:
-                logger.error(f"❌ Error en chunk {i + 1}: {e}")
+                logger.error(f"[FAIL] Error en chunk {i + 1}: {e}")
                 import traceback
 
                 traceback.print_exc()
@@ -185,7 +185,7 @@ class ChunkedBacktestEngine:
         if all_trades:
             final_df = pd.concat(all_trades, ignore_index=True)
             logger.info(f"\n{'=' * 60}")
-            logger.info(f"✅ BACKTEST COMPLETADO")
+            logger.info(f"[OK] BACKTEST COMPLETADO")
             logger.info(f"   Total trades: {len(final_df)}")
             logger.info(f"   Capital final: ${current_capital:,.2f}")
             logger.info(
@@ -198,11 +198,11 @@ class ChunkedBacktestEngine:
                 chunk_summary_df = pd.DataFrame(chunk_results)
                 chunk_summary_path = "outputs/backtests/chunk_summary.csv"
                 chunk_summary_df.to_csv(chunk_summary_path, index=False)
-                logger.info(f"📁 Chunk summary guardado: {chunk_summary_path}")
+                logger.info(f"[U+1F4C1] Chunk summary guardado: {chunk_summary_path}")
 
             return final_df
         else:
-            logger.warning("⚠️ No se generaron trades en ningún chunk")
+            logger.warning("[WARN] No se generaron trades en ningún chunk")
             return pd.DataFrame()
 
 
@@ -234,7 +234,7 @@ class IncrementalBacktestEngine:
         self.start_date = self.last_date + timedelta(days=1)
         self.end_date = datetime.now().date()
 
-        logger.info(f"📊 IncrementalBacktestEngine inicializado")
+        logger.info(f"[U+1F4CA] IncrementalBacktestEngine inicializado")
         logger.info(f"   Última fecha: {self.last_date.date()}")
         logger.info(f"   Nuevos días: {self.start_date.date()} a {self.end_date}")
 
@@ -242,7 +242,7 @@ class IncrementalBacktestEngine:
         """
         Ejecuta backtest incremental y combina con resultados existentes.
         """
-        logger.info(f"🚀 Iniciando backtest incremental")
+        logger.info(f"[U+1F680] Iniciando backtest incremental")
 
         # Calcular capital actual desde resultados existentes
         initial_capital = (
@@ -264,14 +264,14 @@ class IncrementalBacktestEngine:
         # Combinar con resultados existentes
         if not new_trades.empty:
             final_df = pd.concat([self.existing_results, new_trades], ignore_index=True)
-            logger.info(f"✅ Backtest incremental completado")
+            logger.info(f"[OK] Backtest incremental completado")
             logger.info(f"   Trades existentes: {len(self.existing_results)}")
             logger.info(f"   Nuevos trades: {len(new_trades)}")
             logger.info(f"   Total: {len(final_df)}")
 
             return final_df
         else:
-            logger.info("ℹ️ No hay nuevos trades que agregar")
+            logger.info("[INFO] No hay nuevos trades que agregar")
             return self.existing_results
 
 
@@ -292,5 +292,5 @@ if __name__ == "__main__":
     )
 
     results = engine.run()
-    print(f"\n📊 Results shape: {results.shape}")
-    print(f"📊 Total PnL: ${results['pnl'].sum():,.2f}")
+    print(f"\n[U+1F4CA] Results shape: {results.shape}")
+    print(f"[U+1F4CA] Total PnL: ${results['pnl'].sum():,.2f}")

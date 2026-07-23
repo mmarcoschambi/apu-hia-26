@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 # Rutas relativas a PROJECT_ROOT — se resuelven en runtime
 _HERE = Path(__file__).resolve()
-# src/integration/combo_loader.py → subir 3 niveles → PROJECT_ROOT
+# src/integration/combo_loader.py -> subir 3 niveles -> PROJECT_ROOT
 PROJECT_ROOT = _HERE.parents[2]
 
 
@@ -208,11 +208,11 @@ def print_effective_combo_diff(combo_name: str) -> None:
 
     for section, keys in critical_keys.items():
         if section in meta.sections_merged:
-            print(f"\n📂 {section} CHANGED:")
+            print(f"\n[U+1F4C2] {section} CHANGED:")
             base_section = base.get(section, {})
             for key in keys:
                 if key in base_section:
-                    print(f"  {key}: {base_section[key]} → {base[section][key]}")
+                    print(f"  {key}: {base_section[key]} -> {base[section][key]}")
                 else:
                     print(f"  {key}: (new) {base[section][key]}")
 

@@ -333,7 +333,7 @@ def load_spy_vix_data(
     import yfinance as yf
 
     logger.info(
-        f"📊 Loading SPY and VIX data ({start_date} to {end_date}) [offline={offline}]..."
+        f"[U+1F4CA] Loading SPY and VIX data ({start_date} to {end_date}) [offline={offline}]..."
     )
 
     spy_data = None
@@ -350,23 +350,23 @@ def load_spy_vix_data(
                 spy_data = cache.get_ohlcv("SPY", start_date, end_date, offline=offline)
 
             if spy_data is not None and not spy_data.empty:
-                logger.info(f"   ✅ SPY loaded from cache: {len(spy_data)} bars")
+                logger.info(f"   [OK] SPY loaded from cache: {len(spy_data)} bars")
             else:
                 raise ValueError("No SPY data in cache")
         except Exception as e:
             if offline:
                 logger.error(
-                    f"   ❌ SPY not in cache and offline=True, cannot download: {e}"
+                    f"   [FAIL] SPY not in cache and offline=True, cannot download: {e}"
                 )
                 spy_data = None
             else:
-                logger.warning(f"   ⚠️  SPY not in cache, loading from yfinance: {e}")
+                logger.warning(f"   [WARN]  SPY not in cache, loading from yfinance: {e}")
                 spy_data = yf.download(
                     "SPY", start=start_date, end=end_date, progress=False
                 )
     else:
         if offline:
-            logger.error("   ❌ No cache and offline=True, cannot load SPY data")
+            logger.error("   [FAIL] No cache and offline=True, cannot load SPY data")
             spy_data = None
         else:
             spy_data = yf.download(
@@ -396,26 +396,26 @@ def load_spy_vix_data(
                     )
 
             if vix_data is not None and not vix_data.empty:
-                logger.info(f"   ✅ VIX loaded from cache: {len(vix_data)} bars")
+                logger.info(f"   [OK] VIX loaded from cache: {len(vix_data)} bars")
             else:
                 if offline:
                     logger.warning(
-                        f"   ⚠️  VIX not in cache and offline=True, skipping VIX"
+                        f"   [WARN]  VIX not in cache and offline=True, skipping VIX"
                     )
                 else:
                     raise ValueError("No VIX data in cache")
         else:
             if offline:
-                logger.warning(f"   ⚠️  No cache and offline=True, skipping VIX")
+                logger.warning(f"   [WARN]  No cache and offline=True, skipping VIX")
             else:
                 vix_data = yf.download(
                     "^VIX", start=start_date, end=end_date, progress=False
                 )
     except Exception as e:
         if offline:
-            logger.warning(f"   ⚠️  VIX data not available and offline=True: {e}")
+            logger.warning(f"   [WARN]  VIX data not available and offline=True: {e}")
         else:
-            logger.warning(f"   ⚠️  VIX data not available: {e}")
+            logger.warning(f"   [WARN]  VIX data not available: {e}")
 
     # Standardize column names (handle MultiIndex from yfinance)
     if spy_data is not None and isinstance(spy_data.columns, pd.MultiIndex):
@@ -443,6 +443,6 @@ def load_spy_vix_data(
     if vix_data is not None:
         vix_data.columns = [c.lower() for c in vix_data.columns]
 
-    logger.info(f"   ✅ Market data loaded successfully")
+    logger.info(f"   [OK] Market data loaded successfully")
 
     return spy_data, vix_data

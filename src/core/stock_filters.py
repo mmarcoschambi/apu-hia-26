@@ -149,7 +149,7 @@ class StockFilters:
             details_parts.append(f"Trend not aligned")
         
         if all_passed:
-            details = f"✓ All filters passed"
+            details = f"[U+2713] All filters passed"
         else:
             details = " | ".join(details_parts)
         
@@ -215,7 +215,7 @@ class StockFilters:
             details_parts.append(trend_result['reason'])
         
         if all_passed:
-            details = f"✓ All filters passed | Dollar Vol: ${liquidity_result['dollar_volume']/1e6:.0f}M | ADR: {volatility_result['adr_pct']:.1f}% | Trend aligned"
+            details = f"[U+2713] All filters passed | Dollar Vol: ${liquidity_result['dollar_volume']/1e6:.0f}M | ADR: {volatility_result['adr_pct']:.1f}% | Trend aligned"
         else:
             details = " | ".join(details_parts)
         
@@ -352,9 +352,9 @@ class StockFilters:
         result = self.passes_all_filters(df, symbol)
         
         if result['passed']:
-            return f"✅ {symbol} PASSES all filters | {result['details']}"
+            return f"[OK] {symbol} PASSES all filters | {result['details']}"
         else:
-            return f"❌ {symbol} FAILS filters | {result['details']}"
+            return f"[FAIL] {symbol} FAILS filters | {result['details']}"
 
 
 def quick_filter_check(df: pd.DataFrame, symbol: str = "UNKNOWN") -> bool:

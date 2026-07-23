@@ -138,7 +138,7 @@ class SectorCohortManager:
         
         conn.commit()
         conn.close()
-        logger.info(f"✅ sector_cohort actualizado para {date_str}")
+        logger.info(f"[OK] sector_cohort actualizado para {date_str}")
 
     def backfill(self, days: int = 90):
         """Puebla sector_cohort para los últimos X días."""

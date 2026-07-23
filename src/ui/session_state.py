@@ -11,8 +11,8 @@ Diseño:
   - view_scope: "global" | "asset" | "asset+pattern"
 
   - Callbacks de dependencia:
-      asset cambió → resetear pattern y feature si ya no son válidos
-      pattern cambió → resetear feature si ya no es válida
+      asset cambió -> resetear pattern y feature si ya no son válidos
+      pattern cambió -> resetear feature si ya no es válida
 
 Uso desde app.py:
     from src.ui.session_state import DashboardState
@@ -34,9 +34,9 @@ import streamlit as st
 
 logger = logging.getLogger(__name__)
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Keys del namespace
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 
 NS = "dash."
 
@@ -67,9 +67,9 @@ class DashboardState:
     def __init__(self, session: Any = None) -> None:
         self._session = session or st.session_state
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     # Init
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
 
     def init(self) -> None:
         """Inicializar estado con defaults si no existe."""
@@ -89,9 +89,9 @@ class DashboardState:
             if key not in self._session:
                 self._session[key] = value
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     # Getters / Setters
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
 
     @property
     def selected_asset(self) -> str:
@@ -123,9 +123,9 @@ class DashboardState:
     def view_scope(self) -> str:
         return self._session.get(KEY_SCOPE, SCOPE_GLOBAL)
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     # Callbacks de dependencia
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
 
     def on_asset_changed(
         self,
@@ -175,9 +175,9 @@ class DashboardState:
         self._session[KEY_FEATURE] = ALL_LABEL
         self._update_scope()
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     # Scope automático
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
 
     def _update_scope(self) -> None:
         asset = self._session.get(KEY_ASSET, ALL_LABEL)
@@ -190,9 +190,9 @@ class DashboardState:
         else:
             self._session[KEY_SCOPE] = SCOPE_ASSET_PATTERN
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     # Helpers de validación
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
 
     @staticmethod
     def _get_valid_patterns(
@@ -209,9 +209,9 @@ class DashboardState:
         result.extend([p for p in patterns if p != ALL_LABEL])
         return result
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     # Renderizado de selectores en sidebar
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
 
     def render_asset_selector(
         self,
@@ -237,7 +237,7 @@ class DashboardState:
         idx = options.index(current) if current in options else 0
 
         selected = st.selectbox(
-            "🏦 Activo",
+            "[U+1F3E6] Activo",
             options=options,
             index=idx,
             key=f"_dash_asset_sel{key_suffix}",
@@ -273,7 +273,7 @@ class DashboardState:
         idx = valid_patterns.index(current_pattern) if current_pattern in valid_patterns else 0
 
         selected = st.selectbox(
-            "📐 Patrón / Señal",
+            "[U+1F4D0] Patrón / Señal",
             options=valid_patterns,
             index=idx,
             key=f"_dash_pattern_sel{key_suffix}",
@@ -292,15 +292,15 @@ class DashboardState:
         scope = self.view_scope
 
         if scope == SCOPE_GLOBAL:
-            st.info("🌐 Vista: **Global** — todas las señales y activos")
+            st.info("[U+1F310] Vista: **Global** — todas las señales y activos")
         elif scope == SCOPE_ASSET:
-            st.info(f"🏦 Vista: **{asset}** — todos los patrones")
+            st.info(f"[U+1F3E6] Vista: **{asset}** — todos los patrones")
         else:
-            st.info(f"🔍 Vista: **{asset} · {pattern}**")
+            st.info(f"[U+1F50D] Vista: **{asset} · {pattern}**")
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
     # Reset
-    # ──────────────────────────────────────────────────────────────────────────
+    # --------------------------------------------------------------------------
 
     def reset(self) -> None:
         """Resetea todo el árbol de estado al valor inicial."""

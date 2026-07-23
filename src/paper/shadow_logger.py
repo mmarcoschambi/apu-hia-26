@@ -184,11 +184,11 @@ class ShadowLogger:
                         **r
                     }
                     f.write(json.dumps(entry) + "\n")
-            logger.info(f"✅ Consolidated parallel ledger updated in {ledger_file}")
+            logger.info(f"[OK] Consolidated parallel ledger updated in {ledger_file}")
         except Exception as le:
             logger.error(f"Error writing to consolidated ledger: {le}")
             
-        logger.info(f"✅ Shadow round logged to {output_file}")
+        logger.info(f"[OK] Shadow round logged to {output_file}")
         return output_file
 
     def fill_forward_returns(self, lookback_rounds=30):

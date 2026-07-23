@@ -43,7 +43,7 @@ class InteractiveDashboard:
         self.data_provider = MarketDataProvider()
         self.indicators = TriadIndicators()
 
-        print(f"📊 Loaded {len(self.results_df)} signals")
+        print(f"[U+1F4CA] Loaded {len(self.results_df)} signals")
         print(f"   Symbols: {self.results_df['symbol'].nunique()}")
         print(
             f"   Date range: {self.results_df['date'].min().date()} to {self.results_df['date'].max().date()}"
@@ -57,12 +57,12 @@ class InteractiveDashboard:
             rows=3,
             cols=2,
             subplot_titles=(
-                "📊 Returns Distribution",
-                "🎯 Win Rate by Camino",
-                "📈 Equity Curve",
-                "💰 Returns by Symbol",
-                "📅 Signals Over Time",
-                "🔍 Risk vs Reward",
+                "[U+1F4CA] Returns Distribution",
+                "[U+1F3AF] Win Rate by Camino",
+                "[U+1F4C8] Equity Curve",
+                "[U+1F4B0] Returns by Symbol",
+                "[U+1F4C5] Signals Over Time",
+                "[U+1F50D] Risk vs Reward",
             ),
             specs=[
                 [{"type": "histogram"}, {"type": "bar"}],
@@ -247,7 +247,7 @@ class InteractiveDashboard:
         fig.update_yaxes(title_text="Return %", row=3, col=2)
 
         fig.update_layout(
-            title_text="<b>📊 TRIAD BACKTEST DASHBOARD</b><br><sup>Interactive Analysis</sup>",
+            title_text="<b>[U+1F4CA] TRIAD BACKTEST DASHBOARD</b><br><sup>Interactive Analysis</sup>",
             title_font_size=24,
             showlegend=True,
             height=1200,
@@ -414,7 +414,7 @@ class InteractiveDashboard:
                     line_dash="dashdot",
                     line_color="magenta",
                     line_width=2.5,
-                    annotation_text=f"🔍 {pattern_type} PIVOT: ${pivot_price:.2f}",
+                    annotation_text=f"[U+1F50D] {pattern_type} PIVOT: ${pivot_price:.2f}",
                     annotation_position="left",
                 )
 
@@ -531,23 +531,23 @@ class InteractiveDashboard:
                 if "STOP" in type_upper:
                     color = "#FF4136"  # Red
                     symbol_marker = "x"
-                    label_text = f"🛑 {exit_type}"
+                    label_text = f"[U+1F6D1] {exit_type}"
                 elif "TP1" in type_upper:
                     color = "#2ECC40"  # Green
                     symbol_marker = "star"
                     marker_size = 14
-                    label_text = f"⭐ {exit_type} (+1.5R)"
+                    label_text = f"[STAR] {exit_type} (+1.5R)"
                 elif "TP2" in type_upper:
                     color = "#01FF70"  # Lime
                     symbol_marker = "star"
                     marker_size = 16
-                    label_text = f"🌟 {exit_type} (+3R)"
+                    label_text = f"[U+1F31F] {exit_type} (+3R)"
                 elif "RUNNER" in type_upper:
                     color = "#0074D9"  # Blue
                     symbol_marker = "diamond"
-                    label_text = f"🏃 {exit_type}"
+                    label_text = f"[U+1F3C3] {exit_type}"
                 else:
-                    label_text = f"🚪 {exit_type}"
+                    label_text = f"[U+1F6AA] {exit_type}"
 
                 # Add Marker
                 fig.add_trace(
@@ -720,7 +720,7 @@ class InteractiveDashboard:
             )
 
         fig.update_layout(
-            title=f"<b>🔍 Intraday 5m Zoom - {symbol}</b><br><sup>VWAP Defense Analysis | {target_day_str}</sup>",
+            title=f"<b>[U+1F50D] Intraday 5m Zoom - {symbol}</b><br><sup>VWAP Defense Analysis | {target_day_str}</sup>",
             yaxis_title="Price ($)",
             xaxis_title="Time",
             template="plotly_white",
@@ -746,10 +746,10 @@ class InteractiveDashboard:
             rows=2,
             cols=2,
             subplot_titles=(
-                f"📈 {symbol} - Cumulative P&L",
-                f"📊 Trade Statistics",
-                f"📅 Returns Over Time",
-                f"🎯 Win/Loss Distribution",
+                f"[U+1F4C8] {symbol} - Cumulative P&L",
+                f"[U+1F4CA] Trade Statistics",
+                f"[U+1F4C5] Returns Over Time",
+                f"[U+1F3AF] Win/Loss Distribution",
             ),
             specs=[
                 [{"type": "scatter"}, {"type": "indicator"}],
@@ -845,7 +845,7 @@ class InteractiveDashboard:
     ):
         """Generate complete HTML report with all charts"""
 
-        print("\n📊 Generating Interactive Dashboard...")
+        print("\n[U+1F4CA] Generating Interactive Dashboard...")
 
         # Overview dashboard
         print("  Creating overview dashboard...")
@@ -1121,7 +1121,7 @@ class InteractiveDashboard:
             html_content += f'            <button class="nav-tab" onclick="showTab(\'{symbol}\')">{symbol}</button>\n'
 
         html_content += """            <button class="nav-tab" onclick="showTab('trades')">Best/Worst Trades</button>
-            <button class="nav-tab" onclick="showTab('masterclass')">🎓 Masterclass</button>
+            <button class="nav-tab" onclick="showTab('masterclass')">[U+1F393] Masterclass</button>
         </div>
         
         <div id="overview" class="tab-content active">
@@ -1134,7 +1134,7 @@ class InteractiveDashboard:
         # Add masterclass content
         html_content += """
         <div id="masterclass" class="tab-content">
-            <div class="section-title">🎓 The Lifecycle of a Trade (Masterclass)</div>
+            <div class="section-title">[U+1F393] The Lifecycle of a Trade (Masterclass)</div>
             <div class="section" style="line-height: 1.6; color: #333;">
                 <h3>1. The Setup (Entry Logic)</h3>
                 <p><strong>Camino 1: Blue Sky Breakout</strong><br>
@@ -1157,7 +1157,7 @@ class InteractiveDashboard:
                 </ul>
                 
                 <div style="background: #e3f2fd; padding: 15px; border-left: 5px solid #2196f3; margin-top: 20px;">
-                    <strong>💡 Pro Tip:</strong> Check the "Zoom" charts for VWAP Reclaim trades to see the specific 5-minute candle where institutions stepped in.
+                    <strong>[U+1F4A1] Pro Tip:</strong> Check the "Zoom" charts for VWAP Reclaim trades to see the specific 5-minute candle where institutions stepped in.
                 </div>
             </div>
         </div>
@@ -1215,7 +1215,7 @@ class InteractiveDashboard:
         output_path = Path(output_file)
         output_path.write_text(html_content)
 
-        print(f"\n✅ Dashboard saved: {output_path}")
+        print(f"\n[OK] Dashboard saved: {output_path}")
         print(f"   File size: {output_path.stat().st_size / 1024:.1f} KB")
 
         return str(output_path)
@@ -1238,17 +1238,17 @@ def main():
     args = parser.parse_args()
 
     if not Path(args.results_csv).exists():
-        print(f"❌ File not found: {args.results_csv}")
+        print(f"[FAIL] File not found: {args.results_csv}")
         sys.exit(1)
 
     dashboard = InteractiveDashboard(args.results_csv)
     output_file = dashboard.generate_html_report(args.output)
 
     if not args.no_browser:
-        print("\n🌐 Opening dashboard in browser...")
+        print("\n[U+1F310] Opening dashboard in browser...")
         webbrowser.open("file://" + str(Path(output_file).absolute()))
 
-    print("\n✅ Dashboard ready!")
+    print("\n[OK] Dashboard ready!")
     print(f"   Open: {output_file}")
 
 

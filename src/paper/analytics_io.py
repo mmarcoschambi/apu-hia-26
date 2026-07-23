@@ -153,7 +153,7 @@ def save_daily_analytics(date: str, payload: Dict) -> Path:
     out_path = OUTPUTS_DIR / f"analytics_{date}.json"
     with open(out_path, "w") as f:
         json.dump(payload, f, indent=2, default=str)
-    logger.info(f"  ✅ Saved analytics: {out_path}")
+    logger.info(f"  [OK] Saved analytics: {out_path}")
     return out_path
 
 

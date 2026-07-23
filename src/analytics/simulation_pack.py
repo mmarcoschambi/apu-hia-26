@@ -244,7 +244,7 @@ def run_simulation_pack(
     Returns:
         Dict con simulation_pack completo
     """
-    logger.info("📊 Running simulation pack...")
+    logger.info("[U+1F4CA] Running simulation pack...")
 
     # MC completo
     mc_result = run_monte_carlo_full(

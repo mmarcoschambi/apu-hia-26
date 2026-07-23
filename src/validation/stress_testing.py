@@ -148,7 +148,7 @@ class StressTestSuite:
 
         if verbose:
             logger.info("=" * 70)
-            logger.info("🔥 STRESS TESTING SUITE")
+            logger.info("[U+1F525] STRESS TESTING SUITE")
             logger.info("=" * 70)
 
         # Get baseline results
@@ -213,9 +213,9 @@ class StressTestSuite:
         if verbose:
             logger.info("\n" + "=" * 70)
             if result.all_passed:
-                logger.info("✅ ALL STRESS TESTS PASSED")
+                logger.info("[OK] ALL STRESS TESTS PASSED")
             else:
-                logger.info("❌ STRESS TESTS FAILED")
+                logger.info("[FAIL] STRESS TESTS FAILED")
                 for reason in result.failure_reasons:
                     logger.info(f"   • {reason}")
             logger.info("=" * 70)
@@ -232,7 +232,7 @@ class StressTestSuite:
     ) -> StressTestResult:
         """Test sensitivity to transaction costs."""
         if verbose:
-            logger.info("\n💰 Cost Stress Tests")
+            logger.info("\n[U+1F4B0] Cost Stress Tests")
 
         scenarios = [
             ("2x", 0.002, self.thresholds.max_impact_2x_costs, "impact_2x_costs"),
@@ -268,7 +268,7 @@ class StressTestSuite:
                     )
 
                 if verbose:
-                    status = "✅" if scenario_passed else "❌"
+                    status = "[OK]" if scenario_passed else "[FAIL]"
                     logger.info(
                         f"   {status} {label} costs ({cost_rate:.1%}): {impact:+.2f}%"
                     )
@@ -291,7 +291,7 @@ class StressTestSuite:
     ) -> StressTestResult:
         """Test sensitivity to wider spreads and liquidity constraints."""
         if verbose:
-            logger.info("\n💧 Liquidity Stress Tests")
+            logger.info("\n[U+1F4A7] Liquidity Stress Tests")
 
         scenarios = [
             (
@@ -337,7 +337,7 @@ class StressTestSuite:
                     )
 
                 if verbose:
-                    status = "✅" if scenario_passed else "❌"
+                    status = "[OK]" if scenario_passed else "[FAIL]"
                     logger.info(
                         f"   {status} {label} spreads ({slippage:.1%}): {impact:+.2f}%"
                     )
@@ -365,7 +365,7 @@ class StressTestSuite:
         modifying the engine to inject gaps at random or worst-case points.
         """
         if verbose:
-            logger.info("\n⚡ Gap Risk Stress Tests (Simulated)")
+            logger.info("\n[BOLT] Gap Risk Stress Tests (Simulated)")
             logger.info("   Note: Gap simulation requires engine modification")
 
         # Placeholder for gap risk - in production, modify engine to support gap injection
@@ -381,10 +381,10 @@ class StressTestSuite:
 
         if verbose:
             logger.info(
-                f"   {'✅' if gap_1_passed else '❌'} 1% gaps: {result.impact_gap_1pct:+.2f}%"
+                f"   {'[OK]' if gap_1_passed else '[FAIL]'} 1% gaps: {result.impact_gap_1pct:+.2f}%"
             )
             logger.info(
-                f"   {'✅' if gap_2_passed else '❌'} 2% gaps: {result.impact_gap_2pct:+.2f}%"
+                f"   {'[OK]' if gap_2_passed else '[FAIL]'} 2% gaps: {result.impact_gap_2pct:+.2f}%"
             )
 
         return result
@@ -398,7 +398,7 @@ class StressTestSuite:
     ) -> StressTestResult:
         """Analyze strategy capacity and position sizing limits."""
         if verbose:
-            logger.info("\n📊 Capacity Analysis")
+            logger.info("\n[U+1F4CA] Capacity Analysis")
 
         trades_df = baseline_results.get("trades_df", pd.DataFrame())
 
@@ -438,7 +438,7 @@ class StressTestSuite:
             logger.info(f"   Avg Position: ${result.avg_position_size_dollars:,.0f}")
             logger.info(f"   Max Position: ${result.max_position_size_dollars:,.0f}")
             logger.info(f"   Min Liquidity: ${result.min_liquidity_dollar_volume:,.0f}")
-            logger.info(f"   {'✅' if result.capacity_passed else '❌'} Capacity check")
+            logger.info(f"   {'[OK]' if result.capacity_passed else '[FAIL]'} Capacity check")
 
         return result
 
@@ -452,7 +452,7 @@ class StressTestSuite:
     ) -> StressTestResult:
         """Test performance during high market correlation periods."""
         if verbose:
-            logger.info("\n📈 Correlation Stress Test (Simulated)")
+            logger.info("\n[U+1F4C8] Correlation Stress Test (Simulated)")
 
         # Estimate correlation stress impact
         # During high correlation, diversification benefits reduce
@@ -466,7 +466,7 @@ class StressTestSuite:
         if verbose:
             logger.info(f"   High correlation impact: {correlation_impact:+.2f}%")
             logger.info(
-                f"   {'✅' if result.correlation_stress_passed else '❌'} Correlation stress"
+                f"   {'[OK]' if result.correlation_stress_passed else '[FAIL]'} Correlation stress"
             )
 
         return result
@@ -492,10 +492,10 @@ class StressTestSuite:
         )
 
         if verbose:
-            logger.info("\n🔥 Worst Case Scenario")
+            logger.info("\n[U+1F525] Worst Case Scenario")
             logger.info(f"   Combined impact: {result.impact_worst_case:+.2f}%")
             logger.info(
-                f"   {'✅' if result.worst_case_passed else '❌'} Worst case check"
+                f"   {'[OK]' if result.worst_case_passed else '[FAIL]'} Worst case check"
             )
 
         return result
