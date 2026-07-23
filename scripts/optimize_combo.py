@@ -552,7 +552,15 @@ def phase3_optimize_tier1(
     _extra_fixed = (
         _pattern_config.get("extra_fixed_params", {}) if _pattern_config else {}
     )
-    optuna_space = combo["tier1_optuna_space"]
+    optuna_space = combo.get("tier1_optuna_space", {})
+    if not optuna_space:
+        logger.warning(f"  combo JSON missing 'tier1_optuna_space' — usando defaults")
+        optuna_space = {
+            "tp1_r": {"min": 1.25, "max": 2.25, "step": 0.25},
+            "tp2_r": {"min": 2.75, "max": 5.5, "step": 0.25},
+            "tp1_pct": {"min": 0.3, "max": 0.5, "step": 0.05},
+            "tp2_pct": {"min": 0.2, "max": 0.4, "step": 0.05},
+        }
 
     # =========================================================
     # PRE-LOAD ENGINE TEMPLATE (PERF)
@@ -797,7 +805,7 @@ def validate_combo_result(
     )
     if result.rejection_reasons:
         for reason in result.rejection_reasons:
-            logger.info(f"    ❌ {reason}")
+            logger.info(f"    [FAIL] {reason}")
     logger.info(f"    PBO: {result.pbo_score:.2%}")
     logger.info(f"    Sharpe: {result.sharpe_ratio:.2f}")
     logger.info(f"    Max DD: {result.max_drawdown_pct:.1f}%")
@@ -863,11 +871,13 @@ def export_combo_result(
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Atomic write: write to temp file first, then rename
+    # Atomic write: write to temp file first, then replace
     tmp_path = output_path.with_suffix(".json.tmp")
-    with open(tmp_path, "w") as f:
+    if tmp_path.exists():
+        tmp_path.unlink()
+    with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(result, f, indent=2)
-    tmp_path.rename(output_path)
+    tmp_path.replace(output_path)
 
     if _vr is not None:
         logger.info(
@@ -960,6 +970,8 @@ def run_combo_optimization(
     validation_passed = True
     validation_result = None
     oos_score = score
+    train_dates = (start_date, end_date)
+    test_dates = (start_date, end_date)
 
     if not skip_validation and not skip_optimization:
         trials_df = study.trials_dataframe()
@@ -1045,12 +1057,12 @@ def run_combo_optimization(
                 break
             else:
                 logger.info(
-                    f"  ❌ Candidate {idx + 1} FAILED: only {windows_passed}/{len(absolute_windows)} windows."
+                    f"  [FAIL] Candidate {idx + 1} FAILED: only {windows_passed}/{len(absolute_windows)} windows."
                 )
 
         if not found_robust:
             logger.error(
-                "  ❌ PIPELINE FAILED: None of top 10 trials passed multi-window validation."
+                "  [FAIL] PIPELINE FAILED: None of top 10 trials passed multi-window validation."
             )
             validation_passed = False
             validation_result = all_results[-1] if all_results else None

@@ -56,7 +56,7 @@ def main():
         
         status = "OK"
         if trades < args.min_trades:
-            status = "⚠️ INSUFICIENTE EVIDENCIA"
+            status = "[W] INSUFICIENTE EVIDENCIA"
         
         print(f"Variante: {name}")
         print(f"  Trades: {trades} | Retorno/Score: {total_return}% | Sharpe: {sharpe}")
@@ -68,9 +68,9 @@ def main():
         print("-" * 40)
 
     if best_candidate:
-        print(f"\n🏆 GANADOR: {best_candidate[0]} con Retorno de {best_candidate[1]}% ({best_candidate[2]} trades)")
+        print(f"\nGANADOR: {best_candidate[0]} con Retorno de {best_candidate[1]}% ({best_candidate[2]} trades)")
     else:
-        print("\n❌ GANADOR: Insuficiente evidencia, ampliar ventana.")
+        print("\n[F] GANADOR: Insuficiente evidencia, ampliar ventana.")
 
 if __name__ == "__main__":
     main()

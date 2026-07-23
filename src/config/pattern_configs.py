@@ -146,21 +146,14 @@ def _flat_base_space(trial: optuna.Trial, fixed: dict) -> dict:
     }
 
 
-# ── Registro central de patrones ──────────────────────────────────────────────
+# -- Registro central de patrones ----------------------------------------------
 PATTERN_CONFIGS: Dict[str, Dict[str, Any]] = {
     "breakout": {
         "description": "Breakout clasico: close > 20d high. Señal pura de ruptura de pivote.",
         "config_output": "config/breakout_config.json",
         "baseline_signal": "any",
         "optuna_space": _breakout_space,
-        "extra_fixed_params": {
-            "signal_type": "any",
-            "use_adaptive_filtering": True,
-            "require_spy_above_sma50": True,
-            "use_market_regime_filter": True,
-            "block_trades_in_stage3": True,
-            "block_trades_in_stage4": True,
-        },
+        "extra_fixed_params": {},
         "min_tp_separation": 0.50,
         "export_to_streamlit": True,
     },
