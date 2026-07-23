@@ -150,3 +150,46 @@ Un issue está CERRADO cuando:
 | 2026-06    | LightGBM sobre sklearn RF        | Velocidad + feature importance nativa       |
 | 2026-06    | Optuna sobre GridSearch          | Pruning eficiente, Pareto multi-objetivo    |
 | 2026-06    | Streamlit como UI principal      | Iteración rápida, sin frontend separado     |
+
+---
+
+## 9. PROTOCOLO UNIFICADO DE SALIDA DE SESIÓN (OBLIGATORIO)
+
+Al finalizar cualquier sesión o tarea, el agente DEBE emitir la salida utilizando la siguiente plantilla unificada completa de 11 secciones SIN TRUNCAR NINGUNA SECCIÓN:
+
+```markdown
+## 🎯 Goal
+[Propósito de la sesión]
+
+## 📋 Instructions
+[Restricciones o preferencias recibidas]
+
+## 💡 Discoveries
+[Hallazgos técnicos o sorpresas]
+
+## ✅ Accomplished
+[Hitos logrados]
+
+## 🚀 Next Steps
+[Próximos pasos]
+
+## 📂 Relevant Files
+[Archivos clave afectados]
+
+### 1. Rango de Git
+`git diff <commit>~N..<commit> --stat` o commit hash
+
+### 2. Estado del Sistema
+Output JSON de `python3 scripts/dump_state.py`
+
+### 3. Decisions Mapped
+Validación de `DECISIONS.md` contra la configuración real
+
+### 4. Chequeo de Significancia Estadística
+Resultado de `python3 scratch/run_variants.py` (rechaza si trades < 30)
+
+### 5. Control de Duplicados
+Estado del hook `python3 scripts/check_git_duplicates.py` / `tests/test_integrity.py`
+```
+
+

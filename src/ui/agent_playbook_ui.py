@@ -20,7 +20,7 @@ def render_agent_playbook():
     )
 
     # Tabs principales
-    tab_memory, tab_workflow, tab_tdd, tab_research, tab_backlog, tab_first_principles, tab_evolution, tab_prompts = st.tabs([
+    tab_memory, tab_workflow, tab_tdd, tab_research, tab_backlog, tab_first_principles, tab_evolution, tab_prompts, tab_safeguards = st.tabs([
         "🧠 Memory Board (ScrumBan)", 
         "🔄 Ciclo de Vida del Ticket", 
         "🧪 Test Harness & TDD", 
@@ -28,8 +28,10 @@ def render_agent_playbook():
         "📋 Backlog de Experimentos",
         "📐 Primeros Principios",
         "📈 Evolución & Arquitectura",
-        "💬 Cheat Sheet de Prompts"
+        "💬 Cheat Sheet de Prompts",
+        "🛡️ Salvaguardas & Salida"
     ])
+
 
     # ──────────────────────────────────────────────────────────────────────
     # TAB 1: MEMORY BOARD (ScrumBan)
@@ -1500,3 +1502,99 @@ Estuve haciendo pruebas locales y quedaron archivos temporales, backups o logs n
 """,
                 language="markdown"
             )
+
+    # ──────────────────────────────────────────────────────────────────────
+    # TAB 9: SALVAGUARDAS DE ENTORNO & PROTOCOLO UNIFICADO
+    # ──────────────────────────────────────────────────────────────────────
+    with tab_safeguards:
+        st.subheader("🛡️ Salvaguardas de Entorno, Hashes y Protocolo de Salida")
+        st.markdown(
+            "Visualizador interactivo de las salvaguardas mecánicas del repositorio, "
+            "hashes de configuración canónica y la **Plantilla Unificada de Salida de 11 Secciones**."
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("### 📊 Estado Canónico del Sistema (`dump_state.py`)")
+            if st.button("🔄 Ejecutar dump_state.py", key="btn_dump_state"):
+                try:
+                    import subprocess
+                    out = subprocess.check_output(["python3", "scripts/dump_state.py"]).decode("utf-8")
+                    st.code(out, language="json")
+                except Exception as e:
+                    st.error(f"Error al ejecutar dump_state.py: {e}")
+            else:
+                dump_script = Path("scripts/dump_state.py")
+                if dump_script.exists():
+                    try:
+                        import subprocess
+                        out = subprocess.check_output(["python3", "scripts/dump_state.py"]).decode("utf-8")
+                        st.code(out, language="json")
+                    except Exception:
+                        st.info("Hacé clic en 'Ejecutar dump_state.py' para inspeccionar el JSON de estado.")
+                else:
+                    st.warning("⚠️ `scripts/dump_state.py` no existe en este clon.")
+
+        with col2:
+            st.markdown("### 🔍 Chequeo de Duplicados & Pre-commit")
+            if st.button("🛡️ Validar Estructura (check_git_duplicates.py)", key="btn_check_duplicates"):
+                try:
+                    import subprocess
+                    res = subprocess.run(["python3", "scripts/check_git_duplicates.py"], capture_output=True, text=True)
+                    if res.returncode == 0:
+                        st.success("✅ Estructura del repositorio limpia: Sin duplicados activos ni carpetas recursivas.")
+                        st.code(res.stdout, language="text")
+                    else:
+                        st.error("💥 Falla de Integridad: Se detectaron duplicados o rutas anidadas.")
+                        st.code(res.stderr or res.stdout, language="text")
+                except Exception as e:
+                    st.error(f"Error al ejecutar chequeo de duplicados: {e}")
+            else:
+                st.info("Validá en tiempo real si hay archivos `combo_loader.py` duplicados o directorios anidados `vps_snapshot/vps_snapshot`.")
+
+        st.markdown("---")
+        st.markdown("### 📋 Plantilla Unificada de Salida de Sesión (11 Secciones)")
+        st.markdown(
+            "Copiá y pegá esta plantilla en el chat o pedile al agente: "
+            "`'Aplicá la Plantilla Unificada de Salida de 11 Secciones'`."
+        )
+
+        st.code(
+            """
+## 🎯 Goal
+[Propósito de la sesión]
+
+## 📋 Instructions
+[Restricciones o preferencias recibidas]
+
+## 💡 Discoveries
+[Hallazgos técnicos o sorpresas]
+
+## ✅ Accomplished
+[Hitos logrados]
+
+## 🚀 Next Steps
+[Próximos pasos]
+
+## 📂 Relevant Files
+[Archivos clave afectados]
+
+### 1. Rango de Git
+`git diff <commit>~N..<commit> --stat` o commit hash
+
+### 2. Estado del Sistema
+Output JSON de `python3 scripts/dump_state.py`
+
+### 3. Decisions Mapped
+Validación de `DECISIONS.md` contra la configuración real
+
+### 4. Chequeo de Significancia Estadística
+Resultado de `python3 scratch/run_variants.py` (rechaza si trades < 30)
+
+### 5. Control de Duplicados
+Estado del hook `python3 scripts/check_git_duplicates.py` / `tests/test_integrity.py`
+""",
+            language="markdown"
+        )
+

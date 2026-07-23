@@ -81,3 +81,13 @@ node_modules/
 /playwright/.auth/
 # Local AI runtime state
 .atl/
+
+# Tooling artifacts & coverage
+.aider.*
+.codex/
+sdd/
+.coverage
+*,cover
+.cache/
+
+

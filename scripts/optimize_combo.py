@@ -851,6 +851,16 @@ def export_combo_result(
     }
 
     output_path = OUTPUT_DIR / f"{combo['name']}_optimized.json"
+
+    # Control de seguridad de escritura utilizando objetos Path resueltos
+    resolved_out = output_path.resolve()
+    prohibited_dir = (Path(__file__).resolve().parent.parent / "outputs" / "best_combos_run").resolve()
+    if resolved_out == prohibited_dir or resolved_out.is_relative_to(prohibited_dir):
+        raise PermissionError(
+            f"Write-safety violation: Optimization script is strictly forbidden from writing "
+            f"to the production directory '{prohibited_dir}'."
+        )
+
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     # Atomic write: write to temp file first, then rename

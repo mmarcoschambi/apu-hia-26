@@ -15,3 +15,8 @@ The system is **Auto-Aware** of its environment:
 - **Torre de Control (VPS)**: No DB → **Finviz Live** promoted to primary decision source for 24/7 monitoring.
 - **Deploy to VPS**: `./deploy_vps.sh`
 - **Data Sync from VPS**: `./sync_from_vps.sh`
+
+## Session Close Protocol (CRITICAL)
+Always output session summaries using the full 11-section unified template defined in Section 9 of AGENTS.md (Goal, Instructions, Discoveries, Accomplished, Next Steps, Relevant Files, 1. Git Range, 2. System State JSON, 3. Decisions Mapped, 4. Statistical Significance, 5. Duplication Check). NEVER truncate after Relevant Files.
+
+

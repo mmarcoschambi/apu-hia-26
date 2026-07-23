@@ -644,8 +644,8 @@ def run_backtest(
                 dynamic_risk_dollars = total_equity * risk_pct
 
                 # Inject dynamic_risk_dollars into both combo configs tier1_strategy risk_dollars
-                cfg_a["tier1_strategy"]["risk_dollars"] = dynamic_risk_dollars
-                cfg_b["tier1_strategy"]["risk_dollars"] = dynamic_risk_dollars
+                cfg_a.setdefault("tier1_strategy", {})["risk_dollars"] = dynamic_risk_dollars
+                cfg_b.setdefault("tier1_strategy", {})["risk_dollars"] = dynamic_risk_dollars
 
                 day_universe = universe_by_date.get(d_str, [])
                 results_a, results_b = [], []
