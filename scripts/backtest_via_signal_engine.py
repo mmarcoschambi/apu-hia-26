@@ -297,7 +297,7 @@ def run_backtest(
     if use_variant_e:
         from src.data.theme_taxonomy import THEME_MAP_2020, THEME_MAP_2022, THEME_MAP_CURRENT
 
-        all_theme_tickers = (
+        all_theme_tickers = sorted(
             set(THEME_MAP_2020.keys()) | set(THEME_MAP_2022.keys()) | set(THEME_MAP_CURRENT.keys())
         )
         for t in all_theme_tickers:
@@ -362,7 +362,7 @@ def run_backtest(
     regime_lookup = health_all.set_index("date")["regime_mode"].to_dict()
 
     lookback_start = (pd.to_datetime(start_date) - timedelta(days=400)).strftime("%Y-%m-%d")
-    all_ohlcv = load_ohlcv_batch_memory(list(superset_tickers), lookback_start, end_date)
+    all_ohlcv = load_ohlcv_batch_memory(sorted(superset_tickers), lookback_start, end_date)
 
     logger.info("[INDICATORS] Pre-calculating indicators (MA stack, ATR, ADR%, Consolidation) for all tickers...")
     for t_sym, t_df in all_ohlcv.items():
@@ -414,7 +414,7 @@ def run_backtest(
         logger.info("[THEMES] Pre-calculating Dynamic Theme Indices for Variant E...")
         from src.data.theme_taxonomy import THEME_MAP_2020, THEME_MAP_2022, THEME_MAP_CURRENT
 
-        all_theme_tickers = (
+        all_theme_tickers = sorted(
             set(THEME_MAP_2020.keys()) | set(THEME_MAP_2022.keys()) | set(THEME_MAP_CURRENT.keys())
         )
 
@@ -429,11 +429,11 @@ def run_backtest(
         for dt in market_data_closes.index:
             theme_map = get_theme_map_for_date(dt)
             theme_to_tickers_date = {}
-            for t, themes in theme_map.items():
+            for t, themes in sorted(theme_map.items()):
                 for theme in themes:
                     theme_to_tickers_date.setdefault(theme, []).append(t)
 
-            for th, members in theme_to_tickers_date.items():
+            for th, members in sorted(theme_to_tickers_date.items()):
                 valid_members = [m for m in members if m in market_returns.columns]
                 if valid_members:
                     rets_day = market_returns.loc[dt, valid_members].dropna()

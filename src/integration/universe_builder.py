@@ -125,7 +125,7 @@ def build_universe_for_fold(
         # 2) filtro símbolo
         filtered = []
         n_excluded_symbol = 0
-        for ticker, bars in hist_rows:
+        for ticker, bars in sorted(hist_rows, key=lambda x: x[0]):
             if not _is_clean_symbol(ticker):
                 n_excluded_symbol += 1
                 continue

@@ -90,4 +90,6 @@ sdd/
 *,cover
 .cache/
 
-
+# Local Dumps and Validation
+scratch/llm_dump_*
+_validation_out.txt

@@ -207,7 +207,7 @@ def test_scanner_stable_flag():
     with temp_tiny_stable_universe():
         result = subprocess.run(
             [
-                "python3",
+                sys.executable,
                 "src/scanner/daily_signal_scanner.py",
                 "--universe-source",
                 "stable",
@@ -232,7 +232,7 @@ def test_combo_scanner_multi():
     with temp_tiny_stable_universe():
         result = subprocess.run(
             [
-                "python3",
+                sys.executable,
                 "scripts/run_combo_scanner.py",
                 "--universe-source",
                 "stable",

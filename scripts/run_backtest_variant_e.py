@@ -1,4 +1,5 @@
 
+import sys
 import subprocess
 import json
 import os
@@ -33,7 +34,7 @@ def run_variant_e_experiment():
         os.rename(temp_config_path, config_path)
         
         cmd = [
-            "python3", "scripts/backtest_via_signal_engine.py",
+            sys.executable, "scripts/backtest_via_signal_engine.py",
             "--start", "2023-01-01",
             "--end", "2024-12-31",
             "--capital", "100000",
@@ -44,7 +45,7 @@ def run_variant_e_experiment():
         
         # 4. Ejecutar Análisis
         print("\n📊 Generando atribución de sectores y meses...")
-        subprocess.run(["python3", "scripts/analyze_backtest_output.py"], check=True)
+        subprocess.run([sys.executable, "scripts/analyze_backtest_output.py"], check=True)
         
     finally:
         # 5. Restaurar config original
