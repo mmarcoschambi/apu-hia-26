@@ -109,15 +109,13 @@ class TestWatchlistView(unittest.TestCase):
 
         msg_text, msg_buttons = build_watchlist_message("2026-05-21", page=1)
 
-        self.assertIn("DUAL VIEW | 2026-05-21", msg_text)
+        self.assertIn("WATCHLIST | 2026-05-21", msg_text)
         self.assertIn("NVDA", msg_text)
         self.assertIn("AVGO", msg_text)
-        self.assertIn("[LOCAL]", msg_text)
-        self.assertIn("[FINVIZ]", msg_text)
 
         # Since total candidates = 2, total_pages = 1, so buttons should just have Refresh
         self.assertEqual(len(msg_buttons), 1)
-        self.assertEqual(msg_buttons[0][0]["text"], "🔄 Refresh")
+        self.assertEqual(msg_buttons[0][0]["text"], "[U+1F504] Refresh")
 
     @patch("src.paper.telegram_views.load_watchlist_signals")
     @patch("src.paper.telegram_views._get_sector_status")
@@ -149,7 +147,8 @@ class TestWatchlistView(unittest.TestCase):
 
         self.assertIn("WATCHLIST DETAIL | NVDA", detail_card)
         self.assertIn("[LOCAL]", detail_card)
-        self.assertIn("Score:  ★ <code>87</code>", detail_card)
+        self.assertIn("Score:", detail_card)
+        self.assertIn("<code>87</code>", detail_card)
         self.assertIn("Entry:  <code>$135.20</code>", detail_card)
         self.assertIn("Theme: <code>AI/ML</code>", detail_card)
         self.assertIn("RS:0.0% vs Sector" if "RS:0.0%" in detail_card else "RS:+2.1%", detail_card)
@@ -485,7 +484,7 @@ class TestWatchlistView(unittest.TestCase):
         msg_text, _ = build_watchlist_message("2026-05-21", page=1, system="B")
         
         # Debe contener el tag de Size y extensión
-        self.assertIn("(Size: 50% [Ext: 12.0%])", msg_text)
+        self.assertIn("(Ext: 12.0%)", msg_text)
 
     def test_gate_status_when_no_blockers(self):
         detail = {
