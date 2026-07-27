@@ -128,15 +128,14 @@ Actuás como Auditor Técnico. Tu única función es validar la integridad de la
 
 # FORMATO DE SALIDA OBLIGATORIO
 Devuelve tu dictamen EXCLUSIVAMENTE en este formato JSON:
-```json
-{
-  "audit_phase": "PRE_MIGRATION",
-  "received_hash": "<hash_aqui>",
-  "hash_is_valid_sha256": true,
-  "verdict": "APPROVED_TO_MIGRATE",
-  "rationale": "Explicación técnica del veredicto."
-}
-```
+
+    {
+      "audit_phase": "PRE_MIGRATION",
+      "received_hash": "<hash_aqui>",
+      "hash_is_valid_sha256": true,
+      "verdict": "APPROVED_TO_MIGRATE",
+      "rationale": "Explicación técnica del veredicto."
+    }
 ```
 
 ### 8.5.4. Modo Junior (Core Dev) - Test Ciego Post-Migración
@@ -175,15 +174,14 @@ hash_test_ciego_post_migracion: {post_migration_hash}
 
 # FORMATO DE SALIDA
 Devuelve tu análisis en formato JSON:
-```json
-{
-  "comparison_result": "MATCH",
-  "baseline_hash": "<hash>",
-  "new_hash": "<hash>",
-  "final_verdict": "MIGRATION_SUCCESS_APPROVED",
-  "architectural_note": "Justificación basada en el determinismo del motor."
-}
-```
+
+    {
+      "comparison_result": "MATCH",
+      "baseline_hash": "<hash>",
+      "new_hash": "<hash>",
+      "final_verdict": "MIGRATION_SUCCESS_APPROVED",
+      "architectural_note": "Justificación basada en el determinismo del motor."
+    }
 ```
 
 ### 8.5.6. Modo Senior (DevOps)
