@@ -1,0 +1,73 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:PlaybookDesktop.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:md="clr-namespace:Markdown.Avalonia;assembly=Markdown.Avalonia"
+        mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
+        x:Class="PlaybookDesktop.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="Agent Playbook - Book Mode"
+        Background="#0E1117">
+
+    <Design.DataContext>
+        <vm:MainViewModel/>
+    </Design.DataContext>
+
+    <SplitView IsPaneOpen="{Binding IsPaneOpen}"
+               DisplayMode="CompactInline"
+               OpenPaneLength="320"
+               CompactPaneLength="0"
+               Background="#0E1117">
+        
+        <SplitView.Pane>
+            <Border Background="#161B22" BorderBrush="#30363D" BorderThickness="0,0,1,0">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="ÍNDICE" FontWeight="Bold" FontSize="16" Foreground="#8B949E" Margin="15,20,15,10" />
+                    
+                    <TreeView ItemsSource="{Binding Volumes}" 
+                              SelectedItem="{Binding SelectedChapter}"
+                              Background="Transparent"
+                              BorderThickness="0"
+                              Padding="0,0,10,20">
+                        <TreeView.DataTemplates>
+                            <TreeDataTemplate DataType="vm:PlaybookVolume" ItemsSource="{Binding Chapters}">
+                                <TextBlock Text="{Binding Title}" FontWeight="Bold" Foreground="#8B949E" FontSize="14" Padding="0,5" TextWrapping="Wrap"/>
+                            </TreeDataTemplate>
+                            <DataTemplate DataType="vm:PlaybookChapter">
+                                <TextBlock Text="{Binding Title}" Foreground="#C9D1D9" FontSize="13" Padding="0,3" TextWrapping="Wrap"/>
+                            </DataTemplate>
+                        </TreeView.DataTemplates>
+                    </TreeView>
+                </DockPanel>
+            </Border>
+        </SplitView.Pane>
+
+        <SplitView.Content>
+            <Grid RowDefinitions="Auto, *">
+                <ToggleButton Grid.Row="0" Margin="20,20,0,0" HorizontalAlignment="Left"
+                              Content="☰" FontSize="24" Background="Transparent" Foreground="#C9D1D9"
+                              IsChecked="{Binding IsPaneOpen, Mode=TwoWay}"
+                              BorderThickness="0"
+                              Cursor="Hand" />
+                              
+                <ScrollViewer Grid.Row="1" Padding="40,10,40,120">
+                    <md:MarkdownScrollViewer Markdown="{Binding SelectedChapter.Content}">
+                        <md:MarkdownScrollViewer.Styles>
+                            <Style Selector="Border.CodeBlock">
+                                <Setter Property="Margin" Value="0,15,0,15" />
+                                <Setter Property="Padding" Value="15" />
+                                <Setter Property="CornerRadius" Value="6" />
+                                <Setter Property="Background" Value="#161B22" />
+                                <Setter Property="BorderBrush" Value="#30363D" />
+                                <Setter Property="BorderThickness" Value="1" />
+                            </Style>
+                        </md:MarkdownScrollViewer.Styles>
+                    </md:MarkdownScrollViewer>
+                </ScrollViewer>
+            </Grid>
+        </SplitView.Content>
+    </SplitView>
+
+</Window>
