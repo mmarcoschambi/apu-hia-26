@@ -4626,7 +4626,7 @@ class AdvancedVectorBTEngine:
             )
 
         # Calculate metrics
-        total_return = (equity_curve.iloc[-1] - self.initial_capital) / self.initial_capital
+        total_return = (equity_curve.dropna().iloc[-1] - self.initial_capital) / self.initial_capital if not equity_curve.dropna().empty else 0
         returns = equity_curve.pct_change(fill_method=None).dropna()
         sharpe = returns.mean() / (returns.std() + 1e-10) * np.sqrt(252) if len(returns) > 0 else 0
 
@@ -4638,8 +4638,8 @@ class AdvancedVectorBTEngine:
         days_trading = len(equity_curve)
         years_trading = days_trading / 252  # 252 trading days per year
         annualized_return = (
-            (equity_curve.iloc[-1] / self.initial_capital) ** (1 / years_trading) - 1
-            if years_trading > 0 and total_return > -1
+            (equity_curve.dropna().iloc[-1] / self.initial_capital) ** (1 / years_trading) - 1
+            if years_trading > 0 and total_return > -1 and not equity_curve.dropna().empty
             else 0
         )
 

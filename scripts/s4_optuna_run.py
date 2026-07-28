@@ -73,6 +73,14 @@ def define_search_space() -> Dict[str, Any]:
         "use_atr_stop": {"type": "categorical", "choices": [True, False]},
         "atr_stop_multiplier": {"type": "float", "low": 1.2, "high": 2.5},
         "atr_trailing_multiplier": {"type": "float", "low": 1.8, "high": 3.5},
+        "tp1_r": {"type": "float", "low": 1.0, "high": 3.0},
+        "tp2_r": {"type": "float", "low": 2.0, "high": 5.0},
+        "use_breadth_filter": {"type": "categorical", "choices": [True, False]},
+        "breadth_filter_threshold": {"type": "float", "low": 0.1, "high": 0.5},
+        "use_market_regime_filter": {"type": "categorical", "choices": [True, False]},
+        "max_vix_threshold": {"type": "float", "low": 20.0, "high": 40.0},
+        "require_spy_above_sma50": {"type": "categorical", "choices": [True, False]},
+        "min_consolidation_days": {"type": "int", "low": 3, "high": 15},
     }
 
 
@@ -91,6 +99,14 @@ def build_engine_kwargs_from_params(params: Dict[str, Any]) -> Dict[str, Any]:
         "use_atr_stop": params.get("use_atr_stop", False),
         "atr_stop_multiplier": params.get("atr_stop_multiplier", 1.5),
         "atr_trailing_multiplier": params.get("atr_trailing_multiplier", 2.5),
+        "tp1_r": params.get("tp1_r", 2.0),
+        "tp2_r": params.get("tp2_r", 3.0),
+        "use_breadth_filter": params.get("use_breadth_filter", False),
+        "breadth_filter_threshold": params.get("breadth_filter_threshold", 0.3),
+        "use_market_regime_filter": params.get("use_market_regime_filter", False),
+        "max_vix_threshold": params.get("max_vix_threshold", 25.0),
+        "require_spy_above_sma50": params.get("require_spy_above_sma50", False),
+        "min_consolidation_days": params.get("min_consolidation_days", 5),
         "fees": params.get("fees", 0.001),
         "slippage": params.get("slippage", 0.001),
     }
@@ -303,7 +319,7 @@ def run_main_optimization(
 def generate_candidates(study: optuna.Study, top_n: int = 10) -> List[Dict]:
     """Genera lista de candidatos desde study."""
     trials = sorted(
-        study.trials, key=lambda t: t.value if t.value else -999, reverse=True
+        study.trials, key=lambda t: (t.value if t.value else -999, -t.number), reverse=True
     )
 
     candidates = []
@@ -489,7 +505,7 @@ def apply_gates_to_candidates(
                 if isinstance(v, dict) and not v.get("passed")
             ]
             logger.warning(
-                f"  ❌ Candidate {cid} REJECTED — failed: {failed} "
+                f"  [REJECTED] Candidate {cid} REJECTED — failed: {failed} "
                 f"(MDD={mdd_pct:.1f}%, ruin={hard_ruin:.3f}, cost={cost_robust})"
             )
 
@@ -525,8 +541,14 @@ def main():
         )
         reduced_space = reduce_search_space(importances, args.top_params)
     else:
-        logger.info("Resuming — skipping pilot, using full space")
-        reduced_space = full_space
+        try:
+            pilot_study = optuna.load_study(study_name="pilot", storage=f"sqlite:///{OUTPUTS_DIR}/pilot_study.db")
+            importances = optuna.importance.get_param_importances(pilot_study)
+            reduced_space = reduce_search_space(importances, args.top_params)
+            logger.info("Resuming — loaded importances from existing pilot study")
+        except Exception as e:
+            logger.warning(f"Could not load pilot study for resume, using full space: {e}")
+            reduced_space = full_space
 
     # Stage 2: Main
     main_trials = args.trials - args.pilot_trials
@@ -578,7 +600,7 @@ def main():
         OUTPUTS_DIR
         / f"results_{args.study_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     )
-    with open(results_path, "w") as f:
+    with open(results_path, "w", encoding="utf-8") as f:
         json.dump(
             {
                 "study_name": args.study_name,
@@ -593,9 +615,10 @@ def main():
             f,
             indent=2,
             default=str,
+            ensure_ascii=False,
         )
 
-    logger.info(f"✅ Results saved: {results_path}")
+    logger.info(f"[OK] Results saved: {results_path}")
 
 
 if __name__ == "__main__":
