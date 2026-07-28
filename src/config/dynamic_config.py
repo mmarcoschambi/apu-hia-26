@@ -14,6 +14,8 @@ from typing import Dict, Any, Optional
 CONFIG_PATH = Path("config/production_config.json")
 
 
+from src.config.config_loader import load_production_config as _canonical_load
+
 def load_production_config(config_file: Optional[str] = None) -> Dict[str, Any]:
     """
     Load production configuration from JSON file.
@@ -24,15 +26,7 @@ def load_production_config(config_file: Optional[str] = None) -> Dict[str, Any]:
     Returns:
         Dict with all configuration parameters organized by tiers
     """
-    path = Path(config_file) if config_file else CONFIG_PATH
-
-    if not path.exists():
-        raise FileNotFoundError(f"Config file not found: {path}")
-
-    with open(path, "r") as f:
-        config = json.load(f)
-
-    return config
+    return _canonical_load(config_file)
 
 
 def flatten_config(config: Dict[str, Any]) -> Dict[str, Any]:

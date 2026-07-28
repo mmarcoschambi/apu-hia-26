@@ -64,9 +64,9 @@ except ImportError as e:
     sys.exit(1)
 
 
-COMBOS_DIR = Path(__file__).resolve().parent / "config" / "combos"
-OUTPUT_DIR = Path(__file__).resolve().parent / "config" / "combo_results"
-OUTPUT_DIR.mkdir(exist_ok=True)
+COMBOS_DIR = Path(__file__).resolve().parent.parent / "config" / "combos"
+OUTPUT_DIR = Path(__file__).resolve().parent.parent / "config" / "combo_results"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 SCREENER_CACHE = ScreenerCacheManager()
 
 
@@ -822,6 +822,9 @@ def export_combo_result(
     score: float,
     validation_passed: bool,
     validation_result=None,
+    start_date: str = "N/A",
+    end_date: str = "N/A",
+    universe_size: int = 39,
 ) -> Path:
     """Export optimized combo result to JSON.
 
@@ -851,6 +854,12 @@ def export_combo_result(
         "optimization_score": round(score, 3),
         "screener": combo["screener"]["name"],
         "pattern": combo["pattern"]["signal_type"],
+        "universe_size": universe_size,
+        "period": {
+            "start": start_date,
+            "end": end_date,
+            "initial_capital": 100000
+        },
         "tier1_exits": tier1_params,
         "tier2_filters": tier2_filters,
         "tier3_fixed": combo["tier3_fixed"],
@@ -967,7 +976,7 @@ def run_combo_optimization(
     ]
     min_windows_required = 2  # research (2/3); production strict use 3
 
-    validation_passed = True
+    validation_passed = False  # Safe default: only real OOS validation sets True
     validation_result = None
     oos_score = score
     train_dates = (start_date, end_date)
@@ -1089,6 +1098,9 @@ def run_combo_optimization(
         score,
         validation_passed,
         validation_result=validation_result,
+        start_date=start_date,
+        end_date=end_date,
+        universe_size=len(screened_universe) if screened_universe is not None else 0,
     )
 
     return {

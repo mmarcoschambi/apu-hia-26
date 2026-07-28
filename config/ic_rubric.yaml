@@ -18,11 +18,15 @@ combo_decisions:
   combo_pullback_entry:
     status: INCUBATOR_OBSERVATIONAL
     capital_enabled: false
+    paper_trading_capital_usd: 0
   combo_pure_momentum:
     status: PAPER_TRADING_ACTIVE
-    capital_paper_usd: 100000
+    capital_enabled: true
+    paper_trading_capital_usd: 100000
   combo_aggressive_momentum:
     status: NO_GO
+    capital_enabled: false
+    paper_trading_capital_usd: 0
     archived_operationally: true
     notes: "Descartado por colapso en 2024 y dependencia de regimen."
 

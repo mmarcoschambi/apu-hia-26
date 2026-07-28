@@ -1,0 +1,55 @@
+........................................................................ [ 25%]
+........................................................................ [ 50%]
+..........................sss........................................... [ 75%]
+.....................................................................    [100%]
+============================== warnings summary ===============================
+.venv\Lib\site-packages\openbb_core\provider\utils\client.py:65
+  C:\dev\trade\p\momentum-v2\.venv\Lib\site-packages\openbb_core\provider\utils\client.py:65: DeprecationWarning: Inheritance class ClientSession from ClientSession is discouraged
+    class ClientSession(aiohttp.ClientSession):
+
+.venv\Lib\site-packages\openbb_core\app\model\system_settings.py:77
+  C:\dev\trade\p\momentum-v2\.venv\Lib\site-packages\openbb_core\app\model\system_settings.py:77: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.13/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    @model_validator(mode="after")  # type: ignore
+
+.venv\Lib\site-packages\openbb_congress_gov\models\congress_amendments.py:75
+  C:\dev\trade\p\momentum-v2\.venv\Lib\site-packages\openbb_congress_gov\models\congress_amendments.py:75: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.13/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    @model_validator(mode="after")
+
+.venv\Lib\site-packages\openbb_congress_gov\models\congress_bills.py:87
+  C:\dev\trade\p\momentum-v2\.venv\Lib\site-packages\openbb_congress_gov\models\congress_bills.py:87: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.13/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    @model_validator(mode="after")
+
+.venv\Lib\site-packages\openbb_intrinio\models\equity_historical.py:83
+  C:\dev\trade\p\momentum-v2\.venv\Lib\site-packages\openbb_intrinio\models\equity_historical.py:83: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.13/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    @model_validator(mode="after")
+
+.venv\Lib\site-packages\openbb_intrinio\models\forward_eps_estimates.py:52
+  C:\dev\trade\p\momentum-v2\.venv\Lib\site-packages\openbb_intrinio\models\forward_eps_estimates.py:52: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.13/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    @model_validator(mode="after")
+
+.venv\Lib\site-packages\openbb_intrinio\models\forward_sales_estimates.py:52
+  C:\dev\trade\p\momentum-v2\.venv\Lib\site-packages\openbb_intrinio\models\forward_sales_estimates.py:52: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.13/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    @model_validator(mode="after")
+
+.venv\Lib\site-packages\openbb_intrinio\models\options_chains.py:118
+  C:\dev\trade\p\momentum-v2\.venv\Lib\site-packages\openbb_intrinio\models\options_chains.py:118: PydanticDeprecatedSince212: Using `@model_validator` with mode='after' on a classmethod is deprecated. Instead, use an instance method. See the documentation at https://docs.pydantic.dev/2.13/concepts/validators/#model-after-validator. Deprecated in Pydantic V2.12 to be removed in V3.0.
+    @model_validator(mode="after")
+
+tests/test_fast_filters.py::test_traditional_method
+  C:\dev\trade\p\momentum-v2\.venv\Lib\site-packages\_pytest\python.py:171: PytestReturnNotNoneWarning: Test functions should return None, but tests/test_fast_filters.py::test_traditional_method returned <class 'tuple'>.
+  Did you mean to use `assert` instead of `return`?
+  See https://docs.pytest.org/en/stable/how-to/assert.html#return-not-none for more information.
+    warnings.warn(
+
+tests/test_fast_filters.py::test_fast_method
+  C:\dev\trade\p\momentum-v2\.venv\Lib\site-packages\_pytest\python.py:171: PytestReturnNotNoneWarning: Test functions should return None, but tests/test_fast_filters.py::test_fast_method returned <class 'tuple'>.
+  Did you mean to use `assert` instead of `return`?
+  See https://docs.pytest.org/en/stable/how-to/assert.html#return-not-none for more information.
+    warnings.warn(
+
+tests/test_regime_detection.py::test_smoke_end_to_end_ml_regime
+  C:\dev\trade\p\momentum-v2\.venv\Lib\site-packages\sklearn\metrics\_classification.py:2939: UserWarning: y_pred contains classes not in y_true
+    warnings.warn("y_pred contains classes not in y_true")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+282 passed, 3 skipped, 11 warnings in 42.97s

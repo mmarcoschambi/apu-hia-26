@@ -5,13 +5,17 @@ This document outlines ongoing observations, technical debt, and non-blocking is
 ---
 
 ## 1. Optimizer Export Bug (Staging Metadata)
-* **Status**: Logged / Non-blocking
+* **Owner**: Quant Lead
+* **Target Date**: 2026-07-17
+* **Status**: Resolved ✅
 * **Observation**: 
-  When `optimize_combo.py` finishes and exports the results, `universe_size: 39` and `period: N/A` are written in `combo_pure_momentum_optimized.json`.
-* **Impact**: 
-  This causes incorrect staging metadata representation. The canonical loaders bypass this gracefully, but the export logic in `optimize_combo.py` should be corrected to properly capture the actual run dates (`start_date`, `end_date`) and the real size of the filtered universe instead of falling back to default values.
+  When `optimize_combo.py` finished and exported the results, `universe_size: 39` and `period: N/A` were written due to missing properties in the JSON generator, triggering defaults in `sync_combo_config.py`.
+* **Resolution**: 
+  Corrected `export_combo_result` and its caller in `optimize_combo.py` to capture and write the actual `start_date`, `end_date`, and real size of the filtered universe (`len(screened_universe)`).
 
 ## 2. Drop in Relative Strength Coverage (`rs_coverage_pct`)
+* **Owner**: Quant Lead
+* **Target Date**: 2026-07-31
 * **Status**: Logged / Under Investigation
 * **Observation**: 
   The Relative Strength coverage percentage (`rs_coverage_pct`) dropped significantly from `96.81%` to `66.15%`.
@@ -21,17 +25,47 @@ This document outlines ongoing observations, technical debt, and non-blocking is
   Perform a data audit on the historical caching pipelines. Verify database population script outputs and identify whether certain tickers fail data validation, leading to exclusions from the RS calculations.
 
 ## 3. Loader Reconciliation (YAML vs JSON/Canonical)
-* **Status**: Tech Debt
+* **Owner**: Quant Lead
+* **Target Date**: 2026-07-17
+* **Status**: Resolved ✅
 * **Observation**: 
-  The configuration loader in `app.py` uses a custom YAML loading implementation, whereas the core system's canonical loader (`src/integration/combo_loader.py`) loads JSON configs from `outputs/best_combos_run/`.
-* **Impact**: 
-  Risk of drift between how variables are hydrated in the Streamlit UI dashboard and how the live signal engine runs.
-* **Next Steps**: 
-  Refactor `app.py` to use `src/integration/combo_loader.py` as its single source of truth for configuration loading, ensuring identical parameter parsing and fallback mechanisms.
+  Discrepancies and code duplication between how variables were loaded and validated in `app.py` vs the core system's canonical loader (`src/config/config_loader.py`).
+* **Resolution**: 
+  Refactored `src/config/dynamic_config.py` to delegate `load_production_config` directly to `src/config/config_loader.py`, enforcing canonical schema validation across all UI entries and live signal scripts.
 
 ## 4. Production Monitoring: Dynamic Sizing E25
-* **Status**: Production Watchlist
+* **Owner**: Quant Lead
+* **Target Date**: 2026-07-31
+* **Status**: Active Watchlist
 * **Observation**: 
   The E25 sizing model and the Atlas v2 curve are active in production on the VPS (`max_dist_sma20: 13.60%`, `max_exposure_pct: 0.294%`).
 * **Next Steps**: 
-  Monitor the performance of E25 sizing during the first few weeks. Track metric deviations, drawdowns, and execution parameters against the baseline (Russell + E25: 96.12% Return, -35.09% MDD) to verify that local sandbox results match live execution in the production environment.
+  Monitor performance on a weekly basis using the metrics defined below to ensure VPS results converge with local laboratory baselines.
+
+## 5. Governance Gaps: Combos Missing in `ic_rubric.yaml`
+* **Owner**: Quant Lead
+* **Target Date**: 2026-08-15
+* **Status**: Logged / Tech Debt
+* **Observation**: 
+  Four active or developmental combo configurations (`ideal_setup`, `stage2_breakout`, `universal_any`, and `top5`) lack explicit governance declarations and configurations inside `config/ic_rubric.yaml`.
+* **Impact**: 
+  Risk of drift or execution of unapproved settings if these combos are promoted without explicit committee oversight.
+* **Next Steps**: 
+  Register all developmental and benchmark combos in `ic_rubric.yaml` under unified governance parameters, defining their specific capital limits and operational phases.
+
+---
+
+## 6. Production Monitoring Framework (E25 / Atlas v2)
+
+To ensure the integrity of live execution, the E25 sizing model and Atlas v2 curve will be audited under the following framework:
+
+* **Monitoring Cadence**: Weekly (every Saturday after market close).
+* **Target Baseline**: Russell + E25 (96.12% Return, -35.09% MDD).
+* **Key Metrics**:
+  1. **Sharpe Ratio OOS**: Weekly and 30-day rolling (Target: `>= 1.50`).
+  2. **Max Drawdown OOS**: Absolute drawdown during live tracking (Target: `<= 10.0%`).
+  3. **Win Rate (WR)**: Percentage of profitable closed trades (Target: `>= 40.0%`).
+  4. **Portfolio Exposure vs VIX**: Validation that `max_exposure_pct` correctly downscales when VIX rises above 25.0.
+  5. **Parity Drift**: Variance in execution price/return between local simulation and VPS live logs (Target: `<= 0.50%` average drift per trade).
+
+
