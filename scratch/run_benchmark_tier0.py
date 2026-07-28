@@ -48,7 +48,7 @@ parser.add_argument("--start", default="2023-01-01")
 parser.add_argument("--end", default="2024-12-31")
 parser.add_argument("--capital", type=float, default=100000.0)
 parser.add_argument("--universe-size", type=int, default=200)
-parser.add_argument("--index", default="RUSSELL2000", choices=["SP500", "RUSSELL1000", "RUSSELL2000", "NASDAQ100"])
+parser.add_argument("--index", default="RUSSELL1000", choices=["SP500", "RUSSELL1000", "RUSSELL2000", "NASDAQ100"])
 parser.add_argument("--tag", default="golden_baseline")
 parser.add_argument("--cold", action="store_true", help="Cold run flag (no page cache)")
 parser.add_argument("--skip-backtest", action="store_true", help="Only measure data + features")
@@ -63,7 +63,7 @@ parser.add_argument("--exclude-sectors", nargs="+", default=[], metavar="SECTOR"
 parser.add_argument("--universe-source", default="pit", choices=["pit", "shadow_finviz"])
 args = parser.parse_args()
 
-GOLDEN_DIR = PROJECT_ROOT / "outputs" / "golden" / "windows_baseline_2026-07-23"
+GOLDEN_DIR = PROJECT_ROOT / "outputs" / "golden" / "windows_baseline_2026-07-24"
 GOLDEN_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR = GOLDEN_DIR / "artifacts"
 OUTPUT_DIR.mkdir(exist_ok=True)
@@ -189,7 +189,7 @@ def _hash_json_sorted(path: Path) -> str:
 # MAIN BENCHMARK
 # ===================================================================
 def run_tier0():
-    today_str = "2026-07-23"
+    today_str = "2026-07-24"
     env_info = {
         "host": os.environ.get("COMPUTERNAME", "unknown"),
         "os": f"{sys.platform}",
@@ -429,7 +429,7 @@ def run_tier0():
         # ---------------------------------------------------------------
         # Manifest (7 dimensions)
         # ---------------------------------------------------------------
-        raw_data_dir = PROJECT_ROOT / "data" / "golden" / "windows_baseline_2026-07-23" / "raw"
+        raw_data_dir = PROJECT_ROOT / "data" / "golden" / "windows_baseline_2026-07-24" / "raw"
         src_dir = PROJECT_ROOT / "src"
         config_file = PROJECT_ROOT / "config" / "production_config.json"
         lockfile = PROJECT_ROOT / "requirements-lock.txt"
@@ -496,7 +496,7 @@ def run_tier0():
 def _dump_early(quality_report: dict, peak_mib: float):
     timing = StageTimer.summary()
     result = {
-        "environment": {"skip_backtest": True, "date": "2026-07-23"},
+        "environment": {"skip_backtest": True, "date": "2026-07-24"},
         "timing_seconds": timing,
         "total_pipeline_seconds": sum(timing.values()),
         "memory_mib": {"peak_overall": peak_mib},
@@ -544,8 +544,8 @@ def write_golden_contract():
             "una señal (0/1), un trade o un ranking se considera fallo "
             "fatal de regresión."
         ),
-        "generated_at": "2026-07-23",
-        "baseline_tag": "baseline-windows-ntfs-2026-07-23",
+        "generated_at": "2026-07-24",
+        "baseline_tag": "baseline-windows-ntfs-2026-07-24",
     }
     path = GOLDEN_DIR / "golden_contract.json"
     with open(path, "w") as f:

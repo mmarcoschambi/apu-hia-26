@@ -93,3 +93,5 @@ sdd/
 # Local Dumps and Validation
 scratch/llm_dump_*
 _validation_out.txt
+apps/playbook/bin/
+apps/playbook/obj/

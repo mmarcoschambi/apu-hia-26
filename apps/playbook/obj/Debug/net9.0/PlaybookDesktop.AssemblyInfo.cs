@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("PlaybookDesktop")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+88800ec04b60425dde655f1209e46f39c80d3889")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8b480e7e1796b1c31416b632f19ffc2aa48a45cd")]
 [assembly: System.Reflection.AssemblyProductAttribute("PlaybookDesktop")]
 [assembly: System.Reflection.AssemblyTitleAttribute("PlaybookDesktop")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
