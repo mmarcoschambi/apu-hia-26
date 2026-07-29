@@ -1,0 +1,21 @@
+[Unit]
+Description=Momentum Telegram Service
+Documentation=https://github.com/malcolmmm/momentum-v2
+After=network.target
+BindsTo=momentum-trader.service
+
+[Service]
+Type=simple
+User=momentum
+Group=momentum
+WorkingDirectory=/home/marcos/trade/momentum-v2
+EnvironmentFile=/home/marcos/trade/momentum-v2/.env
+ExecStart=/home/marcos/trade/momentum-v2/.venv/bin/python scripts/telegram_bot_listener.py
+Restart=always
+RestartSec=10
+PIDFile=/home/marcos/trade/momentum-v2/run/momentum-telegram.pid
+StandardOutput=append:/home/marcos/trade/momentum-v2/logs/live/telegram_bot.log
+StandardError=append:/home/marcos/trade/momentum-v2/logs/live/telegram_bot.log
+
+[Install]
+WantedBy=multi-user.target
