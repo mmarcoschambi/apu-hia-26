@@ -28,7 +28,7 @@ GATE_PF = 1.3
 GATE_CALMAR = 1.0
 GATE_MDD_DURATION_DAYS = 126  # ~6 months
 GATE_HARD_RUIN = 0.05  # 5%
-GATE_DEGRADATION = 0.20  # 20%
+GATE_DEGRADATION = 0.25  # 25%
 
 
 def _normalize_cost_label(label: Optional[str]) -> Optional[str]:

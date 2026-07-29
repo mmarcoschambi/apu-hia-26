@@ -446,7 +446,7 @@ def get_active_mode(health_score: int) -> dict:
         }
     else:
         return {
-            "mode": "DEFENSE_TOTAL",
+            "mode": "DEFENSE_FULL",
             "use_theme_group_filter": True,    # Modo Defensa total
             "risk_multiplier": 0.35,           # Gran reducción de riesgo
         }

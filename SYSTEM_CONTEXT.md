@@ -50,9 +50,12 @@ El sistema es auto-consciente de su entorno (**Auto-Aware**):
  
 ### 🟡 En Desarrollo / Shadow Mode
 *   **Variante E (Divergencia Temática):** Monitoreo pasivo en shadow trading para acumular ~30-40 señales reales antes de su promoción.
+*   **Purged Walk-Forward Cross-Validation:** Implementado en `src/validation/purged_walk_forward.py` con purge (10d) y embargo (5d). Degradation gate: 25% (GATE_DEGRADATION actualizado en s4_gates.py). Integrado como Phase 2b opcional en `ResearchGate.validate_strategy()`.
+*   **Shadow Convergence Audit:** `scripts/convergence_check.py` con Jaccard scoring, price discrepancy gate (<2%), y fallback VPS_UNAVAILABLE. `daily_scan.py` ahora emite `scan_metadata.json`.
+*   **VPS Deploy & Control Tower:** `scripts/sv/` con systemd units, health check, PID lifecycle. `deploy_vps.sh` validado con 5-step pipeline. `start_live_session.sh` migrado a systemd-first con fallback nohup+PID.
  
 ### 🔴 Bloqueado / Pendiente
-*   **Dynamic Switch (Ataque/Defensa):** Bloqueado hasta implementar la precarga histórica del `health_score` en la base de datos local.
+*   **Dynamic Switch (Ataque/Defensa):** **ACTIVO.** Precarga histórica completada (8,195 registros, 1993-2026). `health_score` (0-7) calculado vía `src/utils/market_health.py` y persistido en `daily_health_scores` por `scripts/build_health_scores.py`. `config/feature_flags.get_active_mode()` mapea score a ATTACK/DEFENSE_PARTIAL/DEFENSE_FULL con risk multipliers y theme filter. Script de comparación three-way: `scripts/run_dynamic_switch_backtest.py`.
  
 ### ❌ Descartado Definitivamente
 *   **Modelos Random Forest tradicionales de sklearn:** Reemplazados por LightGBM debido a su velocidad de entrenamiento y feature importance nativa óptima para series de tiempo.
