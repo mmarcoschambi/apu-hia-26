@@ -54,6 +54,8 @@ from scipy import stats
 from itertools import combinations
 import warnings
 
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -116,6 +118,10 @@ class ValidationResult:
     # Walk-forward metrics
     wfv_r2: float = 0.0
     wfv_predictions_vs_actual: List[Tuple[float, float]] = field(default_factory=list)
+
+    # Purged walk-forward CV metrics (Phase 2b)
+    purged_wf_degradation_pct: float = 0.0
+    purged_wf_passed: bool = False
 
     # Bootstrap metrics
     bootstrap_p5: float = -100.0
@@ -425,6 +431,7 @@ class ResearchGate:
         n_cscv_trials: int = 100,
         verbose: bool = True,
         template_engine=None,
+        purged_cv_config: Optional[Dict[str, Any]] = None,
     ) -> ValidationResult:
         """
         Run full validation pipeline on a strategy using AdvancedVectorBTEngine.
@@ -594,6 +601,65 @@ class ResearchGate:
                 logger.info(
                     f"   PBO Score: {result.pbo_score:.2%} (from {len(returns_list)} param variations)"
                 )
+
+        # Phase 2b: Purged Walk-Forward Cross-Validation (optional)
+        if purged_cv_config is not None:
+            if verbose:
+                logger.info("\n[📊] PHASE 2b: PURGED WALK-FORWARD CROSS-VALIDATION")
+
+            purge_days = purged_cv_config.get("purge_days", 10)
+            embargo_days = purged_cv_config.get("embargo_days", 5)
+            n_folds = purged_cv_config.get("n_folds", 4)
+
+            # Local import to avoid circular dependency at module level
+            from src.validation.purged_walk_forward import PurgedWalkForwardValidator
+
+            wf_validator = PurgedWalkForwardValidator(
+                n_folds=n_folds, purge_days=purge_days, embargo_days=embargo_days
+            )
+
+            fold_defs = purged_cv_config.get("fold_definitions")
+            if fold_defs is None:
+                fold_defs = wf_validator.generate_folds(train_start="2019-01-01")
+
+            try:
+                wf_report = wf_validator.validate(
+                    engine_class=engine_class,
+                    params=params,
+                    universe=universe,
+                    fold_definitions=fold_defs,
+                )
+
+                result.purged_wf_degradation_pct = wf_report.degradation_pct
+                result.purged_wf_passed = wf_report.gate_passed
+
+                if verbose:
+                    logger.info(
+                        f"   IS Sharpe (mean): {wf_report.is_sharpe_mean:.3f}"
+                    )
+                    logger.info(
+                        f"   OOS Sharpe (mean): {wf_report.oos_sharpe_mean:.3f}"
+                    )
+                    logger.info(
+                        f"   Degradation: {wf_report.degradation_pct:.1f}%"
+                    )
+                    logger.info(
+                        f"   Gate: {'PASS' if wf_report.gate_passed else 'REJECT'}"
+                    )
+                    if wf_report.warnings:
+                        for w in wf_report.warnings:
+                            logger.warning(f"   ⚠ {w}")
+
+                if not wf_report.gate_passed:
+                    result.rejection_reasons.append(
+                        f"Purged CV rejected: degradation {wf_report.degradation_pct:.1f}% > 25%"
+                    )
+                    result.validation_passed = False
+
+            except Exception as e:
+                logger.error(f"Purged CV failed: {e}")
+                result.rejection_reasons.append(f"Purged CV execution failed: {str(e)}")
+                result.validation_passed = False
 
         # Bootstrap analysis on test period returns
         if len(test_equity) > 0:

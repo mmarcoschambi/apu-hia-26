@@ -43,6 +43,12 @@ from src.validation.robustness_metrics import (
     calculate_comprehensive_robustness_report,
 )
 
+from src.validation.purged_walk_forward import (
+    PurgedWalkForwardValidator,
+    PurgedWFReport,
+    FoldMetrics,
+)
+
 __all__ = [
     # Research Gate
     "ResearchGate",
@@ -59,6 +65,10 @@ __all__ = [
     "RobustObjectiveConfig",
     "robust_objective_function",
     "calculate_comprehensive_robustness_report",
+    # Purged Walk-Forward CV
+    "PurgedWalkForwardValidator",
+    "PurgedWFReport",
+    "FoldMetrics",
 ]
 
 __version__ = "1.0.0"
