@@ -55,6 +55,32 @@ def _get_rss_mb() -> float:
         return 0.0
 
 
+def compute_profit_factor(trades_df: "pd.DataFrame") -> float:
+    """
+    Calcula el profit factor a partir del DataFrame de trades.
+
+    Sentinel: devuelve 999.0 cuando total_loss == 0 y total_profit > 0
+    (todos los trades son ganadores). Este valor es intencional para
+    indicar que el trial no tuvo trades perdedores, no un error de calculo.
+    Clasificar como data leakage solo si trade_count > 20 con win_rate 100%.
+
+    Args:
+        trades_df: DataFrame con columna 'pnl' por trade.
+
+    Returns:
+        float: ratio total_profit/total_loss, 999.0 (sentinel) o 0.0.
+    """
+    if trades_df is None or len(trades_df) == 0:
+        return 0.0
+    total_profit = trades_df[trades_df["pnl"] > 0]["pnl"].sum()
+    total_loss = abs(trades_df[trades_df["pnl"] < 0]["pnl"].sum())
+    if total_loss > 0:
+        return total_profit / total_loss
+    elif total_profit > 0:
+        return 999.0
+    return 0.0
+
+
 def prepare_numba_arrays(engine, release_dataframes: bool = False) -> Dict:
     """
     Convierte DataFrames a arrays numpy.
@@ -3771,16 +3797,7 @@ class AdvancedVectorBTEngine:
             winners = len(trades_df[trades_df["pnl"] > 0]) if len(trades_df) > 0 else 0
             win_rate = winners / all_exits_count if all_exits_count > 0 else 0
 
-            total_profit = trades_df[trades_df["pnl"] > 0]["pnl"].sum() if len(trades_df) > 0 else 0
-            total_loss = (
-                abs(trades_df[trades_df["pnl"] < 0]["pnl"].sum()) if len(trades_df) > 0 else 0
-            )
-            if total_loss > 0:
-                profit_factor = total_profit / total_loss
-            elif total_profit > 0:
-                profit_factor = 999.0
-            else:
-                profit_factor = 0.0
+            profit_factor = compute_profit_factor(trades_df)
 
             # Count unique executed entry positions (real trades)
             if trades_df is not None and not trades_df.empty:
@@ -4677,14 +4694,7 @@ class AdvancedVectorBTEngine:
         win_rate = winners / all_exits_count if all_exits_count > 0 else 0
 
         # Calculate Profit Factor
-        total_profit = trades_df[trades_df["pnl"] > 0]["pnl"].sum() if len(trades_df) > 0 else 0
-        total_loss = abs(trades_df[trades_df["pnl"] < 0]["pnl"].sum()) if len(trades_df) > 0 else 0
-        if total_loss > 0:
-            profit_factor = total_profit / total_loss
-        elif total_profit > 0:
-            profit_factor = 999.0
-        else:
-            profit_factor = 0.0
+        profit_factor = compute_profit_factor(trades_df)
 
         # Count unique executed entry positions (real trades)
         if trades_df is not None and not trades_df.empty:
