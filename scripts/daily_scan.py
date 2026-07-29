@@ -535,6 +535,24 @@ def run_daily_scan(date_str: str, max_tickers: int = 200):
     else:
         logger.warning("\nNo signals found today.")
 
+    # Save scan metadata for convergence audit (Track B, Phase 5)
+    # Ensures ALL scanned tickers are recorded, not just passed signals.
+    scan_metadata = {
+        "date": date_str,
+        "total_scanned": len(all_scan_tickers),
+        "total_signals": len(all_signals),
+        "total_rejection_records": len(rejection_audit),
+        "universe_sources": {
+            "local": len(tickers_local),
+            "finviz": len(tickers_finviz),
+        },
+        "regime_mode": active_mode.get("mode", "UNKNOWN"),
+        "health_score": int(health) if not isinstance(health, int) else health,
+    }
+    with open(out_dir / "scan_metadata.json", "w") as f:
+        json.dump(scan_metadata, f, indent=2)
+    logger.info(f"Saved scan metadata to {out_dir / 'scan_metadata.json'}")
+
     return all_signals
 
 
