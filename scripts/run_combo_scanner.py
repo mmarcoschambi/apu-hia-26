@@ -220,6 +220,99 @@ def _decision_to_row(d: SignalDecision) -> dict:
     }
 
 
+# --- Watchlist detail gate derivation ---
+GATES = ["last_base_entry", "last_liquidity", "last_quality", "last_consolidation"]
+
+
+def _derive_gate_status(decision: SignalDecision) -> dict[str, bool]:
+    """
+    Deriva el estado de las 4 gates de watchlist a partir de un SignalDecision.
+
+    Solo se conoce la PRIMERA gate que falló (reject_reason tiene la primera
+    razón de rechazo). Las gates que no fallaron en ese orden se asumen True
+    (lower bound de rechazo real).
+    """
+    if decision.passed:
+        return {g: True for g in GATES}
+
+    reason = (decision.reject_reason or "") + " " + (decision.screener_reason or "")
+    gates = {g: True for g in GATES}
+
+    if reason.startswith("screener_fail") or "screener_fail" in reason:
+        gates["last_base_entry"] = False
+    elif any(k in reason for k in ("rvol", "adr_pct", "consol_days", "dist_sma20", "consolidation")):
+        gates["last_consolidation"] = False
+    elif any(k in reason for k in ("dollar_vol", "volume")):
+        gates["last_liquidity"] = False
+    elif any(k in reason for k in ("rs_percentile", "trend_intensity", "ma_stack", "spy_above")):
+        gates["last_quality"] = False
+    # Si no hay match, dejamos todas True (no sabemos cuál falló exactamente)
+
+    return gates
+
+
+def _build_watchlist_detail(
+    universe: list[str],
+    df_map: dict[str, pd.DataFrame],
+    all_rejections: list[dict],
+) -> dict[str, dict]:
+    """
+    Construye watchlist_detail para todo el universo.
+
+    Para tickers evaluados: deriva las 4 gates del resultado del scanner.
+    Para tickers sin datos: todas las gates en False (sin_data).
+    """
+    # Indexar rejection results por ticker (tomar el primer agente)
+    rejection_by_ticker: dict[str, dict] = {}
+    for entry in all_rejections:
+        t = entry["ticker"]
+        if t not in rejection_by_ticker:
+            rejection_by_ticker[t] = entry
+
+    detail = {}
+    for ticker in universe:
+        if ticker in df_map:
+            entry = rejection_by_ticker.get(ticker)
+            if entry:
+                # Reconstruir SignalDecision-like object
+                passed = entry["passed_with_sector"]
+                reject_reason = entry.get("reject_reason_with_sector", "")
+                screener_reason = entry.get("screener_reason_with_sector", "")
+                # Usar un mock de SignalDecision para la derivación
+                mock = SignalDecision(
+                    ticker=ticker,
+                    mode="A",
+                    passed=passed,
+                    reject_reason=reject_reason,
+                )
+                mock.screener_reason = screener_reason
+                gates = _derive_gate_status(mock)
+                detail[ticker] = {
+                    **gates,
+                    "passed": passed,
+                    "reject_reason": reject_reason,
+                    "has_data": True,
+                }
+            else:
+                # Ticker with data but not in rejections — edge case
+                detail[ticker] = {
+                    **{g: True for g in GATES},
+                    "passed": True,
+                    "reject_reason": "",
+                    "has_data": True,
+                }
+        else:
+            # Ticker without data
+            detail[ticker] = {
+                **{g: False for g in GATES},
+                "passed": False,
+                "reject_reason": "no_data",
+                "has_data": False,
+            }
+
+    return detail
+
+
 def run_combo_scan(
     date: str | None = None,
     universe_source: str = "db",
@@ -398,8 +491,10 @@ def run_combo_scan(
                 "mode": effective_mode,
                 "passed_with_sector": d_with.passed,
                 "reject_reason_with_sector": d_with.reject_reason,
+                "screener_reason_with_sector": d_with.screener_reason,
                 "passed_without_sector": d_without.passed,
                 "reject_reason_without_sector": d_without.reject_reason,
+                "screener_reason_without_sector": d_without.screener_reason,
                 "blocked_by_sector": is_blocked,
                 "sector_etf": etf_symbol,
                 "sector_etf_dist": dist
@@ -434,6 +529,7 @@ def run_combo_scan(
             out_dir / "combined.csv", index=False
         )
 
+        watchlist_detail = _build_watchlist_detail(universe, df_map, all_rejections)
         summary = {
             "scan_date": today,
             "universe_source": universe_source,
@@ -445,6 +541,7 @@ def run_combo_scan(
                 {"ticker": s.ticker, "agent": s.mode, "score": s.entry_score}
                 for s in all_signals[:10]
             ],
+            "watchlist_detail": watchlist_detail,
         }
         with open(out_dir / "run_summary.json", "w") as f:
             json.dump(summary, f, indent=2, default=str)
