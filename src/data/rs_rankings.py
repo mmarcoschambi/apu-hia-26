@@ -30,15 +30,31 @@ def _get_conn() -> sqlite3.Connection:
 
 
 @lru_cache(maxsize=1048576)
-def _get_rs_percentile_cached(ticker: str, date: Optional[str], metric: str) -> Optional[float]:
+def _get_rs_percentile_cached(ticker: str, date: Optional[str], metric: str, max_age_days: Optional[int] = 5) -> Optional[float]:
     conn = _get_persistent_conn()
     if date:
-        query = f"SELECT {metric} FROM daily_rs_rankings WHERE ticker=? AND date=?"
+        query = f"SELECT date, {metric} FROM daily_rs_rankings WHERE ticker=? AND date=?"
         row = conn.execute(query, (ticker, date)).fetchone()
     else:
-        query = f"SELECT {metric} FROM daily_rs_rankings WHERE ticker=? ORDER BY date DESC LIMIT 1"
+        query = f"SELECT date, {metric} FROM daily_rs_rankings WHERE ticker=? ORDER BY date DESC LIMIT 1"
         row = conn.execute(query, (ticker,)).fetchone()
-    return row[0] if row else None
+        
+    if not row:
+        return None
+        
+    row_date, val = row
+    if date is None and max_age_days is not None:
+        from datetime import datetime
+        try:
+            db_date = datetime.strptime(row_date, "%Y-%m-%d")
+            age = (datetime.now() - db_date).days
+            if age > max_age_days:
+                logger.warning(f"RS data for {ticker} is stale (age={age}d > {max_age_days}d). Returning None.")
+                return None
+        except Exception:
+            pass
+            
+    return val
 
 
 def get_rs_percentile(
@@ -46,6 +62,7 @@ def get_rs_percentile(
     date: Optional[str] = None,
     metric: str = "rs_composite",
     conn: Optional[sqlite3.Connection] = None,
+    max_age_days: Optional[int] = 5,
 ) -> Optional[float]:
     """
     Retorna el percentil RS de un ticker en una fecha dada.
@@ -55,9 +72,10 @@ def get_rs_percentile(
         date:   Fecha YYYY-MM-DD. Si None, usa la última disponible.
         metric: 'rs_composite' | 'rs_60d_pct' | 'rs_20d_pct' | 'rs_5d_pct'
         conn:   Conexión opcional (para reutilizar)
+        max_age_days: Edad máxima permitida en días si date es None.
 
     Returns:
-        Percentil 0–100 o None si no hay datos.
+        Percentil 0–100 o None si no hay datos o están stale.
     """
     valid_metrics = {"rs_composite", "rs_60d_pct", "rs_20d_pct", "rs_5d_pct"}
     if metric not in valid_metrics:
@@ -65,14 +83,28 @@ def get_rs_percentile(
 
     if conn is not None:
         if date:
-            query = f"SELECT {metric} FROM daily_rs_rankings WHERE ticker=? AND date=?"
+            query = f"SELECT date, {metric} FROM daily_rs_rankings WHERE ticker=? AND date=?"
             row = conn.execute(query, (ticker, date)).fetchone()
         else:
-            query = f"SELECT {metric} FROM daily_rs_rankings WHERE ticker=? ORDER BY date DESC LIMIT 1"
+            query = f"SELECT date, {metric} FROM daily_rs_rankings WHERE ticker=? ORDER BY date DESC LIMIT 1"
             row = conn.execute(query, (ticker,)).fetchone()
-        return row[0] if row else None
+            
+        if not row:
+            return None
+            
+        row_date, val = row
+        if date is None and max_age_days is not None:
+            from datetime import datetime
+            try:
+                db_date = datetime.strptime(row_date, "%Y-%m-%d")
+                age = (datetime.now() - db_date).days
+                if age > max_age_days:
+                    return None
+            except Exception:
+                pass
+        return val
 
-    return _get_rs_percentile_cached(ticker, date, metric)
+    return _get_rs_percentile_cached(ticker, date, metric, max_age_days)
 
 
 def get_top_rs_tickers(
