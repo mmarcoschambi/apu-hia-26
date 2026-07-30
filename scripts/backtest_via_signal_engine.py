@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import hashlib
 import sqlite3
 import logging
 import pandas as pd
@@ -230,18 +231,53 @@ def run_backtest(
 
     logger.info(f"[SCANNING] Building PIT universes for each date (Index: {index_name})...")
     
-    # Load disk cache for universe builder to speed up consecutive backtest runs
+    # ------------------------------------------------------------------
+    # Disk cache for universe builder (auto-invalidates on param change)
+    # ------------------------------------------------------------------
     cache_dir = Path(".cache")
     cache_dir.mkdir(exist_ok=True)
     cache_file = cache_dir / f"universes_{index_name}_{max_tickers}.json"
-    universe_cache = {}
+
+    # Build params that affect the universe construction — cache is tied to these
+    _cache_params = {
+        "max_tickers": max_tickers,
+        "index_name": index_name,
+        "use_pit": use_pit,
+        "universe_source": universe_source,
+    }
+    cache_params_hash = hashlib.sha256(
+        json.dumps(_cache_params, sort_keys=True).encode()
+    ).hexdigest()
+
+    universe_cache: dict[str, list[str]] = {}
     if cache_file.exists():
         try:
             with open(cache_file, "r") as f:
-                universe_cache = json.load(f)
-            logger.info(f"Loaded {len(universe_cache)} cached universes from {cache_file}")
+                raw = json.load(f)
+            # Extract metadata from new format; treat legacy (no __meta__) as stale
+            if isinstance(raw, dict) and "__meta__" in raw:
+                cache_meta = raw.pop("__meta__", {})
+                universe_cache = {k: v for k, v in raw.items() if isinstance(v, list)}
+                stored_hash = cache_meta.get("params_hash", "")
+                if stored_hash != cache_params_hash:
+                    logger.warning(
+                        "Cache params mismatch (expected %s, got %s). Rebuilding...",
+                        cache_params_hash[:12], stored_hash[:12],
+                    )
+                    universe_cache = {}
+                else:
+                    logger.info(
+                        "Loaded %d cached universes from %s",
+                        len(universe_cache), cache_file,
+                    )
+            else:
+                # Legacy cache — no metadata, treat as stale
+                logger.warning(
+                    "Legacy cache at %s has no metadata; rebuilding from scratch.",
+                    cache_file,
+                )
         except Exception as e:
-            logger.warning(f"Error loading universe cache: {e}")
+            logger.warning("Error loading universe cache: %s", e)
 
     universe_by_date = {}
     superset_tickers = set()
@@ -287,7 +323,17 @@ def run_backtest(
     if cache_updated:
         try:
             with open(cache_file, "w") as f:
-                json.dump(universe_cache, f)
+                json.dump(
+                    {
+                        "__meta__": {
+                            "params_hash": cache_params_hash,
+                            "params": _cache_params,
+                            "built_at": datetime.now().isoformat(),
+                        },
+                        **universe_cache,
+                    },
+                    f,
+                )
             logger.info(f"Saved {len(universe_cache)} universes to cache file: {cache_file}")
         except Exception as e:
             logger.warning(f"Error saving universe cache: {e}")
