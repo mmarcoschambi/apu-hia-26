@@ -83,6 +83,39 @@ def load_ohlcv(ticker: str, days: int = LOOKBACK_DAYS) -> pd.DataFrame:
     return df.set_index("date").astype(float)
 
 
+def load_ohlcv_batch(
+    tickers: list[str],
+    days: int = LOOKBACK_DAYS,
+    db_path: Path = DB_PATH,
+) -> dict[str, pd.DataFrame]:
+    """Carga OHLCV para múltiples tickers en una sola query SQL."""
+    cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    placeholders = ",".join("?" * len(tickers))
+    sql = (
+        "SELECT ticker, date, open, high, low, close, volume FROM ohlcv_cache "
+        f"WHERE ticker IN ({placeholders}) AND date>=? ORDER BY ticker, date"
+    )
+    params = list(tickers) + [cutoff]
+    conn = sqlite3.connect(str(db_path))
+    try:
+        rows = conn.execute(sql, params).fetchall()
+    finally:
+        conn.close()
+
+    if not rows:
+        return {}
+
+    df_all = pd.DataFrame(rows, columns=["ticker", "date", "open", "high", "low", "close", "volume"])
+    df_all["date"] = pd.to_datetime(df_all["date"], format="mixed")
+
+    result: dict[str, pd.DataFrame] = {}
+    for ticker, grp in df_all.groupby("ticker"):
+        grp = grp.drop(columns="ticker").set_index("date").astype(float).sort_index()
+        result[ticker] = grp
+    return result
+
+
+
 def _load_combo_json(combo_name: str) -> Optional[dict]:
     candidates = [
         COMBOS_DIR / f"{combo_name}.json",
@@ -114,23 +147,30 @@ def _compute_rs_percentile(
     all_closes: dict[str, pd.Series],
     rs_lookback: int,
 ) -> float | None:
-    ticker_series = all_closes.get(ticker)
-    if ticker_series is None or len(ticker_series) < rs_lookback + 5:
-        return None
-    ticker_ret_series = ticker_series.pct_change(rs_lookback).dropna()
-    if ticker_ret_series.empty:
-        return None
-    ticker_ret = float(ticker_ret_series.iloc[-1])
-    other_rets = []
-    for other_ticker, series in all_closes.items():
-        if other_ticker == ticker or len(series) < rs_lookback + 5:
-            continue
-        ret_series = series.pct_change(rs_lookback).dropna()
-        if not ret_series.empty:
-            other_rets.append(float(ret_series.iloc[-1]))
-    if not other_rets:
-        return None
-    return float((sum(r < ticker_ret for r in other_rets) / len(other_rets)) * 100.0)
+    """O(N) lookup into precomputed RS ranks dict, or None if unavailable."""
+    # Build cache once — first call seeds it for all tickers
+    all_closes_id = id(all_closes)
+    cache_key = (rs_lookback, all_closes_id)
+    if not hasattr(_compute_rs_percentile, "_cache"):
+        _compute_rs_percentile._cache = {}  # type: ignore[attr-defined]
+    cached = _compute_rs_percentile._cache.get(cache_key)  # type: ignore[attr-defined]
+    if cached is None:
+        # Precompute pct_change once per ticker, rank vectorizado
+        rets: dict[str, float] = {}
+        for t, s in all_closes.items():
+            if len(s) >= rs_lookback + 5:
+                r = s.pct_change(rs_lookback).dropna()
+                if not r.empty:
+                    rets[t] = float(r.iloc[-1])
+        if rets:
+            series = pd.Series(rets)
+            ranked = series.rank(pct=True, ascending=True) * 100.0
+            _compute_rs_percentile._cache[cache_key] = ranked.to_dict()  # type: ignore[attr-defined]
+        else:
+            _compute_rs_percentile._cache[cache_key] = {}  # type: ignore[attr-defined]
+        cached = _compute_rs_percentile._cache[cache_key]  # type: ignore[attr-defined]
+
+    return cached.get(ticker)
 
 
 def scan_combo(
@@ -142,8 +182,14 @@ def scan_combo(
     mode: SignalMode = "A",
     skip_tier2: bool = False,
     etf_dists: dict[str, float] | None = None,
-) -> list[SignalDecision]:
+) -> tuple[list[SignalDecision], dict[str, SignalDecision]]:
+    """
+    Escanea el universo con una config y retorna:
+      - signals: decisiones que PASARON, ordenadas por score descendente
+      - all_decisions: {ticker: SignalDecision} para TODOS los tickers evaluados
+    """
     signals: list[SignalDecision] = []
+    all_decisions: dict[str, SignalDecision] = {}
 
     for ticker in universe:
         df = df_map.get(ticker)
@@ -160,11 +206,12 @@ def scan_combo(
             sector_etf_dist=dist
         )
         decision.mode = mode
+        all_decisions[ticker] = decision
         if decision.passed:
             signals.append(decision)
 
     signals.sort(key=lambda x: x.entry_score, reverse=True)
-    return signals
+    return signals, all_decisions
 
 
 def _decision_to_row(d: SignalDecision) -> dict:
@@ -412,14 +459,15 @@ def run_combo_scan(
 
     all_signals: list[SignalDecision] = []
     agent_results: dict[str, list[SignalDecision]] = {}
+    all_agent_decisions: dict[str, dict[str, SignalDecision]] = {}
     df_map: dict[str, pd.DataFrame] = {}
     all_closes: dict[str, pd.Series] = {}
 
-    for ticker in universe:
-        df = load_ohlcv(ticker)
+    # Batch load en una sola conexión SQLite
+    df_map = load_ohlcv_batch(universe)
+    for ticker, df in df_map.items():
         if len(df) >= RS_LOOKBACK + 5:
             all_closes[ticker] = df["close"]
-            df_map[ticker] = df
 
     # Only enforce df_map min size if the loaded universe was large enough
     if len(universe) >= 10 and len(df_map) < 10:
@@ -462,24 +510,24 @@ def run_combo_scan(
             if k == "min_adr_pct":
                 cfg.setdefault("screener", {})[k] = v
 
-        decisions = scan_combo(
+        decisions, all_decisions = scan_combo(
             cfg, universe, df_map, spy_df, all_closes, effective_mode, skip_tier2,
             etf_dists=etf_dists
         )
+        all_agent_decisions[name] = all_decisions
         
-        # Reconstruir impacto marginal para auditoria
-        # Reconstruir impacto marginal para auditoria
+        # Auditoria: solo evaluar sin sector filter (d_with ya esta en all_decisions)
         for ticker in universe:
             if ticker not in df_map:
                 continue
+            d_with = all_decisions.get(ticker)
+            if d_with is None:
+                continue
+            
             rs_pct = _compute_rs_percentile(ticker, all_closes, RS_LOOKBACK)
             etf_symbol = SECTOR_MAP.get(ticker)
             dist = etf_dists.get(etf_symbol) if etf_dists and etf_symbol else None
-
-            d_with = evaluate_ticker(
-                ticker, df_map[ticker], spy_df, cfg, effective_mode, skip_tier2, 
-                rs_percentile=rs_pct, sector_etf_dist=dist
-            )
+            
             d_without = evaluate_ticker(
                 ticker, df_map[ticker], spy_df, cfg_no_sector, effective_mode, skip_tier2,
                 rs_percentile=rs_pct, sector_etf_dist=dist

@@ -319,7 +319,7 @@ def test_screener_gate_blocks_signal():
         reject_reason="screener_fail:Fake failure",
     )
 
-    signals = mod.scan_combo(
+    signals, _ = mod.scan_combo(
         {
             "name": "test",
             "screener": {"name": "fake"},
@@ -354,7 +354,7 @@ def test_tier2_gate_blocks_signal():
         reject_reason="tier2_fail:rvol:0.10 < 0.80",
     )
 
-    signals = mod.scan_combo(
+    signals, _ = mod.scan_combo(
         {
             "name": "test",
             "screener": {"name": "fake"},
