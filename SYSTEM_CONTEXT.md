@@ -47,15 +47,17 @@ El sistema es auto-consciente de su entorno (**Auto-Aware**):
 *   Auditoría diaria automatizada de señales aprobadas y rechazadas (`rejection_audit.csv`).
 *   Configuraciones leídas directamente de [production_config.json](file:///home/marcos/trade/momentum-v2/config/production_config.json).
 *   **Breadth Gate (Filtro de participación de mercado):** Optimizado y validado en Walk-Forward de 15 pliegues (Modos A y B). Determinado NO-GO para su uso estático (degrada Sharpe de 0.39 a 0.23). Se promueve a Gate Dinámico Condicional acoplado al Regime Detection (umbral 0.40 en Modo B activado únicamente en mercados correctivos/bajistas).
+*   **Dynamic Switch (Ataque/Defensa):** **PROMOVIDO a producción.** Precarga histórica completada (8,195 registros, 1993-2026). `health_score` (0-7) vía `src/utils/market_health.py`. Evidencia empírica validada con script three-way `scripts/run_dynamic_switch_backtest.py`.
+*   **Shadow Convergence Audit:** `scripts/convergence_check.py` con Jaccard scoring, price discrepancy gate (<2%), y fallback VPS_UNAVAILABLE. `daily_scan.py` emite `scan_metadata.json`. Fixes #49.
  
 ### 🟡 En Desarrollo / Shadow Mode
 *   **Variante E (Divergencia Temática):** Monitoreo pasivo en shadow trading para acumular ~30-40 señales reales antes de su promoción.
-*   **Purged Walk-Forward Cross-Validation:** Implementado en `src/validation/purged_walk_forward.py` con purge (10d) y embargo (5d). Degradation gate: 25% (GATE_DEGRADATION actualizado en s4_gates.py). Integrado como Phase 2b opcional en `ResearchGate.validate_strategy()`.
-*   **Shadow Convergence Audit:** `scripts/convergence_check.py` con Jaccard scoring, price discrepancy gate (<2%), y fallback VPS_UNAVAILABLE. `daily_scan.py` ahora emite `scan_metadata.json`.
+*   **Purged Walk-Forward Cross-Validation:** Implementado en `src/validation/purged_walk_forward.py` con purge (10d) y embargo (5d). Degradation gate: 25%. Integrado como Phase 2b opcional en `ResearchGate.validate_strategy()`. **Estado: NO VERIFICABLE** — `purged_walk_forward.py` es biblioteca pura sin persistencia en disco. Para auditar, se necesita ejecutar `scripts/run_purged_cv_freeze_evidence.py` y analizar el JSON resultante.
 *   **VPS Deploy & Control Tower:** `scripts/sv/` con systemd units, health check, PID lifecycle. `deploy_vps.sh` validado con 5-step pipeline. `start_live_session.sh` migrado a systemd-first con fallback nohup+PID.
  
 ### 🔴 Bloqueado / Pendiente
-*   **Dynamic Switch (Ataque/Defensa):** **ACTIVO.** Precarga histórica completada (8,195 registros, 1993-2026). `health_score` (0-7) calculado vía `src/utils/market_health.py` y persistido en `daily_health_scores` por `scripts/build_health_scores.py`. `config/feature_flags.get_active_mode()` mapea score a ATTACK/DEFENSE_PARTIAL/DEFENSE_FULL con risk multipliers y theme filter. Script de comparación three-way: `scripts/run_dynamic_switch_backtest.py`.
+*   **Unificación de Pipelines ML:** `src/ml_signal/` (walk-forward con features de mercado) y `src/ml/` (entry scoring con features de setup) son pipelines independientes, sin features compartidos ni `models/entry_scorer.pkl` en disco. Documentado en DECISIONS.md — pendiente de estrategia de consolidación cross-sesión.
+*   **Shadow watchlist_detail gap:** `experiments/shadow_watchlist_sim.py` reporta ~44% de omisión en watchlist_detail (331/591 tickers únicos).
  
 ### ❌ Descartado Definitivamente
 *   **Modelos Random Forest tradicionales de sklearn:** Reemplazados por LightGBM debido a su velocidad de entrenamiento y feature importance nativa óptima para series de tiempo.
