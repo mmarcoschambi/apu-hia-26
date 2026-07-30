@@ -46,6 +46,8 @@ THEME_FILTER_MAP: dict[str, bool] = {
 """Theme filter state per mode from DRS-REQ-01."""
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+import sys
+sys.path.insert(0, str(PROJECT_ROOT))
 DB_PATH = PROJECT_ROOT / "data" / "ticker_cache.db"
 
 

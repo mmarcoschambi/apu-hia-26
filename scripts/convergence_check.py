@@ -181,7 +181,11 @@ def load_backtest_signals(
         logger.warning(f"Backtest trades file not found: {trades_path}")
         return {}
 
-    df = pd.read_csv(trades_path)
+    try:
+        df = pd.read_csv(trades_path)
+    except pd.errors.EmptyDataError:
+        logger.warning(f"Backtest trades file is empty (0 trades): {trades_path}")
+        return {}
     if "entry_date" in df.columns:
         date_col = "entry_date"
     elif "date" in df.columns:
@@ -292,7 +296,10 @@ def load_backtest_prices(
     if not trades_path.exists():
         return {}
 
-    df = pd.read_csv(trades_path)
+    try:
+        df = pd.read_csv(trades_path)
+    except pd.errors.EmptyDataError:
+        return {}
     if "entry_date" in df.columns:
         date_col = "entry_date"
     elif "date" in df.columns:
