@@ -177,6 +177,11 @@ class MarketDataProvider:
             if 'rolling_dollar_vol_20' not in df.columns:
                 df['rolling_dollar_vol_20'] = df['dollar_volume'].rolling(window=20, min_periods=1).mean()
 
+            # Limpiar filas inválidas (fix para Open=0)
+            df = df.dropna(subset=["Open", "Close"])
+            if not df.empty:
+                df = df[(df["Open"] > 0) & (df["Close"] > 0)]
+
             for date, row in df.iterrows():
                 # Safe extraction
                 d_vol = row['dollar_volume'] if pd.notna(row['dollar_volume']) else 0.0

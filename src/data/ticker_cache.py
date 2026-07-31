@@ -663,6 +663,13 @@ class TickerCache:
                 combined_df = combined_df[~combined_df.index.duplicated(keep="last")].sort_index()
                 df = combined_df
 
+            # Limpiar filas inválidas antes de recalcular indicadores y guardar (fix para Open=0)
+            df = df.dropna(subset=["Open", "Close"])
+            if not df.empty:
+                df = df[(df["Open"] > 0) & (df["Close"] > 0)]
+            if df.empty:
+                return old_df if old_df is not None else None
+
             close_s = df["Close"]
             volume_s = df["Volume"]
             if isinstance(close_s, pd.DataFrame):
@@ -727,6 +734,9 @@ class TickerCache:
                     sma100 = sma100.iloc[0] if hasattr(sma100, "iloc") else sma100
                     sma200 = sma200.iloc[0] if hasattr(sma200, "iloc") else sma200
                     adr20 = adr20.iloc[0] if hasattr(adr20, "iloc") else adr20
+
+                    if pd.isna(open_val) or pd.isna(close_val) or open_val <= 0 or close_val <= 0:
+                        continue
 
                     records.append(
                         (
