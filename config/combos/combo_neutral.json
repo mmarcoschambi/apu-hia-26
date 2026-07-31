@@ -1,0 +1,42 @@
+{
+  "name": "combo_neutral",
+  "operational_status": "RESEARCH_ONLY",
+  "capital_enabled": false,
+  "paper_trading_capital_usd": 100000,
+  "governance_note": "Combo neutro sin filtros cosmeticos para Reality Check de Alfa Estructural.",
+  "description": "Neutral Baseline: Loose thresholds to measure raw signal engine edge.",
+  "version": "1.0",
+  "screener": {
+    "name": "qullamaggie_momentum",
+    "config": "config/screeners/qullamaggie_momentum.json",
+    "mode": "all"
+  },
+  "pattern": {
+    "signal_type": "breakout",
+    "description": "Unrestricted breakout signal test"
+  },
+  "tier2_filters": {
+    "min_rvol": 1.0,
+    "min_adr": 1.0,
+    "max_dist_sma20": 15.0,
+    "min_dollar_volume": 1000000.0,
+    "min_consolidation_days": 3,
+    "min_volume": 100000,
+    "use_rs_percentile": false,
+    "min_rs_percentile": 50.0,
+    "rs_lookback_days": 60,
+    "require_positive_rs": false,
+    "require_spy_above_sma200": false
+  },
+  "tier3_fixed": {
+    "max_loss_pct": 5.0,
+    "max_positions": 10,
+    "position_size_method": "equal",
+    "risk_fraction": 0.005
+  },
+  "validation": {
+    "min_win_rate": 0.35,
+    "min_profit_factor": 1.1,
+    "min_trades": 30
+  }
+}

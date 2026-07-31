@@ -56,7 +56,7 @@ def main():
     config_path = Path("config/production_config.json")
     state = {
         "canonical_loader": "src/config/config_loader.py",
-        "canonical_config_path": str(config_path),
+        "canonical_config_path": config_path.as_posix(),
         "use_dynamic_extension_sizing": get_dynamic_sizing(config_path),
         "canonical_config_hash": get_canonical_config_hash(config_path),
         "commit_head": get_git_head(),

@@ -177,11 +177,10 @@ def run_backtest_for_trial(
         mdd_positive = abs(float(raw_mdd))
 
         # FIX: Calmar del engine viene como calmar_ratio, no calmar
-        calmar = (
-            metrics.get("calmar_ratio", 0)
-            or result.get("calmar_ratio", 0)
-            or 0.0
-        )
+        calmar_raw = metrics.get("calmar_ratio")
+        if calmar_raw is None:
+            calmar_raw = result.get("calmar_ratio", 0.0)
+        calmar = float(calmar_raw) if calmar_raw is not None else 0.0
 
         return {
             "trades": len(trades_df),
@@ -189,8 +188,8 @@ def run_backtest_for_trial(
             "mdd": mdd_positive,          # positivo, decimal (ej: 0.0528)
             "win_rate": float(metrics.get("win_rate", 0) or result.get("win_rate", 0) or 0),
             "pf": float(metrics.get("profit_factor", 0) or result.get("profit_factor", 0) or 0),
-            "calmar": float(calmar),
-            "cagr": float(metrics.get("annualized_return", 0) or result.get("annualized_return", 0) or 0),
+            "calmar": calmar,
+            "cagr": float(metrics.get("annualized_return") if metrics.get("annualized_return") is not None else result.get("annualized_return", 0.0)),
             "equity_curve": equity_curve,
             "trades_df": trades_df,
         }

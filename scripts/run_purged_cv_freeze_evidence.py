@@ -35,9 +35,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+PROJECT_ROOT = Path(__file__).parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 # ── imports del proyecto ──────────────────────────────────────────────
-# Ambos viven dentro del PYTHONPATH del proyecto (el entry point los
-# resuelve desde CWD + src/). NO modificar sus módulos fuente.
 from src.backtest.vectorbt_engine_advanced import AdvancedVectorBTEngine
 from src.validation.research_gate import ResearchGate
 

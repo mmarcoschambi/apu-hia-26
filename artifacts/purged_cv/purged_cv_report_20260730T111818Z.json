@@ -1,0 +1,39 @@
+{
+  "degradation_pct": 100.0,
+  "gate_passed": false,
+  "gate_threshold_pct": 25,
+  "generated_at_utc": "20260730T111818Z",
+  "git_commit": "4c9ab5deacd4aa83830bd4ac4879fb9e836d688a",
+  "max_drawdown_pct": 5.671341051908786,
+  "params_json_source": "config/validated_production_params.json",
+  "profit_factor": 0.8601662587640095,
+  "purged_cv_config": {
+    "embargo_days": 5,
+    "n_folds": 4,
+    "purge_days": 10
+  },
+  "rejection_reasons": [
+    "Purged CV rejected: degradation 100.0% > 25%",
+    "Sharpe too low: -0.76 < 0.35",
+    "Profit factor too low: 0.86 < 1.10",
+    "Win rate too low: 40.5% < 45.0%"
+  ],
+  "sharpe_ratio": -0.7558218316956304,
+  "test_period": "2024-01-01→2025-12-31",
+  "total_trades": 147,
+  "train_period": "2019-01-01→2023-12-31",
+  "universe_size": 1239,
+  "universe_sorted_first10": [
+    "A",
+    "AA",
+    "AAL",
+    "AAOI",
+    "AAON",
+    "AAP",
+    "AAPL",
+    "ABBV",
+    "ABNB",
+    "ABT"
+  ],
+  "validation_passed": false
+}

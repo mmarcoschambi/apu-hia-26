@@ -148,21 +148,34 @@ def sync(name, promote=False):
         return True
 
     # Modo PROMOCIÓN (con --promote)
-    out['approved'] = True
-    out['approved_at'] = datetime.now().isoformat()
+    import sys
+    from pathlib import Path
+    
+    # Ensure src is in sys.path to import ParamGate
+    if str(resolved_dst_dir.parent.parent) not in sys.path:
+        sys.path.insert(0, str(resolved_dst_dir.parent.parent))
+    from src.validation.param_gate import ParamGate
+    
+    # We must construct the candidate object and include validation metrics if present
+    # to feed into ParamGate.
+    # We will map 'validation' to 'oos_metrics' if oos_metrics isn't present,
+    # because some pipelines store metrics under 'validation'.
+    if 'oos_metrics' not in out and 'validation' in out:
+        out['oos_metrics'] = out['validation']
+    
     out['approved_source'] = "sync_combo_config"
-    out['promotion_gate'] = "validation_passed_true"
-
+    # La bandera validation_passed debe venir ya izada por el script validador real.
+    # No la derivamos heurísticamente aquí.
+    
     bak_path = dst.with_suffix('.json.bak')
-    tmp_path = dst.with_suffix('.json.tmp')
-
+    
     backup_created = False
     try:
         # Si ya existe en producción, hacer backup de un paso
         if dst.exists():
             try:
                 existing_data = json.loads(dst.read_text())
-                if existing_data.get('approved', False):
+                if existing_data.get('approved', False) or existing_data.get('governance_hash'):
                     print(f"[*] Overwriting existing approved config for '{name}' via explicit '--promote'.")
             except Exception:
                 pass
@@ -172,11 +185,16 @@ def sync(name, promote=False):
             dst.rename(bak_path)
             backup_created = True
 
-        # Escritura atómica
-        tmp_path.write_text(json.dumps(out, indent=2))
-        tmp_path.rename(dst)
-        print(f"SUCCESS: Promoted and synced '{name}' to {dst}")
-        return True
+        # Usar ParamGate para validación criptográfica y promoción segura
+        print(f"[*] Executing Phase 6 ParamGate for {name}...")
+        success = ParamGate.promote(out, dst)
+        
+        if success:
+            print(f"SUCCESS: Promoted and synced '{name}' to {dst}")
+            return True
+        else:
+            print(f"CRITICAL ERROR: ParamGate REJECTED '{name}'. Check logs.")
+            raise ValueError("Governance check failed")
 
     except Exception as e:
         print(f"CRITICAL ERROR during promotion of '{name}': {e}")
@@ -185,8 +203,6 @@ def sync(name, promote=False):
             if dst.exists():
                 dst.unlink()
             bak_path.rename(dst)
-        if tmp_path.exists():
-            tmp_path.unlink()
         return False
 
 

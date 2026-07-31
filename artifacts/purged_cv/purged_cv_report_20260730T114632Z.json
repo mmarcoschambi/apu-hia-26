@@ -1,0 +1,39 @@
+{
+  "degradation_pct": 63.83,
+  "gate_passed": false,
+  "gate_threshold_pct": 25,
+  "generated_at_utc": "20260730T114632Z",
+  "git_commit": "4c9ab5deacd4aa83830bd4ac4879fb9e836d688a",
+  "max_drawdown_pct": 12.915564585497833,
+  "params_json_source": "config/neutral_params.json",
+  "profit_factor": 1.0981222184703008,
+  "purged_cv_config": {
+    "embargo_days": 5,
+    "n_folds": 4,
+    "purge_days": 10
+  },
+  "rejection_reasons": [
+    "Purged CV rejected: degradation 63.8% > 25%",
+    "PBO too high: 53.34% > 50.00%",
+    "Sharpe too low: 0.16 < 0.35",
+    "Profit factor too low: 1.10 < 1.10"
+  ],
+  "sharpe_ratio": 0.16078480755839208,
+  "test_period": "2024-01-01→2025-12-31",
+  "total_trades": 481,
+  "train_period": "2019-01-01→2023-12-31",
+  "universe_size": 1239,
+  "universe_sorted_first10": [
+    "A",
+    "AA",
+    "AAL",
+    "AAOI",
+    "AAON",
+    "AAP",
+    "AAPL",
+    "ABBV",
+    "ABNB",
+    "ABT"
+  ],
+  "validation_passed": false
+}

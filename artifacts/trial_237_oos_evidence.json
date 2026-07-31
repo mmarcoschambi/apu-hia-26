@@ -1,0 +1,42 @@
+{
+    "timestamp": "2026-07-31T22:00:46.106795+00:00",
+    "trial": 237,
+    "params": {
+        "min_rs_percentile": 70.51387426277266,
+        "max_dist_sma20": 10.654586547338871,
+        "min_rvol": 0.9744767905812619,
+        "min_adr": 1.7625786362836864,
+        "risk_per_trade_pct": 0.02465801110988385,
+        "max_exposure_pct": 0.2970570408489135,
+        "use_composite_sector_scoring": false,
+        "sector_top_percentile": 0.4877460354687121,
+        "use_atr_stop": true,
+        "atr_stop_multiplier": 1.8029603842199324,
+        "atr_trailing_multiplier": 2.599276809709379,
+        "tp1_r": 1.2789071315588438,
+        "tp2_r": 3.307445346538822,
+        "use_breadth_filter": false,
+        "breadth_filter_threshold": 0.2977355139292666,
+        "use_market_regime_filter": false,
+        "max_vix_threshold": 23.674582823954534,
+        "require_spy_above_sma50": false,
+        "min_consolidation_days": 5
+    },
+    "in_sample": {
+        "trades": 168,
+        "sharpe": 0.43561446367431295,
+        "profit_factor": 1.3142176337001008,
+        "mdd_pct": -20.912666126168165,
+        "calmar": 0.1737318405456584,
+        "cagr": 0.03633195976816039
+    },
+    "out_of_sample": {
+        "trades": 5,
+        "sharpe": -1.3399892949680234,
+        "profit_factor": 0.04157292840479842,
+        "mdd_pct": -27.642979609990668,
+        "calmar": -1.4216214651742827,
+        "cagr": -0.3929785317493776
+    },
+    "verdict": "REJECTED (Curve Fitted)"
+}

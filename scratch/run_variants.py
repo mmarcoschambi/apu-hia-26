@@ -17,8 +17,18 @@ def check_significance(metrics_path: Path):
 
     # Intentar resolver anidamiento de validation (ej. resultados de optimización combo)
     v_data = metrics.get("validation", {})
+    oos_data = metrics.get("out_of_sample", {})
     if isinstance(v_data, dict) and v_data:
         resolved_metrics = {**metrics, **v_data}
+    elif isinstance(oos_data, dict) and oos_data:
+        # Extraer data de OOS
+        resolved_metrics = {**metrics, **oos_data}
+        if "trades" in resolved_metrics and "total_trades" not in resolved_metrics:
+            resolved_metrics["total_trades"] = resolved_metrics["trades"]
+        if "cagr" in resolved_metrics and "total_return" not in resolved_metrics:
+            resolved_metrics["total_return"] = resolved_metrics["cagr"] * 100
+        if "sharpe" in resolved_metrics and "sharpe_ratio" not in resolved_metrics:
+            resolved_metrics["sharpe_ratio"] = resolved_metrics["sharpe"]
     else:
         resolved_metrics = metrics
 
