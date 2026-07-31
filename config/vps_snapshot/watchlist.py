@@ -24,4 +24,4 @@ VOLATILITY = _data.get('VOLATILITY', [])
 ENERGY = _data.get('ENERGY', [])
 
 # Combined Default Watchlist
-DEFAULT_WATCHLIST = list(set(MOMENTUM + TECH + VOLATILITY + ENERGY))
+DEFAULT_WATCHLIST = sorted(set(MOMENTUM + TECH + VOLATILITY + ENERGY))

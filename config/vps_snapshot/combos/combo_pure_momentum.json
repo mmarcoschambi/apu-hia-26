@@ -1,8 +1,7 @@
 {
-  "_CANONICAL_NOTE": "This is the canonical BASE config for combo_pure_momentum. Architecture: (1) This file defines the strategy structure, screener, and base filters. (2) optimizer runs and produces config/combo_results/combo_pure_momentum_optimized.json. (3) sync_combo_config.py reads (2) and writes to outputs/best_combos_run/combo_pure_momentum_config.json with merged tier3_risk. (4) Production loads base here + merges with optimized config from outputs/ (see src/integration/combo_loader.py). DO NOT edit optimization results manually.",
   "name": "combo_pure_momentum",
   "operational_status": "PAPER_TRADING_ACTIVE",
-  "capital_enabled": false,
+  "capital_enabled": true,
   "paper_trading_capital_usd": 100000,
   "governance_note": "Promoted to paper trading after passing WF gate with 2025 included. Updated to Fortress Config (RS 85, SMA200).",
   "description": "Pure Momentum: Qullamaggie RS + Breakout. Top 3% relative strength with clean breakout.",
@@ -33,19 +32,7 @@
     "max_loss_pct": 2.0,
     "max_positions": 4,
     "position_size_method": "rs_weighted",
-    "risk_fraction": 0.005,
-    "use_dynamic_extension_sizing": true,
-    "dynamic_extension_sizing": {
-      "version": "v2_atlas_informed",
-      "comfort_pct": 6.76,
-      "valley_pct": 10.0,
-      "mid_pct": 15.0,
-      "high_pct": 25.0,
-      "extreme_pct": 35.0,
-      "max_pct": 50.0,
-      "min_factor": 0.5,
-      "extreme_factor": 0.2
-    }
+    "risk_fraction": 0.005
   },
   "validation": {
     "min_win_rate": 0.35,
