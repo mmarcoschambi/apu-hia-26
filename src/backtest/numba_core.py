@@ -282,6 +282,9 @@ def simulate_fast_core(
                 
                 # --- MAX POSITION CAP ---
                 entry_fill = open_arr[t+1, i] if t+1 < n_days and not np.isnan(open_arr[t+1, i]) else curr_close
+                # Guard: open inválido (0 o NaN) al día siguiente -> evitar ZeroDivisionError
+                if not (entry_fill > 0):
+                    continue
                 max_shares = np.floor((current_equity * max_position_pct) / (entry_fill * (1 + slippage_rate)))
                 shares = min(shares, max_shares)
 

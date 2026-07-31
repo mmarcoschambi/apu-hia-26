@@ -5421,21 +5421,20 @@ class AdvancedVectorBTEngine:
 
             except Exception as e:
                 logger.error(f"   [FAIL] Chunk {chunk_idx + 1} failed: {e}")
-                # Continue with current capital
-                import traceback
+                raise RuntimeError(
+                    f"Chunk {chunk_idx + 1} abortó el backtest: resultado no confiable"
+                ) from e
+            finally:
+                # Restore original initial capital
+                self.initial_capital = original_initial_capital
 
-                logger.error(traceback.format_exc())
+                # Restore original indicators
+                for attr, original_df in original_indicators.items():
+                    setattr(self, attr, original_df)
 
-            # Restore original initial capital
-            self.initial_capital = original_initial_capital
-
-            # Restore original indicators
-            for attr, original_df in original_indicators.items():
-                setattr(self, attr, original_df)
-
-            # Restore original market data
-            for attr, original_series in original_market.items():
-                setattr(self, attr, original_series)
+                # Restore original market data
+                for attr, original_series in original_market.items():
+                    setattr(self, attr, original_series)
 
             # Force garbage collection between chunks
             gc.collect()
