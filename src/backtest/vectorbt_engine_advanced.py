@@ -3827,6 +3827,20 @@ class AdvancedVectorBTEngine:
             drawdown = (equity_curve - cum_max) / cum_max
             max_dd = drawdown.min()
 
+            # Calcular MAR Ratio y Calmar Ratio (espejo de ADVANCED mode)
+            days_trading = len(equity_curve)
+            years_trading = days_trading / 252  # 252 trading days per year
+            annualized_return = (
+                (equity_curve.dropna().iloc[-1] / self.initial_capital) ** (1 / years_trading) - 1
+                if years_trading > 0 and total_return > -1 and not equity_curve.dropna().empty
+                else 0
+            )
+
+            # MAR Ratio = Annualized Return / Max Drawdown
+            # Calmar Ratio = Annualized Return / Absolute Max Drawdown
+            mar_ratio = annualized_return / abs(max_dd) if max_dd < 0 and max_dd != -1 else 0
+            calmar_ratio = annualized_return / abs(max_dd) if max_dd < 0 and max_dd != -1 else 0
+
             unique_entries = entries.sum().sum()
             all_exits_count = len(trades_df)
             winners = len(trades_df[trades_df["pnl"] > 0]) if len(trades_df) > 0 else 0
@@ -3856,6 +3870,9 @@ class AdvancedVectorBTEngine:
                 "total_return": total_return,
                 "sharpe_ratio": sharpe,
                 "max_drawdown": max_dd,
+                "annualized_return": annualized_return,
+                "mar_ratio": mar_ratio,
+                "calmar_ratio": calmar_ratio,
                 "total_trades": real_trades_count,
                 "unique_entries": int(unique_entries),
                 "all_exits": int(all_exits_count),

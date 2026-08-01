@@ -11,9 +11,21 @@ Combina Sharpe con penalizaciones por:
 Hard reject:
 - Trades < 30
 - PF < 1.0
+
+Steering Calmar/CAGR (opcional):
+- Si se provee `calmar`, el score recibe un bonus multiplicativo
+  `(1 + CALMAR_BONUS * max(calmar - CALMAR_MIN_REWARD, 0))` que recompensa
+  de forma creciente los Calmar positivos y con fuerza los >= 1.0 (umbral
+  del gate), sin castigar configuraciones con Calmar bajo.
+- Si se provee `cagr` (fracción, ej. 0.25 = 25%), se suma un término
+  aditivo menor `CAGR_WEIGHT * max(cagr, 0)` como desempate entre
+  configuraciones de Calmar similar.
+- Ambos parámetros son opcionales: con `calmar=None` y `cagr=None` el
+  comportamiento es idéntico a la versión anterior (backward compatible).
 """
 
 import logging
+import math
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
@@ -34,6 +46,11 @@ MDD_PENALTY = 0.5
 WIN_RATE_PENALTY = 0.7
 PF_PENALTY = 0.6
 
+# Calmar / CAGR steering
+CALMAR_MIN_REWARD = 0.0  # Calmar por debajo de este umbral no recibe bonus
+CALMAR_BONUS = 0.5  # score *= (1 + CALMAR_BONUS * max(calmar - CALMAR_MIN_REWARD, 0))
+CAGR_WEIGHT = 0.25  # score += CAGR_WEIGHT * max(cagr, 0), cagr como fracción
+
 
 def compute_score_composed(
     trades: int,
@@ -43,6 +60,8 @@ def compute_score_composed(
     profit_factor: float,
     is_sharpe: Optional[float] = None,
     val_sharpe: Optional[float] = None,
+    calmar: Optional[float] = None,
+    cagr: Optional[float] = None,
 ) -> Tuple[float, Dict[str, Any]]:
     """
     Computa score compuesto para Optuna.
@@ -55,6 +74,10 @@ def compute_score_composed(
         profit_factor: Profit factor
         is_sharpe: Sharpe in-sample (optional, for stability bonus)
         val_sharpe: Sharpe validation (optional, for degradation check)
+        calmar: Calmar ratio (optional). Si se provee, aplica bonus
+            multiplicativo creciente: score *= (1 + CALMAR_BONUS * max(calmar - CALMAR_MIN_REWARD, 0))
+        cagr: CAGR como fracción (optional, ej. 0.25 = 25%). Si se provee,
+            suma término aditivo menor: score += CAGR_WEIGHT * max(cagr, 0)
 
     Returns:
         (score, metadata) donde metadata incluye break_reason y componentes
@@ -107,6 +130,26 @@ def compute_score_composed(
             score *= 0.7
             meta["instability_penalty"] = True
         meta["degradation_pct"] = round(degradation * 100, 1)
+
+    # Steering: bonus multiplicativo por Calmar positivo
+    if calmar is not None and not math.isnan(calmar) and math.isfinite(calmar):
+        calmar_excess = max(calmar - CALMAR_MIN_REWARD, 0.0)
+        if calmar_excess > 0:
+            multiplier = 1.0 + CALMAR_BONUS * calmar_excess
+            if score >= 0:
+                score *= multiplier
+            else:
+                # Si el score base es negativo, multiplicar por > 1 lo haría aún más negativo (castigo).
+                # Dividir lo acerca a 0, lo cual es matemáticamente un bonus o atenuación.
+                score /= multiplier
+            meta["calmar_bonus"] = True
+        meta["calmar"] = round(calmar, 4)
+
+    # Steering: término aditivo menor por CAGR (fracción)
+    if cagr is not None and not math.isnan(cagr) and math.isfinite(cagr):
+        score += CAGR_WEIGHT * max(cagr, 0.0)
+        meta["cagr_term_applied"] = True
+        meta["cagr"] = round(cagr, 4)
 
     meta["break_reason"] = "PASSED"
     meta["score_raw"] = round(score, 4)
@@ -205,4 +248,36 @@ if __name__ == "__main__":
     )
     print(
         f"Stable: score={score5}, reason={meta5['break_reason']}, bonus={meta5.get('stability_bonus')}"
+    )
+
+    # Case 6: Steering Calmar - mismo Sharpe, mayor Calmar -> mayor score
+    score6a, meta6a = compute_score_composed(
+        trades=150, sharpe=1.5, mdd=0.15, win_rate=0.55, profit_factor=2.0, calmar=0.4
+    )
+    score6b, meta6b = compute_score_composed(
+        trades=150, sharpe=1.5, mdd=0.15, win_rate=0.55, profit_factor=2.0, calmar=1.2
+    )
+    print(
+        f"Calmar 0.4: score={score6a} | Calmar 1.2: score={score6b} | steering={score6b > score6a}"
+    )
+
+    # Case 7: Backward compat - calmar=None identico al comportamiento base
+    score7a, meta7a = compute_score_composed(
+        trades=150, sharpe=1.5, mdd=0.15, win_rate=0.55, profit_factor=2.0
+    )
+    score7b, meta7b = compute_score_composed(
+        trades=150, sharpe=1.5, mdd=0.15, win_rate=0.55, profit_factor=2.0, calmar=None
+    )
+    print(f"Backward compat: score7a={score7a}, score7b={score7b}, equal={score7a == score7b}")
+
+    # Case 8: Steering CAGR - termino aditivo aplica
+    score8a, meta8a = compute_score_composed(
+        trades=150, sharpe=1.5, mdd=0.15, win_rate=0.55, profit_factor=2.0, cagr=0.20
+    )
+    score8b, meta8b = compute_score_composed(
+        trades=150, sharpe=1.5, mdd=0.15, win_rate=0.55, profit_factor=2.0, cagr=0.40
+    )
+    print(
+        f"CAGR 0.20: score={score8a} | CAGR 0.40: score={score8b} | "
+        f"cagr_term={meta8b.get('cagr_term_applied')} | steering={score8b > score8a}"
     )

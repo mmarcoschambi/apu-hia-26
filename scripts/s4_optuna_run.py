@@ -280,6 +280,8 @@ def objective(
         mdd=metrics["mdd"],
         win_rate=metrics["win_rate"],
         profit_factor=metrics["pf"],
+        calmar=metrics.get("calmar"),
+        cagr=metrics.get("cagr"),
     )
 
     trial.set_user_attr("trades", metrics["trades"])
@@ -304,6 +306,8 @@ def run_pilot_study(
     end_date: str,
     universe: List[str],
     shared_data: Optional[Dict[str, Any]] = None,
+    study_name: str = "pilot",
+    storage_url: str = f"sqlite:///{OUTPUTS_DIR}/pilot_study.db",
 ) -> Dict[str, float]:
     """Stage 1: Pilot study para determinar importance."""
     logger.info(f"=== STAGE 1: Pilot Study ({n_trials} trials) ===")
@@ -311,8 +315,8 @@ def run_pilot_study(
     study = optuna.create_study(
         direction="maximize",
         sampler=optuna.samplers.TPESampler(seed=42),
-        storage=f"sqlite:///{OUTPUTS_DIR}/pilot_study.db",
-        study_name="pilot",
+        storage=storage_url,
+        study_name=study_name,
         load_if_exists=True,
     )
 
@@ -339,15 +343,18 @@ def run_main_optimization(
     study_name: str,
     universe: List[str],
     shared_data: Optional[Dict[str, Any]] = None,
+    storage_url: Optional[str] = None,
 ) -> optuna.Study:
     """Stage 2: Main optimization."""
     logger.info(f"=== STAGE 2: Main Optimization ({n_trials} trials) ===")
+
+    _storage_url = storage_url if storage_url else f"sqlite:///{OUTPUTS_DIR}/{study_name}.db"
 
     study = optuna.create_study(
         direction="maximize",
         sampler=optuna.samplers.TPESampler(seed=42),
         pruner=optuna.pruners.MedianPruner(n_startup_trials=20, n_warmup_steps=10),
-        storage=f"sqlite:///{OUTPUTS_DIR}/{study_name}.db",
+        storage=_storage_url,
         study_name=study_name,
         load_if_exists=True,
     )
@@ -576,9 +583,13 @@ def main():
     parser.add_argument("--start", type=str, default="2019-01-01")
     parser.add_argument("--end", type=str, default="2024-12-31")
     parser.add_argument("--study-name", type=str, default="s4_main")
+    parser.add_argument("--storage", type=str, default=None, help="Ruta SQLite (ej: sqlite:///optuna.db). Si no se provee, usa outputs/optuna_s4/<study-name>.db")
     parser.add_argument("--resume", action="store_true")
 
     args = parser.parse_args()
+
+    db_name = f"{args.study_name}.db"
+    storage_url = args.storage if args.storage else f"sqlite:///{OUTPUTS_DIR}/{db_name}"
 
     logger.info(f"Starting S4: {args.trials} trials total")
     logger.info(f"Period: {args.start} → {args.end}")
@@ -596,12 +607,14 @@ def main():
     # Stage 1: Pilot
     if not args.resume:
         importances = run_pilot_study(
-            args.pilot_trials, full_space, args.start, args.end, universe, shared_data
+            args.pilot_trials, full_space, args.start, args.end, universe, shared_data,
+            study_name=f"{args.study_name}_pilot",
+            storage_url=storage_url
         )
         reduced_space = reduce_search_space(importances, args.top_params)
     else:
         try:
-            pilot_study = optuna.load_study(study_name="pilot", storage=f"sqlite:///{OUTPUTS_DIR}/pilot_study.db")
+            pilot_study = optuna.load_study(study_name=f"{args.study_name}_pilot", storage=storage_url)
             importances = optuna.importance.get_param_importances(pilot_study)
             reduced_space = reduce_search_space(importances, args.top_params)
             logger.info("Resuming — loaded importances from existing pilot study")
@@ -617,12 +630,13 @@ def main():
             "Usando pilot study para candidatos."
         )
         study = optuna.load_study(
-            study_name="pilot",
-            storage=f"sqlite:///{OUTPUTS_DIR}/pilot_study.db",
+            study_name=f"{args.study_name}_pilot",
+            storage=storage_url,
         )
     else:
         study = run_main_optimization(
-            main_trials, reduced_space, args.start, args.end, args.study_name, universe, shared_data
+            main_trials, reduced_space, args.start, args.end, args.study_name, universe, shared_data,
+            storage_url=storage_url
         )
 
     # Stage 3: Candidates

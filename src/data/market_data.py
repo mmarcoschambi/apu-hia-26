@@ -2,17 +2,36 @@
 Market Data Provider - Supports both Yahoo Finance and OpenBB
 Handles intraday and daily data retrieval with caching
 """
-import yfinance as yf
-from openbb import obb
-import pandas as pd
+import logging
+import pickle
+import time
+import warnings
+from collections import OrderedDict
 from datetime import datetime, timedelta
 from pathlib import Path
-import pickle
-import logging
+from typing import Optional
+
+import pandas as pd
+import requests
+import yfinance as yf
+from openbb import obb
+
 from config.settings import DATA_SOURCE, OPENBB_PROVIDER
 from src.data.ticker_cache import TickerCache
 
 logger = logging.getLogger(__name__)
+
+# Intentos máximos de descarga de earnings antes de rendirse (retorno vacío).
+_EARNINGS_MAX_ATTEMPTS = 3
+# Backoff en segundos entre reintentos de descarga de earnings.
+_EARNINGS_RETRY_BACKOFF = 1.0
+# Máximo de símbolos cacheados en memoria (éxitos y negativos) por proceso.
+_EARNINGS_CACHE_MAX = 1024
+# User-Agent realista para el backend requests (sin impersonación TLS).
+_EARNINGS_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
 
 
 class MarketDataProvider:
@@ -21,6 +40,10 @@ class MarketDataProvider:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.data_source = DATA_SOURCE
         self.sqlite_cache = TickerCache()
+        # Sesión HTTP compartida del backend requests para earnings (evita curl_cffi).
+        self._earnings_session: Optional[requests.Session] = None
+        # Cache en memoria acotado (éxitos y negativos) para evitar re-descargas.
+        self._earnings_cache: "OrderedDict[str, pd.DatetimeIndex]" = OrderedDict()
 
     def get_intraday_data(self, symbol: str, interval: str = "5m", days: int = 5) -> pd.DataFrame:
         """
@@ -353,46 +376,121 @@ class MarketDataProvider:
 
     def get_earnings_dates(self, symbol: str) -> pd.DatetimeIndex:
         """
-        Get historical and future earnings dates.
-        Checks SQLite cache first, then attempts download.
-        Returns a sorted DatetimeIndex.
+        Obtiene fechas de earnings (históricas y futuras) para un símbolo.
+
+        Prioridad de fuentes: cache en memoria -> cache SQLite -> descarga
+        vía yfinance. Ante cualquier fallo transitorio retorna un
+        DatetimeIndex vacío (nunca propaga excepciones) y registra el
+        símbolo en un cache negativo acotado para evitar re-descargas
+        dentro del mismo proceso.
+
+        Args:
+            symbol: Ticker del símbolo a consultar.
+
+        Returns:
+            DatetimeIndex ordenado con las fechas de earnings, o vacío si
+            no hay datos o si la descarga falla.
         """
+        if symbol in self._earnings_cache:
+            return self._earnings_cache[symbol]
+
         # 1. Check SQLite Cache
         try:
             cached_earnings = self.sqlite_cache.get_earnings_history(symbol)
             if cached_earnings is not None and not cached_earnings.empty:
-                # logger.debug(f"Loaded earnings for {symbol} from SQLite")
-                dates = pd.to_datetime(cached_earnings['report_date']).sort_values()
+                dates = pd.DatetimeIndex(pd.to_datetime(cached_earnings["report_date"]).sort_values())
+                self._cache_earnings_result(symbol, dates)
                 return dates
         except Exception as e:
             logger.warning(f"Error reading earnings from SQLite for {symbol}: {e}")
 
-        # 2. Download via YFinance (Fallback)
-        try:
-            # Use yfinance directly for earnings
-            import warnings
-            with warnings.catch_warnings():
-                warnings.filterwarnings("ignore")  # Suppress yfinance warnings
-                
-                ticker = yf.Ticker(symbol)
-                earnings = ticker.earnings_dates
-            
-            if earnings is not None and not earnings.empty:
-                # Save to SQLite for future use
-                df_to_save = pd.DataFrame()
-                df_to_save['report_date'] = earnings.index
-                df_to_save['eps_estimate'] = earnings['EPS Estimate'].values if 'EPS Estimate' in earnings.columns else None
-                df_to_save['eps_actual'] = earnings['Reported EPS'].values if 'Reported EPS' in earnings.columns else None
-                df_to_save['surprise_pct'] = earnings['Surprise(%)'].values if 'Surprise(%)' in earnings.columns else None
-                
-                # Save
+        # 2. Download via YFinance (Fallback) con reintentos acotados
+        earnings = self._download_earnings_dates(symbol)
+
+        if earnings is not None and not earnings.empty:
+            # Save to SQLite for future use
+            df_to_save = pd.DataFrame()
+            df_to_save["report_date"] = earnings.index
+            df_to_save["eps_estimate"] = (
+                earnings["EPS Estimate"].values if "EPS Estimate" in earnings.columns else None
+            )
+            df_to_save["eps_actual"] = (
+                earnings["Reported EPS"].values if "Reported EPS" in earnings.columns else None
+            )
+            df_to_save["surprise_pct"] = (
+                earnings["Surprise(%)"].values if "Surprise(%)" in earnings.columns else None
+            )
+
+            try:
                 self.sqlite_cache.save_earnings(symbol, df_to_save)
-                
-                # Return dates
-                dates = pd.to_datetime(earnings.index).tz_localize(None).sort_values()
-                return dates
-        except Exception as e:
-            # Silently fail - most warnings are just "no earnings found"
-            pass
-        
-        return pd.DatetimeIndex([])
+            except Exception as e:
+                logger.debug(f"Error saving earnings to SQLite for {symbol}: {e}")
+
+            # Return dates
+            dates = pd.to_datetime(earnings.index).tz_localize(None).sort_values()
+        else:
+            dates = pd.DatetimeIndex([])
+
+        self._cache_earnings_result(symbol, dates)
+        return dates
+
+    def _get_earnings_session(self) -> requests.Session:
+        """
+        Retorna la sesión HTTP compartida para descargas de earnings.
+
+        Usa el backend `requests` (pila pura de Python, sin curl_cffi) para
+        eliminar la posibilidad de fallos nativos de TLS que matarían el
+        proceso sin traceback. yfinance ya aplica `timeout=30` por request.
+
+        Returns:
+            Sesión `requests.Session` con User-Agent realista.
+        """
+        if self._earnings_session is None:
+            session = requests.Session()
+            session.headers.update({"User-Agent": _EARNINGS_USER_AGENT})
+            self._earnings_session = session
+        return self._earnings_session
+
+    def _download_earnings_dates(self, symbol: str) -> Optional[pd.DataFrame]:
+        """
+        Descarga fechas de earnings vía yfinance con reintentos acotados.
+
+        Todo error (red, timeout, parseo) se captura y se traduce en un
+        retorno vacío; jamás se propaga una excepción que pueda matar al
+        proceso ni un fallo nativo (el backend requests no usa curl_cffi).
+
+        Args:
+            symbol: Ticker del símbolo a consultar.
+
+        Returns:
+            DataFrame de yfinance con fechas de earnings, o None si falla.
+        """
+        last_error: Optional[Exception] = None
+        for attempt in range(_EARNINGS_MAX_ATTEMPTS):
+            try:
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore")  # Suprimir warnings de yfinance
+                    ticker = yf.Ticker(symbol, session=self._get_earnings_session())
+                    return ticker.earnings_dates
+            except Exception as e:
+                last_error = e
+                if attempt < _EARNINGS_MAX_ATTEMPTS - 1:
+                    time.sleep(_EARNINGS_RETRY_BACKOFF)
+        if last_error is not None:
+            logger.debug(f"Earnings download failed for {symbol}: {last_error}")
+        return None
+
+    def _cache_earnings_result(self, symbol: str, dates: pd.DatetimeIndex) -> None:
+        """
+        Cachea el resultado de earnings en un diccionario acotado.
+
+        Limita el crecimiento de memoria a `_EARNINGS_CACHE_MAX` entradas
+        desalojando la entrada más antigua (FIFO).
+
+        Args:
+            symbol: Ticker del símbolo.
+            dates: DatetimeIndex con las fechas (puede ser vacío).
+        """
+        if len(self._earnings_cache) >= _EARNINGS_CACHE_MAX:
+            self._earnings_cache.popitem(last=False)
+        self._earnings_cache[symbol] = dates
