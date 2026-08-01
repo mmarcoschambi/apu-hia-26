@@ -499,6 +499,48 @@ def get_dynamic_thresholds(
         }
 
 
+def vectorized_low_mask(metric_df: pd.DataFrame, dynamic: pd.Series) -> pd.DataFrame:
+    """
+    Máscara vectorizada de umbral mínimo (RVOL/ADR) con reindex + ffill.
+
+    Versión NEW del filtro de liquidez dinámico: las fechas con hueco en el
+    índice dinámico heredan el último umbral conocido (ffill) en lugar de no
+    aplicar filtro. Las fechas anteriores al primer umbral quedan NaN -> False
+    (sin lookahead).
+
+    Args:
+        metric_df: DataFrame de la métrica (fecha x ticker).
+        dynamic: Serie de umbrales dinámicos indexada por fecha.
+
+    Returns:
+        DataFrame booleano: True donde la métrica está bajo el umbral dinámico.
+    """
+    threshold = dynamic.reindex(metric_df.index).ffill().values[:, None]
+    return metric_df < threshold
+
+
+def vectorized_wide_stop_mask(
+    stop_df: pd.DataFrame, dynamic: pd.Series, static_default: float
+) -> pd.DataFrame:
+    """
+    Máscara vectorizada de stop amplio (dist_stop > umbral) con reindex + ffill.
+
+    Igual que `vectorized_low_mask` pero las fechas que NUNCA tuvieron umbral
+    dinámico usan el estático como fallback (fillna), replicando el loop OLD
+    para el stop.
+
+    Args:
+        stop_df: DataFrame de distancia de stop (fecha x ticker).
+        dynamic: Serie de umbrales dinámicos indexada por fecha.
+        static_default: Umbral estático de fallback.
+
+    Returns:
+        DataFrame booleano: True donde el stop supera el umbral dinámico.
+    """
+    threshold = dynamic.reindex(stop_df.index).ffill().fillna(static_default).values[:, None]
+    return stop_df > threshold
+
+
 @lru_cache(maxsize=256)
 def should_trade_long(
     spy_price: float,
@@ -4231,15 +4273,14 @@ class AdvancedVectorBTEngine:
             # ===============================================================
             if self.use_dynamic_thresholds and hasattr(self, "min_rvol_dynamic"):
                 logger.info("[SEARCH] Aplicando filtros de liquidez con UMBRALES DINÁMICOS (Vectorizado)...")
-                
-                rvol_threshold = self.min_rvol_dynamic.reindex(self.rvol.index).ffill().values[:, None]
-                adr_threshold = self.min_adr_dynamic.reindex(self.adr_pct.index).ffill().values[:, None]
-                low_rvol_mask = self.rvol < rvol_threshold
-                low_adr_mask = self.adr_pct < adr_threshold
-                
+
+                low_rvol_mask = vectorized_low_mask(self.rvol, self.min_rvol_dynamic)
+                low_adr_mask = vectorized_low_mask(self.adr_pct, self.min_adr_dynamic)
+
                 if hasattr(self, "max_stop_pct_dynamic"):
-                    stop_threshold = self.max_stop_pct_dynamic.reindex(self.close.index).ffill().fillna(self.max_stop_pct).values[:, None]
-                    wide_stop_mask = stop_dist_df > stop_threshold
+                    wide_stop_mask = vectorized_wide_stop_mask(
+                        stop_dist_df, self.max_stop_pct_dynamic, self.max_stop_pct
+                    )
                 else:
                     wide_stop_mask = stop_dist_df > self.max_stop_pct
             else:
