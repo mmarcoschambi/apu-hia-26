@@ -43,3 +43,4 @@ Este archivo registra las decisiones clave de arquitectura y el valor esperado e
 | **`deterministic_baseline_2026-07-24`** | 56 | 16.35% Return, -19.40% MDD | **Canónico de infraestructura**. |
 | **`reference_backtest_134`** | 134 | Válido previo a fix de determinismo | Referencia histórica (legacy). |
 | **`thor_oos_2024_2025`** | 138 | Sharpe -1.03 | **RECHAZADO**. |
+| **`s4_oos_survivors_20260801`** | N/A | DSR 0.002, PBO 99.8% | **RECHAZADO** (Ver `artifacts/s4_oos_validation_20260801/`). Alfa indistinguible de ruido. |
