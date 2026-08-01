@@ -139,25 +139,68 @@ def reduce_search_space(
 
 # === OBJECTIVE FUNCTION ===
 
+SHARED_DATA_ATTRS = [
+    "close", "high", "low", "volume",
+    "sma_20", "sma_50", "adr_pct", "adr_pct_14",
+    "avg_volume_20", "dollar_volume", "trend_aligned",
+    "ema_8", "ema_21", "ema_10",
+    "rvol", "dist_sma20_pct",
+    "consolidation_days", "consolidation_range",
+    "tradeable_mask",
+    "market_is_safe", "market_is_bullish",
+    "spy_close", "vix_close", "spy_sma50", "spy_ema20", "spy_sma200",
+    "universe", "rs_matrix", "atr_ratio_matrix"
+]
+
+def preload_engine_data(universe: List[str], start_date: str, end_date: str) -> Dict[str, Any]:
+    from src.backtest.vectorbt_engine_advanced import AdvancedVectorBTEngine
+    logger.info("[PERF] Pre-loading shared data (ONE TIME for all trials)...")
+    engine = AdvancedVectorBTEngine(
+        universe=universe,
+        start_date=start_date,
+        end_date=end_date,
+        initial_capital=100_000,
+        # Triggers for loading extra data matrices
+        use_market_regime_filter=True,
+        min_rs_percentile_breakout=80.0,
+        contraction_zone={"atr_short": 10, "atr_long": 30}
+    )
+    engine.load_data()
+    shared = {attr: getattr(engine, attr, None) for attr in SHARED_DATA_ATTRS if hasattr(engine, attr)}
+    engine.cleanup()
+    logger.info(f"[PERF] Pre-load OK: {len(shared.get('universe', []))} tickers ready.")
+    return shared
+
+def inject_shared_data(engine, shared: Dict[str, Any]) -> None:
+    for attr, val in shared.items():
+        if val is not None:
+            setattr(engine, attr, val)
+
 
 def run_backtest_for_trial(
     params: Dict[str, Any],
     universe: List[str],
     start_date: str,
     end_date: str,
+    shared_data: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Ejecuta backtest con los parámetros dados."""
     from src.backtest.vectorbt_engine_advanced import AdvancedVectorBTEngine
 
     try:
         engine_kwargs = build_engine_kwargs_from_params(params)
+        _universe = shared_data["universe"] if shared_data and "universe" in shared_data else universe
+        
         engine = AdvancedVectorBTEngine(
-            universe=universe,
+            universe=_universe,
             start_date=start_date,
             end_date=end_date,
             initial_capital=100_000,
             **engine_kwargs,
         )
+
+        if shared_data:
+            inject_shared_data(engine, shared_data)
 
         result = engine.run_backtest()
         equity_curve = result.get("equity_curve", pd.Series())
@@ -213,6 +256,7 @@ def objective(
     start_date: str,
     end_date: str,
     universe: List[str],
+    shared_data: Optional[Dict[str, Any]] = None,
 ) -> float:
     """Función objetivo para Optuna."""
     params = {}
@@ -224,7 +268,7 @@ def objective(
         elif config["type"] == "categorical":
             params[name] = trial.suggest_categorical(name, config["choices"])
 
-    metrics = run_backtest_for_trial(params, universe, start_date, end_date)
+    metrics = run_backtest_for_trial(params, universe, start_date, end_date, shared_data)
 
     if metrics.get("sharpe", 0) == -999:
         trial.set_user_attr("break_reason", metrics.get("error", "BACKTEST_ERROR"))
@@ -259,6 +303,7 @@ def run_pilot_study(
     start_date: str,
     end_date: str,
     universe: List[str],
+    shared_data: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, float]:
     """Stage 1: Pilot study para determinar importance."""
     logger.info(f"=== STAGE 1: Pilot Study ({n_trials} trials) ===")
@@ -272,7 +317,7 @@ def run_pilot_study(
     )
 
     study.optimize(
-        lambda t: objective(t, space, start_date, end_date, universe),
+        lambda t: objective(t, space, start_date, end_date, universe, shared_data),
         n_trials=n_trials,
         show_progress_bar=True,
     )
@@ -293,6 +338,7 @@ def run_main_optimization(
     end_date: str,
     study_name: str,
     universe: List[str],
+    shared_data: Optional[Dict[str, Any]] = None,
 ) -> optuna.Study:
     """Stage 2: Main optimization."""
     logger.info(f"=== STAGE 2: Main Optimization ({n_trials} trials) ===")
@@ -307,7 +353,7 @@ def run_main_optimization(
     )
 
     study.optimize(
-        lambda t: objective(t, reduced_space, start_date, end_date, universe),
+        lambda t: objective(t, reduced_space, start_date, end_date, universe, shared_data),
         n_trials=n_trials,
         show_progress_bar=True,
     )
@@ -349,6 +395,7 @@ def run_cost_sensitivity_for_candidate(
     universe: List[str],
     start_date: str,
     end_date: str,
+    shared_data: Optional[Dict[str, Any]] = None,
 ) -> str:
     """Determina ROBUSTO/MODERADO/FRAGIL según breakeven de costos."""
     from src.backtest.vectorbt_engine_advanced import AdvancedVectorBTEngine
@@ -365,8 +412,9 @@ def run_cost_sensitivity_for_candidate(
     results = []
     for cost in COST_GRID:
         try:
+            _universe = shared_data["universe"] if shared_data and "universe" in shared_data else universe
             engine = AdvancedVectorBTEngine(
-                universe=universe,
+                universe=_universe,
                 start_date=start_date,
                 end_date=end_date,
                 initial_capital=100_000,
@@ -374,6 +422,9 @@ def run_cost_sensitivity_for_candidate(
                 slippage=cost["slippage"],
                 **{k: v for k, v in params.items() if k not in ("fees", "slippage")},
             )
+            if shared_data:
+                inject_shared_data(engine, shared_data)
+                
             result = engine.run_backtest()
             sharpe = result.get("sharpe_ratio", 0) or 0
             viable = sharpe > 0 and result.get("profit_factor", 0) > 1.0
@@ -397,11 +448,11 @@ def run_cost_sensitivity_for_candidate(
 
 def _estimate_hard_ruin(equity_curve: pd.Series, n_sims: int = 200) -> float:
     """
-    Estima hard ruin (>= 50% DD) desde equity_curve real vía bootstrap.
+    Estima hard ruin (>= 50% DD) desde equity_curve real vía bootstrap (Vectorizado).
     Fallback a 0.03 si equity_curve tiene menos de 10 puntos.
     """
     if equity_curve is None or len(equity_curve) < 10:
-        return 0.03  # default conservador
+        return 0.03
 
     arr = equity_curve.values.astype(float)
     returns = np.diff(arr) / arr[:-1]
@@ -410,16 +461,16 @@ def _estimate_hard_ruin(equity_curve: pd.Series, n_sims: int = 200) -> float:
     if len(returns) < 5:
         return 0.03
 
-    hard_ruin_count = 0
-    for _ in range(n_sims):
-        sim = np.random.choice(returns, size=len(returns), replace=True)
-        path = np.cumprod(1 + sim) * arr[0]
-        peak = np.maximum.accumulate(path)
-        dd = (peak - path) / peak
-        if dd.max() >= 0.50:
-            hard_ruin_count += 1
+    n = len(returns)
+    idx = np.random.randint(0, n, size=(n_sims, n))
+    sims = returns[idx]
+    
+    paths = np.cumprod(1 + sims, axis=1) * arr[0]
+    peaks = np.maximum.accumulate(paths, axis=1)
+    dds = (peaks - paths) / peaks
+    hard_ruin_count = (dds.max(axis=1) >= 0.50).sum()
 
-    return round(hard_ruin_count / n_sims, 4)
+    return round(int(hard_ruin_count) / n_sims, 4)
 
 
 def apply_gates_to_candidates(
@@ -427,6 +478,7 @@ def apply_gates_to_candidates(
     universe: List[str],
     start_date: str,
     end_date: str,
+    shared_data: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Aplica gates a candidatos.
@@ -451,14 +503,18 @@ def apply_gates_to_candidates(
         hard_ruin = 0.03  # default
         try:
             from src.backtest.vectorbt_engine_advanced import AdvancedVectorBTEngine
+            _universe = shared_data["universe"] if shared_data and "universe" in shared_data else universe
             eng = AdvancedVectorBTEngine(
-                universe=universe,
+                universe=_universe,
                 start_date=start_date,
                 end_date=end_date,
                 initial_capital=100_000,
                 **{k: v for k, v in cand.get("params", {}).items()
                    if k not in ("fees", "slippage")},
             )
+            if shared_data:
+                inject_shared_data(eng, shared_data)
+                
             res = eng.run_backtest()
             equity_curve = res.get("equity_curve", pd.Series())
             eng.cleanup()
@@ -477,7 +533,7 @@ def apply_gates_to_candidates(
         }
 
         cost_robust = run_cost_sensitivity_for_candidate(
-            cand.get("params", {}), universe, start_date, end_date
+            cand.get("params", {}), universe, start_date, end_date, shared_data
         )
 
         passed, gate_details = check_acceptance_gates(is_metrics, None, None, cost_robust)
@@ -529,14 +585,18 @@ def main():
     logger.info(f"Pilot: {args.pilot_trials} | Main: {args.trials - args.pilot_trials}")
 
     universe = get_universe_from_db(args.start, args.end, args.universe_size)
-    logger.info(f"Universe: {len(universe)} symbols")
+    logger.info(f"Universe from DB: {len(universe)} symbols")
+
+    # PRE-LOAD SHARED DATA
+    shared_data = preload_engine_data(universe, args.start, args.end)
+    universe = shared_data.get("universe", universe)
 
     full_space = define_search_space()
 
     # Stage 1: Pilot
     if not args.resume:
         importances = run_pilot_study(
-            args.pilot_trials, full_space, args.start, args.end, universe
+            args.pilot_trials, full_space, args.start, args.end, universe, shared_data
         )
         reduced_space = reduce_search_space(importances, args.top_params)
     else:
@@ -562,7 +622,7 @@ def main():
         )
     else:
         study = run_main_optimization(
-            main_trials, reduced_space, args.start, args.end, args.study_name, universe
+            main_trials, reduced_space, args.start, args.end, args.study_name, universe, shared_data
         )
 
     # Stage 3: Candidates
@@ -579,7 +639,7 @@ def main():
     gate_results = {}
     if candidates:
         gate_results = apply_gates_to_candidates(
-            candidates, universe, args.start, args.end
+            candidates, universe, args.start, args.end, shared_data
         )
 
     # Summary

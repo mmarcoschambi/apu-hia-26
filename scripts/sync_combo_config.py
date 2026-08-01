@@ -119,6 +119,9 @@ def sync(name, promote=False):
         'screener': d.get('screener', ''),
         'pattern': d.get('pattern', ''),
         'validation': d.get('validation', {}),
+        'validation_passed': d.get('validation_passed', False),
+        'oos_metrics': d.get('oos_metrics', {}),
+        'params_json_source': d.get('params_json_source', '')
     }
 
     dst = DST / (name + '_config.json')

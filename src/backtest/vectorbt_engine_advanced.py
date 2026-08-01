@@ -370,33 +370,26 @@ def prepare_numba_arrays(engine, release_dataframes: bool = False) -> Dict:
             n_rows, n_cols = engine.close.shape
             sector_mult_arr = np.ones((n_rows, n_cols), dtype=np.float32)
 
-            # Buckets from plan
-            # weak: <= 0.00
-            # low: (0.00, 0.01]
-            # mid: (0.01, 0.02]
-            # high: (0.02, 0.03]
-            # extreme: > 0.03
+            # Vectorized buckets from plan
+            # weak: <= 0.00, low: (0.00, 0.01], mid: (0.01, 0.02], high: (0.02, 0.03], extreme: > 0.03
 
             for j, ticker in enumerate(engine.close.columns):
                 etf = ticker_map.get(ticker)
                 if etf and etf in dist_matrix.columns:
                     dists = dist_matrix[etf].values
-                    for i in range(n_rows):
-                        d = dists[i]
-                        if pd.isna(d):
-                            bucket = "weak"
-                        elif d <= 0.00:
-                            bucket = "weak"
-                        elif d <= 0.01:
-                            bucket = "low"
-                        elif d <= 0.02:
-                            bucket = "mid"
-                        elif d <= 0.03:
-                            bucket = "high"
-                        else:
-                            bucket = "extreme"
-
-                        sector_mult_arr[i, j] = mult_map.get(bucket, 1.0)
+                    mults = np.full(n_rows, mult_map.get("weak", 1.0), dtype=np.float32)
+                    
+                    mask_low = (dists > 0.00) & (dists <= 0.01)
+                    mask_mid = (dists > 0.01) & (dists <= 0.02)
+                    mask_high = (dists > 0.02) & (dists <= 0.03)
+                    mask_ext = (dists > 0.03)
+                    
+                    mults[mask_low] = mult_map.get("low", 1.0)
+                    mults[mask_mid] = mult_map.get("mid", 1.0)
+                    mults[mask_high] = mult_map.get("high", 1.0)
+                    mults[mask_ext] = mult_map.get("extreme", 1.0)
+                    
+                    sector_mult_arr[:, j] = mults
 
             arrays["sector_multiplier"] = sector_mult_arr
             logger.info("   [OK] Sector strength multiplier array prepared")
@@ -4237,30 +4230,18 @@ class AdvancedVectorBTEngine:
             # [SHIELD] FILTRO DE LIQUIDEZ: RVOL Mínimo, ADR Mínimo, Volumen Mínimo
             # ===============================================================
             if self.use_dynamic_thresholds and hasattr(self, "min_rvol_dynamic"):
-                logger.info("[SEARCH] Aplicando filtros de liquidez con UMBRALES DINÁMICOS...")
-
-                low_rvol_mask = pd.DataFrame(
-                    False, index=self.rvol.index, columns=self.rvol.columns
-                )
-                low_adr_mask = pd.DataFrame(
-                    False, index=self.adr_pct.index, columns=self.adr_pct.columns
-                )
-                wide_stop_mask = pd.DataFrame(
-                    False, index=self.close.index, columns=self.close.columns
-                )
-
-                for date in self.rvol.index:
-                    if date in self.min_rvol_dynamic.index:
-                        rvol_threshold = self.min_rvol_dynamic.loc[date]
-                        adr_threshold = self.min_adr_dynamic.loc[date]
-                        low_rvol_mask.loc[date] = self.rvol.loc[date] < rvol_threshold
-                        low_adr_mask.loc[date] = self.adr_pct.loc[date] < adr_threshold
-                    
-                    if date in self.max_stop_pct_dynamic.index:
-                        stop_threshold = self.max_stop_pct_dynamic.loc[date]
-                    else:
-                        stop_threshold = self.max_stop_pct
-                    wide_stop_mask.loc[date] = stop_dist_df.loc[date] > stop_threshold
+                logger.info("[SEARCH] Aplicando filtros de liquidez con UMBRALES DINÁMICOS (Vectorizado)...")
+                
+                rvol_threshold = self.min_rvol_dynamic.reindex(self.rvol.index).ffill().values[:, None]
+                adr_threshold = self.min_adr_dynamic.reindex(self.adr_pct.index).ffill().values[:, None]
+                low_rvol_mask = self.rvol < rvol_threshold
+                low_adr_mask = self.adr_pct < adr_threshold
+                
+                if hasattr(self, "max_stop_pct_dynamic"):
+                    stop_threshold = self.max_stop_pct_dynamic.reindex(self.close.index).ffill().fillna(self.max_stop_pct).values[:, None]
+                    wide_stop_mask = stop_dist_df > stop_threshold
+                else:
+                    wide_stop_mask = stop_dist_df > self.max_stop_pct
             else:
                 logger.info(
                     f"[SEARCH] Aplicando filtros de liquidez estáticos (RVOL>={self.min_rvol}x, ADR>={self.min_adr}%)..."
@@ -4311,35 +4292,52 @@ class AdvancedVectorBTEngine:
             # [GLOBE] FILTRO DE RÉGIMEN DE MERCADO (Market Context)
             # ===============================================================
             if self.use_market_regime_filter and self.market_regime_classifier is not None:
-                logger.info("[GLOBE] Aplicando filtro de régimen de mercado...")
+                logger.info("[GLOBE] Aplicando filtro de régimen de mercado (Vectorizado)...")
 
-                market_stages = {}
-                blocked_entries = 0
                 total_entries_pre_regime = entries.sum().sum()
 
-                blocked_mask = pd.DataFrame(False, index=entries.index, columns=entries.columns)
+                clf = self.market_regime_classifier
+                spy = clf.spy.reindex(entries.index).ffill()
+                
+                if clf.vix is not None:
+                    vix_close = clf.vix["close"].reindex(entries.index).ffill()
+                else:
+                    vix_close = pd.Series(20.0, index=entries.index)
+                    
+                # Vectorized stage determination
+                stage_4_mask = (spy["close"] < spy["sma200"]) & (spy["close"] < spy["sma50"]) & (spy["mom_20"] < -0.05)
+                
+                spy_weak = (spy["close"] < spy["sma50"]).astype(int)
+                vol_high = (spy["volatility_20"] > 1.5).astype(int)
+                vix_high = (vix_close > 20).astype(int)
+                stage_3_mask = ((spy_weak + vol_high + vix_high) >= 2) & ~stage_4_mask
+                
+                should_block = pd.Series(False, index=entries.index)
+                if self.block_trades_in_stage4:
+                    should_block |= stage_4_mask
+                if self.block_trades_in_stage3:
+                    should_block |= stage_3_mask
+                    
+                # Broadcast column-wise
+                blocked_mask = pd.DataFrame(
+                    np.broadcast_to(should_block.values[:, None], entries.shape),
+                    index=entries.index,
+                    columns=entries.columns
+                )
+                blocked_entries = (entries & blocked_mask).sum().sum()
 
-                for date in entries.index:
-                    context = self.market_regime_classifier.get_market_context(date)
-                    market_stages[date] = context
+                # Stage 1 mask (needed for both risk adjustment and logging)
+                stage_1_mask = (spy["close"] > spy["sma200"]) & (spy["close"] > spy["sma50"]) & (spy["mom_20"] > 0.03) & (vix_close < 20) & ~stage_3_mask & ~stage_4_mask
 
-                    should_block = False
-                    if self.block_trades_in_stage4 and context["market_stage"] == "STAGE_4":
-                        should_block = True
-                    elif self.block_trades_in_stage3 and context["market_stage"] == "STAGE_3":
-                        should_block = True
+                if self.adjust_risk_by_regime:
+                    risk_mult = pd.Series(0.75, index=entries.index) # Default STAGE_2
+                    risk_mult[stage_4_mask] = 0.00
+                    risk_mult[stage_3_mask] = 0.25
+                    risk_mult[stage_1_mask] = 1.00
+                    
+                    self.regime_risk_multipliers = risk_mult.to_dict()
 
-                    if should_block:
-                        blocked_mask.loc[date, :] = True
-                        blocked_entries += entries.loc[date, :].sum()
-
-                    if self.adjust_risk_by_regime:
-                        risk_mult = context["risk_multiplier"]
-                        if not hasattr(self, "regime_risk_multipliers"):
-                            self.regime_risk_multipliers = {}
-                        self.regime_risk_multipliers[date] = risk_mult
-
-                # Apply blocked mask to entries - THE CRITICAL FIX
+                # Apply blocked mask to entries
                 entries = entries & ~blocked_mask
 
                 total_entries_post_regime = entries.sum().sum()
@@ -4351,15 +4349,16 @@ class AdvancedVectorBTEngine:
                 if self.adjust_risk_by_regime:
                     logger.info(f"   [CHART] Risk adjustment by regime: ENABLED")
 
-                # Count stages
-                stage_counts = {}
-                for context in market_stages.values():
-                    stage = context["market_stage"]
-                    stage_counts[stage] = stage_counts.get(stage, 0) + 1
+                # Count stages from vectorized masks
+                n_dates = len(entries.index)
+                s4_count = int(stage_4_mask.sum())
+                s3_count = int(stage_3_mask.sum())
+                s1_count = int(stage_1_mask.sum())
+                s2_count = n_dates - s4_count - s3_count - s1_count
 
                 logger.info(f"   [CHART] Market Regime Distribution:")
-                for stage, count in sorted(stage_counts.items()):
-                    pct = count / len(market_stages) * 100 if market_stages else 0
+                for stage, count in [("STAGE_1", s1_count), ("STAGE_2", s2_count), ("STAGE_3", s3_count), ("STAGE_4", s4_count)]:
+                    pct = count / n_dates * 100 if n_dates else 0
                     logger.info(f"      {stage}: {count} days ({pct:.1f}%)")
 
         # ===============================================================
@@ -5513,29 +5512,19 @@ class AdvancedVectorBTEngine:
 
         # Clear large DataFrames
         attrs_to_clear = [
-            "close",
-            "high",
-            "low",
-            "open",
-            "volume",
-            "sma_20",
-            "sma_50",
-            "adr_pct",
-            "rvol",
-            "dist_sma20_pct",
-            "avg_volume_20",
-            "trend_aligned",
-            "dollar_volume",
-            "spy_data",
-            "market_regime_classifier",
+            "close", "high", "low", "open", "volume",
+            "sma_20", "sma_50", "adr_pct", "rvol", "dist_sma20_pct",
+            "avg_volume_20", "trend_aligned", "dollar_volume",
+            "spy_data", "market_regime_classifier",
+            "ema_8", "ema_21", "ema_10", "adr_pct_14",
+            "consolidation_days", "consolidation_range",
+            "rs_matrix", "atr_ratio_matrix", "tradeable_mask", "pattern_confidence_matrix",
+            "spy_close", "vix_close", "spy_sma50", "spy_ema20", "spy_sma200",
         ]
 
         for attr in attrs_to_clear:
             if hasattr(self, attr):
                 try:
-                    df = getattr(self, attr)
-                    if hasattr(df, "values"):
-                        del df
                     setattr(self, attr, None)
                 except:
                     pass

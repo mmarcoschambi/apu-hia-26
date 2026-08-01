@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 import shutil
 import math
+from unittest.mock import patch
 
 # Añadir la raíz al path para poder importar desde scripts
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -86,26 +87,29 @@ def test_promotion_success_with_metadata(setup_test_combo):
         "tier1_exits": {"tp1_r": 1.5},
         "tier2_filters": {"min_adr": 2.0},
         "tier3_fixed": {"max_exposure_pct": 0.3},
-        "validation": {
+        "oos_metrics": {
             "profit_factor": 1.8,
             "sharpe_ratio": 1.2,
-            "total_trades": 25
-        }
+            "trades": 160,
+            "dsr": 0.5,
+            "mdd_pct": -15.0
+        },
+        "params_json_source": "mocked_path"
     }
     src_file.write_text(json.dumps(candidate))
 
     # Ejecutar promoción
-    res = sync(name, promote=True)
+    with patch("src.validation.param_gate.assert_params_cleared", return_value={"gate_passed": True}):
+        res = sync(name, promote=True)
 
     assert res is True
     assert dst_file.exists()
 
     # Validar metadatos inyectados
     promoted = json.loads(dst_file.read_text())
-    assert promoted["approved"] is True
-    assert "approved_at" in promoted
+    assert "governance_hash" in promoted
+    assert "promoted_at" in promoted
     assert promoted["approved_source"] == "sync_combo_config"
-    assert promoted["promotion_gate"] == "validation_passed_true"
 
 
 def test_block_when_validation_failed(setup_test_combo):
@@ -149,7 +153,7 @@ def test_hard_sanity_threshold_rejection(setup_test_combo):
     candidate = {
         "name": name,
         "validation_passed": True,
-        "validation": {"profit_factor": float('inf')}
+        "oos_metrics": {"profit_factor": float('inf'), "trades": 35, "dsr": 2.5, "mdd_pct": -5.0}
     }
     src_file.write_text(json.dumps(candidate))
 
@@ -173,12 +177,14 @@ def test_one_step_backup_and_atomic_replace(setup_test_combo):
     candidate = {
         "name": name,
         "validation_passed": True,
-        "validation": {"profit_factor": 2.1}
+        "oos_metrics": {"profit_factor": 2.1, "trades": 160, "dsr": 0.5, "mdd_pct": -15.0},
+        "params_json_source": "mocked_path"
     }
     src_file.write_text(json.dumps(candidate))
 
     # 3. Promover
-    res = sync(name, promote=True)
+    with patch("src.validation.param_gate.assert_params_cleared", return_value={"gate_passed": True}):
+        res = sync(name, promote=True)
 
     assert res is True
     assert dst_file.exists()
@@ -190,5 +196,5 @@ def test_one_step_backup_and_atomic_replace(setup_test_combo):
 
     # Verificar que el nuevo contiene los datos actualizados
     new_content = json.loads(dst_file.read_text())
-    assert new_content["approved"] is True
-    assert new_content["validation"]["profit_factor"] == 2.1
+    assert "governance_hash" in new_content
+    assert new_content["oos_metrics"]["profit_factor"] == 2.1
