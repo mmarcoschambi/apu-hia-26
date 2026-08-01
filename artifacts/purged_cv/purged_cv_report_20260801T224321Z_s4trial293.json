@@ -1,0 +1,55 @@
+{
+  "degradation_pct": 100.0,
+  "folds": [
+    {
+      "fold": 1,
+      "is_sharpe": -0.029793248100174613,
+      "is_trades": 76,
+      "oos_sharpe": -0.645833188670875,
+      "oos_trades": 19
+    },
+    {
+      "fold": 2,
+      "is_sharpe": -0.04295031553552796,
+      "is_trades": 89,
+      "oos_sharpe": 0.05878189226368363,
+      "oos_trades": 15
+    }
+  ],
+  "gate_passed": false,
+  "gate_threshold_pct": 25,
+  "generated_at_utc": "20260801T224407Z",
+  "git_commit": "8b13c9e99ebae2b529f52188ea4000d12b62550b",
+  "is_sharpe_mean": -0.0364,
+  "oos_folds": [
+    {
+      "fold": 1,
+      "oos_end": "2024-12-31",
+      "oos_start": "2024-01-01"
+    },
+    {
+      "fold": 2,
+      "oos_end": "2025-12-31",
+      "oos_start": "2025-01-01"
+    }
+  ],
+  "oos_sharpe_mean": -0.2935,
+  "params_json_source": "artifacts/s4_candidates/s4_candidate_trial293_params.json",
+  "purged_cv_config": {
+    "embargo_days": 5,
+    "n_folds": 2,
+    "purge_days": 10
+  },
+  "runtime_s": 46.2,
+  "total_oos_trades": 34,
+  "trades_per_fold": [
+    19,
+    15
+  ],
+  "train_start": "2019-01-01",
+  "universe_size": 199,
+  "warnings": [
+    "Fold 1: only 19 OOS trades (< 30) — statistically insignificant",
+    "Fold 2: only 15 OOS trades (< 30) — statistically insignificant"
+  ]
+}

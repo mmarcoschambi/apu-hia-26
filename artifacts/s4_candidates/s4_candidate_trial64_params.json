@@ -1,0 +1,23 @@
+{
+  "risk_dollars": 2000.0,
+  "min_rs_percentile": 70.0,
+  "max_dist_sma20": 10.0,
+  "min_rvol": 1.0,
+  "min_adr": 1.7682682720157696,
+  "max_exposure_pct": 0.29205417217212015,
+  "use_composite_sector_scoring": false,
+  "sector_top_percentile": 0.2777166070031955,
+  "use_atr_stop": false,
+  "atr_stop_multiplier": 1.5,
+  "atr_trailing_multiplier": 3.1601369658173524,
+  "tp1_r": 1.3577839792596098,
+  "tp2_r": 3.0,
+  "use_breadth_filter": false,
+  "breadth_filter_threshold": 0.25688364441129513,
+  "use_market_regime_filter": false,
+  "max_vix_threshold": 25.0,
+  "require_spy_above_sma50": false,
+  "min_consolidation_days": 5,
+  "fees": 0.001,
+  "slippage": 0.001
+}

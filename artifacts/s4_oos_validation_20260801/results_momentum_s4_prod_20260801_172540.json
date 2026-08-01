@@ -1,0 +1,617 @@
+{
+  "study_name": "momentum_s4_prod",
+  "period": {
+    "start": "2019-01-01",
+    "end": "2024-12-31"
+  },
+  "trials_total": 1000,
+  "trials_pilot": 80,
+  "universe_size": 199,
+  "candidates": [
+    {
+      "rank": 1,
+      "trial_id": 722,
+      "score_composed": 1.9992,
+      "params": {
+        "min_adr": 2.141656970240881,
+        "max_exposure_pct": 0.32678012766677805,
+        "sector_top_percentile": 0.27108736048917303,
+        "atr_trailing_multiplier": 3.0543255178987194,
+        "tp1_r": 1.5151916164528663,
+        "breadth_filter_threshold": 0.13422230275534566
+      },
+      "is_sharpe": 1.1599948428801807,
+      "trades": 259,
+      "pf": 1.7935217583438792,
+      "calmar": 1.4047687002554776,
+      "cagr": 0.09793291510808144,
+      "mdd": 0.06971461927523792,
+      "win_rate": 0.752895752895753,
+      "break_reason": "PASSED",
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0
+    },
+    {
+      "rank": 2,
+      "trial_id": 221,
+      "score_composed": 1.8318,
+      "params": {
+        "min_adr": 1.8542143455338482,
+        "max_exposure_pct": 0.31810146809303913,
+        "sector_top_percentile": 0.3188584236763166,
+        "atr_trailing_multiplier": 2.9759428005157766,
+        "tp1_r": 1.3255968930904978,
+        "breadth_filter_threshold": 0.19905660693152352
+      },
+      "is_sharpe": 1.2133724783636726,
+      "trades": 282,
+      "pf": 1.951958827836684,
+      "calmar": 0.9771481652628764,
+      "cagr": 0.10237431236853345,
+      "mdd": 0.10476846399337228,
+      "win_rate": 0.7978723404255319,
+      "break_reason": "PASSED",
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.005
+    },
+    {
+      "rank": 3,
+      "trial_id": 845,
+      "score_composed": 1.831,
+      "params": {
+        "min_adr": 2.0781991905913872,
+        "max_exposure_pct": 0.31162281657405994,
+        "sector_top_percentile": 0.290735413144385,
+        "atr_trailing_multiplier": 3.200587017253765,
+        "tp1_r": 1.3698673822682808,
+        "breadth_filter_threshold": 0.1427477348589259
+      },
+      "is_sharpe": 1.1839327154071984,
+      "trades": 281,
+      "pf": 1.7619808633291185,
+      "calmar": 1.0534468082963113,
+      "cagr": 0.0939140914785408,
+      "mdd": 0.08914934360133808,
+      "win_rate": 0.7829181494661922,
+      "break_reason": "PASSED",
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0
+    },
+    {
+      "rank": 4,
+      "trial_id": 398,
+      "score_composed": 1.8284,
+      "params": {
+        "min_adr": 1.8619613929319956,
+        "max_exposure_pct": 0.2887808045682763,
+        "sector_top_percentile": 0.29785401388152427,
+        "atr_trailing_multiplier": 3.128900395780658,
+        "tp1_r": 1.379055634094759,
+        "breadth_filter_threshold": 0.19884897780367017
+      },
+      "is_sharpe": 1.150194320330438,
+      "trades": 251,
+      "pf": 2.212869629497546,
+      "calmar": 1.1279240298285902,
+      "cagr": 0.11817086810635602,
+      "mdd": 0.10476846399337228,
+      "win_rate": 0.7888446215139442,
+      "break_reason": "PASSED",
+      "cost_robustness": "FRAGIL",
+      "hard_ruin_estimated": 0.0
+    },
+    {
+      "rank": 5,
+      "trial_id": 293,
+      "score_composed": 1.8192,
+      "params": {
+        "min_adr": 2.0160068036879086,
+        "max_exposure_pct": 0.3317181254805998,
+        "sector_top_percentile": 0.2876788277392578,
+        "atr_trailing_multiplier": 3.187111160135801,
+        "tp1_r": 1.3541124551986738,
+        "breadth_filter_threshold": 0.2009613913430825
+      },
+      "is_sharpe": 1.0278333015268633,
+      "trades": 280,
+      "pf": 1.8334846821063928,
+      "calmar": 1.4868793259371804,
+      "cagr": 0.10884067663128039,
+      "mdd": 0.07320074651160953,
+      "win_rate": 0.7785714285714286,
+      "break_reason": "PASSED",
+      "cost_robustness": "MODERADO",
+      "hard_ruin_estimated": 0.005
+    },
+    {
+      "rank": 6,
+      "trial_id": 663,
+      "score_composed": 1.8166,
+      "params": {
+        "min_adr": 2.0821900190002727,
+        "max_exposure_pct": 0.30825825204766005,
+        "sector_top_percentile": 0.32142628685008195,
+        "atr_trailing_multiplier": 3.2513149004165793,
+        "tp1_r": 1.430415241161346,
+        "breadth_filter_threshold": 0.10163991402083211
+      },
+      "is_sharpe": 1.0492980267694578,
+      "trades": 236,
+      "pf": 2.0998734910167434,
+      "calmar": 1.4091903616564634,
+      "cagr": 0.11171906052098168,
+      "mdd": 0.07927889911882387,
+      "win_rate": 0.7627118644067796,
+      "break_reason": "PASSED",
+      "cost_robustness": "MODERADO",
+      "hard_ruin_estimated": 0.0
+    },
+    {
+      "rank": 7,
+      "trial_id": 212,
+      "score_composed": 1.8139,
+      "params": {
+        "min_adr": 1.861141094346878,
+        "max_exposure_pct": 0.3201571651361188,
+        "sector_top_percentile": 0.31965989330456757,
+        "atr_trailing_multiplier": 3.0020737779884246,
+        "tp1_r": 1.339527189701753,
+        "breadth_filter_threshold": 0.1608173635412665
+      },
+      "is_sharpe": 1.2035076476920579,
+      "trades": 281,
+      "pf": 1.95351972549335,
+      "calmar": 0.9721146784707196,
+      "cagr": 0.10184696168878826,
+      "mdd": 0.10476846399337228,
+      "win_rate": 0.7935943060498221,
+      "break_reason": "PASSED",
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.005
+    },
+    {
+      "rank": 8,
+      "trial_id": 222,
+      "score_composed": 1.8111,
+      "params": {
+        "min_adr": 1.8554793501379605,
+        "max_exposure_pct": 0.3191859371619617,
+        "sector_top_percentile": 0.3173114346747932,
+        "atr_trailing_multiplier": 2.9779582132216067,
+        "tp1_r": 1.3370685656870505,
+        "breadth_filter_threshold": 0.21572895589024038
+      },
+      "is_sharpe": 1.2020256398778144,
+      "trades": 281,
+      "pf": 1.9522033438796278,
+      "calmar": 0.9710426842493972,
+      "cagr": 0.10173465050081054,
+      "mdd": 0.10476846399337228,
+      "win_rate": 0.7935943060498221,
+      "break_reason": "PASSED",
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0
+    },
+    {
+      "rank": 9,
+      "trial_id": 64,
+      "score_composed": 1.7442,
+      "params": {
+        "min_adr": 1.7682682720157696,
+        "max_exposure_pct": 0.29205417217212015,
+        "sector_top_percentile": 0.2777166070031955,
+        "atr_trailing_multiplier": 3.1601369658173524,
+        "tp1_r": 1.3577839792596098,
+        "breadth_filter_threshold": 0.25688364441129513
+      },
+      "is_sharpe": 1.1427955518502462,
+      "trades": 242,
+      "pf": 1.6897078144790694,
+      "calmar": 1.012118221809436,
+      "cagr": 0.0923655911703325,
+      "mdd": 0.09125968605248894,
+      "win_rate": 0.7768595041322314,
+      "break_reason": "PASSED",
+      "cost_robustness": "MODERADO",
+      "hard_ruin_estimated": 0.01
+    },
+    {
+      "rank": 10,
+      "trial_id": 763,
+      "score_composed": 1.7379,
+      "params": {
+        "min_adr": 2.061934285204072,
+        "max_exposure_pct": 0.3255420870146613,
+        "sector_top_percentile": 0.33501453470783443,
+        "atr_trailing_multiplier": 3.112288850237831,
+        "tp1_r": 1.5250760165174024,
+        "breadth_filter_threshold": 0.2289913159052548
+      },
+      "is_sharpe": 1.0816303158367568,
+      "trades": 241,
+      "pf": 1.8938084568444788,
+      "calmar": 1.1697726887430058,
+      "cagr": 0.09458914133328333,
+      "mdd": 0.08086112989603587,
+      "win_rate": 0.7676348547717843,
+      "break_reason": "PASSED",
+      "cost_robustness": "MODERADO",
+      "hard_ruin_estimated": 0.0
+    }
+  ],
+  "gate_results": {
+    "722": {
+      "passed": true,
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0,
+      "gate_details": {
+        "pf_gate": {
+          "threshold": 1.3,
+          "passed": true,
+          "value": 1.7935217583438792
+        },
+        "calmar_gate": {
+          "threshold": 1.0,
+          "passed": true,
+          "value": 1.4047687002554776
+        },
+        "mdd_duration_gate": {
+          "threshold": 126,
+          "passed": true,
+          "value": 41
+        },
+        "hard_ruin_gate": {
+          "threshold": 0.05,
+          "passed": true,
+          "value": 0.0
+        },
+        "degradation_gate": {
+          "threshold": 0.25,
+          "passed": true,
+          "value": null
+        },
+        "cost_robustness_gate": {
+          "passed": true,
+          "value": "ROBUSTO"
+        }
+      }
+    },
+    "221": {
+      "passed": false,
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.005,
+      "gate_details": {
+        "pf_gate": {
+          "threshold": 1.3,
+          "passed": true,
+          "value": 1.951958827836684
+        },
+        "calmar_gate": {
+          "threshold": 1.0,
+          "passed": false,
+          "value": 0.9771481652628764
+        },
+        "mdd_duration_gate": {
+          "threshold": 126,
+          "passed": true,
+          "value": 62
+        },
+        "hard_ruin_gate": {
+          "threshold": 0.05,
+          "passed": true,
+          "value": 0.005
+        },
+        "degradation_gate": {
+          "threshold": 0.25,
+          "passed": true,
+          "value": null
+        },
+        "cost_robustness_gate": {
+          "passed": true,
+          "value": "ROBUSTO"
+        }
+      }
+    },
+    "845": {
+      "passed": true,
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0,
+      "gate_details": {
+        "pf_gate": {
+          "threshold": 1.3,
+          "passed": true,
+          "value": 1.7619808633291185
+        },
+        "calmar_gate": {
+          "threshold": 1.0,
+          "passed": true,
+          "value": 1.0534468082963113
+        },
+        "mdd_duration_gate": {
+          "threshold": 126,
+          "passed": true,
+          "value": 53
+        },
+        "hard_ruin_gate": {
+          "threshold": 0.05,
+          "passed": true,
+          "value": 0.0
+        },
+        "degradation_gate": {
+          "threshold": 0.25,
+          "passed": true,
+          "value": null
+        },
+        "cost_robustness_gate": {
+          "passed": true,
+          "value": "ROBUSTO"
+        }
+      }
+    },
+    "398": {
+      "passed": false,
+      "cost_robustness": "FRAGIL",
+      "hard_ruin_estimated": 0.0,
+      "gate_details": {
+        "pf_gate": {
+          "threshold": 1.3,
+          "passed": true,
+          "value": 2.212869629497546
+        },
+        "calmar_gate": {
+          "threshold": 1.0,
+          "passed": true,
+          "value": 1.1279240298285902
+        },
+        "mdd_duration_gate": {
+          "threshold": 126,
+          "passed": true,
+          "value": 62
+        },
+        "hard_ruin_gate": {
+          "threshold": 0.05,
+          "passed": true,
+          "value": 0.0
+        },
+        "degradation_gate": {
+          "threshold": 0.25,
+          "passed": true,
+          "value": null
+        },
+        "cost_robustness_gate": {
+          "passed": false,
+          "value": "FRAGIL"
+        }
+      }
+    },
+    "293": {
+      "passed": true,
+      "cost_robustness": "MODERADO",
+      "hard_ruin_estimated": 0.005,
+      "gate_details": {
+        "pf_gate": {
+          "threshold": 1.3,
+          "passed": true,
+          "value": 1.8334846821063928
+        },
+        "calmar_gate": {
+          "threshold": 1.0,
+          "passed": true,
+          "value": 1.4868793259371804
+        },
+        "mdd_duration_gate": {
+          "threshold": 126,
+          "passed": true,
+          "value": 43
+        },
+        "hard_ruin_gate": {
+          "threshold": 0.05,
+          "passed": true,
+          "value": 0.005
+        },
+        "degradation_gate": {
+          "threshold": 0.25,
+          "passed": true,
+          "value": null
+        },
+        "cost_robustness_gate": {
+          "passed": true,
+          "value": "MODERADO"
+        }
+      }
+    },
+    "663": {
+      "passed": true,
+      "cost_robustness": "MODERADO",
+      "hard_ruin_estimated": 0.0,
+      "gate_details": {
+        "pf_gate": {
+          "threshold": 1.3,
+          "passed": true,
+          "value": 2.0998734910167434
+        },
+        "calmar_gate": {
+          "threshold": 1.0,
+          "passed": true,
+          "value": 1.4091903616564634
+        },
+        "mdd_duration_gate": {
+          "threshold": 126,
+          "passed": true,
+          "value": 47
+        },
+        "hard_ruin_gate": {
+          "threshold": 0.05,
+          "passed": true,
+          "value": 0.0
+        },
+        "degradation_gate": {
+          "threshold": 0.25,
+          "passed": true,
+          "value": null
+        },
+        "cost_robustness_gate": {
+          "passed": true,
+          "value": "MODERADO"
+        }
+      }
+    },
+    "212": {
+      "passed": false,
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.005,
+      "gate_details": {
+        "pf_gate": {
+          "threshold": 1.3,
+          "passed": true,
+          "value": 1.95351972549335
+        },
+        "calmar_gate": {
+          "threshold": 1.0,
+          "passed": false,
+          "value": 0.9721146784707196
+        },
+        "mdd_duration_gate": {
+          "threshold": 126,
+          "passed": true,
+          "value": 62
+        },
+        "hard_ruin_gate": {
+          "threshold": 0.05,
+          "passed": true,
+          "value": 0.005
+        },
+        "degradation_gate": {
+          "threshold": 0.25,
+          "passed": true,
+          "value": null
+        },
+        "cost_robustness_gate": {
+          "passed": true,
+          "value": "ROBUSTO"
+        }
+      }
+    },
+    "222": {
+      "passed": false,
+      "cost_robustness": "ROBUSTO",
+      "hard_ruin_estimated": 0.0,
+      "gate_details": {
+        "pf_gate": {
+          "threshold": 1.3,
+          "passed": true,
+          "value": 1.9522033438796278
+        },
+        "calmar_gate": {
+          "threshold": 1.0,
+          "passed": false,
+          "value": 0.9710426842493972
+        },
+        "mdd_duration_gate": {
+          "threshold": 126,
+          "passed": true,
+          "value": 62
+        },
+        "hard_ruin_gate": {
+          "threshold": 0.05,
+          "passed": true,
+          "value": 0.0
+        },
+        "degradation_gate": {
+          "threshold": 0.25,
+          "passed": true,
+          "value": null
+        },
+        "cost_robustness_gate": {
+          "passed": true,
+          "value": "ROBUSTO"
+        }
+      }
+    },
+    "64": {
+      "passed": true,
+      "cost_robustness": "MODERADO",
+      "hard_ruin_estimated": 0.01,
+      "gate_details": {
+        "pf_gate": {
+          "threshold": 1.3,
+          "passed": true,
+          "value": 1.6897078144790694
+        },
+        "calmar_gate": {
+          "threshold": 1.0,
+          "passed": true,
+          "value": 1.012118221809436
+        },
+        "mdd_duration_gate": {
+          "threshold": 126,
+          "passed": true,
+          "value": 54
+        },
+        "hard_ruin_gate": {
+          "threshold": 0.05,
+          "passed": true,
+          "value": 0.01
+        },
+        "degradation_gate": {
+          "threshold": 0.25,
+          "passed": true,
+          "value": null
+        },
+        "cost_robustness_gate": {
+          "passed": true,
+          "value": "MODERADO"
+        }
+      }
+    },
+    "763": {
+      "passed": true,
+      "cost_robustness": "MODERADO",
+      "hard_ruin_estimated": 0.0,
+      "gate_details": {
+        "pf_gate": {
+          "threshold": 1.3,
+          "passed": true,
+          "value": 1.8938084568444788
+        },
+        "calmar_gate": {
+          "threshold": 1.0,
+          "passed": true,
+          "value": 1.1697726887430058
+        },
+        "mdd_duration_gate": {
+          "threshold": 126,
+          "passed": true,
+          "value": 48
+        },
+        "hard_ruin_gate": {
+          "threshold": 0.05,
+          "passed": true,
+          "value": 0.0
+        },
+        "degradation_gate": {
+          "threshold": 0.25,
+          "passed": true,
+          "value": null
+        },
+        "cost_robustness_gate": {
+          "passed": true,
+          "value": "MODERADO"
+        }
+      }
+    }
+  },
+  "gate_summary": {
+    "total_candidates": 10,
+    "passed": 6,
+    "rejected": 4,
+    "gate_stats": {
+      "pf": "10/10",
+      "calmar": "7/10",
+      "mdd_duration": "10/10",
+      "hard_ruin": "10/10",
+      "degradation": "10/10",
+      "cost_robustness": "9/10"
+    }
+  }
+}

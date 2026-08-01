@@ -1,0 +1,662 @@
+{
+  "block": 2,
+  "oos_period": "2024-01-01 to 2025-12-31",
+  "n_search_trials_for_dsr": 1000,
+  "verdict": "ALL 6 REJECTED",
+  "candidates": {
+    "722": {
+      "consolidated_src": "oos_validation_6_survivors_20260801T223635Z.json",
+      "oos_analysis": {
+        "engine": {
+          "sharpe": 0.47811085444897616,
+          "profit_factor": 1.4516523714988583,
+          "total_trades": 30,
+          "mdd": -0.11357057650808977
+        },
+        "n_positions": 30,
+        "bootstrap": {
+          "n_positions": 30,
+          "n_boot": 2000,
+          "seed": 42,
+          "mean": 2.582312555829184,
+          "std": 2.815898767427982,
+          "ci_lower_5": -2.109768579816641,
+          "ci_upper_95": 6.945762875150236,
+          "pct_positive": 83.0,
+          "prob_alpha_positive": 0.83
+        },
+        "psr_dsr": {
+          "n_trials": 1000,
+          "sharpe_hat_non_annualized": 0.16136,
+          "sharpe_hat_annualized": 2.5615,
+          "expected_max_sharpe_null": 0.60446,
+          "psr_vs_zero": 0.82352,
+          "dsr": 0.00538,
+          "pbo_mc_equiv": 0.99462
+        },
+        "equity": {
+          "initial": 100000.0,
+          "final": 109364.22,
+          "n_days": 502,
+          "daily_sharpe_ann": 0.4781
+        },
+        "mc_summary": {
+          "expected_growth": 0.0405,
+          "median_outcome": 104045.98,
+          "risk_of_loss": 0.349,
+          "mean_outcome": 104939.06
+        }
+      },
+      "purged_cv": {
+        "generated_at_utc": "20260801T223725Z",
+        "git_commit": "8b13c9e99ebae2b529f52188ea4000d12b62550b",
+        "params_json_source": "artifacts/s4_candidates/s4_candidate_trial722_params.json",
+        "universe_size": 199,
+        "train_start": "2019-01-01",
+        "oos_folds": [
+          {
+            "fold": 1,
+            "oos_start": "2024-01-01",
+            "oos_end": "2024-12-31"
+          },
+          {
+            "fold": 2,
+            "oos_start": "2025-01-01",
+            "oos_end": "2025-12-31"
+          }
+        ],
+        "purged_cv_config": {
+          "n_folds": 2,
+          "purge_days": 10,
+          "embargo_days": 5
+        },
+        "degradation_pct": 40.94,
+        "gate_passed": false,
+        "gate_threshold_pct": 25,
+        "is_sharpe_mean": 0.4543,
+        "oos_sharpe_mean": 0.2683,
+        "trades_per_fold": [
+          16,
+          12
+        ],
+        "total_oos_trades": 28,
+        "warnings": [
+          "Fold 1: only 16 OOS trades (< 30) — statistically insignificant",
+          "Fold 2: only 12 OOS trades (< 30) — statistically insignificant"
+        ],
+        "runtime_s": 39.9
+      },
+      "purged_cv_folds": [
+        {
+          "fold": 1,
+          "is_sharpe": 0.7936257796813441,
+          "oos_sharpe": -0.10453255154621163,
+          "is_trades": 78,
+          "oos_trades": 16
+        },
+        {
+          "fold": 2,
+          "is_sharpe": 0.11505180881111443,
+          "oos_sharpe": 0.6412248760542536,
+          "is_trades": 95,
+          "oos_trades": 12
+        }
+      ],
+      "receipt": "artifacts/purged_cv/purged_cv_report_20260801T223646Z_s4trial722.json",
+      "params_json_source": "artifacts/s4_candidates/s4_candidate_trial722_params.json",
+      "is_metrics": {
+        "sharpe": 1.1599948428801807,
+        "pf": 1.7935217583438792,
+        "calmar": 1.4047687002554776,
+        "trades": 259
+      },
+      "score_composed": 1.9992,
+      "cost_robustness": "ROBUSTO"
+    },
+    "845": {
+      "consolidated_src": "oos_validation_6_survivors_20260801T224042Z.json",
+      "oos_analysis": {
+        "engine": {
+          "sharpe": 0.21392474622194904,
+          "profit_factor": 1.1903202893689742,
+          "total_trades": 34,
+          "mdd": -0.1472998463937856
+        },
+        "n_positions": 34,
+        "bootstrap": {
+          "n_positions": 34,
+          "n_boot": 2000,
+          "seed": 42,
+          "mean": 1.2810004333504792,
+          "std": 2.746152143107271,
+          "ci_lower_5": -3.5064113811640527,
+          "ci_upper_95": 5.577972369853372,
+          "pct_positive": 69.75,
+          "prob_alpha_positive": 0.6975
+        },
+        "psr_dsr": {
+          "n_trials": 1000,
+          "sharpe_hat_non_annualized": 0.08762,
+          "sharpe_hat_annualized": 1.3909,
+          "expected_max_sharpe_null": 0.56664,
+          "psr_vs_zero": 0.69905,
+          "dsr": 0.00217,
+          "pbo_mc_equiv": 0.99783
+        },
+        "equity": {
+          "initial": 100000.0,
+          "final": 103503.13,
+          "n_days": 502,
+          "daily_sharpe_ann": 0.2139
+        },
+        "mc_summary": {
+          "expected_growth": 0.0133,
+          "median_outcome": 101326.25,
+          "risk_of_loss": 0.442,
+          "mean_outcome": 101981.34
+        }
+      },
+      "purged_cv": {
+        "generated_at_utc": "20260801T224134Z",
+        "git_commit": "8b13c9e99ebae2b529f52188ea4000d12b62550b",
+        "params_json_source": "artifacts/s4_candidates/s4_candidate_trial845_params.json",
+        "universe_size": 199,
+        "train_start": "2019-01-01",
+        "oos_folds": [
+          {
+            "fold": 1,
+            "oos_start": "2024-01-01",
+            "oos_end": "2024-12-31"
+          },
+          {
+            "fold": 2,
+            "oos_start": "2025-01-01",
+            "oos_end": "2025-12-31"
+          }
+        ],
+        "purged_cv_config": {
+          "n_folds": 2,
+          "purge_days": 10,
+          "embargo_days": 5
+        },
+        "degradation_pct": 100.0,
+        "gate_passed": false,
+        "gate_threshold_pct": 25,
+        "is_sharpe_mean": -0.1337,
+        "oos_sharpe_mean": -0.1855,
+        "trades_per_fold": [
+          19,
+          14
+        ],
+        "total_oos_trades": 33,
+        "warnings": [
+          "Fold 1: only 19 OOS trades (< 30) — statistically insignificant",
+          "Fold 2: only 14 OOS trades (< 30) — statistically insignificant"
+        ],
+        "runtime_s": 42.9
+      },
+      "purged_cv_folds": [
+        {
+          "fold": 1,
+          "is_sharpe": -0.10326604211259527,
+          "oos_sharpe": -0.39690258124950795,
+          "is_trades": 81,
+          "oos_trades": 19
+        },
+        {
+          "fold": 2,
+          "is_sharpe": -0.16422655334606256,
+          "oos_sharpe": 0.02599127675411752,
+          "is_trades": 95,
+          "oos_trades": 14
+        }
+      ],
+      "receipt": "artifacts/purged_cv/purged_cv_report_20260801T224051Z_s4trial845.json",
+      "params_json_source": "artifacts/s4_candidates/s4_candidate_trial845_params.json",
+      "is_metrics": {
+        "sharpe": 1.1839327154071984,
+        "pf": 1.7619808633291185,
+        "calmar": 1.0534468082963113,
+        "trades": 281
+      },
+      "score_composed": 1.831,
+      "cost_robustness": "ROBUSTO"
+    },
+    "293": {
+      "consolidated_src": "oos_validation_6_survivors_20260801T224312Z.json",
+      "oos_analysis": {
+        "engine": {
+          "sharpe": 0.11147333367890093,
+          "profit_factor": 1.1080722370054348,
+          "total_trades": 35,
+          "mdd": -0.17610637853065036
+        },
+        "n_positions": 35,
+        "bootstrap": {
+          "n_positions": 35,
+          "n_boot": 2000,
+          "seed": 42,
+          "mean": 1.1506958350897314,
+          "std": 2.646445801447511,
+          "ci_lower_5": -3.2238307556922146,
+          "ci_upper_95": 5.300217321622124,
+          "pct_positive": 69.05,
+          "prob_alpha_positive": 0.6905
+        },
+        "psr_dsr": {
+          "n_trials": 1000,
+          "sharpe_hat_non_annualized": 0.07765,
+          "sharpe_hat_annualized": 1.2326,
+          "expected_max_sharpe_null": 0.55825,
+          "psr_vs_zero": 0.68011,
+          "dsr": 0.00188,
+          "pbo_mc_equiv": 0.99812
+        },
+        "equity": {
+          "initial": 100000.0,
+          "final": 101255.58,
+          "n_days": 502,
+          "daily_sharpe_ann": 0.1115
+        },
+        "mc_summary": {
+          "expected_growth": -0.0041,
+          "median_outcome": 99591.15,
+          "risk_of_loss": 0.51,
+          "mean_outcome": 100877.68
+        }
+      },
+      "purged_cv": {
+        "generated_at_utc": "20260801T224407Z",
+        "git_commit": "8b13c9e99ebae2b529f52188ea4000d12b62550b",
+        "params_json_source": "artifacts/s4_candidates/s4_candidate_trial293_params.json",
+        "universe_size": 199,
+        "train_start": "2019-01-01",
+        "oos_folds": [
+          {
+            "fold": 1,
+            "oos_start": "2024-01-01",
+            "oos_end": "2024-12-31"
+          },
+          {
+            "fold": 2,
+            "oos_start": "2025-01-01",
+            "oos_end": "2025-12-31"
+          }
+        ],
+        "purged_cv_config": {
+          "n_folds": 2,
+          "purge_days": 10,
+          "embargo_days": 5
+        },
+        "degradation_pct": 100.0,
+        "gate_passed": false,
+        "gate_threshold_pct": 25,
+        "is_sharpe_mean": -0.0364,
+        "oos_sharpe_mean": -0.2935,
+        "trades_per_fold": [
+          19,
+          15
+        ],
+        "total_oos_trades": 34,
+        "warnings": [
+          "Fold 1: only 19 OOS trades (< 30) — statistically insignificant",
+          "Fold 2: only 15 OOS trades (< 30) — statistically insignificant"
+        ],
+        "runtime_s": 46.2
+      },
+      "purged_cv_folds": [
+        {
+          "fold": 1,
+          "is_sharpe": -0.029793248100174613,
+          "oos_sharpe": -0.645833188670875,
+          "is_trades": 76,
+          "oos_trades": 19
+        },
+        {
+          "fold": 2,
+          "is_sharpe": -0.04295031553552796,
+          "oos_sharpe": 0.05878189226368363,
+          "is_trades": 89,
+          "oos_trades": 15
+        }
+      ],
+      "receipt": "artifacts/purged_cv/purged_cv_report_20260801T224321Z_s4trial293.json",
+      "params_json_source": "artifacts/s4_candidates/s4_candidate_trial293_params.json",
+      "is_metrics": {
+        "sharpe": 1.0278333015268633,
+        "pf": 1.8334846821063928,
+        "calmar": 1.4868793259371804,
+        "trades": 280
+      },
+      "score_composed": 1.8192,
+      "cost_robustness": "MODERADO"
+    },
+    "663": {
+      "consolidated_src": "oos_validation_6_survivors_20260801T224210Z.json",
+      "oos_analysis": {
+        "engine": {
+          "sharpe": 0.353266040656819,
+          "profit_factor": 1.2998417571919658,
+          "total_trades": 31,
+          "mdd": -0.138026428201763
+        },
+        "n_positions": 31,
+        "bootstrap": {
+          "n_positions": 31,
+          "n_boot": 2000,
+          "seed": 42,
+          "mean": 1.7496385389767992,
+          "std": 2.753696270788978,
+          "ci_lower_5": -2.837869128225573,
+          "ci_upper_95": 6.013275932455302,
+          "pct_positive": 74.85000000000001,
+          "prob_alpha_positive": 0.7485
+        },
+        "psr_dsr": {
+          "n_trials": 1000,
+          "sharpe_hat_non_annualized": 0.11768,
+          "sharpe_hat_annualized": 1.8681,
+          "expected_max_sharpe_null": 0.5943,
+          "psr_vs_zero": 0.7514,
+          "dsr": 0.00298,
+          "pbo_mc_equiv": 0.99702
+        },
+        "equity": {
+          "initial": 100000.0,
+          "final": 106703.89,
+          "n_days": 502,
+          "daily_sharpe_ann": 0.3533
+        },
+        "mc_summary": {
+          "expected_growth": 0.0273,
+          "median_outcome": 102730.11,
+          "risk_of_loss": 0.386,
+          "mean_outcome": 103583.05
+        }
+      },
+      "purged_cv": {
+        "generated_at_utc": "20260801T224256Z",
+        "git_commit": "8b13c9e99ebae2b529f52188ea4000d12b62550b",
+        "params_json_source": "artifacts/s4_candidates/s4_candidate_trial663_params.json",
+        "universe_size": 199,
+        "train_start": "2019-01-01",
+        "oos_folds": [
+          {
+            "fold": 1,
+            "oos_start": "2024-01-01",
+            "oos_end": "2024-12-31"
+          },
+          {
+            "fold": 2,
+            "oos_start": "2025-01-01",
+            "oos_end": "2025-12-31"
+          }
+        ],
+        "purged_cv_config": {
+          "n_folds": 2,
+          "purge_days": 10,
+          "embargo_days": 5
+        },
+        "degradation_pct": 100.0,
+        "gate_passed": false,
+        "gate_threshold_pct": 25,
+        "is_sharpe_mean": -0.0425,
+        "oos_sharpe_mean": -0.3161,
+        "trades_per_fold": [
+          16,
+          14
+        ],
+        "total_oos_trades": 30,
+        "warnings": [
+          "Fold 1: only 16 OOS trades (< 30) — statistically insignificant",
+          "Fold 2: only 14 OOS trades (< 30) — statistically insignificant"
+        ],
+        "runtime_s": 37.1
+      },
+      "purged_cv_folds": [
+        {
+          "fold": 1,
+          "is_sharpe": 0.042205878746067314,
+          "oos_sharpe": -0.6589926460695804,
+          "is_trades": 76,
+          "oos_trades": 16
+        },
+        {
+          "fold": 2,
+          "is_sharpe": -0.12722259075976527,
+          "oos_sharpe": 0.026804336900207344,
+          "is_trades": 91,
+          "oos_trades": 14
+        }
+      ],
+      "receipt": "artifacts/purged_cv/purged_cv_report_20260801T224219Z_s4trial663.json",
+      "params_json_source": "artifacts/s4_candidates/s4_candidate_trial663_params.json",
+      "is_metrics": {
+        "sharpe": 1.0492980267694578,
+        "pf": 2.0998734910167434,
+        "calmar": 1.4091903616564634,
+        "trades": 236
+      },
+      "score_composed": 1.8166,
+      "cost_robustness": "MODERADO"
+    },
+    "64": {
+      "consolidated_src": "oos_validation_6_survivors_20260801T224449Z.json",
+      "oos_analysis": {
+        "engine": {
+          "sharpe": 0.19371008088802352,
+          "profit_factor": 1.1893510734867219,
+          "total_trades": 28,
+          "mdd": -0.151815946461253
+        },
+        "n_positions": 28,
+        "bootstrap": {
+          "n_positions": 28,
+          "n_boot": 2000,
+          "seed": 42,
+          "mean": 1.2533472228823712,
+          "std": 3.070168874658475,
+          "ci_lower_5": -3.8337585710906983,
+          "ci_upper_95": 6.0534575557970935,
+          "pct_positive": 67.05,
+          "prob_alpha_positive": 0.6705
+        },
+        "psr_dsr": {
+          "n_trials": 1000,
+          "sharpe_hat_non_annualized": 0.08987,
+          "sharpe_hat_annualized": 1.4266,
+          "expected_max_sharpe_null": 0.62645,
+          "psr_vs_zero": 0.68637,
+          "dsr": 0.00187,
+          "pbo_mc_equiv": 0.99813
+        },
+        "equity": {
+          "initial": 100000.0,
+          "final": 102917.92,
+          "n_days": 502,
+          "daily_sharpe_ann": 0.1937
+        },
+        "mc_summary": {
+          "expected_growth": 0.0149,
+          "median_outcome": 101488.2,
+          "risk_of_loss": 0.431,
+          "mean_outcome": 102252.31
+        }
+      },
+      "purged_cv": {
+        "generated_at_utc": "20260801T224537Z",
+        "git_commit": "8b13c9e99ebae2b529f52188ea4000d12b62550b",
+        "params_json_source": "artifacts/s4_candidates/s4_candidate_trial64_params.json",
+        "universe_size": 199,
+        "train_start": "2019-01-01",
+        "oos_folds": [
+          {
+            "fold": 1,
+            "oos_start": "2024-01-01",
+            "oos_end": "2024-12-31"
+          },
+          {
+            "fold": 2,
+            "oos_start": "2025-01-01",
+            "oos_end": "2025-12-31"
+          }
+        ],
+        "purged_cv_config": {
+          "n_folds": 2,
+          "purge_days": 10,
+          "embargo_days": 5
+        },
+        "degradation_pct": 190.36,
+        "gate_passed": false,
+        "gate_threshold_pct": 25,
+        "is_sharpe_mean": 0.6208,
+        "oos_sharpe_mean": -0.561,
+        "trades_per_fold": [
+          16,
+          9
+        ],
+        "total_oos_trades": 25,
+        "warnings": [
+          "Fold 1: only 16 OOS trades (< 30) — statistically insignificant",
+          "Fold 2: only 9 OOS trades (< 30) — statistically insignificant"
+        ],
+        "runtime_s": 38.9
+      },
+      "purged_cv_folds": [
+        {
+          "fold": 1,
+          "is_sharpe": 0.8482170750797273,
+          "oos_sharpe": -0.7008050248144262,
+          "is_trades": 66,
+          "oos_trades": 16
+        },
+        {
+          "fold": 2,
+          "is_sharpe": 0.3933585729021841,
+          "oos_sharpe": -0.42111821907181274,
+          "is_trades": 86,
+          "oos_trades": 9
+        }
+      ],
+      "receipt": "artifacts/purged_cv/purged_cv_report_20260801T224458Z_s4trial64.json",
+      "params_json_source": "artifacts/s4_candidates/s4_candidate_trial64_params.json",
+      "is_metrics": {
+        "sharpe": 1.1427955518502462,
+        "pf": 1.6897078144790694,
+        "calmar": 1.012118221809436,
+        "trades": 242
+      },
+      "score_composed": 1.7442,
+      "cost_robustness": "MODERADO"
+    },
+    "763": {
+      "consolidated_src": "oos_validation_6_survivors_20260801T224552Z.json",
+      "oos_analysis": {
+        "engine": {
+          "sharpe": 0.18062661487341333,
+          "profit_factor": 1.1524073456702653,
+          "total_trades": 33,
+          "mdd": -0.1557825178650896
+        },
+        "n_positions": 33,
+        "bootstrap": {
+          "n_positions": 33,
+          "n_boot": 2000,
+          "seed": 42,
+          "mean": 1.093194140130734,
+          "std": 2.849294114336106,
+          "ci_lower_5": -3.780446274672122,
+          "ci_upper_95": 5.391172077821536,
+          "pct_positive": 67.15,
+          "prob_alpha_positive": 0.6715
+        },
+        "psr_dsr": {
+          "n_trials": 1000,
+          "sharpe_hat_non_annualized": 0.07627,
+          "sharpe_hat_annualized": 1.2108,
+          "expected_max_sharpe_null": 0.57543,
+          "psr_vs_zero": 0.67251,
+          "dsr": 0.00173,
+          "pbo_mc_equiv": 0.99827
+        },
+        "equity": {
+          "initial": 100000.0,
+          "final": 102776.83,
+          "n_days": 502,
+          "daily_sharpe_ann": 0.1806
+        },
+        "mc_summary": {
+          "expected_growth": 0.0077,
+          "median_outcome": 100769.08,
+          "risk_of_loss": 0.471,
+          "mean_outcome": 101675.18
+        }
+      },
+      "purged_cv": {
+        "generated_at_utc": "20260801T224640Z",
+        "git_commit": "8b13c9e99ebae2b529f52188ea4000d12b62550b",
+        "params_json_source": "artifacts/s4_candidates/s4_candidate_trial763_params.json",
+        "universe_size": 199,
+        "train_start": "2019-01-01",
+        "oos_folds": [
+          {
+            "fold": 1,
+            "oos_start": "2024-01-01",
+            "oos_end": "2024-12-31"
+          },
+          {
+            "fold": 2,
+            "oos_start": "2025-01-01",
+            "oos_end": "2025-12-31"
+          }
+        ],
+        "purged_cv_config": {
+          "n_folds": 2,
+          "purge_days": 10,
+          "embargo_days": 5
+        },
+        "degradation_pct": 304.21,
+        "gate_passed": false,
+        "gate_threshold_pct": 25,
+        "is_sharpe_mean": 0.1068,
+        "oos_sharpe_mean": -0.2181,
+        "trades_per_fold": [
+          18,
+          14
+        ],
+        "total_oos_trades": 32,
+        "warnings": [
+          "Fold 1: only 18 OOS trades (< 30) — statistically insignificant",
+          "Fold 2: only 14 OOS trades (< 30) — statistically insignificant"
+        ],
+        "runtime_s": 39.1
+      },
+      "purged_cv_folds": [
+        {
+          "fold": 1,
+          "is_sharpe": 0.18352658469310948,
+          "oos_sharpe": -0.46702922370045186,
+          "is_trades": 67,
+          "oos_trades": 18
+        },
+        {
+          "fold": 2,
+          "is_sharpe": 0.030052548824330075,
+          "oos_sharpe": 0.030876211211924756,
+          "is_trades": 87,
+          "oos_trades": 14
+        }
+      ],
+      "receipt": "artifacts/purged_cv/purged_cv_report_20260801T224601Z_s4trial763.json",
+      "params_json_source": "artifacts/s4_candidates/s4_candidate_trial763_params.json",
+      "is_metrics": {
+        "sharpe": 1.0816303158367568,
+        "pf": 1.8938084568444788,
+        "calmar": 1.1697726887430058,
+        "trades": 241
+      },
+      "score_composed": 1.7379,
+      "cost_robustness": "MODERADO"
+    }
+  }
+}
