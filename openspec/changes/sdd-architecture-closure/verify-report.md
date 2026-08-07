@@ -8,7 +8,7 @@ requirements: 4/4
 scenarios: 4/4
 test_command: "pytest tests/"
 test_exit_code: 0
-test_output_hash: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+test_output_hash: sha256:b33abedfbc67eb21da16be25bf6b3d651912bdc5945c3807ee0ec96b2cbed101
 build_command: "none"
 build_exit_code: 0
 build_output_hash: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
