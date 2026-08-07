@@ -18,7 +18,7 @@ strict_tdd: true
 testing:
   strict_tdd: true
   runner: pytest
-  test_command: PYTHONPATH=. pytest -k "not test_integrity"
+  test_command: PYTHONPATH=. pytest
   lint_command: ruff check .
   linter: ruff
   formatter: black
@@ -55,13 +55,13 @@ rules:
       - Reference spec requirement IDs
   apply:
     tdd: true
-    test_command: PYTHONPATH=. pytest -k "not test_integrity"
+    test_command: PYTHONPATH=. pytest
     rules:
       - Follow existing code patterns (clean modular, type-hinted)
       - Run affected test module before committing
       - PROHIBITED: modifying src/backtest/ or src/data/ without explicit authorization
   verify:
-    test_command: PYTHONPATH=. pytest -k "not test_integrity"
+    test_command: PYTHONPATH=. pytest
     build_command: ""
     coverage_threshold: 0
     rules: []

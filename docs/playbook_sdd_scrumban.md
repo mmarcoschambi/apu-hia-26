@@ -22,12 +22,24 @@ Este manual define el estándar de ingeniería y flujo operativo del **Sistema Q
 4. **Cierre y Documentación (ScrumBan Fase 3)**
    - Confirmar solo los cambios relevantes del ticket (evitar mezclar estados).
    - Commitear con formato convencional: `fix(modulo): descripción. Fixes #$(ticket)` (ej: `feat(shadow): ...`)
-   - Subir cambios a GitHub: `git push origin HEAD --no-verify` (si falla pre-commit por cuotas de API).
+   - Subir cambios a GitHub: `git push origin HEAD` (el hook de pre-commit debe correr siempre).
    - Comentar y cerrar ticket:
      ```bash
      gh issue comment <ID> --body "✅ Build completado. Veredicto: ..."
      gh issue close <ID>
      ```
+
+### Prevención de Bypass de Gates
+
+Los gates de calidad (hook de pre-commit, `test_integrity`, validadores de evidencia) existen para proteger la integridad del pipeline. Ante cualquier señal de evasión, la acción obligatoria es corregir la causa raíz, nunca saltarse la verificación.
+
+| Señal | Riesgo | Acción Obligatoria |
+| :--- | :--- | :--- |
+| Falsificación temporal: métricas con datos del futuro | Look-Ahead Bias: resultados irreales que no sobreviven OOS | Rechazar la evidencia y re-ejecutar con datos point-in-time |
+| Evidencia vacía: output SHA-256 en blanco | Sin prueba de que el pipeline corrió | Re-ejecutar el comando y capturar el hash antes de avanzar |
+| Umbral mágico: selección arbitraria de thresholds | Sobreajuste disfrazado de regla de negocio | Justificar cada umbral con evidencia o test estadístico |
+| Paridad fantasma: pruebas A/B sobre un working tree sucio | Comparaciones inválidas entre variantes | Limpiar el working tree y re-correr la paridad desde un estado reproducible |
+| Bypass de calidad: salto del hook de pre-commit bajo excusas operativas | Cambios sin validar que entran a la rama | Corregir la causa raíz del hook; nunca evadir la verificación |
 
 ---
 

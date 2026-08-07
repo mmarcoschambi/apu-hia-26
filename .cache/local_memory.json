@@ -1,195 +1,221 @@
-[
-  {
-    "timestamp": "2026-06-05T22:05:04.247623Z",
-    "title": "Generacion de setups.csv desde snapshots Finviz",
-    "type": "bugfix",
-    "scope": "project",
-    "topic_key": "shadow-finviz-convergence",
-    "content": "Para resolver la falta de trades (0 trades) en el backtest shadow de Mayo 2026, se modifico rebuild_shadow_universe.py para procesar watchlists desde snapshot.json y generar setups.csv por fecha. Se ajustaron los asserts del test de integracion en test_shadow_replay.py ya que los snapshots reales incluyen tickers de XLV (bloqueados correctamente por allowed_shadow_candidate=False)."
-  },
-  {
-    "timestamp": "2026-06-06T02:16:30Z",
-    "title": "Finalizacion de test de convergencia Mayo 2026",
-    "type": "discovery",
-    "scope": "project",
-    "topic_key": "shadow-finviz-convergence",
-    "content": "Se completo el test de convergencia de Mayo 2026. Veredicto: NO CONVERGE. La causa raiz es que los snapshots de Finviz (snapshot.json) generados en el VPS omitieron tickers (ADM, NXPI) que si se imprimieron en las tablas de los logs del VPS. El backtest local no ejecuto esos trades, sino otros tres (ADEA, LRCX, EQNR). Se commitearon los reportes de convergencia y summary.md y se cerro el Issue #37."
-  },
-  {
-    "timestamp": "2026-06-06T02:53:15Z",
-    "title": "Fix de serializacion de watchlists en VPS (Issue #38)",
-    "type": "bugfix",
-    "scope": "project",
-    "topic_key": "vps-snapshot-serialization-fix",
-    "content": "Se resolvio el bug de serializacion que hacia perder tickers como ADM y NXPI en el VPS. Se agregaron validaciones de tamano (st_size > 0) y timeout (30s) al conectar con la cache SQLite de modo de no crear archivos vacios de 0 bytes en el VPS (lo que causaba OperationalErrors). Tambien se implemento un fallback chain robusto en yfinance (intento batch -> individual 1m -> individual diario -> Ticker.history diario) en scripts/finviz_live_promoter.py para evitar que fallos temporales de descarga o limites de cuota descarten tickers de la watchlist."
-  },
-  {
-    "timestamp": "2026-06-12T20:34:00Z",
-    "title": "Verificacion del fix del VPS y run del 12 de Junio",
-    "type": "discovery",
-    "scope": "project",
-    "topic_key": "vps-snapshot-serialization-fix",
-    "content": "Se verificó mediante sync_from_vps.sh que el cron pre-market del 12 de junio corrió al 100% sin OperationalErrors. El snapshot.json generado hoy contiene una watchlist de 250 tickers completos. El canal de Telegram reportó OK."
-  },
-  {
-    "timestamp": "2026-06-15T13:29:30Z",
-    "title": "Fase 6 — Documentación core, consolidación ML y aclaración de dualidad risk_manager/position_sizing",
-    "type": "pattern",
-    "scope": "project",
-    "topic_key": "architecture/documentation-and-ml-consolidation",
-    "content": "Se documentaron detalladamente los constructores, firmas y flujos en vectorbt_engine_advanced.py, signal_engine.py y thematic_logic.py. Se consolidó la estructura de SYSTEM_CONTEXT.md para clarificar la división de los directorios de Machine Learning (src/ml vs src/ml_signal) y de sizing y riesgo. Se resolvió un problema de pre-commit local (--no-verify) derivado de una lista de argumentos demasiado larga por la cantidad de archivos de backups locales sin seguimiento."
-  },
-  {
-    "timestamp": "2026-06-17T13:50:00Z",
-    "title": "Agregar pestaña de Evolución & Arquitectura interactiva en Streamlit UI",
-    "type": "architecture",
-    "scope": "project",
-    "topic_key": "ui/agent-playbook-evolution",
-    "content": "Se integró una pestaña '📈 Evolución & Arquitectura' en la app de Streamlit (agent_playbook_ui.py) que muestra un diagrama dinámico de arquitectura (Graphviz), calcula la cobertura de docstrings de forma dinámica mediante parsing AST de los 6 archivos core prioritarios de Phase 6, e imprime un timeline formateado de Git Log para facilitar la inducción en nuevas sesiones."
-  },
-  {
-    "timestamp": "2026-06-23T16:21:00Z",
-    "title": "Implementado diagrama de flujo interactivo ScrumBan en UI",
-    "type": "architecture",
-    "scope": "project",
-    "topic_key": "ui/agent-playbook-workflow",
-    "content": "Se reemplazó la guía textual estática del ciclo del ticket en agent_playbook_ui.py por un visor de flujo interactivo de dos columnas. Utiliza un select_slider de Streamlit para controlar el estado activo y renderiza dinámicamente el nodo resaltado en Graphviz, mostrando comandos y prompts mocks del ciclo ScrumBan a la derecha."
-  },
-  {
-    "timestamp": "2026-06-24T17:45:00Z",
-    "title": "Bifurcacion de watchlists en pre-market y ajuste de ruteo de Telegram (Issue #48)",
-    "type": "bugfix",
-    "scope": "project",
-    "topic_key": "vps-watchlist-split-and-routing",
-    "content": "Se corrigio la duplicacion de candidatos en las watchlists de Telegram de Qulla y Minervini aplicando la validacion de filtros especifica de cada combo (_passes_combo_filters) antes de asociar el combo en el snapshot consolidado. Tambien se re-ruteo el brief diario de pre-market para que llegue al mensaje privado (TELEGRAM_CHAT_ID) y las watchlists y alertas a los grupos correspondientes (TELEGRAM_CHAT_ID_MONITOR)."
-  },
-  {
-    "timestamp": "2026-06-24T18:02:00Z",
-    "title": "Implementada pestaña interactiva Backlog de Experimentos en UI",
-    "type": "architecture",
-    "scope": "project",
-    "topic_key": "ui/agent-playbook-experiments-backlog",
-    "content": "Se añadió una pestaña dedicada '📋 Backlog de Experimentos' en la UI del playbook (agent_playbook_ui.py). Precarga de forma automática los 5 tracks cuantitativos pendientes del plan de congelamiento a partir de experiments_backlog.json y provee un formulario interactivo en Streamlit para registrar nuevas ideas usando una plantilla estructurada y limpia."
-  },
-  {
-    "timestamp": "2026-06-24T18:36:00Z",
-    "title": "Implementada pestaña de Primeros Principios y simulador matemático en UI",
-    "type": "architecture",
-    "scope": "project",
-    "topic_key": "ui/agent-playbook-first-principles",
-    "content": "Se añadió la pestaña interactiva '📐 Primeros Principios' en la app de Streamlit (agent_playbook_ui.py). Explica la teoría de la expectativa matemática del trade en LaTeX, compara en detalle el Sistema A (TP1/TP2/Runner) y el Sistema B (Joya E25) con diagramas de flujo Graphviz específicos de salidas y riesgo, y despliega un simulador interactivo que calcula el EV del portafolio en base al Win Rate y Stop Loss."
-  },
-  {
-    "timestamp": "2026-06-24T18:46:00Z",
-    "title": "Añadida guía paso a paso de un trade con mocks de Telegram reales",
-    "type": "architecture",
-    "scope": "project",
-    "topic_key": "ui/agent-playbook-trade-walkthrough",
-    "content": "Se integró una sección interactiva de ciclo de vida de un trade real bajo la pestaña '📐 Primeros Principios' en agent_playbook_ui.py. Permite navegar por las 4 fases (Pre-Market, Trigger, Post-Market, Liquidación) mostrando tablas con logs de candidatos reales de snapshot.json (QCOM, TSM, SMH), diagramas de cálculo de position sizing por ATR y plantillas HTML exactas de los mensajes enviados a Telegram."
-  },
-  {
-    "timestamp": "2026-06-24T19:42:00Z",
-    "title": "Ajuste de alertas reales de Telegram, medias móviles e integración con TradingView en la guía de trade",
-    "type": "pattern",
-    "scope": "project",
-    "topic_key": "ui/agent-playbook-trade-walkthrough",
-    "content": "Se corrigieron las fases del ciclo de trade en la UI para reflejar con precisión el envío en producción: reporte crudo preliminar en el Pre-Market (09:00 EST) y watchlist sectorizada en el Market Open (09:30 EST). Además, se mejoró el gráfico de velas de Plotly integrando visualmente el indicador companion de TradingView (bugatti_momentum.pine) con sus 5 medias móviles, sombreado verde del fondo por MA stack alineado, niveles de breakout y un panel de control con señales lógicas. También se expandió el gráfico a 52 días de historial respetando los fines de semana como espacios vacíos e ilustrando cómo se forma el breakout mediante anotaciones del patrón VCP (Volatility Contraction Pattern)."
-  },
-  {
-    "timestamp": "2026-06-24T20:05:00Z",
-    "title": "Corregido ValueError por desalineación de fechas y velas en la UI",
-    "type": "bugfix",
-    "scope": "project",
-    "topic_key": "ui/agent-playbook-trade-walkthrough",
-    "content": "Se solucionó el crash runtime en streamlit al renderizar la pestaña de Primeros Principios eliminando una vela mock redundante (June 14) en agent_playbook_ui.py. Esto igualó la longitud de la lista de velas a 52 para que coincida exactamente con la lista de fechas del eje temporal, resolviendo la excepción 'Length of values (52) does not match length of index (53)' al construir el DataFrame."
-  },
-  {
-    "timestamp": "2026-06-29T20:00:00Z",
-    "title": "Cerrado Issue #39 de deploy y validacion del VPS",
-    "type": "bugfix",
-    "scope": "project",
-    "topic_key": "vps-snapshot-serialization-fix",
-    "content": "Se descargo y verifico la data del VPS para el Lunes 29, Viernes 26 y Jueves 25 de Junio. Se constato estabilidad en los snapshots (size de ~570 tickers, >160 candidates en watchlist_detail) y ausencia absoluta de OperationalErrors de SQLite o timeouts. Se procedio al cierre formal del Issue #39 en GitHub."
-  },
-  {
-    "timestamp": "2026-06-29T21:00:00Z",
-    "title": "Validada alineacion VPS-Local y cerrado Issue #42",
-    "type": "discovery",
-    "scope": "project",
-    "topic_key": "vps-local-alignment-validation",
-    "content": "Se validó la alineación entre el motor de señales VPS y local para el Issue #42. Se creó scratch/compare_vps_local_alignment.py que compara campo a campo entre snapshot.json y el cómputo local replicando la lógica exacta de _build_watchlist_detail() de paper_finviz.py. Resultados: score (RS percentile) e is_promotable 100% alineados en 161/161 tickers del snapshot del 2026-06-29. Los tests de paridad (test_signal_parity_ab.py) pasan 15/15. Los campos OHLCV (ma_stack, breakout_level, dollar_volume_m) no pudieron validarse porque la cache local ticker_cache.db contiene datos corruptos por cross-contamination residual del Issue #39 (precios duplicados entre tickers). El veredicto es que la lógica de señales VPS y LOCAL es idéntica; las diferencias observadas se deben exclusivamente a datos stale/corruptos en la cache local."
-  },
-  {
-    "timestamp": "2026-06-29T23:42:00Z",
-    "title": "Creado script para preparar datos historicos limpios de 3 meses",
-    "type": "pattern",
-    "scope": "project",
-    "topic_key": "vps-local-alignment-validation",
-    "content": "Se diseñó y creó el script scratch/prepare_clean_historical_data.py. Este script escanea los snapshots de los últimos 90 días del VPS en outputs/paper_finviz, extrae los tickers únicos, los elimina de ohlcv_cache y daily_rs_rankings para deshacerse de la corrupción residual del Issue #39, descarga datos OHLCV limpios de yfinance con margen de 1 año para cálculo de MAs y los inserta en la base de datos local. Esto sienta las bases para validar el sistema con 3 meses de histórico 100% limpio."
-  },
-  {
-    "timestamp": "2026-06-30T17:41:00Z",
-    "title": "Recarga de historico de 1022 tickers sin corrupcion",
-    "type": "bugfix",
-    "scope": "project",
-    "topic_key": "vps-local-alignment-validation",
-    "content": "Se completo al 100% la ejecucion de scratch/prepare_clean_historical_data.py. Se purgaron las entradas corruptas e ingirieron de forma segura y secuencial desde Yahoo Finance los datos OHLCV limpios para los 1022 tickers del universo historico de los ultimos 3 meses, resolviendo definitivamente el problema de cross-contamination en ticker_cache.db."
-  },
-  {
-    "timestamp": "2026-06-30T17:42:00Z",
-    "title": "Recalculo de rankings diarios RS y Triad para 63 fechas",
-    "type": "config",
-    "scope": "project",
-    "topic_key": "vps-local-alignment-validation",
-    "content": "Se recalcularon exitosamente los rankings diarios mediante scripts/populate_rankings_daily.py para 63 fechas de trading desde el 2026-04-18 hasta el 2026-06-29, restaurando por completo la tabla daily_rs_rankings con datos limpios deterministas."
-  },
-  {
-    "timestamp": "2026-06-30T17:43:00Z",
-    "title": "Completado test de convergencia y reporte semanal (Issue #40)",
-    "type": "discovery",
-    "scope": "project",
-    "topic_key": "shadow-finviz-convergence",
-    "content": "Se ejecuto el parser ETL de shadow (src/shadow/etl.py) sobre el log real de pre-market (cron_pre_market.log) de los ultimos 2 meses del VPS, y se corrio el motor de simulación local (src/shadow/replay.py) sobre 4016 candidatos. Tambien se compilaron los reportes semanales comparativos. Veredicto: El sistema converge al 100% logicamente. La discrepancia en el Live Paper (VPS) es esperada ya que el VPS rutea ejecuciones a Telegram en caliente y no escribe en el archivo plano journal.json de Finviz. Se cerro el Issue #40."
-  },
-  {
-    "timestamp": "2026-07-05T04:20:00Z",
-    "title": "Alineacion e integracion de extension SMA20 y Sizing E25",
-    "type": "bugfix",
-    "scope": "project",
-    "topic_key": "vps-local-alignment-validation",
-    "content": "Se resolvio la desalineacion de la sobre-extension de SMA20 entre Padre y E25. En paper_finviz.py se corrigio load_combo_params para que System B reciba tier3_fixed y System A reciba tier3_risk. En daily_scan.py y run_combo_scanner.py se inyecto tier3_fixed en System B y se omitio max_dist_sma20 bajo sizing dinamico. En telegram_views.py se parametrizo _classify_urgency con max_dist=35.0% para el Sistema B para no penalizarlo visualmente con warning amarillo, exponiendo sizing_factor en el pipeline y mostrando 'Size: XX% (Ext: YY%)' al lado del precio de entrada en la watchlist. En finviz_live_promoter.py se inyecto el factor de sizing y el riesgo ajustado real en el mensaje de Telegram del trigger en vivo. Se reescribieron y agregaron los tests unitarios pasando al 100% (27/27 passed)."
-  },
-  {
-    "timestamp": "2026-07-06T03:20:00Z",
-    "title": "Resolucion de caida de alertas de Telegram y bucle de reinicios en bot listener",
-    "type": "bugfix",
-    "scope": "project",
-    "topic_key": "vps-telegram-alerts-fix",
-    "content": "Se resolvio la inactividad de finviz-live-promoter.service en el VPS corrigiendo la falta de privilegios (sudo) en el crontab para llamadas a systemctl de inicio/fin. En paralelo, se resolvio un bucle de reinicios (mas de 504.000 fallos) en el servicio telegram-bot-listener.service originado por caracteres CRLF de Windows en scripts/run_telegram_listener.sh. Se configuro git core.autocrlf=input de forma global en la maquina local para evitar que se reintroduzcan CRLF al hacer checkouts en WSL2, se convirtieron todos los shell scripts a LF, se redesplego y se reiniciaron ambos servicios con exito, liberando 2.2GB de espacio en el disco del VPS."
-  },
-  {
-    "timestamp": "2026-07-08T06:18:00Z",
-    "title": "Experimento y descarte de salidas por salud a 6 años",
-    "type": "discovery",
-    "scope": "project",
-    "topic_key": "market-health-exits-validation",
-    "content": "Se validó la inyección de salidas por salud de mercado (fase-aware y binarias) a 6 años (2019-2025) en el Russell 1000 PIT. Veredicto: NO-GO absoluto. Las salidas dinámicas degradan el retorno (37.5% vs 222.3% baseline) y cuadruplican la fricción transaccional (1091 trades). Se guardó el reporte detallado en sandbox_results.md y se actualizó SYSTEM_CONTEXT.md."
-  },
-  {
-    "timestamp": "2026-07-13T12:45:00Z",
-    "title": "Resolucion de bugs del Breadth Gate (Issue #43)",
-    "type": "bugfix",
-    "scope": "project",
-    "topic_key": "breadth-gate-bugs-fix",
-    "content": "Se resolvieron los dos bugs core del Breadth Gate (Exp#5b) en vectorbt_engine_advanced.py. Se removió el sesgo de selección en SQL consultando todo el universo cargado en la base de datos (no solo entries.columns). Se corrigió la pérdida de warm-up calculando las MAs y los máximos rodantes de 252 días sobre la matriz de pivot completa antes de reindexar por entries.index. Se agregó tests/test_breadth_gate.py con metodología TDD Red-to-Green, logrando que la suite completa de 34 tests pase en verde al 100%."
-  },
-  {
-    "timestamp": "2026-07-13T20:18:00Z",
-    "title": "Optimizacion e investigacion del Breadth Gate en Walk-Forward (Issue #50)",
-    "type": "discovery",
-    "scope": "project",
-    "topic_key": "breadth-gate-walkforward-optimization",
-    "content": "Se corrigió un desalineamiento de un fold en el mapeo inicial (Fold 15 vs Fold 14) mediante la validación cruzada de firmas de días hábiles únicas contra la base de datos (date(date) distinct SQL). Se corrió Walk-Forward de 15 pliegues para los Modos A (SMA20) y B (High/Low nh_nl) de 2022 a 2026. Veredicto: NO-GO para el Gate Estático ya que drena retornos globales (Sharpe 0.23 vs 0.39 baseline). Se recomienda un Gate Dinámico Condicional acoplado al módulo de Regime Detection para proteger capital en mercados bajistas y no lastrar en mercados alcistas."
-  }
-]
-
+{
+  "schema_version": "1.0",
+  "entries": [
+    {
+      "timestamp": "2026-06-05T22:05:04.247623Z",
+      "title": "Generacion de setups.csv desde snapshots Finviz",
+      "type": "bugfix",
+      "scope": "project",
+      "topic_key": "shadow-finviz-convergence",
+      "content": "Para resolver la falta de trades (0 trades) en el backtest shadow de Mayo 2026, se modifico rebuild_shadow_universe.py para procesar watchlists desde snapshot.json y generar setups.csv por fecha. Se ajustaron los asserts del test de integracion en test_shadow_replay.py ya que los snapshots reales incluyen tickers de XLV (bloqueados correctamente por allowed_shadow_candidate=False)."
+    },
+    {
+      "timestamp": "2026-06-06T02:16:30Z",
+      "title": "Finalizacion de test de convergencia Mayo 2026",
+      "type": "discovery",
+      "scope": "project",
+      "topic_key": "shadow-finviz-convergence",
+      "content": "Se completo el test de convergencia de Mayo 2026. Veredicto: NO CONVERGE. La causa raiz es que los snapshots de Finviz (snapshot.json) generados en el VPS omitieron tickers (ADM, NXPI) que si se imprimieron en las tablas de los logs del VPS. El backtest local no ejecuto esos trades, sino otros tres (ADEA, LRCX, EQNR). Se commitearon los reportes de convergencia y summary.md y se cerro el Issue #37."
+    },
+    {
+      "timestamp": "2026-06-06T02:53:15Z",
+      "title": "Fix de serializacion de watchlists en VPS (Issue #38)",
+      "type": "bugfix",
+      "scope": "project",
+      "topic_key": "vps-snapshot-serialization-fix",
+      "content": "Se resolvio el bug de serializacion que hacia perder tickers como ADM y NXPI en el VPS. Se agregaron validaciones de tamano (st_size > 0) y timeout (30s) al conectar con la cache SQLite de modo de no crear archivos vacios de 0 bytes en el VPS (lo que causaba OperationalErrors). Tambien se implemento un fallback chain robusto en yfinance (intento batch -> individual 1m -> individual diario -> Ticker.history diario) en scripts/finviz_live_promoter.py para evitar que fallos temporales de descarga o limites de cuota descarten tickers de la watchlist."
+    },
+    {
+      "timestamp": "2026-06-12T20:34:00Z",
+      "title": "Verificacion del fix del VPS y run del 12 de Junio",
+      "type": "discovery",
+      "scope": "project",
+      "topic_key": "vps-snapshot-serialization-fix",
+      "content": "Se verificó mediante sync_from_vps.sh que el cron pre-market del 12 de junio corrió al 100% sin OperationalErrors. El snapshot.json generado hoy contiene una watchlist de 250 tickers completos. El canal de Telegram reportó OK."
+    },
+    {
+      "timestamp": "2026-06-15T13:29:30Z",
+      "title": "Fase 6 — Documentación core, consolidación ML y aclaración de dualidad risk_manager/position_sizing",
+      "type": "pattern",
+      "scope": "project",
+      "topic_key": "architecture/documentation-and-ml-consolidation",
+      "content": "Se documentaron detalladamente los constructores, firmas y flujos en vectorbt_engine_advanced.py, signal_engine.py y thematic_logic.py. Se consolidó la estructura de SYSTEM_CONTEXT.md para clarificar la división de los directorios de Machine Learning (src/ml vs src/ml_signal) y de sizing y riesgo. Se resolvió un problema de pre-commit local (--no-verify) derivado de una lista de argumentos demasiado larga por la cantidad de archivos de backups locales sin seguimiento."
+    },
+    {
+      "timestamp": "2026-06-17T13:50:00Z",
+      "title": "Agregar pestaña de Evolución & Arquitectura interactiva en Streamlit UI",
+      "type": "architecture",
+      "scope": "project",
+      "topic_key": "ui/agent-playbook-evolution",
+      "content": "Se integró una pestaña '📈 Evolución & Arquitectura' en la app de Streamlit (agent_playbook_ui.py) que muestra un diagrama dinámico de arquitectura (Graphviz), calcula la cobertura de docstrings de forma dinámica mediante parsing AST de los 6 archivos core prioritarios de Phase 6, e imprime un timeline formateado de Git Log para facilitar la inducción en nuevas sesiones."
+    },
+    {
+      "timestamp": "2026-06-23T16:21:00Z",
+      "title": "Implementado diagrama de flujo interactivo ScrumBan en UI",
+      "type": "architecture",
+      "scope": "project",
+      "topic_key": "ui/agent-playbook-workflow",
+      "content": "Se reemplazó la guía textual estática del ciclo del ticket en agent_playbook_ui.py por un visor de flujo interactivo de dos columnas. Utiliza un select_slider de Streamlit para controlar el estado activo y renderiza dinámicamente el nodo resaltado en Graphviz, mostrando comandos y prompts mocks del ciclo ScrumBan a la derecha."
+    },
+    {
+      "timestamp": "2026-06-24T17:45:00Z",
+      "title": "Bifurcacion de watchlists en pre-market y ajuste de ruteo de Telegram (Issue #48)",
+      "type": "bugfix",
+      "scope": "project",
+      "topic_key": "vps-watchlist-split-and-routing",
+      "content": "Se corrigio la duplicacion de candidatos en las watchlists de Telegram de Qulla y Minervini aplicando la validacion de filtros especifica de cada combo (_passes_combo_filters) antes de asociar el combo en el snapshot consolidado. Tambien se re-ruteo el brief diario de pre-market para que llegue al mensaje privado (TELEGRAM_CHAT_ID) y las watchlists y alertas a los grupos correspondientes (TELEGRAM_CHAT_ID_MONITOR)."
+    },
+    {
+      "timestamp": "2026-06-24T18:02:00Z",
+      "title": "Implementada pestaña interactiva Backlog de Experimentos en UI",
+      "type": "architecture",
+      "scope": "project",
+      "topic_key": "ui/agent-playbook-experiments-backlog",
+      "content": "Se añadió una pestaña dedicada '📋 Backlog de Experimentos' en la UI del playbook (agent_playbook_ui.py). Precarga de forma automática los 5 tracks cuantitativos pendientes del plan de congelamiento a partir de experiments_backlog.json y provee un formulario interactivo en Streamlit para registrar nuevas ideas usando una plantilla estructurada y limpia."
+    },
+    {
+      "timestamp": "2026-06-24T18:36:00Z",
+      "title": "Implementada pestaña de Primeros Principios y simulador matemático en UI",
+      "type": "architecture",
+      "scope": "project",
+      "topic_key": "ui/agent-playbook-first-principles",
+      "content": "Se añadió la pestaña interactiva '📐 Primeros Principios' en la app de Streamlit (agent_playbook_ui.py). Explica la teoría de la expectativa matemática del trade en LaTeX, compara en detalle el Sistema A (TP1/TP2/Runner) y el Sistema B (Joya E25) con diagramas de flujo Graphviz específicos de salidas y riesgo, y despliega un simulador interactivo que calcula el EV del portafolio en base al Win Rate y Stop Loss."
+    },
+    {
+      "timestamp": "2026-06-24T18:46:00Z",
+      "title": "Añadida guía paso a paso de un trade con mocks de Telegram reales",
+      "type": "architecture",
+      "scope": "project",
+      "topic_key": "ui/agent-playbook-trade-walkthrough",
+      "content": "Se integró una sección interactiva de ciclo de vida de un trade real bajo la pestaña '📐 Primeros Principios' en agent_playbook_ui.py. Permite navegar por las 4 fases (Pre-Market, Trigger, Post-Market, Liquidación) mostrando tablas con logs de candidatos reales de snapshot.json (QCOM, TSM, SMH), diagramas de cálculo de position sizing por ATR y plantillas HTML exactas de los mensajes enviados a Telegram."
+    },
+    {
+      "timestamp": "2026-06-24T19:42:00Z",
+      "title": "Ajuste de alertas reales de Telegram, medias móviles e integración con TradingView en la guía de trade",
+      "type": "pattern",
+      "scope": "project",
+      "topic_key": "ui/agent-playbook-trade-walkthrough",
+      "content": "Se corrigieron las fases del ciclo de trade en la UI para reflejar con precisión el envío en producción: reporte crudo preliminar en el Pre-Market (09:00 EST) y watchlist sectorizada en el Market Open (09:30 EST). Además, se mejoró el gráfico de velas de Plotly integrando visualmente el indicador companion de TradingView (bugatti_momentum.pine) con sus 5 medias móviles, sombreado verde del fondo por MA stack alineado, niveles de breakout y un panel de control con señales lógicas. También se expandió el gráfico a 52 días de historial respetando los fines de semana como espacios vacíos e ilustrando cómo se forma el breakout mediante anotaciones del patrón VCP (Volatility Contraction Pattern)."
+    },
+    {
+      "timestamp": "2026-06-24T20:05:00Z",
+      "title": "Corregido ValueError por desalineación de fechas y velas en la UI",
+      "type": "bugfix",
+      "scope": "project",
+      "topic_key": "ui/agent-playbook-trade-walkthrough",
+      "content": "Se solucionó el crash runtime en streamlit al renderizar la pestaña de Primeros Principios eliminando una vela mock redundante (June 14) en agent_playbook_ui.py. Esto igualó la longitud de la lista de velas a 52 para que coincida exactamente con la lista de fechas del eje temporal, resolviendo la excepción 'Length of values (52) does not match length of index (53)' al construir el DataFrame."
+    },
+    {
+      "timestamp": "2026-06-29T20:00:00Z",
+      "title": "Cerrado Issue #39 de deploy y validacion del VPS",
+      "type": "bugfix",
+      "scope": "project",
+      "topic_key": "vps-snapshot-serialization-fix",
+      "content": "Se descargo y verifico la data del VPS para el Lunes 29, Viernes 26 y Jueves 25 de Junio. Se constato estabilidad en los snapshots (size de ~570 tickers, >160 candidates en watchlist_detail) y ausencia absoluta de OperationalErrors de SQLite o timeouts. Se procedio al cierre formal del Issue #39 en GitHub."
+    },
+    {
+      "timestamp": "2026-06-29T21:00:00Z",
+      "title": "Validada alineacion VPS-Local y cerrado Issue #42",
+      "type": "discovery",
+      "scope": "project",
+      "topic_key": "vps-local-alignment-validation",
+      "content": "Se validó la alineación entre el motor de señales VPS y local para el Issue #42. Se creó scratch/compare_vps_local_alignment.py que compara campo a campo entre snapshot.json y el cómputo local replicando la lógica exacta de _build_watchlist_detail() de paper_finviz.py. Resultados: score (RS percentile) e is_promotable 100% alineados en 161/161 tickers del snapshot del 2026-06-29. Los tests de paridad (test_signal_parity_ab.py) pasan 15/15. Los campos OHLCV (ma_stack, breakout_level, dollar_volume_m) no pudieron validarse porque la cache local ticker_cache.db contiene datos corruptos por cross-contamination residual del Issue #39 (precios duplicados entre tickers). El veredicto es que la lógica de señales VPS y LOCAL es idéntica; las diferencias observadas se deben exclusivamente a datos stale/corruptos en la cache local."
+    },
+    {
+      "timestamp": "2026-06-29T23:42:00Z",
+      "title": "Creado script para preparar datos historicos limpios de 3 meses",
+      "type": "pattern",
+      "scope": "project",
+      "topic_key": "vps-local-alignment-validation",
+      "content": "Se diseñó y creó el script scratch/prepare_clean_historical_data.py. Este script escanea los snapshots de los últimos 90 días del VPS en outputs/paper_finviz, extrae los tickers únicos, los elimina de ohlcv_cache y daily_rs_rankings para deshacerse de la corrupción residual del Issue #39, descarga datos OHLCV limpios de yfinance con margen de 1 año para cálculo de MAs y los inserta en la base de datos local. Esto sienta las bases para validar el sistema con 3 meses de histórico 100% limpio."
+    },
+    {
+      "timestamp": "2026-06-30T17:41:00Z",
+      "title": "Recarga de historico de 1022 tickers sin corrupcion",
+      "type": "bugfix",
+      "scope": "project",
+      "topic_key": "vps-local-alignment-validation",
+      "content": "Se completo al 100% la ejecucion de scratch/prepare_clean_historical_data.py. Se purgaron las entradas corruptas e ingirieron de forma segura y secuencial desde Yahoo Finance los datos OHLCV limpios para los 1022 tickers del universo historico de los ultimos 3 meses, resolviendo definitivamente el problema de cross-contamination en ticker_cache.db."
+    },
+    {
+      "timestamp": "2026-06-30T17:42:00Z",
+      "title": "Recalculo de rankings diarios RS y Triad para 63 fechas",
+      "type": "config",
+      "scope": "project",
+      "topic_key": "vps-local-alignment-validation",
+      "content": "Se recalcularon exitosamente los rankings diarios mediante scripts/populate_rankings_daily.py para 63 fechas de trading desde el 2026-04-18 hasta el 2026-06-29, restaurando por completo la tabla daily_rs_rankings con datos limpios deterministas."
+    },
+    {
+      "timestamp": "2026-06-30T17:43:00Z",
+      "title": "Completado test de convergencia y reporte semanal (Issue #40)",
+      "type": "discovery",
+      "scope": "project",
+      "topic_key": "shadow-finviz-convergence",
+      "content": "Se ejecuto el parser ETL de shadow (src/shadow/etl.py) sobre el log real de pre-market (cron_pre_market.log) de los ultimos 2 meses del VPS, y se corrio el motor de simulación local (src/shadow/replay.py) sobre 4016 candidatos. Tambien se compilaron los reportes semanales comparativos. Veredicto: El sistema converge al 100% logicamente. La discrepancia en el Live Paper (VPS) es esperada ya que el VPS rutea ejecuciones a Telegram en caliente y no escribe en el archivo plano journal.json de Finviz. Se cerro el Issue #40."
+    },
+    {
+      "timestamp": "2026-07-05T04:20:00Z",
+      "title": "Alineacion e integracion de extension SMA20 y Sizing E25",
+      "type": "bugfix",
+      "scope": "project",
+      "topic_key": "vps-local-alignment-validation",
+      "content": "Se resolvio la desalineacion de la sobre-extension de SMA20 entre Padre y E25. En paper_finviz.py se corrigio load_combo_params para que System B reciba tier3_fixed y System A reciba tier3_risk. En daily_scan.py y run_combo_scanner.py se inyecto tier3_fixed en System B y se omitio max_dist_sma20 bajo sizing dinamico. En telegram_views.py se parametrizo _classify_urgency con max_dist=35.0% para el Sistema B para no penalizarlo visualmente con warning amarillo, exponiendo sizing_factor en el pipeline y mostrando 'Size: XX% (Ext: YY%)' al lado del precio de entrada en la watchlist. En finviz_live_promoter.py se inyecto el factor de sizing y el riesgo ajustado real en el mensaje de Telegram del trigger en vivo. Se reescribieron y agregaron los tests unitarios pasando al 100% (27/27 passed)."
+    },
+    {
+      "timestamp": "2026-07-06T03:20:00Z",
+      "title": "Resolucion de caida de alertas de Telegram y bucle de reinicios en bot listener",
+      "type": "bugfix",
+      "scope": "project",
+      "topic_key": "vps-telegram-alerts-fix",
+      "content": "Se resolvio la inactividad de finviz-live-promoter.service en el VPS corrigiendo la falta de privilegios (sudo) en el crontab para llamadas a systemctl de inicio/fin. En paralelo, se resolvio un bucle de reinicios (mas de 504.000 fallos) en el servicio telegram-bot-listener.service originado por caracteres CRLF de Windows en scripts/run_telegram_listener.sh. Se configuro git core.autocrlf=input de forma global en la maquina local para evitar que se reintroduzcan CRLF al hacer checkouts en WSL2, se convirtieron todos los shell scripts a LF, se redesplego y se reiniciaron ambos servicios con exito, liberando 2.2GB de espacio en el disco del VPS."
+    },
+    {
+      "timestamp": "2026-07-08T06:18:00Z",
+      "title": "Experimento y descarte de salidas por salud a 6 años",
+      "type": "discovery",
+      "scope": "project",
+      "topic_key": "market-health-exits-validation",
+      "content": "Se validó la inyección de salidas por salud de mercado (fase-aware y binarias) a 6 años (2019-2025) en el Russell 1000 PIT. Veredicto: NO-GO absoluto. Las salidas dinámicas degradan el retorno (37.5% vs 222.3% baseline) y cuadruplican la fricción transaccional (1091 trades). Se guardó el reporte detallado en sandbox_results.md y se actualizó SYSTEM_CONTEXT.md."
+    },
+    {
+      "timestamp": "2026-07-13T12:45:00Z",
+      "title": "Resolucion de bugs del Breadth Gate (Issue #43)",
+      "type": "bugfix",
+      "scope": "project",
+      "topic_key": "breadth-gate-bugs-fix",
+      "content": "Se resolvieron los dos bugs core del Breadth Gate (Exp#5b) en vectorbt_engine_advanced.py. Se removió el sesgo de selección en SQL consultando todo el universo cargado en la base de datos (no solo entries.columns). Se corrigió la pérdida de warm-up calculando las MAs y los máximos rodantes de 252 días sobre la matriz de pivot completa antes de reindexar por entries.index. Se agregó tests/test_breadth_gate.py con metodología TDD Red-to-Green, logrando que la suite completa de 34 tests pase en verde al 100%."
+    },
+    {
+      "timestamp": "2026-07-13T20:18:00Z",
+      "title": "Optimizacion e investigacion del Breadth Gate en Walk-Forward (Issue #50)",
+      "type": "discovery",
+      "scope": "project",
+      "topic_key": "breadth-gate-walkforward-optimization",
+      "content": "Se corrigió un desalineamiento de un fold en el mapeo inicial (Fold 15 vs Fold 14) mediante la validación cruzada de firmas de días hábiles únicas contra la base de datos (date(date) distinct SQL). Se corrió Walk-Forward de 15 pliegues para los Modos A (SMA20) y B (High/Low nh_nl) de 2022 a 2026. Veredicto: NO-GO para el Gate Estático ya que drena retornos globales (Sharpe 0.23 vs 0.39 baseline). Se recomienda un Gate Dinámico Condicional acoplado al módulo de Regime Detection para proteger capital en mercados bajistas y no lastrar en mercados alcistas."
+    },
+    {
+      "timestamp": "2026-08-07T00:00:00Z",
+      "title": "Regla: Promoción de shadow/experimentos a producción",
+      "type": "pattern",
+      "scope": "project",
+      "topic_key": "rules/promotion",
+      "content": "Una estrategia en shadow/experimento solo se promueve a producción tras evidencia empírica suficiente (n>=30 señales reales) y sin degradar el baseline oficial (Return >= 96%, MDD <= -36%)."
+    },
+    {
+      "timestamp": "2026-08-07T00:00:00Z",
+      "title": "Regla: Prohibición de look-ahead bias en datos PIT",
+      "type": "pattern",
+      "scope": "project",
+      "topic_key": "rules/look-ahead",
+      "content": "Toda señal debe computarse con datos point-in-time (PIT) disponibles al momento de la decisión; queda prohibido usar información futura en el pipeline de backtest o validación."
+    },
+    {
+      "timestamp": "2026-08-07T00:00:00Z",
+      "title": "Regla: Verdad canónica live vs simulación",
+      "type": "pattern",
+      "scope": "project",
+      "topic_key": "rules/live-status",
+      "content": "La verdad canónica del sistema es el estado LIVE (producción/VPS); la simulación y el shadow son aproximaciones que deben reconciliarse contra live antes de promover cualquier cambio."
+    }
+  ]
+}

@@ -38,6 +38,15 @@ El sistema es auto-consciente de su entorno (**Auto-Aware**):
 4.  **Verdad Canónica Compartida:** Backtest y Live Scanner consumen exactamente el mismo archivo de lógica de señales ([signal_engine.py](file:///home/marcos/trade/momentum-v2/src/signals/signal_engine.py)).
 5.  **Strict TDD Mode:** Lógica de entrada/salida protegida por pruebas unitarias obligatorias en [tests/](file:///home/marcos/trade/momentum-v2/tests/) (Fase Red -> Green).
 
+### Baselines de referencia (dos distintos)
+
+El sistema distingue **DOS baselines independientes** que no deben confundirse ni usarse como intercambiables:
+
+| Baseline | Métricas | Rol |
+| :--- | :--- | :--- |
+| **Histórico Gold Standard** (Russell 1000 + E25 Sizing + ex-XLV) | **96.12% Return / -35.09% MDD** | Baseline oficial de referencia de producción. Toda estrategia promovida debe no degradar estas métricas (Return >= 96%, MDD <= -36%). |
+| **Variante E (Divergencia Temática — Shadow Mode)** | **2.55% Return** | Baseline de experimento en shadow trading. Acumulando señales reales antes de su promoción; NO es referencia de producción. |
+
 ---
 
 ## 4. Estado de Desarrollo y Roadmap
