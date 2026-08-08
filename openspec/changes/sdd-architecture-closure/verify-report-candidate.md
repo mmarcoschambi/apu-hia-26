@@ -1,17 +1,19 @@
 ```yaml
-schema: gentle-ai.verify-result/v1
-evidence_revision: sha256:180b5fd51d00110c33613e99352745c126ab33992fd615221d4d905b039563be
-verdict: pass
-blockers: 0
-critical_findings: 0
-requirements: 4/4
-scenarios: 4/4
-test_command: .venv\Scripts\python.exe -m pytest tests/
+schema: "gentle-ai.verify-result/v1"
 test_exit_code: 0
-test_output_hash: sha256:4b4472e9434b2eee63c542042254289b9e22e541472b07fcb278fdac44c753fa
-build_command: "none"
 build_exit_code: 0
-build_output_hash: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+test_command: .venv\Scripts\python.exe -m pytest tests/
+build_command: ""
+test_output_hash: sha256:4b4472e9434b2eee63c542042254289b9e22e541472b07fcb278fdac44c753fa
+build_output_hash: ""
+authority_only_failure: false
+missing_review_authority: false
+substantive_failure: false
+command_failed: false
+evidence_revision: ""
+verdict: PASS
+blockers: []
+critical_findings: []
 ```
 
 ## Verification Report
