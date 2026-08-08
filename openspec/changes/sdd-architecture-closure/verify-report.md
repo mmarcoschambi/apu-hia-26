@@ -1,6 +1,6 @@
 ```yaml
 schema: gentle-ai.verify-result/v1
-evidence_revision: sha256:180b5fd51d00110c33613e99352745c126ab33992fd615221d4d905b039563be
+evidence_revision: sha256:f328b70d68d5811870139095f5c57b07f8976d78210b2a5180bacd9d7904f154
 verdict: pass
 blockers: 0
 critical_findings: 0
