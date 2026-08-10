@@ -1251,9 +1251,7 @@ def run_pre(trade_date, drift_override, rs_min_pct=RS_FINVIZ_MIN_PCT_DEFAULT, to
             t2_filters = combo_params.get("tier2_filters", {})
 
             for t, detail in res.get("watchlist_detail", {}).items():
-                # Only associate this combo label if the candidate passes the combo-specific filters
-                if not _passes_combo_filters(detail, t2_filters):
-                    continue
+                passes = _passes_combo_filters(detail, t2_filters)
 
                 combo_lbl = (
                     "Qulla"
@@ -1262,12 +1260,13 @@ def run_pre(trade_date, drift_override, rs_min_pct=RS_FINVIZ_MIN_PCT_DEFAULT, to
                     if combo_name == "combo_stage2_breakout"
                     else combo_name
                 )
+
                 if t not in watchlist_details:
                     watchlist_details[t] = detail
-                    watchlist_details[t]["combos"] = [combo_lbl]
+                    watchlist_details[t]["combos"] = [combo_lbl] if passes else []
                 else:
                     current_combos = watchlist_details[t].get("combos", [])
-                    if combo_lbl not in current_combos:
+                    if passes and combo_lbl not in current_combos:
                         current_combos.append(combo_lbl)
 
                     if detail.get("score", 0) > watchlist_details[t].get("score", 0):
