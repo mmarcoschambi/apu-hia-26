@@ -690,9 +690,14 @@ class ResearchGate:
                 logger.info(f"   DD Duration: {dd_duration} days")
 
         # Check validation thresholds
-        result.validation_passed = self._check_validation_thresholds(
+        thresholds_passed = self._check_validation_thresholds(
             result, test_metrics
         )
+
+        if purged_cv_config is not None and not result.purged_wf_passed:
+            result.validation_passed = False
+        else:
+            result.validation_passed = thresholds_passed
 
         if not result.validation_passed:
             if result.pbo_score > self.thresholds.max_pbo:
