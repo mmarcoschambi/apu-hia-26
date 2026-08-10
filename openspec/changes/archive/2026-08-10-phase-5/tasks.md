@@ -60,6 +60,6 @@ Chain strategy: feature-branch-chain
 
 ## Phase 5: Documentation
 
-- [ ] 5.1 **Update `SYSTEM_CONTEXT.md`**: Move Dynamic Switch from 🔴 Bloqueado to 🟢 Activo
-- [ ] 5.2 **Verify `pytest` passes** with all new tests
-- [ ] 5.3 **Commit and push** to origin/main before VPS sync declaration
+- [x] 5.1 **Update `SYSTEM_CONTEXT.md`**: Move Dynamic Switch from 🔴 Bloqueado to 🟢 Activo
+- [x] 5.2 **Verify `pytest` passes** with all new tests
+- [x] 5.3 **Commit and push** to origin/main before VPS sync declaration

@@ -523,6 +523,7 @@ def build_engine_kwargs(
         "offline_mode": False,
     }
 
+    base["use_pit_universe"] = False
     base["use_rs_percentile"] = False
     base["min_rs_percentile"] = rs_min_pct
     base["require_positive_rs"] = True
@@ -1103,7 +1104,7 @@ def scan_signals(
         }
     except Exception as e:
         logger.error(f"Scan error ({combo_name}): {e}", exc_info=True)
-        return {"signals": [], "watchlist": [], "watchlist_detail": {}, "breadth": {}}
+        return {"signals": [], "watchlist": {}, "watchlist_detail": {}, "breadth": {}}
     finally:
         engine.cleanup()
 
