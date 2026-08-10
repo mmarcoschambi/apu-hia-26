@@ -7,9 +7,9 @@
 ### 1. Completeness Table
 | Area | Status | Notes |
 |------|--------|-------|
-| Track A (Purged CV) | Complete | `PurgedWalkForwardValidator` implemented, integrated, gate updated |
-| Track B (Convergence Audit) | Complete | `convergence_check.py` and `daily_scan.py` updated |
-| Track C (Dynamic Switch) | Complete | Backtest script implemented |
+| Track A (Purged CV) | Complete | `PurgedWalkForwardValidator` auditado/validado, integrated, gate updated |
+| Track B (Convergence Audit) | Complete | `convergence_check.py` and `daily_scan.py` auditado/validado |
+| Track C (Dynamic Switch) | Complete | Backtest script auditado/validado |
 | Track D (VPS Harden) | Complete | systemd units, health_check, deploy scripts updated |
 
 ### 2. Build & Test Evidence
