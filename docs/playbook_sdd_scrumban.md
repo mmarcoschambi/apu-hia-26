@@ -288,11 +288,21 @@ tests/test_atr_percentile.py::test_calculate_atr_percentile_no_exception_on_warm
 4 passed in 0.75s
 ```
 
-**4. Estado FSM al momento de la evidencia:**
+**4. Estado FSM (snapshot histórico, durante la ejecución del agente — pre-cierre):**
 
 ```json
 { "State": "WORKING", "PID": 0, "LastReason": "Launching agent session" }
 ```
+
+> Este snapshot corresponde al momento de la ejecución del agente (Paso 4), NO al cierre.
+> El estado final tras el ciclo de gobernanza completo (Paso 5) quedó:
+
+```json
+{ "State": "PENDING", "PID": 0, "LastReason": "User reverted changes" }
+```
+
+> `PENDING` tras el `loomctl reset 65` (salida documentada del `ORPHAN`); al mergear el
+> PR #66 el poller descarta el issue local sin acción manual.
 
 **5. Ciclo de gobernanza completo (Paso 5, ejecutado 2026-08-18):**
 
@@ -303,7 +313,7 @@ review → validate → commit → push/PR → seal → clean
 - **Review RDD real**: `gentle-ai review start --focus risk` en el worktree `~/.loom/worktrees/65`
   → `risk_level: medium`, lente `review-risk`, lineage `review-5375ec8827577509`.
   Requiere **stagear todos los archivos** antes (sin untracked) para no fallar con
-  `E_GENTLE_AI_MISSING` (ver Bloque 6).
+  `E_GENTLE_AI_MISSING` (ver Bloque 5).
 - **Gate de entrega**: `gentle-ai review validate --gate pre-commit` → `result: allow` con
   receipt aprobado (revisión nativa con evidencia de verificación: pytest 4/4 + ruff limpio).
 - **Commit**: `4352b63` `[Indicators] Add rolling percentile ATR helper. Fixes #65`
@@ -336,7 +346,7 @@ compliance matrix, assertion quality), pero Loom no lo consume como input autom�
 propio `seal`. La FSM de Loom puede estar clavada en `WORKING` mientras el agente ya completó
 y archivó todo su trabajo.
 
-### Bloque 6: Gobernanza RDD y Errores Conocidos del Cierre Real
+### Bloque 5: Gobernanza RDD y Errores Conocidos del Cierre Real
 
 **Gate real de entrega (authority, no stub).** Desde el cambio de gobernanza en Loom,
 `loomctl validate`/`seal` corren `gentle-ai review validate --gate pre-pr --cwd <worktree>`
@@ -358,7 +368,7 @@ sellado con `E_GENTLE_AI_MISSING`; en flujo estándar (fail-open) sellan con
 > segura si el trabajo ya fue pusheado/PR creado. El directorio vacío residual puede requerir
 > limpieza manual posterior cuando el proceso lo libere.
 
-### Bloque 5: Cheat Sheet de Comandos loomctl
+### Bloque 6: Cheat Sheet de Comandos loomctl
 
 | Comando | Acción | Mutación en FSM |
 |---------|--------|-----------------|
