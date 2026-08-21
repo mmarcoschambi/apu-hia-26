@@ -25,6 +25,9 @@ El nuevo formato debe seguir esta estructura de secciones:
 - [ ] Tests pytest para `build_telegram_brief` verificando estructura y contenido de cada sección
 - [ ] Ruff limpio sobre archivos modificados
 - [ ] Commit con formato: [Telegram] Redesign pre-market brief with narrative format. Fixes #<N>
+- [ ] Mini-línea de aprendizaje 'Objetivo' en candidatos con estado 'Trigger listo' o 'Esperando ruptura': 'Objetivo: Breakout de NIVEL. Si cruza con RVOL > UMBRAL, la señal es de alta convicción.'
+- [ ] Umbral RVOL de alta convicción definido como constante nombrada del módulo (sin magic numbers)
+- [ ] Candidatos en 'Consolidar - no comprar aún' conservan su guía de enfriamiento y NO llevan línea Objetivo
 
 ### Baseline a no degradar
 N/A (feature aditiva, no toca backtest core).
