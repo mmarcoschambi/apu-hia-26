@@ -28,6 +28,7 @@ dependencies = [
     "plotly",
     "matplotlib",
     "duckdb",
+    "polars>=1.0",
     "lightgbm",
     "psutil",
     "python-dotenv",
