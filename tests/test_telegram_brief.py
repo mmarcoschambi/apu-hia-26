@@ -317,6 +317,64 @@ def test_motivo_estado_explicado_con_numeros(brief):
     assert "límite sano: 6.77%" in texto
 
 
+# ── Criterio nuevo: mini-línea de aprendizaje 'Objetivo' por candidato ──────
+
+
+def _bloque_candidato(texto: str, ticker: str) -> str:
+    """Extrae el fragmento del brief correspondiente a un solo candidato.
+
+    Parámetros: texto (brief completo), ticker (símbolo buscado).
+    Retorna: substring desde la viñeta del candidato hasta la siguiente.
+    """
+    seccion = texto[texto.index("CANDIDATOS DEL DÍA"):texto.index("ALERTA PRIORITARIA")]
+    inicio = seccion.index(f"• <b>{ticker}</b>")
+    siguiente = seccion.find("• <b>", inicio + len(f"• <b>{ticker}</b>"))
+    fin = siguiente if siguiente != -1 else len(seccion)
+    return seccion[inicio:fin]
+
+
+def test_objetivo_en_trigger_listo_con_nivel_y_rvol(brief):
+    texto, _ = brief
+    bloque = _bloque_candidato(texto, "JPM")  # Trigger listo
+    assert "→ 🎯 <b>Objetivo:</b>" in bloque
+    assert "Breakout de 210.40" in bloque
+    assert "RVOL &gt; 1.20" in bloque
+    assert "alta convicción" in bloque
+
+
+def test_objetivo_en_esperando_ruptura_con_nivel_y_rvol(brief):
+    texto, _ = brief
+    bloque = _bloque_candidato(texto, "BAC")  # Esperando ruptura
+    assert "→ 🎯 <b>Objetivo:</b>" in bloque
+    assert "Breakout de 45.80" in bloque
+    assert "RVOL &gt; 1.20" in bloque
+    assert "alta convicción" in bloque
+
+
+def test_objetivo_reemplaza_accion_sugerida_en_estados_de_ruptura(brief):
+    texto, _ = brief
+    for ticker in ("JPM", "BAC"):
+        bloque = _bloque_candidato(texto, ticker)
+        # La línea Objetivo subsume la acción operativa previa
+        assert "Acción sugerida" not in bloque
+
+
+def test_consolidar_mantiene_enfriamiento_sin_linea_objetivo(brief):
+    texto, _ = brief
+    bloque = _bloque_candidato(texto, "PYPL")  # Consolidar - no comprar aún
+    # Extendido: nada que romper todavía, conserva su guía de enfriamiento
+    assert "Objetivo:" not in bloque
+    assert "→ Acción sugerida:" in bloque
+    assert "Esperar que se enfríe hacia la media antes de re-evaluar" in bloque
+
+
+def test_umbral_rvol_alta_conviccion_constante_nombrada():
+    from src.utils.terminal_gui import HIGH_CONVICTION_RVOL
+
+    assert isinstance(HIGH_CONVICTION_RVOL, float)
+    assert HIGH_CONVICTION_RVOL == pytest.approx(1.20)
+
+
 # ── Sección 6: Alerta Prioritaria ────────────────────────────────────────────
 
 

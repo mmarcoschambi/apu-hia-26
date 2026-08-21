@@ -608,6 +608,9 @@ DEFAULT_MAX_DIST_SMA20 = 6.77
 RVOL_MINIMO_TRIGGER = 1.0
 GEX_TO_BILLIONS = 1e9
 
+# Umbral de volumen relativo que confirma una ruptura como alta convicción
+HIGH_CONVICTION_RVOL = 1.20
+
 # Estados narrativos de los candidatos
 ESTADO_TRIGGER_LISTO = "Trigger listo"
 ESTADO_CONSOLIDAR = "Consolidar - no comprar aún"
@@ -798,6 +801,20 @@ def _join_natural(nombres: list) -> str:
     return ", ".join(nombres[:-1]) + " y " + nombres[-1]
 
 
+def _linea_objetivo(nivel: float) -> str:
+    """Construye la mini-línea de aprendizaje 'Objetivo' del candidato.
+
+    Propósito: enseñar el nivel de breakout y el umbral RVOL que convierte
+    la ruptura en una señal de alta convicción.
+    Parámetros: nivel (precio clave de ruptura del candidato).
+    Retorna: línea HTML lista para insertar en el brief.
+    """
+    return (
+        f"→ 🎯 <b>Objetivo:</b> Breakout de {nivel:.2f}. Si cruza con RVOL &gt; "
+        f"{HIGH_CONVICTION_RVOL:.2f}, la señal es de alta convicción."
+    )
+
+
 def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple[str, list]:
     """Construye un brief pre-market narrativo para Telegram (parse_mode=HTML).
 
@@ -935,12 +952,18 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
                 ticker_esc = html.escape(str(ticker))
                 motivo_esc = html.escape(motivo)
                 accion_esc = html.escape(accion)
+                # La línea de aprendizaje subsume la acción operativa cuando hay
+                # un nivel claro que romper; el resto conserva su guía original
+                if estado in (ESTADO_TRIGGER_LISTO, ESTADO_ESPERANDO_RUPTURA):
+                    linea_final = _linea_objetivo(nivel)
+                else:
+                    linea_final = f"→ Acción sugerida: {accion_esc}"
                 lines.append(
                     f"• <b>{ticker_esc}</b>{tema_txt} · Fuerza Relativa {rs:.0f}/100\n"
                     f"{emoji} <b>Estado: {estado}</b>\n"
                     f"→ Motivo: {motivo_esc}\n"
                     f"→ Nivel de ruptura: {nivel:.2f} | Precio actual: {precio:.2f}\n"
-                    f"→ Acción sugerida: {accion_esc}"
+                    f"{linea_final}"
                 )
     if len(rendered_tickers) == 0:
         lines.append("Sin candidatos validados hoy; el radar sigue trabajando.")
