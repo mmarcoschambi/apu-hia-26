@@ -1,12 +1,16 @@
 """Módulo de microestructura: validación cruzada intraday (Issue #69).
 
 Pipeline A (volume bars + Bollinger breakout), Pipeline B (time bars +
-Vol Buzz Z-Score + AVWAP) y capa de ingesta lazy DuckDB -> Polars. El
-feature engine del dataset híbrido, el modelo LightGBM y los kernels Numba
-se implementan en slices posteriores.
+Vol Buzz Z-Score + AVWAP + Signal B) y el feature engine del dataset
+híbrido. Capa de ingesta lazy DuckDB -> Polars incluida. El modelo híbrido
+LightGBM y los kernels Numba se implementan en slices posteriores.
 """
 
 from src.microstructure.data_pipeline import load_tick_data
+from src.microstructure.feature_engine import (
+    FEATURE_OUTPUT_COLUMNS,
+    build_feature_frame,
+)
 from src.microstructure.time_bars import (
     DEFAULT_THRESHOLD_Z,
     TIME_BAR_OUTPUT_COLUMNS,
@@ -23,7 +27,9 @@ from src.microstructure.volume_bars import (
 
 __all__ = [
     "DEFAULT_THRESHOLD_Z",
+    "FEATURE_OUTPUT_COLUMNS",
     "TIME_BAR_OUTPUT_COLUMNS",
+    "build_feature_frame",
     "build_time_bars",
     "build_volume_bars",
     "compute_avwap",
