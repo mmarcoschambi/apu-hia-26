@@ -1,0 +1,46 @@
+{
+  "date": "2026-08-21",
+  "watchlist_detail": {
+    "KKR": {
+      "score": 100.0,
+      "rs_pct": 100.0,
+      "price": 107.02,
+      "rvol": 0.7,
+      "adr": 3.95,
+      "dollar_volume_m": 396.86,
+      "dist_sma20_pct": 1.04,
+      "breakout_level": 116.57,
+      "breakout_gap_pct": -8.19,
+      "breakout": false,
+      "ma_stack": false,
+      "ma_status": "broken",
+      "ma_trigger": "P>EMA10",
+      "ma_gap_pct": -1.3,
+      "sector_etf": "OTHER",
+      "sector_etf_dist_pct": null,
+      "sector_trigger": "OK",
+      "sector_etf_ok": true,
+      "waiting_for": "Breakout > 116.57",
+      "proximity_score": 20.0,
+      "primary_reason": "Falta breakout",
+      "reasons": [
+        "Falta breakout",
+        "MA stack roto",
+        "RVOL bajo"
+      ],
+      "themes": [],
+      "theme_vs_sector": null,
+      "best_theme": null,
+      "max_dist_sma20": 6.768,
+      "htf_candidate": 0,
+      "combos": [
+        "Qulla",
+        "Minervini"
+      ],
+      "data_quality_status": "ok",
+      "data_quality_reasons": [],
+      "is_promotable": true
+    }
+  },
+  "source": "finviz"
+}
