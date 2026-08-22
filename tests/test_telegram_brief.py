@@ -5,6 +5,7 @@ UTF-8 reales (sin placeholders), estados en lenguaje natural y HTML válido
 para Telegram (parse_mode=HTML).
 """
 
+import inspect
 import re
 from unittest.mock import patch
 
@@ -445,6 +446,23 @@ def test_contrato_retorno_tupla_str_list(brief):
         for boton in fila:
             assert "text" in boton
             assert "callback_data" in boton
+
+
+# ── Cleanup #76: sin dead code 'En espera' ni shim hq_n ─────────────────────
+
+
+def test_alerta_prioritaria_no_renderiza_linea_en_espera(brief):
+    """El bloque 'resto' era siempre vacio por construccion: la linea
+    'En espera' nunca debe aparecer en el brief."""
+    texto, _ = brief
+    assert "En espera:" not in texto
+
+
+def test_firma_build_telegram_brief_sin_parametro_hq_n():
+    """hq_n estaba retenido sin uso y ningun caller lo pasa (grep #76):
+    la firma de build_telegram_brief no debe exponerlo."""
+    parametros = inspect.signature(build_telegram_brief).parameters
+    assert "hq_n" not in parametros
 
 
 if __name__ == "__main__":
