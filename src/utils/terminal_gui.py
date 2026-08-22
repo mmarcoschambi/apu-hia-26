@@ -1,18 +1,18 @@
-import json
 import html
+import json
 from pathlib import Path
-import pandas as pd
-from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
-from rich.columns import Columns
-from rich.text import Text
-from rich import box
 
-from src.utils.sector_rotation import SectorRotationAnalyzer, get_ticker_sector_mapping
+import pandas as pd
+from rich import box
+from rich.columns import Columns
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
 
 from src.utils.data_quality import calculate_data_quality
 from src.utils.gamma_scraper import fetch_gamma_data
+from src.utils.sector_rotation import SectorRotationAnalyzer, get_ticker_sector_mapping
 
 console = Console()
 
@@ -236,13 +236,13 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
             diag.add_row(
                 ticker,
                 f"[bold]{data.get('rs_pct', data.get('score', 0)):.1f}[/bold]",
-                f"[green][U+2713][/green]" if data.get("breakout") else "[red][U+2717][/red]",
+                "[green][U+2713][/green]" if data.get("breakout") else "[red][U+2717][/red]",
                 _fmt_num(data.get("breakout_level")),
-                f"[green][U+2713][/green]" if data.get("ma_stack") else "[red][U+2717][/red]",
+                "[green][U+2713][/green]" if data.get("ma_stack") else "[red][U+2717][/red]",
                 str(data.get("ma_trigger", "OK")),
                 _fmt_num(data.get("rvol")),
                 _fmt_num(data.get("dist_sma20_pct"), "%"),
-                f"[green][U+2713][/green]" if data.get("sector_etf_ok", True) else "[red][U+2717][/red]",
+                "[green][U+2713][/green]" if data.get("sector_etf_ok", True) else "[red][U+2717][/red]",
                 t_rs_txt,
                 str(data.get("waiting_for", "OK")),
                 data.get("primary_reason") or (", ".join(data.get("reasons", [])[:3]) or "OK"),
@@ -379,7 +379,7 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
                         try:
                             dv = int(drift)
                             trend = "[UP]" if dv > 0 else "[DOWN]" if dv < 0 else "[RIGHT]"
-                        except:
+                        except (TypeError, ValueError):
                             trend = "[RIGHT]"
 
                     prev_rank = str(f_row.get("previous_rank", "-"))
@@ -473,7 +473,7 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
                             trend = f"[DOWN]{drift_val:+} "
                         else:
                             trend = "[RIGHT]  "
-                    except:
+                    except (TypeError, ValueError):
                         trend = "[RIGHT]  "
 
                 ticker_txt = f"{trend}{row.get('ticker', '?')} (R{row.get('previous_rank', '-')})"
@@ -542,7 +542,7 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
             max_dist = 6.77
             try:
                 max_dist = float(d.get("max_dist_sma20", max_dist))
-            except:
+            except (TypeError, ValueError):
                 pass
 
             dist = d.get("dist_sma20_pct")
@@ -589,632 +589,472 @@ def print_terminal_brief(snapshot_path_or_dict, top_n: int = 5, hq_n: int = 5):
     console.print("\n" + "-" * console.width + "\n", style="dim")
 
 
+# ── Constantes narrativas del brief ─────────────────────────────────────────
+# Umbrales de interpretación del VIX (zonas de volatilidad)
+VIX_CALM_THRESHOLD = 20.0
+VIX_STRESS_THRESHOLD = 30.0
+
+# Umbrales de interpretación del DIX (compra oculta institucional)
+DIX_STRONG_THRESHOLD = 0.40
+DIX_MODERATE_THRESHOLD = 0.35
+
+# Tamaños del formato narrativo
+NARRATIVE_HOT_SECTORS = 4
+MAX_CANDIDATES_PER_SECTOR = 3
+TOP_GLOBAL_NARRATIVE_SIZE = 3
+
+# Parámetros técnicos por defecto
+DEFAULT_MAX_DIST_SMA20 = 6.77
+RVOL_MINIMO_TRIGGER = 1.0
+GEX_TO_BILLIONS = 1e9
+
+# Umbral de volumen relativo que confirma una ruptura como alta convicción
+HIGH_CONVICTION_RVOL = 1.20
+
+# Estados narrativos de los candidatos
+ESTADO_TRIGGER_LISTO = "Trigger listo"
+ESTADO_CONSOLIDAR = "Consolidar - no comprar aún"
+ESTADO_ESPERANDO_RUPTURA = "Esperando ruptura"
+ESTADO_ESPERANDO_VOLUMEN = "Esperando volumen"
+ESTADO_DATOS_INCOMPLETOS = "Datos incompletos"
+
+EMOJI_ESTADO = {
+    ESTADO_TRIGGER_LISTO: "✅",
+    ESTADO_CONSOLIDAR: "⏸",
+    ESTADO_ESPERANDO_RUPTURA: "⏳",
+    ESTADO_ESPERANDO_VOLUMEN: "📉",
+    ESTADO_DATOS_INCOMPLETOS: "⚠️",
+}
+
+SEM_FAVORABLE = "ENTORNO FAVORABLE"
+SEM_CAUTELA = "ENTORNO DE CAUTELA"
+SEM_BLOQUEADO = "ENTORNO BLOQUEADO"
+
+
+def _to_float(value, default=None):
+    """Convierte un valor a float de forma tolerante.
+
+    Propósito: evitar excepciones con datos faltantes o corruptos del snapshot.
+    Parámetros: value (valor a convertir), default (retorno si no es convertible).
+    Retorna: float o default.
+    """
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _semaphore_state(regime_ok: bool, breadth: dict) -> str:
+    """Determina la etiqueta del semáforo de entorno.
+
+    Propósito: resumir el régimen en favorable/cautela/bloqueado para humanos.
+    Parámetros: regime_ok (gate del sistema), breadth (diccionario con 'vix').
+    Retorna: etiqueta del semáforo (str).
+    """
+    vix = _to_float((breadth or {}).get("vix"))
+    if not regime_ok or (vix is not None and vix >= VIX_STRESS_THRESHOLD):
+        return SEM_BLOQUEADO
+    if vix is None:
+        return SEM_CAUTELA
+    if vix < VIX_CALM_THRESHOLD:
+        return SEM_FAVORABLE
+    return SEM_CAUTELA
+
+
+def _narrativa_vix(vix) -> str:
+    """Traduce el valor del VIX a una interpretación narrativa.
+
+    Propósito: que el lector entienda el entorno sin conocer el indicador.
+    Parámetros: vix (valor numérico o None).
+    Retorna: frase explicativa (str).
+    """
+    if vix is None:
+        return "Sin datos de VIX hoy: el radar de volatilidad está apagado, se recomienda cautela."
+    if vix < VIX_CALM_THRESHOLD:
+        return (
+            f"VIX en {vix:.2f} (zona tranquila): el mercado opera sin miedo y deja buscar "
+            "oportunidades con comodidad."
+        )
+    if vix < VIX_STRESS_THRESHOLD:
+        return (
+            f"VIX en {vix:.2f} (zona nerviosa): hay tensión en el mercado; conviene operar "
+            "liviano y solo los mejores setups."
+        )
+    return (
+        f"VIX en {vix:.2f} (zona de pánico): el mercado está defendiéndose; prioridad en "
+        "proteger capital y esperar a que pase la tormenta."
+    )
+
+
+def _narrativa_gex(gex_raw) -> str:
+    """Traduce el Gamma Exposure a una interpretación narrativa.
+
+    Propósito: explicar si el GEX actúa como piso o techo para el mercado.
+    Parámetros: gex_raw (GEX en dólares crudos).
+    Retorna: frase explicativa (str).
+    """
+    gex_b = float(gex_raw) / GEX_TO_BILLIONS
+    if gex_b > 0:
+        return (
+            f"GEX de <b>${gex_b:.1f}B</b> positivo: las caídas encuentran compradores rápido; "
+            "actúa como un <b>piso de soporte</b> para el mercado."
+        )
+    return (
+        f"GEX de <b>${gex_b:.1f}B</b> negativo: los movimientos se amplifican en ambas "
+        "direcciones; actúa como un <b>techo de volatilidad</b> que frena los rebotes."
+    )
+
+
+def _narrativa_dix(dix: float) -> str:
+    """Traduce el DIX (Dark Pool IndicateX) a una interpretación narrativa.
+
+    Propósito: explicar qué está haciendo el dinero institucional oculto.
+    Parámetros: dix (proporción de compra oculta, 0-1).
+    Retorna: frase explicativa (str).
+    """
+    pct = dix * 100.0
+    if dix >= DIX_STRONG_THRESHOLD:
+        return (
+            f"{pct:.1f}% del volumen fue compra oculta en Dark Pool: hay <b>acumulación "
+            "institucional activa</b>; el smart money sigue posicionado."
+        )
+    if dix >= DIX_MODERATE_THRESHOLD:
+        return (
+            f"{pct:.1f}% del volumen fue compra oculta en Dark Pool: acumulación moderada; "
+            "el dinero institucional observa sin comprometerse."
+        )
+    return (
+        f"Solo {pct:.1f}% del volumen fue compra oculta en Dark Pool: el smart money está "
+        "mayormente esperando; poca convicción institucional."
+    )
+
+
+def _estado_narrativo(data: dict) -> tuple[str, str, str]:
+    """Clasifica un candidato en un estado narrativo accionable.
+
+    Propósito: reemplazar estados técnicos por lenguaje natural con motivo numérico.
+    Parámetros: data (diccionario de watchlist_detail del candidato).
+    Retorna: tupla (estado, motivo, acción sugerida), todas en texto natural.
+    """
+    dist = _to_float(data.get("dist_sma20_pct"))
+    max_dist = _to_float(data.get("max_dist_sma20"), DEFAULT_MAX_DIST_SMA20)
+    nivel = _to_float(data.get("breakout_level"), 0.0)
+    precio = _to_float(data.get("price"), 0.0)
+    rvol = _to_float(data.get("rvol"))
+    reason = str(data.get("primary_reason") or "").lower()
+
+    if data.get("_display_status") == "warn":
+        return (
+            ESTADO_DATOS_INCOMPLETOS,
+            "faltan datos clave para validar el setup",
+            "Revisar datos antes de operar",
+        )
+
+    # Extendido sobre su media: dejar enfriar antes de comprar
+    if (dist is not None and abs(dist) > max_dist) or "extendido" in reason:
+        extension = abs(dist) if dist is not None else 0.0
+        return (
+            ESTADO_CONSOLIDAR,
+            f"precio extendido {extension:.2f}% sobre su media, límite sano: {max_dist:.2f}%",
+            "Esperar que se enfríe hacia la media antes de re-evaluar",
+        )
+
+    gap = ((nivel / precio) - 1.0) * 100.0 if precio > 0 and nivel > 0 else 0.0
+
+    # Aún no rompió su nivel clave
+    if not data.get("breakout"):
+        return (
+            ESTADO_ESPERANDO_RUPTURA,
+            f"a {gap:.2f}% de romper {nivel:.2f}",
+            f"Vigilar ruptura de {nivel:.2f} con volumen",
+        )
+
+    # Ruptura confirmada pero sin volumen suficiente
+    if rvol is not None and rvol < RVOL_MINIMO_TRIGGER:
+        return (
+            ESTADO_ESPERANDO_VOLUMEN,
+            (
+                f"rompió {nivel:.2f} pero el volumen relativo es {rvol:.2f} "
+                f"(mínimo sano: {RVOL_MINIMO_TRIGGER:.2f})"
+            ),
+            "Esperar entrada de volumen que confirme la ruptura",
+        )
+
+    # Setup completo: listo para disparar
+    rvol_txt = f"{rvol:.2f}" if rvol is not None else "n/d"
+    return (
+        ESTADO_TRIGGER_LISTO,
+        f"a {gap:.2f}% de su nivel clave {nivel:.2f}, con volumen relativo {rvol_txt}",
+        f"Entrada al romper {nivel:.2f} con volumen",
+    )
+
+
+def _join_natural(nombres: list) -> str:
+    """Une nombres en formato natural en español ('A y B', 'A, B y C').
+
+    Propósito: listar tickers legibles dentro de frases narrativas.
+    Parámetros: nombres (lista de strings).
+    Retorna: string unido de forma natural.
+    """
+    if len(nombres) <= 1:
+        return ", ".join(nombres)
+    return ", ".join(nombres[:-1]) + " y " + nombres[-1]
+
+
+def _linea_objetivo(nivel: float) -> str:
+    """Construye la mini-línea de aprendizaje 'Objetivo' del candidato.
+
+    Propósito: enseñar el nivel de breakout y el umbral RVOL que convierte
+    la ruptura en una señal de alta convicción.
+    Parámetros: nivel (precio clave de ruptura del candidato).
+    Retorna: línea HTML lista para insertar en el brief.
+    """
+    return (
+        f"→ 🎯 <b>Objetivo:</b> Breakout de {nivel:.2f}. Si cruza con RVOL &gt; "
+        f"{HIGH_CONVICTION_RVOL:.2f}, la señal es de alta convicción."
+    )
+
+
 def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple[str, list]:
-    """Construye un brief operativo para Telegram con formato visual 'tipo GUI' y botones inline."""
+    """Construye un brief pre-market narrativo para Telegram (parse_mode=HTML).
+
+    Propósito: reemplazar el reporte técnico por un relato human-friendly con 8
+    secciones: Header, Semáforo, Rastro Institucional, Sectores en Rotación,
+    Candidatos del Día, Alerta Prioritaria, Top Global y Footer.
+
+    Parámetros:
+        snapshot: dict del pipeline con date/breadth/watchlist_detail/etc.
+        top_n: presupuesto máximo de candidatos a mostrar.
+        hq_n: se mantiene por compatibilidad con callers existentes (sin uso).
+
+    Retorna: tupla (texto_html, botones_inline) para el cliente de Telegram.
+    """
     date = snapshot.get("date", "n/a")
     data_as_of = snapshot.get("data_as_of")
     regime_ok = snapshot.get("regime_ok", False)
-    signals = snapshot.get("signals", [])
     watchlist_detail = snapshot.get("watchlist_detail", {})
-    breadth = snapshot.get("breadth", {})
+    breadth = snapshot.get("breadth") or {}
+    universe_size = snapshot.get("universe_size", 0)
 
     date_esc = html.escape(str(date))
-    header_date = f"[U+1F680] <b>MOMENTUM V2 | {date_esc}</b>"
+    lines: list = []
+
+    # ── 1. Header ────────────────────────────────────────────────────────
+    header = f"🚀 <b>MOMENTUM SIGNALS</b> | {date_esc}"
     if data_as_of and data_as_of != date:
-        data_as_of_esc = html.escape(str(data_as_of))
-        header_date += f" (Data: {data_as_of_esc})"
-
-    # 1. Breadth Health Section
-    breadth_lines = []
-    if breadth:
-        data_status = breadth.get("data_status", "OK")
-        vix = breadth.get("vix")
-        vix_status = "[U+1F7E2]" if (vix and vix < 20) else "[U+1F7E1]" if (vix and vix < 30) else "[U+1F534]"
-
-        if data_status == "STALE" or breadth.get("sample_size", 0) == 0:
-            breadth_lines = [
-                f"\n[U+1F4CA] <b>BREADTH HEALTH: [CIRCLE-W] N/A</b>",
-                f"• VIX: <code>{vix if vix else 'N/A'}</code> {vix_status}",
-                f"• Status: <code>DATA STALE (0/0)</code> [WARN]",
-            ]
-        else:
-            nh = breadth.get("new_highs", 0)
-            nl = breadth.get("new_lows", 0)
-            nh_nl_ratio = nh / (nl if nl > 0 else 1)
-            nh_status = "[U+1F7E2]" if nh_nl_ratio > 1.5 else "[U+1F7E1]" if nh_nl_ratio > 0.7 else "[U+1F534]"
-
-            adv = breadth.get("advances", 0)
-            dec = breadth.get("declines", 0)
-            ad_ratio = adv / (dec if dec > 0 else 1)
-            ad_status = "[U+1F7E2]" if ad_ratio > 1.2 else "[U+1F7E1]" if ad_ratio > 0.8 else "[U+1F534]"
-
-            verdict = breadth.get("verdict", "NEUTRAL")
-            v_emoji = (
-                "[OK] GREEN"
-                if verdict == "GREEN"
-                else "[WARN] CAUTION"
-                if verdict == "CAUTION"
-                else "[SCALE] NEUTRAL"
-            )
-            sample = breadth.get("sample_size", 0)
-
-            breadth_lines = [
-                f"\n[U+1F4CA] <b>BREADTH HEALTH: {v_emoji}</b>",
-                f"• VIX: <code>{vix if vix else 'N/A'}</code> {vix_status}",
-                f"• NH/NL: <code>{nh}/{nl}</code> {nh_status} | A/D: <code>{adv}/{dec}</code> {ad_status}",
-                f"• Sample: <code>{sample} tickers</code>",
-            ]
-            pc = breadth.get("put_call")
-            if pc:
-                breadth_lines[-1] += f" | P/C: <code>{pc:.2f}</code>"
-
-    # Intentar obtener datos de Gamma/DarkPools
-    gamma_data = fetch_gamma_data()
-    gamma_str = ""
-    if gamma_data:
-        dix = gamma_data["dix"]
-        gex = gamma_data["gex"] / 1e9  # Convertir a Billones para legibilidad
-        dix_status = "[U+1F525]" if dix > 0.45 else "[SNOW]"
-        gex_status = "[OK]" if gex > 0 else "[WARN]"
-        gamma_str = (
-            f"\n[U+1F48E] <b>MARKET ALPHA (Gamma/DIX)</b>\n"
-            f"• DIX: <code>{dix:.1%}</code> {dix_status} (Dark Pool Buy %)\n"
-            f"• GEX: <code>${gex:.1f}B</code> {gex_status} (Gamma Exposure)\n"
+        header += (
+            f"\n<i>Datos al cierre del {html.escape(str(data_as_of))} · "
+            f"Universo: {universe_size} activos</i>"
         )
-
-    universe_size = snapshot.get("universe_size", 0)
-    scanner_uni_count = snapshot.get("scanner_universe_count")
-    if scanner_uni_count is not None and abs(universe_size - scanner_uni_count) > 50:
-        universe_str = f"• Universe (Finviz): <code>{universe_size}</code> | Scanner DB: <code>{scanner_uni_count}</code>"
     else:
-        universe_str = f"• Universe: <code>{universe_size}</code>"
+        header += f"\n<i>Universo: {universe_size} activos</i>"
+    lines.append(header)
 
-    lines = [
-        header_date,
-        f"• Regime: <b>{'PASS' if regime_ok else 'BLOCKED'}</b>",
-        universe_str,
-        f"• Signals: <code>{len(signals)}</code>",
-    ]
-
-    if breadth_lines:
-        lines.extend(breadth_lines)
-
-    if gamma_str:
-        lines.append(gamma_str)
-
-    e25_audit = snapshot.get("e25_audit") or {}
-    if e25_audit:
-        systems = e25_audit.get("systems", {})
-        finviz = systems.get("finviz_vps", {})
-        local = systems.get("local_pit", {})
-        lines.append("\n[U+1F9EA] <b>SHADOW / E25 AUDIT</b>")
-        lines.append(
-            f"• FINVIZ/VPS: <code>{finviz.get('signals', 0)}</code> | avg SF <code>{finviz.get('avg_sizing_factor', 1.0):.2f}</code> | blocked <code>{finviz.get('blocked_extremes', 0)}</code> | ultra <code>{finviz.get('ultralight', 0)}</code>"
-        )
-        lines.append(
-            f"• LOCAL/PIT: <code>{local.get('signals', 0)}</code> | avg SF <code>{local.get('avg_sizing_factor', 1.0):.2f}</code> | blocked <code>{local.get('blocked_extremes', 0)}</code> | ultra <code>{local.get('ultralight', 0)}</code>"
-        )
-        overlap = e25_audit.get("overlap_tickers") or []
-        local_only = e25_audit.get("local_only_tickers") or []
-        finviz_only = e25_audit.get("finviz_only_tickers") or []
-        if overlap:
-            lines.append(f"• Overlap: <code>{', '.join(overlap[:8])}</code>")
-        if local_only:
-            lines.append(f"• Local only: <code>{', '.join(local_only[:6])}</code>")
-        if finviz_only:
-            lines.append(f"• Finviz only: <code>{', '.join(finviz_only[:6])}</code>")
-
-    hot_sectors = _build_hot_sectors(date, top_n=5)
-    hot_sector_order = {}
-    if hot_sectors:
-        lines.append("\n[U+1F525] <b>HOT SECTORS</b>")
-        for idx, row in enumerate(hot_sectors):
-            etf = row["sector_etf"]
-            hot_sector_order[etf] = idx
-            name = html.escape(SECTOR_NAMES.get(etf, ""))
-            lines.append(
-                f"• <b>{etf} {name}</b> | RS {row.get('rs', 0):.1%} | S1 {'[U+2713]' if row.get('tradeable') else '[U+2717]'}"
-            )
-
-    # Resolve all sectors at once for efficiency
-    all_tickers_for_sec = list(watchlist_detail.keys())
-    nearest_flow_data = snapshot.get("nearest_flow") or {}
-    all_tickers_for_sec.extend(
-        [r.get("ticker") for r in nearest_flow_data.get("rows", []) if r.get("ticker")]
+    # ── 2. Semáforo de entorno ───────────────────────────────────────────
+    semaphore = _semaphore_state(regime_ok, breadth)
+    vix = _to_float(breadth.get("vix")) if breadth else None
+    accion_entorno = {
+        SEM_FAVORABLE: "Momento de <b>buscar breakouts</b>, no de quedarse mirando.",
+        SEM_CAUTELA: "Entorno exigente: <b>operar liviano</b> y solo lo mejor del radar.",
+        SEM_BLOQUEADO: (
+            "El sistema está <b>bloqueado</b>: prioridad en proteger capital, no en entrar."
+        ),
+    }[semaphore]
+    lines.append(
+        f"\n🚦 <b>SEMÁFORO: {semaphore}</b>\n"
+        f"{_narrativa_vix(vix)}\n"
+        f"{accion_entorno}"
     )
-    all_tickers_for_sec = list(set(all_tickers_for_sec))
-    resolved_sectors = get_ticker_sector_mapping(all_tickers_for_sec)
+
+    # ── Datos externos: Gamma/Dark Pool y sectores calientes ────────────
+    gamma_data = fetch_gamma_data()
+    hot_sectors = _build_hot_sectors(str(date), top_n=NARRATIVE_HOT_SECTORS)
+    hot_etfs = {row["sector_etf"] for row in hot_sectors}
+    hot_sector_order = {row["sector_etf"]: idx for idx, row in enumerate(hot_sectors)}
+
+    # ── 3. Rastro Institucional ──────────────────────────────────────────
+    if gamma_data:
+        dix_line = _narrativa_dix(float(gamma_data["dix"]))
+        gex_line = _narrativa_gex(float(gamma_data["gex"]))
+        lines.append(f"\n🏛 <b>RASTRO INSTITUCIONAL</b>\n{gex_line}\n{dix_line}")
+    else:
+        lines.append(
+            "\n🏛 <b>RASTRO INSTITUCIONAL</b>\nSin datos de Gamma/Dark Pool disponibles hoy."
+        )
+
+    # ── 4. Sectores en Rotación ──────────────────────────────────────────
+    if hot_sectors:
+        rotacion = ["\n📊 <b>SECTORES EN ROTACIÓN</b>"]
+        for idx, row in enumerate(hot_sectors, 1):
+            etf = row["sector_etf"]
+            nombre = SECTOR_NAMES.get(etf, etf)
+            fuego = " 🔥" if row.get("tradeable") else ""
+            rotacion.append(f"{idx}. {nombre} ({etf}) → Fuerza {row.get('rs', 0):.0%}{fuego}")
+        lines.append("\n".join(rotacion))
+    else:
+        lines.append("\n📊 <b>SECTORES EN ROTACIÓN</b>\nSin datos de rotación sectorial hoy.")
+
+    # ── Clasificación de calidad y resolución de sectores ───────────────
+    nearest_ok = []
+    nearest_warn = []
+    for ticker, data in watchlist_detail.items():
+        status, _ = calculate_data_quality(data)
+        if status == "bad":
+            continue
+        data["_display_status"] = status
+        (nearest_warn if status == "warn" else nearest_ok).append((ticker, data))
+
+    nearest_ok.sort(key=lambda x: x[1].get("proximity_score", 0), reverse=True)
+
+    # Resolución de sectores perezosa: solo consultar el mapeo si falta dato
+    sin_sector = [t for t, d in watchlist_detail.items() if not d.get("sector_etf")]
+    resolved_sectors = get_ticker_sector_mapping(sin_sector) if sin_sector else {}
 
     def _get_sec(ticker, data):
         return data.get("sector_etf") or resolved_sectors.get(ticker) or "OTHER"
 
-    def _fmt_val(v, suffix="", default="N/A"):
-        if v is None:
-            return default
-        try:
-            return f"{float(v):.2f}{suffix}"
-        except:
-            return default
-
-    def _get_tv_link(ticker):
-        ticker_esc = html.escape(str(ticker))
-        return f'<a href="https://www.tradingview.com/symbols/{ticker_esc}/">TradingView</a>'
-
-    def _estado_simple(data):
-        if data.get("_display_status") == "warn":
-            return "[WARN] Data incompleta"
-
-        # Calculate sizing factor for E25_v2
-        dist = data.get("dist_sma20_pct")
-        adr = data.get("adr", 0.0)
-        try:
-            from src.signals.signal_engine import calculate_dynamic_sizing_factor
-            from src.config.dynamic_config import load_production_config
-            cfg = load_production_config()
-            sf_val, _ = calculate_dynamic_sizing_factor(float(dist or 0.0), float(adr or 0.0), cfg)
-        except:
-            sf_val = 1.0
-
-        waiting = data.get("waiting_for", "OK")
-        reason = data.get("primary_reason", "OK")
-        breakout = data.get("breakout", False)
-        rvol = data.get("rvol")
-
-        max_dist = 6.77
-        try:
-            max_dist = float(data.get("max_dist_sma20", max_dist))
-        except:
-            pass
-
-        # Si E25 está activo y sf_val > 0, quitamos el bloqueo de distancia
-        is_extendido = (dist is not None and abs(float(dist)) > max_dist)
-        if is_extendido and sf_val > 0:
-            if reason == "Extendido de SMA20":
-                reasons = [r for r in data.get("reasons", []) if "extendido" not in r.lower()]
-                reason = reasons[0] if reasons else "OK"
-            if "dist" in waiting.lower() or "sma20" in waiting.lower():
-                reasons = [r for r in data.get("reasons", []) if "extendido" not in r.lower()]
-                waiting = "OK" if not reasons else reasons[0]
-
-        # Lógica mejorada según plan
-        if waiting == "OK" and reason == "OK":
-            return "[OK] Trigger listo"
-        if reason == "Extendido de SMA20" or (is_extendido and sf_val <= 0):
-            return "[U+1F4C9] Consolidar"
-        if reason == "Falta breakout" or not breakout:
-            return "[HOURGLASS] Esperar breakout"
-        if reason == "RVOL bajo" or (rvol is not None and float(rvol) < 1.0):
-            return "[U+1F4E1] Esperar volumen"
-
-        return "[U+1F527] Setup incompleto"
-
-    buttons = []
-
-    if watchlist_detail:
-        nearest_ok = []
-        nearest_warn = []
-        for ticker, data in watchlist_detail.items():
-            status, _ = calculate_data_quality(data)
-            if status == "bad":
-                continue
-            data["_display_status"] = status
-            if status == "warn":
-                nearest_warn.append((ticker, data))
-            else:
-                nearest_ok.append((ticker, data))
-
-        # Mapa de flujo para inyectar tendencias en el reporte principal
-        nearest_flow = snapshot.get("nearest_flow") or {}
-        flow_data = {r.get("ticker"): r for r in nearest_flow.get("rows", [])}
-
-        nearest_ok = sorted(nearest_ok, key=lambda x: x[1].get("proximity_score", 0), reverse=True)
-        rendered_tickers = []
-
-        if nearest_ok:
-            lines.append("\n[U+1F3AF] <b>SECTORES CON CANDIDATOS</b>")
-
-            # Agrupar por SECTOR primero
-            by_sector = {}
-            for t, d in nearest_ok:
-                sec = _get_sec(t, d)
-                by_sector.setdefault(sec, []).append((t, d))
-
-            def _sector_sort_key(sec):
-                cands = by_sector.get(sec, [])
-                best_prox = max((d.get("proximity_score", 0) for _, d in cands), default=0)
-                return (hot_sector_order.get(sec, 99), -best_prox, sec)
-
-            total_shown = 0
-            shown_tickers = set()
-
-            for sec in sorted(by_sector.keys(), key=_sector_sort_key):
-                if total_shown >= top_n:
-                    break
-
-                # Header del Sector con metadata de RS/Flow
-                # Intentar encontrar datos del sector en hot_sectors o sector_flow
-                sec_name = SECTOR_NAMES.get(sec, sec)
-
-                # Buscar RS del sector en hot_sectors
-                sec_rs_txt = ""
-                for hs in hot_sectors:
-                    if hs["sector_etf"] == sec:
-                        sec_rs_txt = (
-                            f" | RS {hs.get('rs', 0):.1%} {'[U+1F525]' if hs.get('tradeable') else ''}"
-                        )
-                        break
-
-                lines.append(f"<b>[{sec} {sec_name}{sec_rs_txt}]</b>")
-
-                # Dentro del sector, opcionalmente agrupar por temas
-                sec_cands = sorted(
-                    by_sector[sec], key=lambda x: x[1].get("proximity_score", 0), reverse=True
-                )
-
-                # Detectar temas en este sector
-                themes_in_sec = {}
-                for t, d in sec_cands:
-                    for theme in d.get("themes", []):
-                        themes_in_sec.setdefault(theme, []).append(t)
-
-                # Renderizar candidatos
-                for ticker, data in sec_cands:
-                    if total_shown >= top_n:
-                        break
-                    total_shown += 1
-                    rendered_tickers.append(ticker)
-                    shown_tickers.add(ticker)
-
-                    ticker_esc = html.escape(str(ticker))
-                    rs = data.get("rs_pct", data.get("score", 0))
-                    prox = data.get("proximity_score", 0)
-                    brk = data.get("breakout_level", 0)
-                    rvol = _fmt_val(data.get("rvol"))
-                    dist_val = data.get("dist_sma20_pct", 0)
-                    dist = _fmt_val(dist_val, "%")
-                    max_dist = _fmt_val(data.get("max_dist_sma20", 6.77), "%")
-                    htf_badge = " [U+1F525] HTF" if data.get("htf_candidate") else ""
-
-                    themes = data.get("themes", [])
-                    theme_txt = f" [Tema: {', '.join(themes).upper()}]" if themes else ""
-
-                    entry = float(brk) if brk else data.get("price", 0)
-                    f_row = flow_data.get(ticker, {})
-                    drift = f_row.get("rank_drift", 0)
-                    if drift == "NEW":
-                        trend = "[U+1F195] "
-                    elif drift == "OUT":
-                        trend = "[FAIL] "
-                    else:
-                        try:
-                            dv = int(drift)
-                            trend = "[UP] " if dv > 0 else "[DOWN] " if dv < 0 else "[RIGHT] "
-                        except:
-                            trend = "[RIGHT] "
-
-                    # Calculate sizing factor for E25_v2 shadow
-                    try:
-                        from src.signals.signal_engine import calculate_dynamic_sizing_factor
-                        from src.config.dynamic_config import load_production_config
-                        cfg = load_production_config()
-                        sf_val, _ = calculate_dynamic_sizing_factor(float(dist_val or 0.0), float(data.get("adr", 0.0) or 0.0), cfg)
-                    except:
-                        sf_val = 1.0
-
-                    bucket = "Z1"
-                    if dist_val <= 6.76:
-                        bucket = "Z1"
-                    elif dist_val <= 10.0:
-                        bucket = "Z2"
-                    elif dist_val <= 15.0:
-                        bucket = "Z3"
-                    elif dist_val <= 25.0:
-                        bucket = "Z4"
-                    elif dist_val <= 35.0:
-                        bucket = "Z5"
-                    else:
-                        bucket = "Z6"
-
-                    if sf_val is not None:
-                        dist_sma20_line = f"Dist SMA20: {dist} / E25 Sizing: {sf_val:.2f} ({bucket})"
-                    else:
-                        dist_sma20_line = f"Dist SMA20: {dist} / max {max_dist}"
-
-                    reasons = data.get("reasons", [])
-                    trigger = html.escape(str(data.get("waiting_for", "OK")))
-
-                    if sf_val > 0:
-                        reasons = [r for r in reasons if "extendido" not in r.lower()]
-                        if "dist" in trigger.lower() or "sma20" in trigger.lower():
-                            trigger = "OK" if not reasons else reasons[0]
-
-                    falta = ", ".join(reasons[:2]) if reasons else "OK"
-
-                    combos = data.get("combos", [])
-                    combo_badge = ""
-                    if combos:
-                        if len(combos) > 1:
-                            combo_badge = " <b>[Ambos]</b>"
-                        else:
-                            combo_badge = f" <b>[{combos[0]}]</b>"
-
-                    lines.append(
-                        f"• {trend}<code>{ticker_esc}</code>{combo_badge}{htf_badge}{theme_txt}\n"
-                        f"  RS: <b>{rs:.0f}</b> | Prox: <b>{prox:.0f}</b> | {_get_tv_link(ticker)}\n"
-                        f"  Estado: <b>{html.escape(_estado_simple(data))}</b>\n"
-                        f"  {dist_sma20_line}\n"
-                        f"  RVOL: {rvol} | Break: <code>{entry:.2f}</code>\n"
-                        f"  Bloqueos: {html.escape(str(falta))} | Live: <code>{trigger}</code>\n"
-                    )
-
-        # 2. TOP GLOBAL (TOTAL RANKING) - Absolute leaders regardless of sector
-        if nearest_ok:
-            lines.append("\n[U+1F3C6] <b>TOP GLOBAL (TOTAL RANKING)</b>")
-            for ticker, data in nearest_ok[:5]:
-                ticker_esc = html.escape(str(ticker))
-                rs = data.get("rs_pct", data.get("score", 0))
-                prox = data.get("proximity_score", 0)
-                sec = _get_sec(ticker, data)
-                lines.append(
-                    f"• <code>{ticker_esc}</code> ({sec}) | Prox: <b>{prox:.0f}</b> | RS: <b>{rs:.0f}</b>"
-                )
-
-        # 3. VARIANTE E (DIVERGENCIA TEMÁTICA)
-        variant_e_candidates = []
+    # ── 5. Candidatos del Día (agrupados por sector caliente) ───────────
+    lines.append("\n🎯 <b>CANDIDATOS DEL DÍA</b>")
+    rendered_tickers = []
+    presupuesto = top_n
+    if nearest_ok and hot_sectors:
+        by_sector = {}
         for ticker, data in nearest_ok:
-            # Variante E: Tema fuerte (Theme vs Sector > 2%) pero Sector débil (sector_etf_ok = False)
-            if not data.get("sector_etf_ok", True) and (data.get("theme_vs_sector") or 0) > 0.02:
-                variant_e_candidates.append((ticker, data))
+            by_sector.setdefault(_get_sec(ticker, data), []).append((ticker, data))
 
-        if variant_e_candidates:
-            lines.append("\n[U+1F6E1] <b>VARIANTE E (DIVERGENCIA TEMÁTICA)</b>")
-            lines.append("<i>Temas fuertes en sectores débiles (Plan E11)</i>")
-            for ticker, data in sorted(
-                variant_e_candidates, key=lambda x: x[1].get("theme_vs_sector", 0), reverse=True
-            )[:3]:
+        # Solo sectores calientes: los líderes fuera de la rotación van a Top Global
+        for sec in [h["sector_etf"] for h in hot_sectors]:
+            if presupuesto <= 0:
+                break
+            sec_cands = by_sector.get(sec)
+            if not sec_cands:
+                continue
+            sec_info = next((h for h in hot_sectors if h["sector_etf"] == sec), None)
+            sec_nombre = SECTOR_NAMES.get(sec, sec)
+            fuego = " 🔥" if (sec_info or {}).get("tradeable") else ""
+            lines.append(f"\n→ <b>Sector {sec_nombre}{fuego}</b>")
+
+            sec_cands = sorted(
+                by_sector[sec], key=lambda x: x[1].get("proximity_score", 0), reverse=True
+            )[:MAX_CANDIDATES_PER_SECTOR]
+            for ticker, data in sec_cands:
+                if presupuesto <= 0:
+                    break
+                presupuesto -= 1
+                rendered_tickers.append(ticker)
+                estado, motivo, accion = _estado_narrativo(data)
+                emoji = EMOJI_ESTADO.get(estado, "•")
+                rs = _to_float(data.get("rs_pct", data.get("score", 0)), 0.0)
+                nivel = _to_float(data.get("breakout_level"), 0.0)
+                precio = _to_float(data.get("price"), 0.0)
+                themes = data.get("themes") or []
+                tema_txt = f" ({', '.join(themes)})" if themes else ""
                 ticker_esc = html.escape(str(ticker))
-                rs_divergence = data.get("theme_vs_sector", 0)
-                sec = _get_sec(ticker, data)
-                theme = data.get("best_theme", "N/A")
-                lines.append(
-                    f"• <code>{ticker_esc}</code> ({theme}) | Div: <b>{rs_divergence:+.1%}</b> vs {sec}"
-                )
-
-            # Crear el teclado inline
-            row = []
-            for ticker in rendered_tickers[:6]:
-                row.append({"text": f"[U+1F50E] {ticker}", "callback_data": f"detail:{ticker}"})
-                if len(row) == 2:
-                    buttons.append(row)
-                    row = []
-            if row:
-                buttons.append(row)
-
-        if nearest_warn:
-            lines.append("\n[U+1F4E1] <b>DATA INCOMPLETE RADAR</b>")
-            quality_map = {
-                "rvol_1.0_default": "RVOL premarket no confiable",
-                "adr_0": "ADR faltante",
-                "zero_dollar_vol": "Dollar volume faltante",
-                "missing_avg_volume_20d": "sin baseline volumen 20d",
-                "dist_sma20_zero_suspect": "SMA20 suspect (0.0)",
-            }
-
-            for ticker, data in nearest_warn[:3]:
-                ticker_esc = html.escape(str(ticker))
-                sec = _get_sec(ticker, data)
-                q_reasons = data.get("data_quality_reasons", [])
-                if q_reasons:
-                    motivo = ", ".join([quality_map.get(r, r) for r in q_reasons[:2]])
+                motivo_esc = html.escape(motivo)
+                accion_esc = html.escape(accion)
+                # La línea de aprendizaje subsume la acción operativa cuando hay
+                # un nivel claro que romper; el resto conserva su guía original
+                if estado in (ESTADO_TRIGGER_LISTO, ESTADO_ESPERANDO_RUPTURA):
+                    linea_final = _linea_objetivo(nivel)
                 else:
-                    motivo = ", ".join(data.get("reasons", [])[:2]) or "Incompleto"
-
-                motivo = html.escape(str(motivo))
+                    linea_final = f"→ Acción sugerida: {accion_esc}"
                 lines.append(
-                    f"• <b>{ticker_esc}</b> ({sec}) | RS {data.get('rs_pct', 0):.0f} | {motivo}"
+                    f"• <b>{ticker_esc}</b>{tema_txt} · Fuerza Relativa {rs:.0f}/100\n"
+                    f"{emoji} <b>Estado: {estado}</b>\n"
+                    f"→ Motivo: {motivo_esc}\n"
+                    f"→ Nivel de ruptura: {nivel:.2f} | Precio actual: {precio:.2f}\n"
+                    f"{linea_final}"
                 )
+    if len(rendered_tickers) == 0:
+        lines.append("Sin candidatos validados hoy; el radar sigue trabajando.")
 
-        # 2. ALERTA TOP Section (basada solo en lo renderizado)
-        if rendered_tickers:
-            rendered_data = [(t, watchlist_detail[t]) for t in rendered_tickers]
-            grouped_rendered = {}
-            for t, d in rendered_data:
-                grouped_rendered.setdefault(_get_sec(t, d), []).append((t, d))
+    # ── 6. Alerta Prioritaria ────────────────────────────────────────────
+    lines.append("\n🚨 <b>ALERTA PRIORITARIA</b>")
+    if rendered_tickers and hot_sectors:
+        rendered_set = set(rendered_tickers)
+        sec_top = min(
+            (_get_sec(t, watchlist_detail[t]) for t in rendered_tickers),
+            key=lambda s: (hot_sector_order.get(s, 99), s),
+        )
+        foco = [
+            t
+            for t in rendered_tickers
+            if _get_sec(t, watchlist_detail[t]) == sec_top
+        ]
+        resto = [t for t in rendered_tickers if t not in rendered_set]
+        nombres_foco = _join_natural([html.escape(t) for t in foco])
+        sec_nombre = SECTOR_NAMES.get(sec_top, sec_top)
+        detalle_resto = ""
+        if resto:
+            detalle_resto = f"\n<i>En espera: {_join_natural(resto)} aún no tienen trigger.</i>"
+        lines.append(
+            f"Sector {sec_nombre} concentra el mejor momentum del mercado hoy.\n"
+            f"→ <b>Acción:</b> vigilar {nombres_foco} → si rompen su nivel clave "
+            f"<b>con volumen</b>, son los primeros en gatillar señal de entrada."
+            f"{detalle_resto}"
+        )
+    elif hot_sectors:
+        sec_nombre = SECTOR_NAMES.get(hot_sectors[0]["sector_etf"], hot_sectors[0]["sector_etf"])
+        lines.append(
+            f"Sector {sec_nombre} lidera la rotación, pero ningún candidato pasó el filtro.\n"
+            f"→ <b>Acción:</b> vigilar el sector sin apurar entradas."
+        )
+    else:
+        lines.append(
+            "Mercado sin rotación clara hoy.\n"
+            "→ <b>Acción:</b> mantener la pólvora seca hasta que aparezcan líderes."
+        )
 
-            top_sec = sorted(
-                grouped_rendered.keys(),
-                key=lambda sec: (
-                    hot_sector_order.get(sec, 99),
-                    -max(
-                        (d.get("proximity_score", 0) for _, d in grouped_rendered.get(sec, [])),
-                        default=0,
-                    ),
-                    sec,
-                ),
-            )[0]
-            top_sector_candidates = sorted(
-                grouped_rendered[top_sec],
-                key=lambda x: x[1].get("proximity_score", 0),
-                reverse=True,
-            )
-            top_names = " / ".join(t for t, _ in top_sector_candidates[:3])
+    # ── 7. Top Global (fuera de sectores calientes) ──────────────────────
+    lines.append("\n🏆 <b>TOP GLOBAL (fuera de sectores calientes)</b>")
+    globales = (
+        [(t, d) for t, d in nearest_ok if _get_sec(t, d) not in hot_etfs]
+        if hot_sectors
+        else list(nearest_ok)
+    )
+    globales.sort(key=lambda x: x[1].get("rs_pct", x[1].get("score", 0)), reverse=True)
+    globales = globales[:TOP_GLOBAL_NARRATIVE_SIZE]
+    if globales:
+        for ticker, data in globales:
+            rs = _to_float(data.get("rs_pct", data.get("score", 0)), 0.0)
+            sec = _get_sec(ticker, data)
+            sec_nombre = SECTOR_NAMES.get(sec, sec)
+            ticker_esc = html.escape(str(ticker))
+            lines.append(f"• <b>{ticker_esc}</b> ({sec_nombre}) → Fuerza {rs:.0f}/100")
+        lines.append("<i>Fuerzas altas fuera de la rotación principal: vigilar sin apurar.</i>")
+    else:
+        lines.append("Sin líderes relevantes fuera de la rotación por ahora.")
 
-            # Blocker predominante y notas secundarias
-            blocker_counts = {}
-            rvol_notes = []
-            sma20_notes = []
-            for t, data in top_sector_candidates[:3]:
-                blocker = data.get("primary_reason") or "OK"
-                blocker_counts[blocker] = blocker_counts.get(blocker, 0) + 1
+    # ── 8. Footer ────────────────────────────────────────────────────────
+    lines.append(
+        "\n<i>Reporte informativo, no es asesoría de inversión.</i>\n"
+        "\n📖 <b>CÓMO LEER ESTE REPORTE</b>\n"
+        "• <b>Fuerza Relativa (RS)</b>: performance del ticker vs el mercado; 90+ = liderazgo.\n"
+        "• <b>RVOL</b>: volumen relativo vs su promedio; 1.00+ confirma interés real.\n"
+        "• <b>Nivel de ruptura</b>: precio clave que, al superarse con volumen, dispara señal.\n"
+        "• <b>DIX/GEX</b>: huella del dinero institucional (Dark Pool) y del mercado de opciones."
+    )
 
-                # Notas específicas
-                if "RVOL bajo" in data.get("reasons", []):
-                    rvol_notes.append(t)
-                if "Extendido de SMA20" in data.get("reasons", []):
-                    sma20_notes.append(t)
-
-            main_blocker = max(blocker_counts, key=blocker_counts.get)
-
-            # Construir accion coherente
-            if sma20_notes and rvol_notes:
-                max_d = top_sector_candidates[0][1].get("max_dist_sma20", 6.77)
-                action = f"Esperar Dist SMA20 <= {max_d:.2f}%"
-                if rvol_notes:
-                    action += f"; {', '.join(rvol_notes)} además RVOL >= 1.10"
-            elif sma20_notes:
-                max_d = top_sector_candidates[0][1].get("max_dist_sma20", 6.77)
-                action = f"Esperar Dist SMA20 <= {max_d:.2f}%"
-            elif rvol_notes:
-                action = "Esperar RVOL >= 1.10"
-            elif main_blocker == "Falta breakout":
-                action = "Esperar Breakout"
-            else:
-                wait_msg = top_sector_candidates[0][1].get("waiting_for", "trigger live")
-                action = (
-                    f"Esperar {wait_msg}"
-                    if main_blocker != "OK"
-                    else "Monitorear Breakout live + RVOL"
-                )
-
-            lines.append(
-                f"\n[U+1F6A8] <b>ALERTA TOP: Sector {top_sec}</b>\n"
-                f"Candidatos: <code>{html.escape(top_names)}</code>\n"
-                f"Blocker: <b>{html.escape(str(main_blocker))}</b>\n"
-                f"Acción: <b>{html.escape(str(action))}</b>"
-            )
-
-        sector_flow = snapshot.get("sector_flow") or {}
-        sf_rows = sector_flow.get("rows") or []
-        if sf_rows:
-            lines.append("\n[U+1F3DB] <b>SECTOR MONEY FLOW</b>")
-            flow_secs = []
-            for row in sf_rows[:5]:
-                etf = row["sector_etf"]
-                flow_secs.append(etf)
-                name = html.escape(SECTOR_NAMES.get(etf, ""))
-                drift = row.get("rank_drift", 0)
-                trend = "[U+1F525] [UP]" if drift > 0 else "[SNOW] [DOWN]" if drift < 0 else "[RIGHT]"
-                rs_drift = row.get("rs_drift", 0)
-                rs_txt = f"{rs_drift:+.2%}" if rs_drift != 0 else "="
-                lines.append(f"• <b>{etf} {name}</b> | {trend} | RS {rs_txt}")
-
-            # Bloque compacto: TOP WATCHLIST POR FLOW
-            all_detail = watchlist_detail
-            gen_lines = []
-            for etf in flow_secs:
-                sec_candidates = [
-                    t
-                    for t, d in all_detail.items()
-                    if _get_sec(t, d) == etf
-                    and t not in rendered_tickers
-                    and d.get("_display_status") == "ok"
-                ]
-                if sec_candidates:
-                    top_gen = sorted(
-                        sec_candidates,
-                        key=lambda t: all_detail[t].get("proximity_score", 0),
-                        reverse=True,
-                    )[:3]
-                    formatted_gen = []
-                    for t in top_gen:
-                        prox = all_detail[t].get("proximity_score", 0)
-                        formatted_gen.append(f"<code>{t}</code> ({prox:.0f})")
-                    gen_lines.append(f"• {etf}: " + ", ".join(formatted_gen))
-
-            if gen_lines:
-                lines.append("\n[U+1F52D] <b>TOP WATCHLIST POR FLOW</b>")
-                lines.append(
-                    "<i>Top por score sectorial; no necesariamente listos para trigger.</i>"
-                )
-                lines.extend(gen_lines)
-
-        nearest_flow = snapshot.get("nearest_flow") or {}
-        flow_rows = nearest_flow.get("rows") or []
-        if flow_rows:
-            prev_date = html.escape(str(nearest_flow.get("previous_date", "previo")))
-            lines.append(f"\n[U+1F501] <b>NEAREST FLOW {prev_date} -> {date_esc}</b>")
-            state_map = {
-                "SIGNAL": "Signal",
-                "STILL_NEAR": "Sigue top",
-                "DROPPED": "Cayo",
-                "DATA_BAD": "Data mala",
-                "OUT_OF_RADAR": "Fuera radar",
-            }
-
-            for row in flow_rows[:top_n]:
-                ticker = row.get("ticker", "?")
-                ticker_esc = html.escape(str(ticker))
-                state = html.escape(state_map.get(row.get("state"), str(row.get("state", "-"))))
-                drift = row.get("rank_drift", 0)
-                if drift == "NEW":
-                    trend = "[U+1F195] "
-                elif drift == "OUT":
-                    trend = "[FAIL] "
-                else:
-                    try:
-                        dv = int(drift)
-                        trend = f"[UP]{dv:+} " if dv > 0 else f"[DOWN]{dv:+} " if dv < 0 else "[RIGHT] "
-                    except:
-                        trend = "[RIGHT] "
-
-                prev_rank = row.get("previous_rank", "-")
-                waiting = html.escape(str(row.get("current_waiting_for", "N/A")))
-                px = row.get("price_delta_pct", "N/A")
-
-                lines.append(
-                    f"• {trend}<b>{ticker_esc}</b> (Prev R{prev_rank}) | {state} | Wait: <code>{waiting}</code>"
-                )
-
-    # PIPELINE STATUS Block
-    scanner_uni_count = snapshot.get("scanner_universe_count")
-    is_stale = False
-    try:
-        from src.scanner.universe_loader import DB_PATH
-        import pandas as pd
-        from pathlib import Path
-
-        db_path = Path(DB_PATH)
-        if not db_path.exists() or db_path.stat().st_size == 0:
-            is_stale = True
-        else:
-            # Simple query to get latest date
-            import sqlite3
-
-            conn = sqlite3.connect(db_path)
-            res = conn.execute("SELECT MAX(date) FROM ohlcv_cache").fetchone()
-            latest_date_str = res[0] if res else None
-            conn.close()
-            if latest_date_str:
-                latest_ts = pd.to_datetime(latest_date_str)
-                trade_ts = pd.to_datetime(snapshot.get("date"))
-                b_days = len(pd.bdate_range(start=latest_ts, end=trade_ts)) - 1
-                if b_days > 3:
-                    is_stale = True
-            else:
-                is_stale = True
-    except:
-        pass
-
-    status_parts = []
-    status_parts.append(f"{snapshot.get('universe_size', 0)} Finviz")
-    if scanner_uni_count is not None:
-        status_parts.append(f"{scanner_uni_count} DB")
-    if is_stale:
-        status_parts.append("[WARN] DB stale")
-
-    status_line = " | ".join(status_parts)
-    lines.append(f"\n[U+1F527] <b>PIPELINE STATUS</b>\nScanner: {status_line}")
-
-    # Botones finales
+    # Botones inline con emojis reales (contrato preservado para el caller)
+    buttons: list = []
+    fila_detalle = []
+    for ticker in rendered_tickers[:6]:
+        fila_detalle.append({"text": f"🔎 {ticker}", "callback_data": f"detail:{ticker}"})
+        if len(fila_detalle) == 2:
+            buttons.append(fila_detalle)
+            fila_detalle = []
+    if fila_detalle:
+        buttons.append(fila_detalle)
     buttons.append(
         [
-            {"text": "[U+1F504] Refresh", "callback_data": "refresh:market"},
-            {"text": "[BOLT] Regen All", "callback_data": "regenerate:market"},
-            {"text": "[U+1F9EA] Shadow Audit", "callback_data": "shadow_audit:market"},
+            {"text": "🔄 Refresh", "callback_data": "refresh:market"},
+            {"text": "♻️ Regen All", "callback_data": "regenerate:market"},
+            {"text": "🧪 Shadow Audit", "callback_data": "shadow_audit:market"},
         ]
     )
 
     return "\n".join(lines), buttons
+
 
 
 if __name__ == "__main__":
