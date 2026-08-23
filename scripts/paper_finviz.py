@@ -12,7 +12,7 @@ Usage:
 Outputs -> outputs/paper_finviz/
 """
 
-import argparse, copy, json, logging, sys, sqlite3
+import argparse, copy, json, logging, math, sys, sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
@@ -71,6 +71,17 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 ACTIVE_COMBOS = ["combo_pure_momentum", "combo_stage2_breakout"]
 INITIAL_CAPITAL = 100_000
+
+# Ventanas de medias largas para el diagnostico ma_stack del watchlist.
+# El engine NO expone sma_100/sma_200 como atributos, se calculan locales.
+SMA100_WINDOW = 100
+SMA200_WINDOW = 200
+# Stop operativo espejo de los setups del engine: price - 2*ATR(14),
+# fallback 7% fijo si ATR no disponible, capping al 12% de distancia.
+SETUP_STOP_ATR_PERIOD = 14
+SETUP_STOP_ATR_MULTIPLE = 2.0
+SETUP_STOP_FALLBACK_PCT = 0.07
+SETUP_STOP_MAX_DISTANCE_PCT = 0.12
 
 
 def pre_warm_cache(universe: list[str], date_str: str):
@@ -781,7 +792,7 @@ def scan_signals(
         **kwargs,
     )
 
-    def _build_watchlist_detail(engine_obj, watchlist_scores, confirmed_signals):
+    def _build_watchlist_detail(engine_obj, watchlist_scores):
         detail = {}
         if not watchlist_scores:
             return detail
@@ -794,26 +805,29 @@ def scan_signals(
             "Extendido de SMA20": 4,
         }
 
-        confirmed = {s.get("ticker") for s in confirmed_signals}
         for ticker, score in watchlist_scores.items():
-            if ticker in confirmed:
-                continue
             try:
                 close = engine_obj.close[ticker]
                 high = engine_obj.high[ticker]
+                low = engine_obj.low[ticker]
                 vol_series = engine_obj.volume[ticker]
                 ema10 = engine_obj.ema_10[ticker]
                 sma20 = engine_obj.sma_20[ticker]
                 sma50 = engine_obj.sma_50[ticker]
-                sma100 = engine_obj.sma_100[ticker]
-                sma200 = engine_obj.sma_200[ticker]
+                # Medias largas calculadas localmente: el engine no expone
+                # sma_100/sma_200 como atributos y referenciarlos crasheaba
+                # el builder completo (drift de schema del snapshot, issue 74).
+                s100 = float(
+                    close.rolling(SMA100_WINDOW, min_periods=1).mean().iloc[-1]
+                )
+                s200 = float(
+                    close.rolling(SMA200_WINDOW, min_periods=1).mean().iloc[-1]
+                )
 
                 price = float(close.iloc[-1])
                 e10 = float(ema10.iloc[-1])
                 s20 = float(sma20.iloc[-1])
                 s50 = float(sma50.iloc[-1])
-                s100 = float(sma100.iloc[-1])
-                s200 = float(sma200.iloc[-1])
 
                 # Calcular RVOL directamente desde series raw para evitar
                 # el default 1.0 cuando avg_volume_20 no esta precalculado en DB.
@@ -932,8 +946,33 @@ def scan_signals(
                 proximity_score = max(0.0, min(100.0, proximity_score))
 
                 raw_risk_budget_usd = float(kwargs.get("risk_dollars", INITIAL_CAPITAL * 0.005))
-                risk_budget_usd = round(raw_risk_budget_usd * sizing_factor, 2)
+
+                # Stop operativo por ticker (espejo de la logica de setups del
+                # engine): price - 2*ATR(14), fallback 7% fijo, cap 12%.
+                # Antes se referenciaba un `stop` inexistente en este scope y
+                # el NameError dejaba stubs sin avg_volume_20d (issue 74).
+                prev_close = close.shift(1)
+                true_range = pd.concat(
+                    [
+                        high - low,
+                        (high - prev_close).abs(),
+                        (low - prev_close).abs(),
+                    ],
+                    axis=1,
+                ).max(axis=1)
+                atr_setup = float(
+                    true_range.rolling(SETUP_STOP_ATR_PERIOD).mean().iloc[-1]
+                )
+                if math.isnan(atr_setup) or atr_setup <= 0:
+                    stop = price * (1.0 - SETUP_STOP_FALLBACK_PCT)
+                else:
+                    stop = price - SETUP_STOP_ATR_MULTIPLE * atr_setup
+                max_stop_distance = price * SETUP_STOP_MAX_DISTANCE_PCT
+                if (price - stop) > max_stop_distance:
+                    stop = price - max_stop_distance
+
                 risk_per_share = max(price - stop, price * 0.005)
+                risk_budget_usd = round(raw_risk_budget_usd * sizing_factor, 2)
                 initial_size = (
                     int(raw_risk_budget_usd / risk_per_share) if risk_per_share > 0 else 0
                 )
@@ -1089,7 +1128,7 @@ def scan_signals(
                 )
 
         fallback_detail = _build_watchlist_detail(
-            engine, result.get("eligible_watchlist", {}), signals
+            engine, result.get("eligible_watchlist", {})
         )
 
         return {
@@ -1324,6 +1363,15 @@ def run_pre(trade_date, drift_override, rs_min_pct=RS_FINVIZ_MIN_PCT_DEFAULT, to
     }
 
     snap["e25_summary"] = _build_e25_summary(signals, watchlist_details)
+
+    # Guard de contrato de schema: deteccion automatica y ruidosa de drift
+    # (issue 74). No aborta el pipeline, pero deja evidencia en el snapshot.
+    from src.validation.snapshot_contract import validate_snapshot
+
+    schema_violations = validate_snapshot(snap)
+    if schema_violations:
+        logger.critical("[SchemaContract] %s", " | ".join(schema_violations))
+        snap["schema_contract_violations"] = schema_violations
 
     live_signals_path = ROOT / "outputs" / "live_signals" / trade_date / "combined.csv"
     if live_signals_path.exists():
