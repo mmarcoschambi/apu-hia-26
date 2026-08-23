@@ -815,7 +815,7 @@ def _linea_objetivo(nivel: float) -> str:
     )
 
 
-def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple[str, list]:
+def build_telegram_brief(snapshot: dict, top_n: int = 5) -> tuple[str, list]:
     """Construye un brief pre-market narrativo para Telegram (parse_mode=HTML).
 
     Propósito: reemplazar el reporte técnico por un relato human-friendly con 8
@@ -825,7 +825,6 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
     Parámetros:
         snapshot: dict del pipeline con date/breadth/watchlist_detail/etc.
         top_n: presupuesto máximo de candidatos a mostrar.
-        hq_n: se mantiene por compatibilidad con callers existentes (sin uso).
 
     Retorna: tupla (texto_html, botones_inline) para el cliente de Telegram.
     """
@@ -971,7 +970,6 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
     # ── 6. Alerta Prioritaria ────────────────────────────────────────────
     lines.append("\n🚨 <b>ALERTA PRIORITARIA</b>")
     if rendered_tickers and hot_sectors:
-        rendered_set = set(rendered_tickers)
         sec_top = min(
             (_get_sec(t, watchlist_detail[t]) for t in rendered_tickers),
             key=lambda s: (hot_sector_order.get(s, 99), s),
@@ -981,17 +979,12 @@ def build_telegram_brief(snapshot: dict, top_n: int = 5, hq_n: int = 5) -> tuple
             for t in rendered_tickers
             if _get_sec(t, watchlist_detail[t]) == sec_top
         ]
-        resto = [t for t in rendered_tickers if t not in rendered_set]
         nombres_foco = _join_natural([html.escape(t) for t in foco])
         sec_nombre = SECTOR_NAMES.get(sec_top, sec_top)
-        detalle_resto = ""
-        if resto:
-            detalle_resto = f"\n<i>En espera: {_join_natural(resto)} aún no tienen trigger.</i>"
         lines.append(
             f"Sector {sec_nombre} concentra el mejor momentum del mercado hoy.\n"
             f"→ <b>Acción:</b> vigilar {nombres_foco} → si rompen su nivel clave "
             f"<b>con volumen</b>, son los primeros en gatillar señal de entrada."
-            f"{detalle_resto}"
         )
     elif hot_sectors:
         sec_nombre = SECTOR_NAMES.get(hot_sectors[0]["sector_etf"], hot_sectors[0]["sector_etf"])
