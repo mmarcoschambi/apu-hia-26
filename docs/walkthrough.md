@@ -3,14 +3,24 @@
 ## 📌 Resumen de la Solución Implementada
 Se completó la estructuración integral del entorno de trabajo, repositorios Git, worktrees y la documentación académica y técnica para el Trabajo Práctico de **Gestión de Proyectos con Scrum** de la materia *Herramientas Informáticas Avanzadas (APU - UNJu)*.
 
-La arquitectura del proyecto gestionado se diseñó como una **Plataforma Modular de Microservicios 100% nativa en Docker & Docker Compose** (Gateway Nginx, MySQL 8.0 persistente con aislamiento estricto `expose: 3306`, n8n Workflow Automation y GitHub Actions CI/CD), garantizando seguridad de red por diseño, portabilidad absoluta y cero exposición pública de bases de datos.
+La arquitectura del proyecto gestionado se diseñó como una **Plataforma Modular de Microservicios 100% nativa en Docker & Docker Compose**, respaldada por archivos declarativos reales y verificables en el repositorio (`docker-compose.yml`, `nginx/nginx.conf`, `mysql/init/01-init.sql`, `.env.example` y `.gitignore` con exclusión estricta de secretos y overrides).
 
 ---
 
 ## 📁 Estructura Completa de Archivos en el Worktree
 
 ```
-D:\FACUer_año\HIA-worktrees	p-scrum├── docs/
+D:\FACU\3er_año\HIA-worktrees\tp-scrum\
+├── docker-compose.yml                                      <-- [NUEVO] Orquestación base multicapa verificada
+├── docker-compose.override.yml.example                     <-- [NUEVO] Plantilla para desarrollo local (127.0.0.1:3306)
+├── .env.example                                            <-- [NUEVO] Plantilla de variables seguras
+├── .gitignore                                              <-- [ACTUALIZADO] Exclusión estricta de overrides y secretos
+├── nginx/
+│   └── nginx.conf                                          <-- [NUEVO] Configuración Gateway + WebSockets para n8n
+├── mysql/
+│   └── init/
+│       └── 01-init.sql                                     <-- [NUEVO] Esquema inicial y seed de tabla productos
+├── docs/
 │   ├── enunciados/
 │   │   ├── TP_Scrum_Gestion_Proyectos_2026.pdf              <-- Enunciado oficial activo (Scrum 2026)
 │   │   └── TP1_Practica_Ambiente_Desarrollo_Proxmox_2026.pdf <-- [Referencia] Enunciado TP1 Infraestructura
@@ -25,45 +35,41 @@ D:\FACUer_año\HIA-worktrees	p-scrum├── docs/
 │   ├── informe_tp_scrum_2026.md                            <-- Informe maestro integral de 10 secciones
 │   ├── tablero_scrum_backlog.json                          <-- Esquema JSON estructurado para Trello/GitHub
 │   └── walkthrough.md                                      <-- Resumen ejecutivo de la solución
-├── README.md
-└── .gitignore
+└── README.md
 ```
 
 ---
 
-## 🎯 Contenido de los Documentos Principales
+## 🛡️ Evidencia de Seguridad y Aislamiento de Red
 
-### 1. Documento Exclusivo de Mapeo Teórico Cruzado
-- **Ruta:** [`D:\FACUer_año\HIA-worktrees	p-scrum\docs\citas_teoria_desarrollo_scrum.md`](file:///D:/FACU/3er_a%C3%B1o/HIA-worktrees/tp-scrum/docs/citas_teoria_desarrollo_scrum.md)
-- **Aspectos Teóricos Fundamentados:**
-  - Modelo Iterativo e Incremental vs Cascada (*Espinoza, p. 2; Palacio, pp. 11-12*).
-  - Comparativa de herramientas: Jira vs Trello vs Wrike vs GitHub Projects (*Espinoza, pp. 6-8*).
-  - Tres Pilares Empíricos (Transparencia, Inspección, Adaptación) y Cinco Valores Scrum (*Palacio, pp. 62-63*).
-  - Fábula del cerdo y la gallina: Comprometidos vs Implicados (*Palacio, p. 33*).
-  - Definición de Hecho (DoD) y Criterios de Aceptación Gherkin (*Palacio, pp. 42-43*).
-  - Estimación ágil con Story Points, Planning Poker y serie Fibonacci (*Palacio, pp. 54-57*).
-  - Eventos Scrum (Sprint 2 semanas, Dailies de 15 min, Review y Retrospectiva) (*Palacio, pp. 44-53*).
-  - Gestión de Riesgos e Incertidumbre con Spikes técnicos (*Palacio, p. 71; Espinoza, p. 1*).
+### 1. Frontera de Red Real (`app-network` vs `gateway-net`)
+- **`nginx-gateway`:** Conectado a `gateway-net`. Expone puertos `80` y `443` hacia el exterior.
+- **`n8n-automation`:** Conectado a ambas redes (`gateway-net` para recibir tráfico del proxy y `app-network` para consultar datos).
+- **`mysql-db`:** Conectado **exclusivamente a `app-network`**. Posee directiva `expose: ["3306"]` para habilitar conectividad interna por DNS hacia `n8n` sin abrir ningún puerto en la interfaz de red del host (`0.0.0.0`).
 
-### 2. Informe Maestro del Proyecto
-- **Ruta:** [`D:\FACUer_año\HIA-worktrees	p-scrum\docs\informe_tp_scrum_2026.md`](file:///D:/FACU/3er_a%C3%B1o/HIA-worktrees/tp-scrum/docs/informe_tp_scrum_2026.md)
-- **Secciones Oficiales Cumplidas:**
-  1. *Documento del Proyecto:* Nombre, contexto metodológico vs tecnológico, problema, justificación, objetivos SMART, alcance y entregables.
-  2. *Selección de Herramienta:* GitHub Projects + Trello, flujo de 5 columnas, matriz de roles con **Product Owner puro**.
-  3. *Product Backlog:* 5 Épicas nativas en Docker, 15 Historias de Usuario completas con subtareas técnicas, priorización MoSCoW, Story Points y criterios de aceptación formales Gherkin (`Dado/Cuando/Entonces`).
-  4. *Planificación del Sprint:* Sprint 1 de 2 semanas (10 días), **26 Story Points** unificados (consistencia matemática total), capacidad de 180 hs ideales, Gantt y Burndown chart iniciando en 26 SP y terminando en 0 SP.
-  5. *Matriz de 10 Riesgos:* Categorización y cálculo de probabilidad × impacto en entornos Docker (incluyendo riesgo de exposición de puertos R-04).
-  6. *Análisis Profundo de 5 Riesgos Críticos:* Disparadores (*Triggers*), medidas de prevención proactivas y planes de contingencia (comandos de restore `gunzip < backup.sql.gz`, aislamiento con `expose: 3306`, límites `mem_limit` y git-secrets).
-  7. *Ejecución del Sprint:* Bitácora de Dailies (Días 1, 4, 8), resolución de 2 bloqueos reales (WebSockets en Nginx y DNS interno de Docker `mysql:3306`), políticas de branching (GitHub Flow) y DoD.
-  8. *Sprint Review & Retrospectiva:* Demostración funcional ante el PO y dinámica 4Ls con compromisos de mejora.
-  9. *Bitácora de Inteligencia Artificial:* 6 interacciones estratégicas con herramienta, prompt exacto, respuesta cruda, análisis crítico del equipo, correcciones aplicadas y resultado final incorporado.
-  10. *Conclusiones Finales y Cierre.*
+### 2. Validación Automatizada de Esquema YAML
+```text
+YAML validation SUCCESSFUL! Services: ['nginx-gateway', 'n8n-automation', 'mysql-db']
+Networks: ['gateway-net', 'app-network']
+Volumes: ['mysql_data', 'n8n_data']
+MySQL networks: ['app-network']
+MySQL expose: ['3306']
+MySQL ports: NONE (Cerrado al host)
+```
 
-### 3. Esquema Estructurado del Tablero (JSON)
-- **Ruta:** [`D:\FACUer_año\HIA-worktrees	p-scrum\docs	ablero_scrum_backlog.json`](file:///D:/FACU/3er_a%C3%B1o/HIA-worktrees/tp-scrum/docs/tablero_scrum_backlog.json)
-- **Utilidad:** Exportable e importable para cargar las 5 épicas, 15 historias, estados, prioridades y asignaciones directamente en Trello o GitHub Projects.
+### 3. Exclusiones en `.gitignore`
+```text
+.gitignore:14:docker-compose.override.yml	docker-compose.override.yml
+.gitignore:7:.env				.env
+.gitignore:15:data/				data/
+.gitignore:16:mysql_data/			mysql_data/
+```
 
 ---
 
-## 🔍 Validación y Versionado Git
-- Todos los cambios se encuentran versionados en la rama `feature/tp-scrum` dentro del worktree de trabajo.
+## 🎯 Resumen de Entregables Principales
+
+1. **Informe Maestro (10 Secciones):** [`docs/informe_tp_scrum_2026.md`](file:///D:/FACU/3er_a%C3%B1o/HIA-worktrees/tp-scrum/docs/informe_tp_scrum_2026.md) (Velocidad unificada en **26 SP**, 5 Épicas, 15 Historias Gherkin, DoD estricta, 10 Riesgos con 5 profundos, Dailies, Retrospectiva 4Ls y 6 interacciones de IA).
+2. **Citas Teóricas Cruzadas:** [`docs/citas_teoria_desarrollo_scrum.md`](file:///D:/FACU/3er_a%C3%B1o/HIA-worktrees/tp-scrum/docs/citas_teoria_desarrollo_scrum.md) (Citas textuales de Espinoza y Palacio).
+3. **Tablero JSON:** [`docs/tablero_scrum_backlog.json`](file:///D:/FACU/3er_a%C3%B1o/HIA-worktrees/tp-scrum/docs/tablero_scrum_backlog.json).
+4. **Infraestructura Declarativa:** `docker-compose.yml`, `nginx/nginx.conf`, `mysql/init/01-init.sql`, `.env.example`.

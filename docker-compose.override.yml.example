@@ -1,0 +1,16 @@
+# ==============================================================================
+# DOCKER COMPOSE OVERRIDE - USO EXCLUSIVO ENTORNO DESARROLLADOR LOCAL
+# ==============================================================================
+# Este archivo permite mapear el puerto de MySQL al localhost del desarrollador
+# para inspección con herramientas externas (DBeaver, DataGrip, HeidiSQL).
+#
+# Para usarlo localmente:
+# 1. Copiar este archivo como: docker-compose.override.yml
+# 2. Levantar con: docker compose up -d
+# 3. Este archivo está estrictamente ignorado por .gitignore para no llegar a producción.
+
+services:
+  mysql-db:
+    ports:
+      # Enlazado exclusivamente a la interfaz loopback (127.0.0.1) - NUNCA a 0.0.0.0
+      - "127.0.0.1:3306:3306"
