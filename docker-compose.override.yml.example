@@ -10,7 +10,7 @@
 # 3. Este archivo está estrictamente ignorado por .gitignore para no llegar a producción.
 
 services:
-  mysql-db:
+  mysql:
     ports:
       # Enlazado exclusivamente a la interfaz loopback (127.0.0.1) - NUNCA a 0.0.0.0
       - "127.0.0.1:3306:3306"

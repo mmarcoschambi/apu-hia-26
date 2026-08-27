@@ -11,11 +11,12 @@ networks:
     driver: bridge
     name: pmai_gateway_net
 
-  # Red privada aislada: conecta n8n con MySQL (CERO acceso externo a la base de datos)
+  # Red privada con aislamiento total: internal: true bloquea tráfico hacia/desde el exterior
+  # Conecta n8n con MySQL garantizando seguridad perimetral estricta
   app-network:
     driver: bridge
     name: pmai_app_net
-    internal: false
+    internal: true
 
 volumes:
   mysql_data:
@@ -65,7 +66,7 @@ services:
       - TZ=${TZ:-America/Argentina/Jujuy}
       - DB_TYPE=mysqldb
       - DB_MYSQLDB_DATABASE=${MYSQL_DATABASE:-pmai_db}
-      - DB_MYSQLDB_HOST=mysql-db
+      - DB_MYSQLDB_HOST=mysql
       - DB_MYSQLDB_PORT=3306
       - DB_MYSQLDB_USER=${MYSQL_USER:-pmai_app}
       - DB_MYSQLDB_PASSWORD=${MYSQL_PASSWORD:-pmai_app_secure_password}
@@ -77,15 +78,17 @@ services:
     expose:
       - "5678"
     depends_on:
-      mysql-db:
+      mysql:
         condition: service_healthy
 
   # ----------------------------------------------------------------------------
   # 3. MYSQL 8.0 RELATIONAL DATABASE (US-04, US-05, US-13)
-  # Aislamiento Estricto: Conectado únicamente a app-network y con expose: 3306
-  # (SIN directiva 'ports' hacia el host para garantizar 0% de superficie de ataque)
+  # Aislamiento Estricto:
+  # - Servicio 'mysql' con alias 'mysql' y 'mysql-db' para resolución DNS unificada
+  # - Red 'app-network' con 'internal: true' (cero enrutamiento hacia o desde el exterior)
+  # - Directiva 'expose: ["3306"]' (sin 'ports' publicados en el host)
   # ----------------------------------------------------------------------------
-  mysql-db:
+  mysql:
     image: mysql:8.0.36-bookworm
     container_name: pmai_mysql
     restart: unless-stopped
@@ -99,7 +102,10 @@ services:
       - mysql_data:/var/lib/mysql
       - ./mysql/init:/docker-entrypoint-initdb.d:ro
     networks:
-      - app-network
+      app-network:
+        aliases:
+          - mysql
+          - mysql-db
     expose:
       - "3306"
     healthcheck:

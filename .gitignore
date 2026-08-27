@@ -3,12 +3,15 @@
 Thumbs.db
 node_modules/
 
-# Entorno de variables y secretos
+# Entorno de variables, certificados y secretos
 .env
 *.env.local
 *.key
 *.pem
 *.pfx
+*.secret
+secrets/
+certs/
 
 # Docker Local Overrides y datos de volumen local
 docker-compose.override.yml
