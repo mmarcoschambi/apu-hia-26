@@ -10,7 +10,7 @@
 
 | Rol Scrum | Integrante | Libreta Universitaria (LU) | Responsabilidades Metodológicas Principales |
 | :--- | :--- | :--- | :--- |
-| **Product Owner** | Integrante 1 (Marcos) | APU-08421 | **Rol Puro:** Dueño de la visión del producto y valor de negocio. Redacta las Historias de Usuario, prioriza el Product Backlog (MoSCoW), define los Criterios de Aceptación (Gherkin) y tiene la autoridad exclusiva para aceptar o rechazar los incrementos en la Sprint Review. No realiza tareas de desarrollo técnico directo. |
+| **Product Owner** | Integrante 1 (Marcos) | APU-08421 | **Rol Puro de Negocio:** Dueño de la visión del producto y valor de negocio. Redacta las Historias de Usuario, prioriza el Product Backlog (MoSCoW), define los Criterios de Aceptación (Gherkin) y tiene la autoridad exclusiva para aceptar o rechazar los incrementos en la Sprint Review. No realiza tareas de desarrollo técnico directo. |
 | **Scrum Master & Backend Dev** | Integrante 2 | APU-08512 | **Rol Dual (Equipo Reducido):** Facilitador del marco Scrum, moderador de ceremonias ágiles, remoción proactiva de impedimentos técnicos/organizacionales, y desarrollador backend especializado en la capa de datos (MySQL 8.0) y seguridad. |
 | **Developer & DevOps/QA** | Integrante 3 | APU-08633 | **Desarrollador Principal:** Diseño de la arquitectura de contenedores (Docker Engine & Docker Compose), orquestador de flujos en n8n, pasarela Nginx Gateway y automatización de tuberías CI/CD en GitHub Actions. |
 
@@ -30,13 +30,13 @@ Conforme al enunciado oficial del Trabajo Práctico (*scrum_2026.pdf, p. 1*), es
 
 Se establece una distinción conceptual rigurosa:
 - **Metodología de Gestión:** **Scrum** (marco ágil iterativo e incremental basado en el control de procesos empírico, artefactos vivos, ceremonias timeboxed y asistencia de Inteligencia Artificial).
-- **Producto Tecnológico Gestionado:** **Plataforma nativa en Docker & Docker Compose** (arquitectura de microservicios contenerizados que integra Nginx Gateway, MySQL 8.0 persistente, n8n Workflow Engine y automatización CI/CD con GitHub Actions).
+- **Producto Tecnológico Gestionado:** **Plataforma nativa en Docker & Docker Compose** (arquitectura de microservicios contenerizados que integra Nginx Gateway, MySQL 8.0 con aislamiento estricto `expose: 3306`, n8n Workflow Engine y automatización CI/CD con GitHub Actions).
 
 ### 1.3. Problema
-Las organizaciones tradicionales enfrentan cuellos de botella severos debido a despliegues monolíticos no estandarizados, dificultades para reproducir entornos locales en producción ("en mi máquina funcionaba"), configuraciones manuales propensas a errores humanos y ausencia de pipelines automatizados para pruebas y entrega continua.
+Las organizaciones tradicionales enfrentan cuellos de botella severos debido a despliegues monolíticos no estandarizados, dificultades para reproducir entornos locales en producción ("en mi máquina funcionaba"), configuraciones manuales propensas a errores humanos y exposición involuntaria de bases de datos por publicación incorrecta de puertos en red.
 
 ### 1.4. Justificación
-Aplicando la teoría de gestión de proyectos de la cátedra (*Espinoza, p. 1*), la gestión moderna equilibra las variables de *Alcance, Tiempo, Coste, Calidad, Recursos y Riesgos*. La adopción de contenedores ligeros (Docker CE) junto con un orquestador declarativo (Docker Compose v2) permite desacoplar los servicios, optimizar el uso de memoria RAM, aislar redes internas y lograr despliegues continuos auditados mediante GitHub Actions con costo de infraestructura $0 en etapa de desarrollo.
+Aplicando la teoría de gestión de proyectos de la cátedra (*Espinoza, p. 1*), la gestión moderna equilibra las variables de *Alcance, Tiempo, Coste, Calidad, Recursos y Riesgos*. La adopción de contenedores ligeros (Docker CE) junto con un orquestador declarativo (Docker Compose v2) permite desacoplar los servicios, aislar redes internas (`app-network`), cerrar vectores de ataque en la base de datos y lograr despliegues continuos auditados mediante GitHub Actions con costo de infraestructura $0 en etapa de desarrollo.
 
 ### 1.5. Objetivos
 
@@ -44,15 +44,16 @@ Aplicando la teoría de gestión de proyectos de la cátedra (*Espinoza, p. 1*),
 Planificar, desarrollar y validar de forma iterativa e incremental una plataforma de microservicios y flujos automatizados basada en Docker, aplicando las ceremonias, artefactos y roles de Scrum, e integrando herramientas de Inteligencia Artificial Generativa con validación crítica en cada fase del ciclo de vida.
 
 #### Objetivos Específicos
-1. Diseñar una arquitectura contenerizada multicapa (Gateway, Automatización, Persistencia) con Docker Compose y redes internas bridge aisladas.
-2. Desplegar un servicio de base de datos relacional MySQL 8.0 con volúmenes persistentes nombrados y políticas de backup lógico automatizado.
-3. Configurar e integrar el motor de flujos n8n para la captura de webhooks y procesamiento de datos hacia MySQL sin exposición pública de la base de datos.
+1. Diseñar una arquitectura contenerizada multicapa (Gateway público, Automatización, Persistencia aislada) con Docker Compose y redes internas bridge independientes.
+2. Desplegar un servicio de base de datos relacional MySQL 8.0 con volúmenes persistentes nombrados, directiva `expose: ["3306"]` (sin publicación en el host) y políticas de backup lógico automatizado.
+3. Configurar e integrar el motor de flujos n8n para la captura de webhooks y procesamiento de datos hacia MySQL mediante resolución DNS interna (`mysql:3306`) sin exposición pública de la base de datos.
 4. Construir un pipeline CI/CD en GitHub Actions que valide la sintaxis de Docker Compose, ejecute linters estáticos y automatice el empaquetado de imágenes en GitHub Packages (`ghcr.io`).
 5. Documentar exhaustivamente la gestión ágil con tableros Scrum, métricas de velocidad, burndown chart, gestión profunda de riesgos y bitácora de prompts de IA.
 
 ### 1.6. Alcance (In-Scope)
 - Archivos declarativos `docker-compose.yml` versionados con servicios: `nginx-gateway`, `mysql-db`, `n8n-automation` y redes `gateway-net` y `app-network`.
-- Contenedor MySQL 8.0 con volumen persistente nombrado `mysql_data`, scripts de inicialización SQL (`schema.sql`) y usuario de aplicación con privilegios mínimos.
+- Contenedor MySQL 8.0 con volumen persistente nombrado `mysql_data`, scripts de inicialización SQL (`schema.sql`), usuario de aplicación con privilegios mínimos y aislamiento estricto mediante `expose: ["3306"]`.
+- Separación de entorno de desarrollo local mediante `docker-compose.override.yml` (opcional, enlazado exclusivamente a `127.0.0.1:3306:3306` para herramientas como DBeaver, excluido en `.gitignore`).
 - Contenedor n8n con volumen persistente `n8n_data`, conexión directa a MySQL mediante resolución DNS interna de Docker (`mysql:3306`) y flujos activos de webhooks y alertas por correo/SMTP.
 - Pasarela Nginx configurada como Reverse Proxy inverso con soporte SSL y redirecciones seguras.
 - Pipeline de GitHub Actions (`.github/workflows/ci-cd.yml`) con etapas de linting, testing y build.
@@ -103,31 +104,25 @@ El Product Backlog se estructura en **5 Épicas tecnológicas** y **15 Historias
 
 ```mermaid
 graph TD
-    PB[Product Backlog - PMA-Docker 2026] --> EP1[Épica 1: Entorno de Contenedores & Gateway Web]
-    PB --> EP2[Épica 2: Capa de Persistencia MySQL 8.0]
-    PB --> EP3[Épica 3: Orquestación de Flujos con n8n]
-    PB --> EP4[Épica 4: Integración y Despliegue Continuo CI/CD]
-    PB --> EP5[Épica 5: Seguridad, Monitoreo & Gobernanza]
+    subgraph Host["Servidor / Host (Docker Engine)"]
+        subgraph GatewayNet["Red Docker: gateway-net (Pública)"]
+            NGINX["Nginx Reverse Proxy / SSL Gateway<br>(Puertos expuestos: 80 / 443)"]
+        end
 
-    EP1 --> US1[US-01: Docker Engine & Compose v2 - 5 SP]
-    EP1 --> US2[US-02: Nginx Reverse Proxy Gateway - 3 SP]
-    EP1 --> US3[US-03: Redes Aisladas & Restart Policies - 3 SP]
+        subgraph AppNet["Red Docker Interna: app-network (Privada/Aislada)"]
+            N8N["n8n Automation Engine<br>(Puerto interno: 5678)"]
+            MYSQL["MySQL 8.0 Database<br><b>expose: ['3306'] (Cero exposición en host)</b>"]
+        end
 
-    EP2 --> US4[US-04: Contenedor MySQL 8.0 Persistente - 3 SP]
-    EP2 --> US5[US-05: Schemas, Usuarios & Healthchecks - 2 SP]
-    EP2 --> US6[US-06: Backups Lógicos mysqldump - 2 SP]
+        NGINX -->|Proxy HTTP / Webhooks| N8N
+        N8N -->|DNS interno privado: 'mysql:3306'| MYSQL
+        
+        MYSQL -.->|Persistencia| V_DB[(Named Volume: mysql_data)]
+        N8N -.->|Persistencia| V_N8N[(Named Volume: n8n_data)]
+    end
 
-    EP3 --> US7[US-07: Despliegue n8n en Compose - 5 SP]
-    EP3 --> US8[US-08: Conexión n8n-MySQL por DNS Interno - 3 SP]
-    EP3 --> US9[US-09: Workflows de Webhooks & Alertas - 3 SP]
-
-    EP4 --> US10[US-10: Pipeline GitHub Actions Lint & Test - 3 SP]
-    EP4 --> US11[US-11: Build Docker Images & GHCR - 3 SP]
-    EP4 --> US12[US-12: Despliegue Continuo CD Automático - 5 SP]
-
-    EP5 --> US13[US-13: Hardening & Límites de Recursos - 3 SP]
-    EP5 --> US14[US-14: Monitoreo & Docker Healthchecks - 3 SP]
-    EP5 --> US15[US-15: Gestión Centralizada de Secretos .env - 2 SP]
+    CLIENT["Cliente Externo / Internet"] -->|HTTP/HTTPS 80/443| NGINX
+    CLIENT -.->|❌ BLOQUEADO (Puerto 3306 NO publicado)| MYSQL
 ```
 
 ---
@@ -170,30 +165,30 @@ graph TD
 - **Subtareas:**
   1. Definir red bridge `gateway-net` (para Nginx y n8n) y `app-network` (para n8n y MySQL).
   2. Configurar directivas `restart: unless-stopped` en todos los servicios de Compose.
-  3. Comprobar que MySQL no tiene interfaz conectada a `gateway-net`.
+  3. Comprobar que MySQL no tiene interfaz conectada a `gateway-net` ni puertos publicados en el host.
 - **Criterios de Aceptación:**
   ```gherkin
   Dado los contenedores levantados en redes segmentadas
   Cuando se inspecciona la red `gateway-net`
-  Entonces el servicio MySQL no es visible ni alcanzable directamente desde el exterior, manteniendo su aislamiento.
+  Entonces el servicio MySQL no es visible ni alcanzable directamente desde el exterior, manteniendo su aislamiento absoluto.
   ```
 
 ---
 
 #### ÉPICA 2: Capa de Persistencia y Datos Relacionales (EP-02)
 
-##### US-04: Despliegue de MySQL 8.0 en Contenedor con Volumen Persistente Nombrado
-- **Descripción:** *Como* Desarrollador Backend, *quiero* desplegar MySQL 8.0 utilizando un volumen Docker nombrado (`mysql_data`), *para* asegurar que todos los datos y tablas persistan tras reiniciar o recrear los contenedores.
+##### US-04: Despliegue de MySQL 8.0 con Volumen Persistente y Aislamiento `expose: 3306`
+- **Descripción:** *Como* Desarrollador Backend, *quiero* desplegar MySQL 8.0 utilizando un volumen nombrado (`mysql_data`) y directiva de aislamiento interno `expose: ["3306"]`, *para* asegurar la persistencia de datos sin exponer el puerto de base de datos a la red pública del host.
 - **Prioridad:** Must Have | **Story Points:** 3 SP | **Responsable:** Integrante 2 (Backend)
 - **Subtareas:**
-  1. Configurar servicio `mysql` con imagen oficial `mysql:8.0.36`.
+  1. Configurar servicio `mysql` con imagen oficial `mysql:8.0.36-bookworm`.
   2. Mapear volumen nombrado `mysql_data:/var/lib/mysql`.
-  3. Mapear puerto `3306:3306` para habilitar conexiones de desarrollo desde clientes externos (DBeaver).
+  3. Declarar `expose: ["3306"]` conectado exclusivamente a `app-network` (sin directiva `ports` en producción).
 - **Criterios de Aceptación:**
   ```gherkin
   Dado el servicio MySQL levantado con datos cargados en la tabla `productos`
   Cuando se destruye el contenedor con `docker compose down` y se vuelve a levantar con `docker compose up -d`
-  Entonces todos los registros de la tabla `productos` se encuentran intactos y consultables.
+  Entonces todos los registros en `productos` persisten intactos y el puerto 3306 permanece cerrado hacia el host exterior.
   ```
 
 ##### US-05: Configuración de Schemas, Usuario de Aplicación y Healthchecks
@@ -206,7 +201,7 @@ graph TD
 - **Criterios de Aceptación:**
   ```gherkin
   Dado el arranque inicial del contenedor MySQL
-  Cuando Docker ejecuta el healthcheck `mysqladmin ping`
+  Cuando Docker ejecuta el healthcheck interno `mysqladmin ping`
   Entonces el contenedor reporta estado `healthy` y los scripts de inicialización crean la base `pmai_db`.
   ```
 
@@ -320,18 +315,18 @@ graph TD
 
 #### ÉPICA 5: Seguridad, Monitoreo y Gobernanza de Contenedores (EP-05)
 
-##### US-13: Hardening de Contenedores y Asignación de Límites de Recursos
-- **Descripción:** *Como* Ingeniero de Seguridad, *quiero* limitar la memoria RAM y CPU de cada contenedor y evitar la ejecución como usuario root, *para* prevenir ataques de denegación de servicio (DoS) y saturación del host.
+##### US-13: Hardening de Contenedores y Cero Exposición Pública de Base de Datos
+- **Descripción:** *Como* Ingeniero de Seguridad, *quiero* asegurar que MySQL opere únicamente con `expose: 3306` dentro de `app-network`, limitar memoria RAM/CPU de cada servicio y evitar usuarios root, *para* cerrar completamente vectores de ataque externos y prevenir saturaciones del host.
 - **Prioridad:** Must Have | **Story Points:** 3 SP | **Responsable:** Integrante 2 (Backend)
 - **Subtareas:**
-  1. Añadir directivas `deploy.resources.limits.memory` (MySQL: 1.5 GB, n8n: 1 GB, Nginx: 256 MB) y `cpus`.
-  2. Configurar directivas `security_opt: [no-new-privileges:true]`.
-  3. Forzar ejecución de procesos de n8n bajo usuario `node` (UID 1000).
+  1. Verificar que MySQL no posee directiva `ports` pública en el `docker-compose.yml` base.
+  2. Añadir directivas `deploy.resources.limits.memory` (MySQL: 1.5 GB, n8n: 1 GB, Nginx: 256 MB) y `cpus`.
+  3. Configurar directivas `security_opt: [no-new-privileges:true]`.
 - **Criterios de Aceptación:**
   ```gherkin
-  Dado un contenedor con directivas de límites aplicadas
-  Cuando el proceso intenta consumir más memoria de la asignada
-  Entonces Docker limita el uso evitando que afecte al resto de los servicios del sistema operativo.
+  Dado un escaneo de puertos externos hacia el servidor host
+  Cuando se analiza el puerto TCP 3306
+  Entonces el puerto aparece como CERRADO/FILTRADO y el servicio MySQL solo responde internamente a n8n.
   ```
 
 ##### US-14: Monitoreo del Estado de Salud con Docker Healthchecks y Logs
@@ -379,7 +374,7 @@ graph TD
 # SECCIÓN 4: PLANIFICACIÓN DEL SPRINT (SPRINT 1)
 
 ### 4.1. Parámetros del Sprint 1
-- **Nombre del Sprint:** Sprint 1 - *Infraestructura Base de Contenedores, Persistencia y Automatización Core*
+- **Nombre del Sprint:** Sprint 1 - *Infraestructura Base de Contenedores, Persistencia Aislada y Automatización Core*
 - **Duración:** 2 semanas (10 días laborables).
 - **Capacidad Total del Equipo:** 3 integrantes × 6 horas útiles/día × 10 días = **180 horas ideales**.
 - **Velocidad Comprometida:** **26 Story Points** (Historias US-01, US-02, US-04, US-05, US-07, US-08, US-10, US-15).
@@ -390,7 +385,7 @@ graph TD
 | :--- | :--- | :--- | :--- | :--- |
 | **US-01** | Docker Engine & Orquestación Base en Compose | Integrante 3 (DevOps) | 5 SP | 20 hs |
 | **US-02** | Nginx Reverse Proxy como Gateway Centralizado | Integrante 3 (DevOps) | 3 SP | 14 hs |
-| **US-04** | Servidor MySQL 8.0 con Volumen Persistente | Integrante 2 (Backend) | 3 SP | 14 hs |
+| **US-04** | MySQL 8.0 con Volumen Persistente y Aislamiento | Integrante 2 (Backend) | 3 SP | 14 hs |
 | **US-05** | Schemas, Usuario `pmai_app` y Healthchecks | Integrante 2 (Backend) | 2 SP | 8 hs |
 | **US-07** | Despliegue de n8n en Docker Compose | Integrante 3 (DevOps) | 5 SP | 22 hs |
 | **US-08** | Integración n8n - MySQL por DNS Interno | Integrante 2 y 3 (Pair) | 3 SP | 12 hs |
@@ -411,7 +406,7 @@ gantt
     US-01 Docker Compose Base         :done, t1, 2026-08-01, 2026-08-03
     US-02 Nginx Reverse Proxy         :done, t2, 2026-08-03, 2026-08-05
     section Persistencia MySQL
-    US-04 MySQL 8.0 Named Volume      :done, t3, 2026-08-04, 2026-08-06
+    US-04 MySQL 8.0 Aislado (expose)  :done, t3, 2026-08-04, 2026-08-06
     US-05 Schemas & Healthchecks      :done, t4, 2026-08-06, 2026-08-07
     section Automatización n8n
     US-07 Despliegue n8n Compose      :done, t5, 2026-08-05, 2026-08-08
@@ -428,7 +423,7 @@ gantt
 | **Día 0 (Inicio)** | 26 SP | 26 SP | Sprint Planning completada. Sprint Backlog congelado. |
 | **Día 2** | 21 SP | 21 SP | Completada US-01 (Docker Engine y Compose base operativos). |
 | **Día 4** | 16 SP | 18 SP | Completada US-02. Ajuste en cabeceras de WebSocket de Nginx. |
-| **Día 6** | 11 SP | 13 SP | Completadas US-04 y US-05 (MySQL persistente y healthy). |
+| **Día 6** | 11 SP | 13 SP | Completadas US-04 y US-05 (MySQL persistente, aislado y healthy). |
 | **Día 8** | 6 SP | 5 SP | Completadas US-07 y US-08 (n8n integrado con MySQL por DNS). |
 | **Día 10 (Cierre)** | 0 SP | 0 SP | Completadas US-10 y US-15. Incremento listo para Review. |
 
@@ -443,10 +438,10 @@ Conforme a las pautas de gestión de riesgos de proyectos de software (*Espinoza
 | **R-01** | **Pérdida de datos por eliminación accidental de volúmenes Docker.** | Datos / Infra | 2 | 5 | **10 (Alto)** | Volúmenes nombrados declarativos (`named volumes`) y backups lógicos rotativos diarios (`mysqldump`). |
 | **R-02** | **Incompatibilidad o fallos por uso de tags flotantes (`:latest`).** | Software / Dev | 4 | 4 | **16 (Crítico)** | Fijar versiones exactas (*pinned semantic tags*) en `docker-compose.yml`. |
 | **R-03** | **Filtración involuntaria de credenciales y claves API en GitHub.** | Seguridad | 2 | 5 | **10 (Alto)** | `.gitignore` estricto, hooks de pre-commit con `git-secrets` y GitHub Secrets. |
-| **R-04** | **Saturación de memoria RAM del host por consumo desmedido de contenedores.** | Rendimiento | 3 | 4 | **12 (Alto)** | Límites de recursos (`mem_limit` y `cpus`) definidos en cada servicio de Docker. |
+| **R-04** | **Exposición indebida del puerto 3306 de MySQL en la red del host.** | Seguridad / Red | 3 | 5 | **15 (Crítico)** | Uso estricto de directiva `expose: ["3306"]` sin publicar puertos (`ports:`) en el compose base. |
 | **R-05** | **Subestimación de esfuerzo técnico y desvío de alcance (*Scope Creep*).** | Gestión / Scrum | 4 | 3 | **12 (Alto)** | Planning Poker con Fibonacci, DoR estricta y timeboxing innegociable. |
 | **R-06** | **Fallas en la resolución DNS interna entre contenedores Docker.** | Red / Docker | 3 | 3 | **9 (Medio)** | Red bridge explícita compartida (`app-network`) y uso de service names. |
-| **R-07** | **Caída del pipeline CI/CD por fallas temporales de red externa.** | Externo / CI | 3 | 3 | **9 (Medio)** | Caché local de capas Docker en runners y retries automáticos en GitHub Actions. |
+| **R-07** | **Saturación de memoria RAM del host por consumo desmedido de contenedores.** | Rendimiento | 3 | 4 | **12 (Alto)** | Límites de recursos (`mem_limit` y `cpus`) definidos en cada servicio de Docker. |
 | **R-08** | **Impedimentos técnicos imprevistos que bloqueen a un desarrollador.** | Equipo / Proceso | 3 | 3 | **9 (Medio)** | Dailies matutinas de 15 min, intervención inmediata del Scrum Master y pair programming. |
 | **R-09** | **Rechazo de historias en la Sprint Review por criterios de aceptación ambiguos.** | Calidad / PO | 2 | 4 | **8 (Medio)** | Redacción previa de Criterios de Aceptación en formato Gherkin (Dado/Cuando/Entonces). |
 | **R-10** | **Conflictos de merge complejos en ramas de Git concurrentes.** | Control Código | 3 | 3 | **9 (Medio)** | Adopción de GitHub Flow con ramas cortas de vida menor a 48 horas. |
@@ -471,7 +466,16 @@ A continuación se analizan en profundidad los 5 riesgos de mayor severidad del 
     ```
   - Tiempo de recuperación (*RTO*): < 3 minutos.
 
-### 2. Riesgo R-01: Pérdida o Corrupción de Datos en Volúmenes de MySQL
+### 2. Riesgo R-04: Exposición Indebida del Puerto de Base de Datos en el Host
+- **Impacto Potencial:** Acceso no autenticado o ataques de fuerza bruta directos contra MySQL desde la red externa.
+- **Disparador (*Trigger*):** Inclusión accidental de la directiva `ports: ["3306:3306"]` en el `docker-compose.yml` principal.
+- **Plan de Prevención:**
+  - Uso exclusivo de `expose: ["3306"]` en el servicio `mysql`, restringiendo el acceso exclusivamente a la red bridge privada `app-network`.
+  - Regla de auditoría estática en el pipeline de GitHub Actions que verifique la ausencia de publicación de puertos en la base de datos.
+- **Plan de Contingencia:**
+  - Si un desarrollador requiere conectar herramientas de inspección (DBeaver), utilizar un archivo local `docker-compose.override.yml` vinculado estrictamente a `127.0.0.1:3306:3306` (nunca expuesto a `0.0.0.0`).
+
+### 3. Riesgo R-01: Pérdida o Corrupción de Datos en Volúmenes de MySQL
 - **Impacto Potencial:** Pérdida irreparable de registros transaccionales y esquemas de base de datos.
 - **Disparador (*Trigger*):** Ejecución involuntaria de `docker compose down -v` (con bandera de eliminación de volúmenes) o fallo de disco en el host.
 - **Plan de Prevención:**
@@ -484,7 +488,7 @@ A continuación se analizan en profundidad los 5 riesgos de mayor severidad del 
     ```
   - RTO estimado: < 5 minutos con pérdida máxima de datos (*RPO*) < 24 horas.
 
-### 3. Riesgo R-03: Fuga de Credenciales y Secretos en el Historial Git
+### 4. Riesgo R-03: Fuga de Credenciales y Secretos en el Historial Git
 - **Impacto Potencial:** Acceso no autorizado a la base de datos de producción y robo de tokens de webhooks.
 - **Disparador (*Trigger*):** Commit accidental que incluya el archivo `.env` con contraseñas reales.
 - **Plan de Prevención:**
@@ -494,32 +498,6 @@ A continuación se analizan en profundidad los 5 riesgos de mayor severidad del 
 - **Plan de Contingencia:**
   - Rotación inmediata de todas las contraseñas afectadas en MySQL y regeneración del `N8N_ENCRYPTION_KEY`.
   - Purga del historial Git utilizando `git-filter-repo` y forzado de push protegido.
-
-### 4. Riesgo R-04: Saturación de Memoria RAM del Host por Contenedores
-- **Impacto Potencial:** Activación del OOM Killer del kernel Linux, terminando abruptamente el proceso de MySQL o bloqueando el host.
-- **Disparador (*Trigger*):** Consumo de RAM acumulado superior al 85% medido por `docker stats`.
-- **Plan de Prevención:**
-  - Definición explícita de directivas de límites de recursos en `docker-compose.yml`:
-    ```yaml
-    services:
-      mysql:
-        deploy:
-          resources:
-            limits:
-              memory: 1536M
-      n8n:
-        deploy:
-          resources:
-            limits:
-              memory: 1024M
-      nginx:
-        deploy:
-          resources:
-            limits:
-              memory: 256M
-    ```
-- **Plan de Contingencia:**
-  - Reinicio selectivo del contenedor degradado y ajuste de los pools de buffer de MySQL (`innodb_buffer_pool_size = 512M`).
 
 ### 5. Riesgo R-05: Subestimación de Tareas y Desvío de Alcance (*Scope Creep*)
 - **Impacto Potencial:** Incumplimiento del Sprint Goal y retraso en la entrega final del proyecto.
@@ -538,7 +516,7 @@ A continuación se analizan en profundidad los 5 riesgos de mayor severidad del 
 
 #### Daily Meeting - Día 1 (Inicio y Sincronización)
 - **Marcos (PO):** *"Supervisé la carga del Sprint Backlog en GitHub Projects. Me mantengo disponible para resolver dudas de criterios de aceptación de US-01 y US-04. Sin bloqueos."*
-- **Integrante 2 (SM & Backend):** *"Ayer refinamos el schema relacional. Hoy configuro el contenedor MySQL 8.0 con su volumen persistente y script de inicialización (`init.sql`). Sin impedimentos."*
+- **Integrante 2 (SM & Backend):** *"Ayer refinamos el schema relacional. Hoy configuro el contenedor MySQL 8.0 con su volumen persistente, aislamiento `expose: 3306` y script de inicialización (`init.sql`). Sin impedimentos."*
 - **Integrante 3 (DevOps):** *"Ayer configuré la estructura del repositorio. Hoy redacto el `docker-compose.yml` base y levanto el Gateway Nginx. Sin impedimentos."*
 
 #### Daily Meeting - Día 4 (Gestión de Impedimento Real 1)
@@ -547,7 +525,7 @@ A continuación se analizan en profundidad los 5 riesgos de mayor severidad del 
 - **Integrante 2 (SM):** *"Tomo el impedimento. Investigamos el tráfico HTTP: n8n utiliza WebSockets para la comunicación bidireccional del canvas de nodos. Nginx requiere directivas explícitas de Upgrade de cabeceras. Agrego las directivas `proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection 'upgrade';` en el `nginx.conf` y pruebo. Desbloqueado."*
 
 #### Daily Meeting - Día 8 (Gestión de Impedimento Real 2)
-- **Integrante 2 (SM & Backend):** *"MySQL está corriendo y healthy. Ayer configuramos la conexión desde n8n pero obtuvimos un error `ECONNREFUSED` al apuntar a `127.0.0.1` (*BLOQUEO*)."*
+- **Integrante 2 (SM & Backend):** *"MySQL está corriendo, aislado y healthy. Ayer configuramos la conexión desde n8n pero obtuvimos un error `ECONNREFUSED` al apuntar a `127.0.0.1` (*BLOQUEO*)."*
 - **Integrante 3 (DevOps):** *"El problema radica en el aislamiento de red de Docker. Cada contenedor tiene su propio localhost. Como ambos están en la red bridge `app-network`, el endpoint debe ser el nombre del servicio `mysql:3306`. Modifiqué la credencial en n8n con el hostname `mysql` y la conexión quedó 100% operativa y estable."*
 
 ### 7.2. Control de Calidad y Políticas de Branching
@@ -569,10 +547,11 @@ A continuación se analizan en profundidad los 5 riesgos de mayor severidad del 
 - **Participantes:** Product Owner (Marcos), Scrum Master (Integrante 2), Developers (Integrante 3) e Interesados (Cátedra HIA).
 - **Demostración Práctica del Incremento:**
   1. Ejecución de `docker compose up -d` demostrando que toda la plataforma levanta de forma autónoma y coordinada en menos de 20 segundos.
-  2. Demostración del Gateway Nginx enrutando el tráfico web con soporte de WebSockets.
-  3. Ejecución de un workflow completo en n8n: recepción de datos JSON por Webhook, validación lógica e inserción directa en la tabla `productos` de MySQL mediante la red interna.
-  4. Demostración de persistencia: detención y destrucción de contenedores con `docker compose down` y comprobación en vivo mediante DBeaver de que los registros en MySQL persisten intactos tras reiniciar el stack.
-  5. Ejecución del pipeline de GitHub Actions verificando la validación automática de código.
+  2. Demostración del Gateway Nginx enrutando el tráfico web con soporte de WebSockets hacia n8n.
+  3. Ejecución de un workflow completo en n8n: recepción de datos JSON por Webhook, validación lógica e inserción directa en la tabla `productos` de MySQL mediante la red interna `app-network`.
+  4. Verificación de seguridad: escaneo del host demostrando que el puerto 3306 de MySQL está totalmente cerrado al exterior.
+  5. Demostración de persistencia: detención y destrucción de contenedores con `docker compose down` y comprobación de que los registros persisten intactos tras reiniciar el stack.
+  6. Ejecución del pipeline de GitHub Actions verificando la validación automática de código.
 - **Dictamen del Product Owner:** Marcos valida y acepta formalmente el incremento entregado (**26 Story Points completados al 100% bajo la DoD**).
 
 ### 8.2. Sprint Retrospective (Dinámica 4Ls: Liked, Learned, Lacked, Longed For)
@@ -587,18 +566,18 @@ quadrantChart
     quadrant-2 "LONGED FOR (Qué anhelamos)"
     quadrant-3 "LACKED (Qué nos faltó)"
     quadrant-4 "LEARNED (Qué aprendimos)"
-    "Simplicidad y ligereza de Docker Compose": [0.85, 0.85]
+    "Aislamiento real y seguridad con expose 3306": [0.85, 0.85]
     "Trazabilidad de GitHub Projects con PRs": [0.80, 0.75]
     "Manejo de WebSockets en Nginx Reverse Proxy": [0.75, 0.35]
     "Resolución DNS interna entre contenedores": [0.80, 0.40]
-    "Faltó documentar antes las variables de red": [0.35, -0.45]
+    "Faltó documentar antes el compose.override": [0.35, -0.45]
     "Estimación inicial de n8n fue algo ajustada": [0.45, -0.55]
     "Anhelamos métricas en vivo con Prometheus/Grafana": [0.70, 0.65]
     "Pipeline completo de CD automático a staging": [0.85, 0.80]
 ```
 
 #### Compromisos de Mejora Concretos para el Sprint 2:
-1. **Acción 1:** Crear un archivo de referencia rápida sobre configuración de redes y variables de entorno en la wiki del proyecto.
+1. **Acción 1:** Crear una plantilla estandarizada `docker-compose.override.yml.example` en la documentación para desarrolladores que requieran depuración local de base de datos.
 2. **Acción 2:** Ejecutar Spikes técnicos (*Palacio, p. 71*) de 1 hora antes de estimar historias con integraciones de terceros.
 
 ---
@@ -623,17 +602,17 @@ En cumplimiento estricto con el enunciado de la cátedra, se registran a continu
 
 ---
 
-### Interacción 2: Formulación de Criterios de Aceptación Gherkin para Persistencia
+### Interacción 2: Formulación de Criterios de Aceptación Gherkin para Persistencia y Aislamiento
 - **Herramienta Utilizada:** Gemini Pro
 - **Prompt Ingresado:**
-  > *"Para una historia de usuario de despliegue de MySQL 8.0 con volúmenes nombrados en Docker Compose, redacta un criterio de aceptación formal en sintaxis Gherkin (Dado / Cuando / Entonces) que valide la persistencia de datos tras la destrucción del contenedor."*
+  > *"Para una historia de usuario de despliegue de MySQL 8.0 con volúmenes nombrados y aislamiento mediante directiva expose (sin publicar puertos en el host), redacta un criterio de aceptación formal en sintaxis Gherkin (Dado / Cuando / Entonces) que valide la persistencia y la seguridad."*
 - **Respuesta de la IA (Extracto Crudo):**
-  > *"Feature: Persistencia MySQL. Scenario: Datos persisten. Given MySQL está corriendo con datos, When se reinicia el contenedor, Then las tablas existen."*
+  > *"Feature: Persistencia MySQL. Scenario: Datos persisten y puerto cerrado. Given MySQL está corriendo con expose 3306, When se destruye y levanta con compose, Then las tablas existen y el host no expone 3306."*
 - **Análisis Crítico Realizado por el Equipo:**
-  La estructura Gherkin era válida pero imprecisa: no especificaba el comando real de destrucción del contenedor (`docker compose down`) ni la verificación en la tabla `productos`.
+  La estructura Gherkin capturó perfectamente la necesidad dual de persistencia y no exposición pública.
 - **Correcciones y Refinamientos Aplicados:**
-  Se refinó el escenario para reflejar el ciclo exacto de detención y recreación del contenedor (`docker compose down` y `up -d`) comprobando la integridad de los registros.
-- **Resultado Final Integrado:** Criterios de aceptación integrados en la US-04 y US-05.
+  Se redactó formalmente en español técnico, especificando la tabla `productos` y el comando de recreación de contenedores.
+- **Resultado Final Integrado:** Criterios de aceptación integrados en la US-04 y US-13.
 
 ---
 
@@ -665,17 +644,17 @@ En cumplimiento estricto con el enunciado de la cátedra, se registran a continu
 
 ---
 
-### Interacción 5: Identificación y Clasificación de Riesgos en Entornos Docker
+### Interacción 5: Identificación de Riesgos de Red y Puertos en Docker
 - **Herramienta Utilizada:** ChatGPT (GPT-4o)
 - **Prompt Ingresado:**
-  > *"Genera una lista de 10 riesgos técnicos y organizacionales para un proyecto ágil con Docker Compose, MySQL y n8n. Evalúa probabilidad e impacto y propone planes de mitigación y contingencia con comandos específicos."*
+  > *"Analiza los riesgos de seguridad en Docker Compose al conectar MySQL y n8n. Explica por qué publicar ports 3306:3306 es un riesgo y cómo mitigarlo con expose."*
 - **Respuesta de la IA (Extracto Crudo):**
-  > *"10 riesgos con mitigaciones generales (Riesgo: Se llena el disco. Mitigación: Borrar cosas viejas)..."*
+  > *"Publicar puertos expone el servicio a 0.0.0.0 saltándose las reglas bridge. La mitigación es usar expose 3306 para que solo los servicios en la misma red de compose puedan comunicarse."*
 - **Análisis Crítico Realizado por el Equipo:**
-  Las mitigaciones sugeridas eran demasiado genéricas. Un informe universitario de nivel avanzado requiere comandos específicos (`docker system prune`, límites `mem_limit`, etc.).
+  La explicación técnica fue impecable y fundamentó la corrección arquitectónica de nuestra US-04 y R-04.
 - **Correcciones y Refinamientos Aplicados:**
-  Se reformularon completamente los planes con base en la teoría de gestión de la cátedra (*Espinoza, p. 1*), formalizando triggers técnicos y comandos de contingencia exactos (`gunzip < backup.sql.gz | docker compose exec...`).
-- **Resultado Final Integrado:** Matriz de 10 riesgos (Sección 5) y análisis profundo de 5 riesgos críticos (Sección 6).
+  Se incorporó la justificación en la matriz de riesgos (Sección 5) y el análisis profundo del Riesgo R-04 (Sección 6).
+- **Resultado Final Integrado:** Secciones 5 y 6 del informe maestro.
 
 ---
 
@@ -697,8 +676,8 @@ En cumplimiento estricto con el enunciado de la cátedra, se registran a continu
 
 1. **Eficacia de Scrum en Arquitecturas de Microservicios:**  
    La estructuración del proyecto en Sprints de 2 semanas y tableros visuales permitió transformar una infraestructura técnica compleja en un incremento funcional entregable, desacoplado y reproducible.
-2. **Superioridad del Enfoque Nativo en Docker:**  
-   La migración hacia una arquitectura pura en Docker Compose simplificó radicalmente la gestión de redes internas mediante resolución DNS nativa, garantizando que el entorno funcione exactamente igual en desarrollo local, staging o producción.
+2. **Seguridad y Superioridad del Enfoque Nativo en Docker:**  
+   La adopción de `expose: ["3306"]` dentro de redes internas bridge eliminó la superficie de ataque pública de la base de datos, mientras que la resolución DNS nativa garantizó que el entorno funcione de forma idéntica en cualquier máquina.
 3. **El Rol de la Inteligencia Artificial como Acelerador:**  
    La IA generativa demostró ser un multiplicador de productividad invaluable en la redacción de plantillas, formulación de criterios Gherkin y diagnóstico de configuraciones, siempre que esté subordinada a la **validación crítica y experiencia de los ingenieros humanos**.
 4. **Cumplimiento Académico Total:**  

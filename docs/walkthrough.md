@@ -3,15 +3,14 @@
 ## 📌 Resumen de la Solución Implementada
 Se completó la estructuración integral del entorno de trabajo, repositorios Git, worktrees y la documentación académica y técnica para el Trabajo Práctico de **Gestión de Proyectos con Scrum** de la materia *Herramientas Informáticas Avanzadas (APU - UNJu)*.
 
-La arquitectura del proyecto gestionado se diseñó como una **Plataforma Modular de Microservicios 100% nativa en Docker & Docker Compose** (Gateway Nginx, MySQL 8.0 persistente, n8n Workflow Automation y GitHub Actions CI/CD), garantizando simplicidad de red, portabilidad absoluta y desacoplamiento total de hipervisores físicos.
+La arquitectura del proyecto gestionado se diseñó como una **Plataforma Modular de Microservicios 100% nativa en Docker & Docker Compose** (Gateway Nginx, MySQL 8.0 persistente con aislamiento estricto `expose: 3306`, n8n Workflow Automation y GitHub Actions CI/CD), garantizando seguridad de red por diseño, portabilidad absoluta y cero exposición pública de bases de datos.
 
 ---
 
 ## 📁 Estructura Completa de Archivos en el Worktree
 
 ```
-D:\FACU\3er_año\HIA-worktrees\tp-scrum\
-├── docs/
+D:\FACUer_año\HIA-worktrees	p-scrum├── docs/
 │   ├── enunciados/
 │   │   ├── TP_Scrum_Gestion_Proyectos_2026.pdf              <-- Enunciado oficial activo (Scrum 2026)
 │   │   └── TP1_Practica_Ambiente_Desarrollo_Proxmox_2026.pdf <-- [Referencia] Enunciado TP1 Infraestructura
@@ -35,7 +34,7 @@ D:\FACU\3er_año\HIA-worktrees\tp-scrum\
 ## 🎯 Contenido de los Documentos Principales
 
 ### 1. Documento Exclusivo de Mapeo Teórico Cruzado
-- **Ruta:** [`D:\FACU\3er_año\HIA-worktrees\tp-scrum\docs\citas_teoria_desarrollo_scrum.md`](file:///D:/FACU/3er_a%C3%B1o/HIA-worktrees/tp-scrum/docs/citas_teoria_desarrollo_scrum.md)
+- **Ruta:** [`D:\FACUer_año\HIA-worktrees	p-scrum\docs\citas_teoria_desarrollo_scrum.md`](file:///D:/FACU/3er_a%C3%B1o/HIA-worktrees/tp-scrum/docs/citas_teoria_desarrollo_scrum.md)
 - **Aspectos Teóricos Fundamentados:**
   - Modelo Iterativo e Incremental vs Cascada (*Espinoza, p. 2; Palacio, pp. 11-12*).
   - Comparativa de herramientas: Jira vs Trello vs Wrike vs GitHub Projects (*Espinoza, pp. 6-8*).
@@ -47,21 +46,21 @@ D:\FACU\3er_año\HIA-worktrees\tp-scrum\
   - Gestión de Riesgos e Incertidumbre con Spikes técnicos (*Palacio, p. 71; Espinoza, p. 1*).
 
 ### 2. Informe Maestro del Proyecto
-- **Ruta:** [`D:\FACU\3er_año\HIA-worktrees\tp-scrum\docs\informe_tp_scrum_2026.md`](file:///D:/FACU/3er_a%C3%B1o/HIA-worktrees/tp-scrum/docs/informe_tp_scrum_2026.md)
+- **Ruta:** [`D:\FACUer_año\HIA-worktrees	p-scrum\docs\informe_tp_scrum_2026.md`](file:///D:/FACU/3er_a%C3%B1o/HIA-worktrees/tp-scrum/docs/informe_tp_scrum_2026.md)
 - **Secciones Oficiales Cumplidas:**
   1. *Documento del Proyecto:* Nombre, contexto metodológico vs tecnológico, problema, justificación, objetivos SMART, alcance y entregables.
   2. *Selección de Herramienta:* GitHub Projects + Trello, flujo de 5 columnas, matriz de roles con **Product Owner puro**.
   3. *Product Backlog:* 5 Épicas nativas en Docker, 15 Historias de Usuario completas con subtareas técnicas, priorización MoSCoW, Story Points y criterios de aceptación formales Gherkin (`Dado/Cuando/Entonces`).
   4. *Planificación del Sprint:* Sprint 1 de 2 semanas (10 días), **26 Story Points** unificados (consistencia matemática total), capacidad de 180 hs ideales, Gantt y Burndown chart iniciando en 26 SP y terminando en 0 SP.
-  5. *Matriz de 10 Riesgos:* Categorización y cálculo de probabilidad × impacto en entornos Docker.
-  6. *Análisis Profundo de 5 Riesgos Críticos:* Disparadores (*Triggers*), medidas de prevención proactivas y planes de contingencia (comandos de restore `gunzip < backup.sql.gz`, límites `mem_limit`, git-secrets y gestión de alcance).
+  5. *Matriz de 10 Riesgos:* Categorización y cálculo de probabilidad × impacto en entornos Docker (incluyendo riesgo de exposición de puertos R-04).
+  6. *Análisis Profundo de 5 Riesgos Críticos:* Disparadores (*Triggers*), medidas de prevención proactivas y planes de contingencia (comandos de restore `gunzip < backup.sql.gz`, aislamiento con `expose: 3306`, límites `mem_limit` y git-secrets).
   7. *Ejecución del Sprint:* Bitácora de Dailies (Días 1, 4, 8), resolución de 2 bloqueos reales (WebSockets en Nginx y DNS interno de Docker `mysql:3306`), políticas de branching (GitHub Flow) y DoD.
   8. *Sprint Review & Retrospectiva:* Demostración funcional ante el PO y dinámica 4Ls con compromisos de mejora.
   9. *Bitácora de Inteligencia Artificial:* 6 interacciones estratégicas con herramienta, prompt exacto, respuesta cruda, análisis crítico del equipo, correcciones aplicadas y resultado final incorporado.
   10. *Conclusiones Finales y Cierre.*
 
 ### 3. Esquema Estructurado del Tablero (JSON)
-- **Ruta:** [`D:\FACU\3er_año\HIA-worktrees\tp-scrum\docs\tablero_scrum_backlog.json`](file:///D:/FACU/3er_a%C3%B1o/HIA-worktrees/tp-scrum/docs/tablero_scrum_backlog.json)
+- **Ruta:** [`D:\FACUer_año\HIA-worktrees	p-scrum\docs	ablero_scrum_backlog.json`](file:///D:/FACU/3er_a%C3%B1o/HIA-worktrees/tp-scrum/docs/tablero_scrum_backlog.json)
 - **Utilidad:** Exportable e importable para cargar las 5 épicas, 15 historias, estados, prioridades y asignaciones directamente en Trello o GitHub Projects.
 
 ---

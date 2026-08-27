@@ -94,8 +94,8 @@
     {
       "id": "US-04",
       "epic": "EP-02",
-      "title": "Despliegue de MySQL 8.0 en Contenedor con Volumen Persistente Nombrado",
-      "description": "Como Desarrollador Backend, quiero desplegar MySQL 8.0 utilizando un volumen Docker nombrado (mysql_data), para asegurar que todos los datos persistan.",
+      "title": "Despliegue de MySQL 8.0 con Volumen Persistente y Aislamiento expose: 3306",
+      "description": "Como Desarrollador Backend, quiero desplegar MySQL 8.0 utilizando un volumen nombrado (mysql_data) y directiva expose: 3306, para asegurar persistencia y cero exposición pública.",
       "priority": "Must Have",
       "story_points": 3,
       "status": "Done",
@@ -193,8 +193,8 @@
     {
       "id": "US-13",
       "epic": "EP-05",
-      "title": "Hardening de Contenedores y Asignación de Límites de Recursos",
-      "description": "Como Ingeniero de Seguridad, quiero limitar la memoria RAM y CPU de cada contenedor y evitar la ejecución como root, para prevenir saturaciones.",
+      "title": "Hardening de Contenedores y Cero Exposición Pública de Base de Datos",
+      "description": "Como Ingeniero de Seguridad, quiero asegurar que MySQL opere únicamente con expose: 3306 dentro de app-network, para cerrar vectores de ataque.",
       "priority": "Must Have",
       "story_points": 3,
       "status": "Product Backlog",
