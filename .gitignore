@@ -2,15 +2,18 @@
 .DS_Store
 Thumbs.db
 node_modules/
+.codegraph/
 
 # Entorno de variables, certificados y secretos
 .env
+*.env
 *.env.local
 *.key
 *.pem
 *.pfx
 *.secret
 secrets/
+.secrets/
 certs/
 
 # Docker Local Overrides y datos de volumen local
