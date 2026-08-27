@@ -1,29 +1,58 @@
-# HIA 2026 - Herramientas Informáticas Avanzadas
-**Carrera:** Analista Programador Universitario (APU) - Facultad de Ingeniería (UNJu)  
-**Cátedra:** Herramientas Informáticas Avanzadas  
-**Profesor:** Ing. Alfredo R. Espinoza  
+# Herramientas Informáticas Avanzadas (HIA 2026) — APU / UNJu
+
+## 📌 Trabajo Práctico: Gestión Ágil de Proyectos con Scrum e Inteligencia Artificial
+
+Este repositorio contiene la planificación metodológica, documentación técnica y artefactos declarativos de la **Plataforma Modular de Automatización y Microservicios Cloud con Docker (PMA-Docker 2026)** para la carrera de *Analista Programador Universitario (Facultad de Ingeniería – Universidad Nacional de Jujuy)*.
+
+---
+
+## 👥 Scrum Team
+
+- **Product Owner (Puro Negocio):** Marcos (APU-08421)
+- **Scrum Master & Backend Dev:** Integrante 2 (APU-08512)
+- **Developer & DevOps/QA:** Integrante 3 (APU-08633)
 
 ---
 
 ## 📁 Estructura del Repositorio
 
-- `docs/enunciados/`: Enunciados oficiales de trabajos prácticos.
-  - `TP_Scrum_Gestion_Proyectos_2026.pdf` *(Enunciado activo: Gestión de Proyectos con Scrum)*
-  - `TP1_Practica_Ambiente_Desarrollo_Proxmox_2026.pdf` *(TP Infraestructura / Proxmox)*
-- `docs/teoria/`: Bibliografía y apuntes teóricos.
-  - `Herramientas_Informaticas_Gestion_Proyectos.pdf`
-  - `Scrum_Master_Guia.pdf`
-- `docs/guias/`: Credenciales, guías técnicas y documentación de soporte.
+```
+.
+├── docker-compose.yml                      # Orquestación declarativa base (Nginx, n8n, MySQL 8.0)
+├── docker-compose.override.yml.example     # Plantilla para desarrollo local (127.0.0.1:3306)
+├── .env.example                            # Variables de entorno documentadas
+├── .gitignore                              # Exclusión de secretos, overrides y datos
+├── nginx/
+│   └── nginx.conf                          # Gateway Proxy inverso + soporte WebSockets
+├── mysql/
+│   └── init/
+│       └── 01-init.sql                     # Schema inicial y seed data
+├── docs/
+│   ├── enunciados/
+│   │   └── TP_Scrum_Gestion_Proyectos_2026.pdf # Enunciado oficial de la cátedra
+│   ├── teoria/
+│   │   ├── Herramientas_Informaticas_Gestion_Proyectos.pdf # Apunte Cátedra (Ing. Espinoza)
+│   │   └── Scrum_Master_Guia.pdf           # Manual Oficial Scrum Manager (M. Palacio)
+│   ├── informe_tp_scrum_2026.md            # Informe maestro integral de 10 secciones (26 SP)
+│   ├── citas_teoria_desarrollo_scrum.md    # Mapeo epistemológico y citas cruzadas
+│   ├── tablero_scrum_backlog.json          # Esquema de backlog y épicas en JSON
+│   └── walkthrough.md                      # Resumen ejecutivo y bitácora técnica
+└── README.md
+```
 
 ---
 
-## 🚀 Trabajos Prácticos & Worktrees
+## 🚀 Despliegue del Entorno de Microservicios
 
-- **TP Scrum: Gestión de Proyectos con Scrum e Inteligencia Artificial (2026)**
-  - **Worktree:** `../HIA-worktrees/tp-scrum`
-  - **Branch:** `feature/tp-scrum`
-  - **Objetivo:** Planificación y gestión ágil (Épicas, Historias de Usuario, Story Points, Sprints, Dailies, Review, Retrospectiva, Gestión de Riesgos e integración de IA) para una plataforma tecnológica moderna (Proxmox + Docker + MySQL + n8n + CI/CD).
-
-- **TP1: Ambiente de Desarrollo con Proxmox VE**
-  - **Worktree:** `../HIA-worktrees/tp1-proxmox`
-  - **Branch:** `feature/tp1-proxmox`
+1. **Configurar variables:**
+   ```bash
+   cp .env.example .env
+   ```
+2. **Levantar el stack:**
+   ```bash
+   docker compose up -d
+   ```
+3. **Acceso:**
+   - **Gateway Web:** `http://localhost`
+   - **Healthcheck Gateway:** `http://localhost/healthz`
+   - **Base de Datos:** Aislada internamente en `app-network` (`internal: true`).
