@@ -64,3 +64,5 @@ n8n DB_MYSQLDB_HOST: ['DB_MYSQLDB_HOST=mysql']
 .gitignore:17:docker-compose.override.yml	docker-compose.override.yml
 .gitignore:7:.env			.env
 ```
+
+- **Clarificación de US-04:** Se sincronizó la redacción del informe y del backlog JSON para explicitar que el mapeo a host (`127.0.0.1:3306`) solo se habilita opcionalmente mediante `docker-compose.override.yml` en desarrollo local, manteniendo la definición base 100% aislada.

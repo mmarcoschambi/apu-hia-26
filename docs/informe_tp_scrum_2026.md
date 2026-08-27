@@ -178,17 +178,18 @@ graph TD
 #### ÉPICA 2: Capa de Persistencia y Datos Relacionales (EP-02)
 
 ##### US-04: Despliegue de MySQL 8.0 con Volumen Persistente y Aislamiento `expose: 3306`
-- **Descripción:** *Como* Desarrollador Backend, *quiero* desplegar MySQL 8.0 utilizando un volumen nombrado (`mysql_data`) y directiva de aislamiento interno `expose: ["3306"]`, *para* asegurar la persistencia de datos sin exponer el puerto de base de datos a la red pública del host.
+- **Descripción:** *Como* Desarrollador Backend, *quiero* desplegar MySQL 8.0 utilizando un volumen nombrado (`mysql_data`) y directiva de aislamiento interno `expose: ["3306"]` dentro de `app-network` (`internal: true`), *para* asegurar la persistencia de datos y desacoplar el acceso de desarrollo mediante `docker-compose.override.yml.example` sin exponer puertos en la definición base de producción.
 - **Prioridad:** Must Have | **Story Points:** 3 SP | **Responsable:** Integrante 2 (Backend)
 - **Subtareas:**
-  1. Configurar servicio `mysql` con imagen oficial `mysql:8.0.36-bookworm`.
+  1. Configurar servicio `mysql` con imagen oficial `mysql:8.0.36-bookworm` y aliases DNS `['mysql', 'mysql-db']`.
   2. Mapear volumen nombrado `mysql_data:/var/lib/mysql`.
-  3. Declarar `expose: ["3306"]` conectado exclusivamente a `app-network` (sin directiva `ports` en producción).
+  3. Declarar `expose: ["3306"]` conectado exclusivamente a `app-network` con `internal: true` (sin directiva `ports` en la definición base).
+  4. Documentar la plantilla `docker-compose.override.yml.example` aclarando que el mapeo a host (`127.0.0.1:3306:3306`) solo se habilita opcionalmente en el entorno de desarrollo local del desarrollador (DBeaver), nunca en la definición base de producción.
 - **Criterios de Aceptación:**
   ```gherkin
-  Dado el servicio MySQL levantado con datos cargados en la tabla `productos`
+  Dado el servicio MySQL levantado en `app-network` con datos cargados en la tabla `productos`
   Cuando se destruye el contenedor con `docker compose down` y se vuelve a levantar con `docker compose up -d`
-  Entonces todos los registros en `productos` persisten intactos y el puerto 3306 permanece cerrado hacia el host exterior.
+  Entonces todos los registros en `productos` persisten intactos, el puerto 3306 permanece cerrado hacia el host exterior en la configuración base, y el acceso local desde DBeaver solo se activa opcionalmente si el desarrollador utiliza un `docker-compose.override.yml` local.
   ```
 
 ##### US-05: Configuración de Schemas, Usuario de Aplicación y Healthchecks

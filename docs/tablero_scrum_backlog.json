@@ -95,7 +95,7 @@
       "id": "US-04",
       "epic": "EP-02",
       "title": "Despliegue de MySQL 8.0 con Volumen Persistente y Aislamiento expose: 3306",
-      "description": "Como Desarrollador Backend, quiero desplegar MySQL 8.0 utilizando un volumen nombrado (mysql_data) y directiva expose: 3306, para asegurar persistencia y cero exposición pública.",
+      "description": "Como Desarrollador Backend, quiero desplegar MySQL 8.0 con volumen persistente mysql_data y expose: 3306 en app-network, habilitando acceso a DBeaver solo opcionalmente vía docker-compose.override.yml local sin exponer puertos en la definición base.",
       "priority": "Must Have",
       "story_points": 3,
       "status": "Done",
