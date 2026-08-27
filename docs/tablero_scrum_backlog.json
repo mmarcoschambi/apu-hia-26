@@ -1,0 +1,217 @@
+{
+  "project": "Plataforma Modular de Automatización e Infraestructura Cloud Ágil (PMAI-2026)",
+  "course": "Herramientas Informáticas Avanzadas (HIA 2026) - UNJu",
+  "team": [
+    {
+      "role": "Product Owner",
+      "name": "Marcos",
+      "lu": "APU-08421"
+    },
+    {
+      "role": "Scrum Master",
+      "name": "Integrante 2",
+      "lu": "APU-08512"
+    },
+    {
+      "role": "Developer / QA",
+      "name": "Integrante 3",
+      "lu": "APU-08633"
+    }
+  ],
+  "columns": [
+    "Product Backlog",
+    "Sprint Backlog (Ready)",
+    "In Progress",
+    "Review / QA",
+    "Done"
+  ],
+  "epics": [
+    {
+      "id": "EP-01",
+      "name": "Infraestructura Base y Virtualización"
+    },
+    {
+      "id": "EP-02",
+      "name": "Capa de Persistencia y Datos"
+    },
+    {
+      "id": "EP-03",
+      "name": "Orquestación de Flujos con n8n"
+    },
+    {
+      "id": "EP-04",
+      "name": "Integración Continua y Despliegue (CI/CD)"
+    },
+    {
+      "id": "EP-05",
+      "name": "Seguridad, Monitoreo y Gobernanza"
+    }
+  ],
+  "user_stories": [
+    {
+      "id": "US-01",
+      "epic": "EP-01",
+      "title": "Aprovisionamiento del Hipervisor Proxmox VE con Red Puente",
+      "description": "Como Administrador de Sistemas, quiero instalar y configurar Proxmox VE con IP fija en modo puente, para disponer de una infraestructura de virtualización robusta.",
+      "priority": "Must Have",
+      "story_points": 5,
+      "status": "Done",
+      "sprint": 1,
+      "assigned_to": "Marcos"
+    },
+    {
+      "id": "US-02",
+      "epic": "EP-01",
+      "title": "Creación de Plantilla Base Debian 12 con Docker Engine",
+      "description": "Como Ingeniero DevOps, quiero crear una plantilla optimizada de Debian 12 con Docker preinstalado, para agilizar el aprovisionamiento de microservicios.",
+      "priority": "Must Have",
+      "story_points": 3,
+      "status": "Done",
+      "sprint": 1,
+      "assigned_to": "Integrante 3"
+    },
+    {
+      "id": "US-03",
+      "epic": "EP-01",
+      "title": "Configuración de Almacenamiento y Respaldos vzdump",
+      "description": "Como Responsable de Infraestructura, quiero programar tareas de respaldo periódico, para garantizar la continuidad operativa.",
+      "priority": "Should Have",
+      "story_points": 3,
+      "status": "Product Backlog",
+      "sprint": 2,
+      "assigned_to": "Marcos"
+    },
+    {
+      "id": "US-04",
+      "epic": "EP-02",
+      "title": "Despliegue de Servidor MySQL 8.0 en Contenedor con Volumen Persistente",
+      "description": "Como Desarrollador Backend, quiero desplegar MySQL 8.0 en Docker con volúmenes montados, para asegurar la persistencia.",
+      "priority": "Must Have",
+      "story_points": 3,
+      "status": "Done",
+      "sprint": 1,
+      "assigned_to": "Integrante 2"
+    },
+    {
+      "id": "US-05",
+      "epic": "EP-02",
+      "title": "Configuración de Schemas, Usuarios y Políticas de Acceso Remoto",
+      "description": "Como Administrador de Base de Datos, quiero crear usuarios con privilegios mínimos, para permitir conexiones seguras desde clientes externos.",
+      "priority": "Must Have",
+      "story_points": 2,
+      "status": "Done",
+      "sprint": 1,
+      "assigned_to": "Integrante 2"
+    },
+    {
+      "id": "US-06",
+      "epic": "EP-02",
+      "title": "Automatización de Respaldos Lógicos de Base de Datos (mysqldump)",
+      "description": "Como DBA, quiero un script que ejecute mysqldump diariamente, para disponer de copias portables.",
+      "priority": "Should Have",
+      "story_points": 2,
+      "status": "Product Backlog",
+      "sprint": 2,
+      "assigned_to": "Integrante 2"
+    },
+    {
+      "id": "US-07",
+      "epic": "EP-03",
+      "title": "Despliegue de n8n en Docker Compose con Webhooks y SSL",
+      "description": "Como Especialista en Automatización, quiero desplegar n8n en contenedor aislado, para crear integraciones visuales.",
+      "priority": "Must Have",
+      "story_points": 5,
+      "status": "Done",
+      "sprint": 1,
+      "assigned_to": "Integrante 3"
+    },
+    {
+      "id": "US-08",
+      "epic": "EP-03",
+      "title": "Conexión e Integración de n8n con Base de Datos MySQL",
+      "description": "Como Desarrollador de Automatización, quiero configurar el nodo MySQL en n8n, para realizar operaciones CRUD.",
+      "priority": "Must Have",
+      "story_points": 3,
+      "status": "Done",
+      "sprint": 1,
+      "assigned_to": "Integrante 2 & 3"
+    },
+    {
+      "id": "US-09",
+      "epic": "EP-03",
+      "title": "Implementación de Flujo de Notificaciones y Alertas Automáticas",
+      "description": "Como Operador de Sistemas, quiero un flujo en n8n que escuche alertas y envíe notificaciones por correo, para responder rápido ante incidentes.",
+      "priority": "Should Have",
+      "story_points": 3,
+      "status": "Product Backlog",
+      "sprint": 2,
+      "assigned_to": "Integrante 3"
+    },
+    {
+      "id": "US-10",
+      "epic": "EP-04",
+      "title": "Pipeline de GitHub Actions para Linting y Pruebas Unitarias",
+      "description": "Como Desarrollador, quiero que cada Pull Request ejecute pruebas de forma automática, para evitar código defectuoso en main.",
+      "priority": "Must Have",
+      "story_points": 3,
+      "status": "Done",
+      "sprint": 1,
+      "assigned_to": "Integrante 3"
+    },
+    {
+      "id": "US-11",
+      "epic": "EP-04",
+      "title": "Pipeline de Construcción y Publicación de Imágenes Docker",
+      "description": "Como Ingeniero DevOps, quiero construir y publicar imágenes Docker en GitHub Packages, para asegurar artefactos inmutables.",
+      "priority": "Should Have",
+      "story_points": 3,
+      "status": "Product Backlog",
+      "sprint": 2,
+      "assigned_to": "Integrante 3"
+    },
+    {
+      "id": "US-12",
+      "epic": "EP-04",
+      "title": "Despliegue Continuo (CD) Automático hacia Proxmox vía SSH",
+      "description": "Como Administrador, quiero que las imágenes aprobadas se desplieguen automáticamente en Proxmox, para eliminar despliegues manuales.",
+      "priority": "Could Have",
+      "story_points": 5,
+      "status": "Product Backlog",
+      "sprint": 2,
+      "assigned_to": "Marcos"
+    },
+    {
+      "id": "US-13",
+      "epic": "EP-05",
+      "title": "Implementación de Reglas de Firewall y Segmentación de Red",
+      "description": "Como Oficial de Seguridad, quiero aplicar políticas de firewall en Proxmox y Docker, para bloquear accesos no autorizados.",
+      "priority": "Must Have",
+      "story_points": 3,
+      "status": "Product Backlog",
+      "sprint": 2,
+      "assigned_to": "Marcos"
+    },
+    {
+      "id": "US-14",
+      "epic": "EP-05",
+      "title": "Monitoreo Centralizado de Métricas y Estado de Contenedores",
+      "description": "Como Operador DevOps, quiero visualizar métricas en tiempo real de CPU y RAM, para detectar degradaciones.",
+      "priority": "Should Have",
+      "story_points": 3,
+      "status": "Product Backlog",
+      "sprint": 2,
+      "assigned_to": "Integrante 3"
+    },
+    {
+      "id": "US-15",
+      "epic": "EP-05",
+      "title": "Gestión de Secretos y Variables de Entorno Seguras",
+      "description": "Como Ingeniero de Seguridad, quiero centralizar credenciales mediante .env y GitHub Secrets, para evitar fugas en el repositorio.",
+      "priority": "Must Have",
+      "story_points": 2,
+      "status": "Done",
+      "sprint": 1,
+      "assigned_to": "Marcos"
+    }
+  ]
+}
