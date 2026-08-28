@@ -87,7 +87,7 @@
       "description": "Como Ingeniero de Infraestructura, quiero segmentar los contenedores en redes independientes (gateway-net y app-network), para aislar la base de datos.",
       "priority": "Should Have",
       "story_points": 3,
-      "status": "Product Backlog",
+      "status": "Done",
       "sprint": 2,
       "assigned_to": "Integrante 2 (Backend)"
     },
@@ -120,7 +120,7 @@
       "description": "Como DBA, quiero un contenedor utilitario que ejecute copias lógicas diarias con mysqldump comprimidas en .sql.gz, para disponer de copias portables.",
       "priority": "Should Have",
       "story_points": 2,
-      "status": "Product Backlog",
+      "status": "Done",
       "sprint": 2,
       "assigned_to": "Integrante 2 (Backend)"
     },
@@ -153,7 +153,7 @@
       "description": "Como Operador de Sistemas, quiero un workflow en n8n que reciba eventos HTTP y envíe notificaciones estructuradas por correo/SMTP ante fallos.",
       "priority": "Should Have",
       "story_points": 3,
-      "status": "Product Backlog",
+      "status": "Done",
       "sprint": 2,
       "assigned_to": "Integrante 3 (DevOps)"
     },
@@ -175,7 +175,7 @@
       "description": "Como Ingeniero DevOps, quiero compilar imágenes personalizadas y publicarlas en GitHub Container Registry, para disponer de artefactos inmutables.",
       "priority": "Should Have",
       "story_points": 3,
-      "status": "Product Backlog",
+      "status": "Done",
       "sprint": 2,
       "assigned_to": "Integrante 3 (DevOps)"
     },
@@ -186,7 +186,7 @@
       "description": "Como Administrador de Sistemas, quiero que las nuevas versiones se desplieguen automáticamente en el servidor host tras aprobarse en main.",
       "priority": "Could Have",
       "story_points": 5,
-      "status": "Product Backlog",
+      "status": "Done",
       "sprint": 2,
       "assigned_to": "Integrante 3 (DevOps)"
     },
@@ -197,7 +197,7 @@
       "description": "Como Ingeniero de Seguridad, quiero asegurar que MySQL opere únicamente con expose: 3306 dentro de app-network, para cerrar vectores de ataque.",
       "priority": "Must Have",
       "story_points": 3,
-      "status": "Product Backlog",
+      "status": "Done",
       "sprint": 2,
       "assigned_to": "Integrante 2 (Backend)"
     },
@@ -208,7 +208,7 @@
       "description": "Como Operador DevOps, quiero consultar el estado de salud de todos los microservicios mediante docker compose ps y rotación de logs.",
       "priority": "Should Have",
       "story_points": 3,
-      "status": "Product Backlog",
+      "status": "Done",
       "sprint": 2,
       "assigned_to": "Integrante 3 (DevOps)"
     },
@@ -223,5 +223,10 @@
       "sprint": 1,
       "assigned_to": "Integrante 2 (Backend)"
     }
-  ]
+  ],
+  "sprint_2_summary": {
+    "duration_weeks": 2,
+    "committed_story_points": 22,
+    "completed_story_points": 22
+  }
 }
