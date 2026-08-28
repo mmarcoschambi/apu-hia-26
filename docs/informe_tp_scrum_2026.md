@@ -419,6 +419,10 @@ gantt
 
 ### 4.4. Sprint Burndown Chart (Línea de Quemado de Story Points)
 
+![Sprint Burndown Chart](./img/burndown_chart.svg)
+*Figura 4.1: Gráfico de quemado de Story Points del Sprint 1 (Línea Ideal de 26 a 0 SP vs. Ejecución Real por Hitos).*
+
+
 | Día del Sprint | Story Points Pendientes (Línea Ideal) | Story Points Pendientes (Línea Real) | Hito y Tareas Completadas |
 | :--- | :--- | :--- | :--- |
 | **Día 0 (Inicio)** | 26 SP | 26 SP | Sprint Planning completada. Sprint Backlog congelado. |
@@ -529,7 +533,12 @@ A continuación se analizan en profundidad los 5 riesgos de mayor severidad del 
 - **Integrante 2 (SM & Backend):** *"MySQL está corriendo, aislado y healthy. Ayer configuramos la conexión desde n8n pero obtuvimos un error `ECONNREFUSED` al apuntar a `127.0.0.1` (*BLOQUEO*)."*
 - **Integrante 3 (DevOps):** *"El problema radica en el aislamiento de red de Docker. Cada contenedor tiene su propio localhost. Como ambos están en la red bridge `app-network`, el endpoint debe ser el nombre del servicio `mysql:3306`. Modifiqué la credencial en n8n con el hostname `mysql` y la conexión quedó 100% operativa y estable."*
 
-### 7.2. Control de Calidad y Políticas de Branching
+### 7.2. Control de Calidad, Estado de Contenedores y Evidencia de Seguridad
+
+![Evidencia de Servicios y Seguridad](./img/evidencia_terminal_seguridad.svg)
+*Figura 7.1: Evidencia de consola en PowerShell: estado saludable de los microservicios (`docker compose ps`) y prueba de conexión TCP fallida al puerto 3306 (Aislamiento de MySQL verificado).*
+
+### 7.3. Políticas de Branching y Definition of Done (DoD)
 - **Flujo Git:** Se adoptó *GitHub Flow*. Cada Historia de Usuario se desarrolló en una rama propia aislada (`feature/US-[ID]-[nombre-corto]`).
 - **Revisión de Código (*Code Review*):** Todo cambio requirió un Pull Request con al menos una aprobación entre pares y la ejecución en verde del pipeline de CI.
 - **Definition of Done (DoD):**
@@ -556,6 +565,10 @@ A continuación se analizan en profundidad los 5 riesgos de mayor severidad del 
 - **Dictamen del Product Owner:** Marcos valida y acepta formalmente el incremento entregado (**26 Story Points completados al 100% bajo la DoD**).
 
 ### 8.2. Sprint Retrospective (Dinámica 4Ls: Liked, Learned, Lacked, Longed For)
+
+![Retrospectiva 4Ls](./img/retrospectiva_4ls.svg)
+*Figura 8.1: Cuadrantes de la Retrospectiva Ágil con la dinámica 4Ls tras finalizar el Sprint 1.*
+
 Conforme a Marta Palacio (*Scrum Master, pp. 52-53*), el equipo evaluó sus procesos y relaciones de trabajo:
 
 ```mermaid

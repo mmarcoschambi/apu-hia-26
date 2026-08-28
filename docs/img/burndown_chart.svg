@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="100%" height="100%" style="background:#ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <style>
+    .title { font-size: 20px; font-weight: bold; fill: #1e293b; }
+    .subtitle { font-size: 13px; fill: #64748b; }
+    .axis-label { font-size: 12px; fill: #475569; }
+    .grid { stroke: #e2e8f0; stroke-width: 1; stroke-dasharray: 4,4; }
+    .axis { stroke: #94a3b8; stroke-width: 2; }
+    .ideal-line { stroke: #3b82f6; stroke-width: 3; stroke-dasharray: 6,6; fill: none; }
+    .real-line { stroke: #10b981; stroke-width: 4; fill: none; }
+    .point { fill: #10b981; stroke: #ffffff; stroke-width: 2; }
+    .legend-text { font-size: 13px; font-weight: 500; fill: #334155; }
+  </style>
+
+  <!-- Title & Header -->
+  <text x="50" y="40" class="title">Sprint 1 Burndown Chart — Plataforma PMA-Docker 2026</text>
+  <text x="50" y="62" class="subtitle">Velocidad Comprometida: 26 Story Points | Duración: 10 Días Hábiles (2 Semanas)</text>
+
+  <!-- Grid Lines (Y-Axis: 0, 5, 10, 15, 20, 25, 30 SP) -->
+  <!-- Origin: X=100, Y=380 (0 SP), Height=280px (30 SP = Y=100) -> 1 SP = 9.33px -->
+  <line x1="100" y1="380" x2="720" y2="380" class="grid" />
+  <line x1="100" y1="333" x2="720" y2="333" class="grid" />
+  <line x1="100" y1="287" x2="720" y2="287" class="grid" />
+  <line x1="100" y1="240" x2="720" y2="240" class="grid" />
+  <line x1="100" y1="193" x2="720" y2="193" class="grid" />
+  <line x1="100" y1="147" x2="720" y2="147" class="grid" />
+  <line x1="100" y1="100" x2="720" y2="100" class="grid" />
+
+  <!-- Y-Axis Labels -->
+  <text x="80" y="385" class="axis-label" text-anchor="end">0 SP</text>
+  <text x="80" y="338" class="axis-label" text-anchor="end">5 SP</text>
+  <text x="80" y="292" class="axis-label" text-anchor="end">10 SP</text>
+  <text x="80" y="245" class="axis-label" text-anchor="end">15 SP</text>
+  <text x="80" y="198" class="axis-label" text-anchor="end">20 SP</text>
+  <text x="80" y="152" class="axis-label" text-anchor="end">25 SP</text>
+  <text x="80" y="105" class="axis-label" text-anchor="end">30 SP</text>
+
+  <!-- Axes -->
+  <line x1="100" y1="90" x2="100" y2="380" class="axis" />
+  <line x1="100" y1="380" x2="730" y2="380" class="axis" />
+
+  <!-- X-Axis Labels (Days 0 to 10) -->
+  <!-- Step X = 62px per day. Day 0 = X=100, Day 10 = X=720 -->
+  <text x="100" y="405" class="axis-label" text-anchor="middle">Día 0</text>
+  <text x="162" y="405" class="axis-label" text-anchor="middle">Día 1</text>
+  <text x="224" y="405" class="axis-label" text-anchor="middle">Día 2</text>
+  <text x="286" y="405" class="axis-label" text-anchor="middle">Día 3</text>
+  <text x="348" y="405" class="axis-label" text-anchor="middle">Día 4</text>
+  <text x="410" y="405" class="axis-label" text-anchor="middle">Día 5</text>
+  <text x="472" y="405" class="axis-label" text-anchor="middle">Día 6</text>
+  <text x="534" y="405" class="axis-label" text-anchor="middle">Día 7</text>
+  <text x="596" y="405" class="axis-label" text-anchor="middle">Día 8</text>
+  <text x="658" y="405" class="axis-label" text-anchor="middle">Día 9</text>
+  <text x="720" y="405" class="axis-label" text-anchor="middle">Día 10</text>
+
+  <!-- Ideal Burn Line (Day 0: 26 SP [Y=137.3] -> Day 10: 0 SP [Y=380]) -->
+  <line x1="100" y1="137.3" x2="720" y2="380" class="ideal-line" />
+
+  <!-- Real Burn Line Coordinates:
+       Day 0: 26 SP -> (100, 137.3)
+       Day 2: 21 SP -> (224, 184.0) [US-01 done, 5 SP]
+       Day 4: 18 SP -> (348, 212.0) [US-02 done, 3 SP]
+       Day 6: 13 SP -> (472, 258.7) [US-04 & US-05 done, 5 SP]
+       Day 8:  5 SP -> (596, 333.3) [US-07 & US-08 done, 8 SP]
+       Day 10: 0 SP -> (720, 380.0) [US-10 & US-15 done, 5 SP]
+  -->
+  <polyline points="100,137.3 224,184 348,212 472,258.7 596,333.3 720,380" class="real-line" />
+
+  <!-- Real Points -->
+  <circle cx="100" cy="137.3" r="6" class="point" />
+  <circle cx="224" cy="184" r="6" class="point" />
+  <circle cx="348" cy="212" r="6" class="point" />
+  <circle cx="472" cy="258.7" r="6" class="point" />
+  <circle cx="596" cy="333.3" r="6" class="point" />
+  <circle cx="720" cy="380" r="6" class="point" />
+
+  <!-- Value Labels over Points -->
+  <text x="100" y="125" font-size="11" font-weight="bold" fill="#0f766e" text-anchor="middle">26 SP</text>
+  <text x="224" y="172" font-size="11" font-weight="bold" fill="#0f766e" text-anchor="middle">21 SP</text>
+  <text x="348" y="200" font-size="11" font-weight="bold" fill="#0f766e" text-anchor="middle">18 SP</text>
+  <text x="472" y="246" font-size="11" font-weight="bold" fill="#0f766e" text-anchor="middle">13 SP</text>
+  <text x="596" y="321" font-size="11" font-weight="bold" fill="#0f766e" text-anchor="middle">5 SP</text>
+  <text x="720" y="368" font-size="11" font-weight="bold" fill="#0f766e" text-anchor="middle">0 SP (Done)</text>
+
+  <!-- Legend -->
+  <g transform="translate(480, 25)">
+    <rect x="0" y="0" width="240" height="48" rx="6" fill="#f8fafc" stroke="#cbd5e1" />
+    <line x1="15" y1="18" x2="45" y2="18" class="ideal-line" />
+    <text x="55" y="22" class="legend-text">Línea Ideal Teórica</text>
+    <line x1="15" y1="34" x2="45" y2="34" class="real-line" />
+    <circle cx="30" cy="34" r="4" class="point" />
+    <text x="55" y="38" class="legend-text">Línea Real Ejecutada</text>
+  </g>
+</svg>

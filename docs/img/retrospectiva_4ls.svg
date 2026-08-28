@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="100%" height="100%" style="background:#ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <style>
+    .header-title { font-size: 20px; font-weight: bold; fill: #1e293b; }
+    .header-sub { font-size: 13px; fill: #64748b; }
+    .quadrant-title { font-size: 15px; font-weight: bold; }
+    .card-title { font-size: 12px; font-weight: bold; }
+    .card-desc { font-size: 11px; fill: #475569; }
+  </style>
+
+  <!-- Header -->
+  <text x="40" y="38" class="header-title">Sprint Retrospective — Técnica 4Ls (Sprint 1)</text>
+  <text x="40" y="58" class="header-sub">Inspección y Adaptación del Equipo de Desarrollo (Palacio, pp. 52-53)</text>
+
+  <!-- Quadrant 1: LIKED (Top Left) -->
+  <rect x="40" y="80" width="350" height="190" rx="8" fill="#f0fdf4" stroke="#86efac" stroke-width="2" />
+  <text x="60" y="110" class="quadrant-title" fill="#166534">💚 LIKED (Lo que nos gustó)</text>
+  
+  <rect x="55" y="125" width="320" height="60" rx="6" fill="#ffffff" stroke="#bbf7d0" />
+  <text x="65" y="145" class="card-title" fill="#14532d">Aislamiento y Seguridad con internal: true</text>
+  <text x="65" y="162" class="card-desc">Red interna sin ports dejó MySQL totalmente protegido.</text>
+
+  <rect x="55" y="195" width="320" height="60" rx="6" fill="#ffffff" stroke="#bbf7d0" />
+  <text x="65" y="215" class="card-title" fill="#14532d">Trazabilidad Total en GitHub Projects</text>
+  <text x="65" y="232" class="card-desc">Vincular PRs y ramas directo a las historias aceleró DoD.</text>
+
+  <!-- Quadrant 2: LEARNED (Top Right) -->
+  <rect x="410" y="80" width="350" height="190" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="2" />
+  <text x="430" y="110" class="quadrant-title" fill="#1e40af">💡 LEARNED (Lo que aprendimos)</text>
+
+  <rect x="425" y="125" width="320" height="60" rx="6" fill="#ffffff" stroke="#bfdbfe" />
+  <text x="435" y="145" class="card-title" fill="#1e3a8a">Manejo de WebSockets en Nginx Gateway</text>
+  <text x="435" y="162" class="card-desc">Cabeceras Upgrade / Connection son vitales para n8n.</text>
+
+  <rect x="425" y="195" width="320" height="60" rx="6" fill="#ffffff" stroke="#bfdbfe" />
+  <text x="435" y="215" class="card-title" fill="#1e3a8a">Contratos DNS en Docker Compose</text>
+  <text x="435" y="232" class="card-desc">Los nombres de servicio y aliases son inmutables.</text>
+
+  <!-- Quadrant 3: LACKED (Bottom Left) -->
+  <rect x="40" y="290" width="350" height="190" rx="8" fill="#fef2f2" stroke="#fca5a5" stroke-width="2" />
+  <text x="60" y="320" class="quadrant-title" fill="#991b1b">⚠️ LACKED (Lo que nos faltó)</text>
+
+  <rect x="55" y="335" width="320" height="60" rx="6" fill="#ffffff" stroke="#fecaca" />
+  <text x="65" y="355" class="card-title" fill="#7f1d1d">Documentar Override desde el Día 1</text>
+  <text x="65" y="372" class="card-desc">Evitar dudas sobre mapeo local de puertos para DBeaver.</text>
+
+  <rect x="55" y="405" width="320" height="60" rx="6" fill="#ffffff" stroke="#fecaca" />
+  <text x="65" y="425" class="card-title" fill="#7f1d1d">Spikes Técnicos Previos a Estimación</text>
+  <text x="65" y="442" class="card-desc">n8n llevó 22 hs; un Spike previo hubiese afinado el SP.</text>
+
+  <!-- Quadrant 4: LONGED FOR (Bottom Right) -->
+  <rect x="410" y="290" width="350" height="190" rx="8" fill="#faf5ff" stroke="#d8b4fe" stroke-width="2" />
+  <text x="430" y="320" class="quadrant-title" fill="#6b21a8">🚀 LONGED FOR (Lo que anhelamos)</text>
+
+  <rect x="425" y="335" width="320" height="60" rx="6" fill="#ffffff" stroke="#e9d5ff" />
+  <text x="435" y="355" class="card-title" fill="#581c87">Métricas en Vivo (Prometheus + Grafana)</text>
+  <text x="435" y="372" class="card-desc">Dashboards de observabilidad en tiempo real para Sprint 2.</text>
+
+  <rect x="425" y="405" width="320" height="60" rx="6" fill="#ffffff" stroke="#e9d5ff" />
+  <text x="435" y="425" class="card-title" fill="#581c87">Pipeline CD Automatizado a Servidor Cloud</text>
+  <text x="435" y="442" class="card-desc">Despliegue continuo sin intervención manual post-Merge.</text>
+</svg>
