@@ -2,8 +2,12 @@
 # PLATAFORMA MODULAR DE MICROSERVICIOS Y AUTOMATIZACIÓN (PMA-DOCKER 2026)
 # Herramientas Informáticas Avanzadas (HIA 2026) - APU / UNJu
 # ==============================================================================
-
-version: "3.8"
+# Orquestación declarativa Docker Compose v2 de la plataforma completa:
+#   - Nginx Reverse Proxy (gateway público)
+#   - n8n Workflow Engine (automatización)
+#   - MySQL 8.0 (persistencia con aislamiento estricto)
+#   - mysql-backup (sidecar de respaldos lógicos)
+# ==============================================================================
 
 networks:
   # Red pública perimetral: expone Nginx hacia el exterior y se conecta a n8n
@@ -18,11 +22,19 @@ networks:
     name: pmai_app_net
     internal: true
 
+  # Red dedicada para el sidecar de backups: acceso mínimo al MySQL
+  backup-network:
+    driver: bridge
+    name: pmai_backup_net
+    internal: true
+
 volumes:
   mysql_data:
     name: pmai_mysql_data
   n8n_data:
     name: pmai_n8n_data
+  mysql_backups:
+    name: pmai_mysql_backups
 
 services:
   # ----------------------------------------------------------------------------
@@ -48,12 +60,19 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
+    # US-14: Rotación de logs (máx 10MB x 3 archivos)
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # ----------------------------------------------------------------------------
-  # 2. N8N WORKFLOW AUTOMATION ENGINE (US-07, US-08)
+  # 2. N8N WORKFLOW AUTOMATION ENGINE (US-07, US-08, US-09)
   # ----------------------------------------------------------------------------
   n8n-automation:
-    image: n8nio/n8n:1.45.1
+    # US-11: imagen publicada en GHCR con fallback a upstream oficial
+    image: ${N8N_IMAGE:-ghcr.io/mmarcoschambi/apu-hia-26/n8n-pmai:latest}
     container_name: pmai_n8n
     restart: unless-stopped
     environment:
@@ -64,14 +83,26 @@ services:
       - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost/}
       - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-America/Argentina/Jujuy}
       - TZ=${TZ:-America/Argentina/Jujuy}
+      # --- US-08: Persistencia de workflows en MySQL ---
       - DB_TYPE=mysqldb
       - DB_MYSQLDB_DATABASE=${MYSQL_DATABASE:-pmai_db}
       - DB_MYSQLDB_HOST=mysql
       - DB_MYSQLDB_PORT=3306
       - DB_MYSQLDB_USER=${MYSQL_USER:-pmai_app}
       - DB_MYSQLDB_PASSWORD=${MYSQL_PASSWORD:-pmai_app_secure_password}
+      # --- US-09: SMTP para alertas automáticas ---
+      - N8N_EMAIL_MODE=${N8N_EMAIL_MODE:-smtp}
+      - N8N_SMTP_HOST=${N8N_SMTP_HOST:-smtp.gmail.com}
+      - N8N_SMTP_PORT=${N8N_SMTP_PORT:-587}
+      - N8N_SMTP_USER=${N8N_SMTP_USER:-}
+      - N8N_SMTP_PASS=${N8N_SMTP_PASS:-}
+      - N8N_SMTP_SENDER=${N8N_SMTP_SENDER:-n8n-alerts@apu-hia-26.local}
+      - N8N_SMTP_SSL=${N8N_SMTP_SSL:-false}
+      - N8N_SMTP_STARTTLS=${N8N_SMTP_STARTTLS:-true}
     volumes:
       - n8n_data:/home/node/.n8n
+      # US-09: workflows exportados se importan al iniciar
+      - ./n8n/workflows:/home/node/.n8n/workflows:ro
     networks:
       - gateway-net
       - app-network
@@ -80,6 +111,11 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # ----------------------------------------------------------------------------
   # 3. MYSQL 8.0 RELATIONAL DATABASE (US-04, US-05, US-13)
@@ -106,6 +142,9 @@ services:
         aliases:
           - mysql
           - mysql-db
+      backup-network:
+        aliases:
+          - mysql
     expose:
       - "3306"
     healthcheck:
@@ -114,3 +153,39 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ----------------------------------------------------------------------------
+  # 4. MYSQL BACKUP SIDECAR (US-06)
+  # Ejecuta mysqldump periódico en .sql.gz dentro de la red aislada backup-network
+  # ----------------------------------------------------------------------------
+  mysql-backup:
+    image: mysql:8.0.36-bookworm
+    container_name: pmai_mysql_backup
+    restart: unless-stopped
+    command: ["bash", "/usr/local/bin/mysqldump.sh"]
+    environment:
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-pmai_db}
+      - MYSQL_USER=${MYSQL_USER:-pmai_app}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-pmai_app_secure_password}
+      - BACKUP_INTERVAL_HOURS=${BACKUP_INTERVAL_HOURS:-24}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-7}
+    volumes:
+      - mysql_backups:/backups
+      - ./scripts/backup/mysqldump.sh:/usr/local/bin/mysqldump.sh:ro
+    networks:
+      - backup-network
+    depends_on:
+      mysql:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
