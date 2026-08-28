@@ -2,18 +2,16 @@
 .DS_Store
 Thumbs.db
 node_modules/
-.codegraph/
 
 # Entorno de variables, certificados y secretos
 .env
-*.env
+.env.test
 *.env.local
 *.key
 *.pem
 *.pfx
 *.secret
 secrets/
-.secrets/
 certs/
 
 # Docker Local Overrides y datos de volumen local
@@ -21,8 +19,24 @@ docker-compose.override.yml
 data/
 mysql_data/
 n8n_data/
+backups/
 
 # Logs y temporales
 *.log
 tmp/
 temp/
+
+# IDEs y herramientas
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Cobertura y reportes
+coverage/
+*.lcov
+trivy-results.sarif
+
+# Backups antiguos del TP1
+docs/guias/
+docs/enunciados/TP1_*.pdf
