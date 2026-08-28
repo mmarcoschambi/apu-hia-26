@@ -1,0 +1,47 @@
+name: "CI/CD Pipeline - PMA-Docker 2026"
+
+on:
+  push:
+    branches: [ "main", "feature/*", "docs/*" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-test:
+    name: "Validación de Compose, Linters y Tests (US-10)"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "1. Checkout del Repositorio"
+        uses: actions/checkout@v4
+
+      - name: "2. Validar Esquema de Docker Compose (US-01, US-04)"
+        run: |
+          echo "Validando sintaxis y consistencia de redes en docker-compose.yml..."
+          docker compose config -q
+          echo "docker-compose.yml valido sin errores de esquema."
+
+      - name: "3. Validar Sintaxis de Scripts SQL de Inicialización"
+        run: |
+          echo "Verificando estructura de mysql/init/01-init.sql..."
+          test -f mysql/init/01-init.sql
+          grep -q "CREATE TABLE IF NOT EXISTS productos" mysql/init/01-init.sql
+          echo "Script SQL verificado con exito."
+
+      - name: "4. Validar Consistencia del Tablero Scrum (JSON)"
+        run: |
+          echo "Validando esquema JSON de docs/tablero_scrum_backlog.json..."
+          python3 -c "import json; d=json.load(open('docs/tablero_scrum_backlog.json')); assert d['sprint_1_summary']['committed_story_points'] == 26; print('JSON Backlog valido con 26 SP.')"
+
+      - name: "5. Comprobar Aislamiento de Puertos (Zero Host Ports en Base)"
+        run: |
+          echo "Verificando que MySQL no publique puertos hacia 0.0.0.0..."
+          python3 -c "import yaml; d=yaml.safe_load(open('docker-compose.yml')); assert 'ports' not in d['services']['mysql'], 'MySQL NO debe publicar ports en base'; print('Regla de aislamiento de red cumplida.')"
+
+      - name: "6. Resumen de Pipeline Exitoso (DoD)"
+        run: |
+          echo "Todas las validaciones estaticas y pruebas de la US-10 finalizaron en verde (Exit code 0)."

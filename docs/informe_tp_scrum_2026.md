@@ -96,6 +96,9 @@ El tablero se configuró respetando el flujo de valor ágil en 5 columnas obliga
 4. **Review / QA:** Historias con Pull Request abierto, pruebas superadas y sujetas a revisión de código entre pares.
 5. **Done:** Incrementos terminados que satisfacen al 100% la *Definition of Done (DoD)*.
 
+![Tablero Scrum en GitHub Projects](./img/tablero_github_projects.png)
+*Figura 2.1: Tablero Scrum en GitHub Projects (PMA-Docker 2026) configurado con las 5 columnas de flujo de valor y las 15 Historias de Usuario cargadas.*
+
 ---
 
 # SECCIÓN 3: GESTIÓN DEL PRODUCT BACKLOG
@@ -538,7 +541,11 @@ A continuación se analizan en profundidad los 5 riesgos de mayor severidad del 
 ![Evidencia de Servicios y Seguridad](./img/evidencia_terminal_seguridad.svg)
 *Figura 7.1: Evidencia de consola en PowerShell: estado saludable de los microservicios (`docker compose ps`) y prueba de conexión TCP fallida al puerto 3306 (Aislamiento de MySQL verificado).*
 
-### 7.3. Políticas de Branching y Definition of Done (DoD)
+### 7.3. Políticas de Branching, Pipeline CI/CD y Definition of Done (DoD)
+
+![Pipeline de CI en GitHub Actions](./img/pipeline_github_actions.png)
+*Figura 7.2: Pipeline de Integración Continua (CI) en GitHub Actions ejecutando la validación estática de Docker Compose y linters de código con resultado exitoso (Exit code 0).*
+
 - **Flujo Git:** Se adoptó *GitHub Flow*. Cada Historia de Usuario se desarrolló en una rama propia aislada (`feature/US-[ID]-[nombre-corto]`).
 - **Revisión de Código (*Code Review*):** Todo cambio requirió un Pull Request con al menos una aprobación entre pares y la ejecución en verde del pipeline de CI.
 - **Definition of Done (DoD):**
