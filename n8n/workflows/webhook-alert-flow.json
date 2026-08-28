@@ -1,0 +1,166 @@
+{
+  "name": "PMAI - Webhook Receiver & Alert",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pmai-alerts",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-node",
+      "name": "Webhook Receptor",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "webhookId": "pmai-alerts-webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "severity-check",
+              "leftValue": "={{$json.body[\"severity\"]}}",
+              "rightValue": "critical",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-severity",
+      "name": "¿Es crítico?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO eventos_webhook (origen, tipo_evento, payload) VALUES (?, ?, ?);",
+        "options": {}
+      },
+      "id": "mysql-log",
+      "name": "Registrar en MySQL",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 1,
+      "position": [680, 180],
+      "credentials": {
+        "mySql": {
+          "id": "pmai-mysql",
+          "name": "PMAI MySQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{$env.N8N_SMTP_SENDER}}",
+        "toEmail": "={{$env.ALERT_RECIPIENT || \"ops@apu-hia-26.local\"}}",
+        "subject": "=[PMAI] Evento {{$json.body[\"severity\"]}}: {{$json.body[\"title\"]}}",
+        "text": "=Origen: {{$json.body[\"origen\"]}}\nTipo: {{$json.body[\"tipo_evento\"]}}\nMensaje: {{$json.body[\"mensaje\"]}}\nTimestamp: {{$now}}\n\nPayload completo:\n{{JSON.stringify($json.body)}}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "smtp-alert",
+      "name": "Enviar alerta SMTP",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [680, 420],
+      "credentials": {
+        "smtp": {
+          "id": "pmai-smtp",
+          "name": "PMAI SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"status\":\"accepted\",\"workflow\":\"pmai-alerts\",\"timestamp\":\"{{$now}}\"}"
+      },
+      "id": "respond-ok",
+      "name": "Responder 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Receptor": {
+      "main": [
+        [
+          {
+            "node": "¿Es crítico?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es crítico?": {
+      "main": [
+        [
+          {
+            "node": "Enviar alerta SMTP",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar en MySQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar en MySQL": {
+      "main": [
+        [
+          {
+            "node": "Responder 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar alerta SMTP": {
+      "main": [
+        [
+          {
+            "node": "Responder 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "pmai"
+    },
+    {
+      "name": "alerts"
+    }
+  ],
+  "active": false,
+  "versionId": "1.0.0"
+}
