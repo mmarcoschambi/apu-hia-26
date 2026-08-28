@@ -255,6 +255,9 @@ graph TD
   Entonces retorna estado exitoso `Connection tested successfully` y permite realizar consultas SQL fluidas.
   ```
 
+![Canvas Visual de Automatización en n8n](./img/workflow_n8n_canvas.svg)
+*Figura 3.2: Workflow automatizado en n8n integrando captura de webhooks HTTP, bifurcación condicional IF y persistencia relacional en MySQL mediante resolución DNS interna (`mysql:3306`).*
+
 ##### US-09: Implementación de Flujo de Webhooks y Alertas Automáticas
 - **Descripción:** *Como* Operador de Sistemas, *quiero* un workflow en n8n que reciba eventos HTTP vía Webhook y envíe notificaciones estructuradas por correo/SMTP ante fallos críticos, *para* responder en tiempo real a incidentes.
 - **Prioridad:** Should Have | **Story Points:** 3 SP | **Responsable:** Integrante 3 (DevOps)

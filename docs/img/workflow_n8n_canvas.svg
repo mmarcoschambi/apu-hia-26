@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 480" width="100%" height="100%" style="background:#1a1d26; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; border-radius: 8px;">
+  <defs>
+    <!-- Dot Grid Pattern -->
+    <pattern id="dotGrid" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="12" cy="12" r="1.2" fill="#333846" />
+    </pattern>
+    <!-- Node Shadows -->
+    <filter id="nodeShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000000" flood-opacity="0.4" />
+    </filter>
+  </defs>
+
+  <!-- Background with Grid -->
+  <rect width="900" height="480" fill="#1a1d26" />
+  <rect width="900" height="480" fill="url(#dotGrid)" />
+
+  <!-- Top Navigation Bar (n8n Style) -->
+  <rect width="900" height="48" fill="#222734" />
+  <circle cx="28" cy="24" r="12" fill="#ff6d5a" />
+  <text x="28" y="29" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle">n</text>
+  <text x="52" y="29" font-size="14" font-weight="bold" fill="#f1f5f9">PMAI — Incident Webhooks &amp; MySQL Sync</text>
+  
+  <!-- Active Tag -->
+  <rect x="760" y="14" width="70" height="22" rx="11" fill="#10b981" />
+  <circle cx="772" cy="25" r="4" fill="#ffffff" />
+  <text x="782" y="29" font-size="11" font-weight="bold" fill="#ffffff">Active</text>
+  <rect x="840" y="12" width="45" height="26" rx="4" fill="#ff6d5a" />
+  <text x="862" y="29" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">Save</text>
+
+  <!-- Connection Curves (Bezier) -->
+  <!-- Webhook (X=230, Y=230) to IF (X=360, Y=230) -->
+  <path d="M 230 230 C 295 230, 295 230, 360 230" fill="none" stroke="#64748b" stroke-width="3" />
+  
+  <!-- IF True Output (X=520, Y=210) to MySQL Node (X=650, Y=170) -->
+  <path d="M 520 210 C 585 210, 585 170, 650 170" fill="none" stroke="#10b981" stroke-width="3" />
+  <text x="560" y="195" font-size="11" font-weight="bold" fill="#10b981">true</text>
+
+  <!-- IF False Output (X=520, Y=250) to Log Node (X=650, Y=300) -->
+  <path d="M 520 250 C 585 250, 585 300, 650 300" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="4,4" />
+  <text x="560" y="290" font-size="11" font-weight="bold" fill="#94a3b8">false</text>
+
+  <!-- ==================== NODE 1: WEBHOOK TRIGGER ==================== -->
+  <g transform="translate(80, 175)" filter="url(#nodeShadow)">
+    <rect width="150" height="110" rx="8" fill="#2d3342" stroke="#ff6d5a" stroke-width="2" />
+    <rect width="150" height="32" rx="8" fill="#ff6d5a" />
+    <!-- Round bottom fix -->
+    <rect y="20" width="150" height="12" fill="#ff6d5a" />
+    <text x="75" y="21" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">⚡ Webhook Trigger</text>
+    <text x="75" y="58" font-size="12" font-weight="bold" fill="#f8fafc" text-anchor="middle">POST /webhook/alerts</text>
+    <text x="75" y="78" font-size="10" fill="#94a3b8" text-anchor="middle">Payload JSON Body</text>
+    <circle cx="150" cy="55" r="6" fill="#ff6d5a" stroke="#ffffff" stroke-width="2" />
+  </g>
+
+  <!-- ==================== NODE 2: IF FILTER ==================== -->
+  <g transform="translate(360, 170)" filter="url(#nodeShadow)">
+    <rect width="160" height="120" rx="8" fill="#2d3342" stroke="#3b82f6" stroke-width="2" />
+    <rect width="160" height="32" rx="8" fill="#3b82f6" />
+    <rect y="20" width="160" height="12" fill="#3b82f6" />
+    <text x="80" y="21" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">🔀 Filter Condition (IF)</text>
+    <text x="80" y="58" font-size="12" font-weight="bold" fill="#f8fafc" text-anchor="middle">severity == 'CRITICAL'</text>
+    <text x="80" y="78" font-size="10" fill="#94a3b8" text-anchor="middle">Mode: String Equal</text>
+    <text x="80" y="96" font-size="9" fill="#38bdf8" text-anchor="middle">Evaluated: True (Match)</text>
+    <circle cx="0" cy="60" r="5" fill="#3b82f6" stroke="#ffffff" stroke-width="2" />
+    <circle cx="160" cy="40" r="6" fill="#10b981" stroke="#ffffff" stroke-width="2" />
+    <circle cx="160" cy="80" r="6" fill="#94a3b8" stroke="#ffffff" stroke-width="2" />
+  </g>
+
+  <!-- ==================== NODE 3: MYSQL PERSISTENCE ==================== -->
+  <g transform="translate(650, 115)" filter="url(#nodeShadow)">
+    <rect width="180" height="125" rx="8" fill="#2d3342" stroke="#00758f" stroke-width="2" />
+    <rect width="180" height="32" rx="8" fill="#00758f" />
+    <rect y="20" width="180" height="12" fill="#00758f" />
+    <text x="90" y="21" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">🐬 MySQL Database</text>
+    <text x="90" y="58" font-size="12" font-weight="bold" fill="#f8fafc" text-anchor="middle">INSERT INTO productos</text>
+    <text x="90" y="78" font-size="10" fill="#67e8f9" text-anchor="middle">Host: mysql:3306 (DNS)</text>
+    <text x="90" y="94" font-size="10" fill="#94a3b8" text-anchor="middle">Database: pmai_db</text>
+    <text x="90" y="110" font-size="9" font-weight="bold" fill="#4ade80" text-anchor="middle">✓ Executed (1 row inserted)</text>
+    <circle cx="0" cy="55" r="6" fill="#00758f" stroke="#ffffff" stroke-width="2" />
+  </g>
+
+  <!-- ==================== NODE 4: IGNORE / LOG ==================== -->
+  <g transform="translate(650, 260)" filter="url(#nodeShadow)">
+    <rect width="180" height="90" rx="8" fill="#2d3342" stroke="#64748b" stroke-width="1.5" />
+    <rect width="180" height="28" rx="8" fill="#475569" />
+    <rect y="18" width="180" height="10" fill="#475569" />
+    <text x="90" y="18" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">📝 Logger (Non-Critical)</text>
+    <text x="90" y="52" font-size="11" fill="#cbd5e1" text-anchor="middle">Discard or Info Log</text>
+    <text x="90" y="72" font-size="9" fill="#94a3b8" text-anchor="middle">Status: Skipped</text>
+    <circle cx="0" cy="40" r="5" fill="#64748b" stroke="#ffffff" stroke-width="2" />
+  </g>
+
+  <!-- Bottom Info Footer -->
+  <rect y="440" width="900" height="40" fill="#1e222d" />
+  <text x="25" y="464" font-size="12" fill="#94a3b8">📌 Red Docker Interna: <tspan fill="#38bdf8">app-network (internal: true)</tspan> | Hostname Resolución: <tspan fill="#4ade80">mysql:3306</tspan> | n8n Engine v1.45.1</text>
+</svg>
