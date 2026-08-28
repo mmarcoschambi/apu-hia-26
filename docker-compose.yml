@@ -1,0 +1,116 @@
+# ==============================================================================
+# PLATAFORMA MODULAR DE MICROSERVICIOS Y AUTOMATIZACIÓN (PMA-DOCKER 2026)
+# Herramientas Informáticas Avanzadas (HIA 2026) - APU / UNJu
+# ==============================================================================
+
+version: "3.8"
+
+networks:
+  # Red pública perimetral: expone Nginx hacia el exterior y se conecta a n8n
+  gateway-net:
+    driver: bridge
+    name: pmai_gateway_net
+
+  # Red privada con aislamiento total: internal: true bloquea tráfico hacia/desde el exterior
+  # Conecta n8n con MySQL garantizando seguridad perimetral estricta
+  app-network:
+    driver: bridge
+    name: pmai_app_net
+    internal: true
+
+volumes:
+  mysql_data:
+    name: pmai_mysql_data
+  n8n_data:
+    name: pmai_n8n_data
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. NGINX REVERSE PROXY & GATEWAY (US-02)
+  # ----------------------------------------------------------------------------
+  nginx-gateway:
+    image: nginx:1.27-alpine
+    container_name: pmai_nginx_gateway
+    restart: unless-stopped
+    ports:
+      - "${GATEWAY_HTTP_PORT:-80}:80"
+      - "${GATEWAY_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - gateway-net
+    depends_on:
+      n8n-automation:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  # ----------------------------------------------------------------------------
+  # 2. N8N WORKFLOW AUTOMATION ENGINE (US-07, US-08)
+  # ----------------------------------------------------------------------------
+  n8n-automation:
+    image: n8nio/n8n:1.45.1
+    container_name: pmai_n8n
+    restart: unless-stopped
+    environment:
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-default_secret_encryption_key_32b}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost/}
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-America/Argentina/Jujuy}
+      - TZ=${TZ:-America/Argentina/Jujuy}
+      - DB_TYPE=mysqldb
+      - DB_MYSQLDB_DATABASE=${MYSQL_DATABASE:-pmai_db}
+      - DB_MYSQLDB_HOST=mysql
+      - DB_MYSQLDB_PORT=3306
+      - DB_MYSQLDB_USER=${MYSQL_USER:-pmai_app}
+      - DB_MYSQLDB_PASSWORD=${MYSQL_PASSWORD:-pmai_app_secure_password}
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - gateway-net
+      - app-network
+    expose:
+      - "5678"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  # ----------------------------------------------------------------------------
+  # 3. MYSQL 8.0 RELATIONAL DATABASE (US-04, US-05, US-13)
+  # Aislamiento Estricto:
+  # - Servicio 'mysql' con alias 'mysql' y 'mysql-db' para resolución DNS unificada
+  # - Red 'app-network' con 'internal: true' (cero enrutamiento hacia o desde el exterior)
+  # - Directiva 'expose: ["3306"]' (sin 'ports' publicados en el host)
+  # ----------------------------------------------------------------------------
+  mysql:
+    image: mysql:8.0.36-bookworm
+    container_name: pmai_mysql
+    restart: unless-stopped
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-secret_root_password_change_me}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-pmai_db}
+      - MYSQL_USER=${MYSQL_USER:-pmai_app}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-pmai_app_secure_password}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      app-network:
+        aliases:
+          - mysql
+          - mysql-db
+    expose:
+      - "3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$MYSQL_PASSWORD || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s

@@ -1,18 +1,28 @@
-# OS & Editor
-Thumbs.db
-Desktop.ini
+# Sistema y dependencias
 .DS_Store
-.vscode/
-.idea/
-*.log
-
-# Large media files (videos/audio recorded)
-*.mp4
-*.mp3
-*.mkv
-*.avi
-
-# Node / Build artifacts
+Thumbs.db
 node_modules/
-dist/
-build/
+.codegraph/
+
+# Entorno de variables, certificados y secretos
+.env
+*.env
+*.env.local
+*.key
+*.pem
+*.pfx
+*.secret
+secrets/
+.secrets/
+certs/
+
+# Docker Local Overrides y datos de volumen local
+docker-compose.override.yml
+data/
+mysql_data/
+n8n_data/
+
+# Logs y temporales
+*.log
+tmp/
+temp/

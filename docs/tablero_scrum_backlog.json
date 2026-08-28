@@ -1,0 +1,227 @@
+{
+  "project": "Plataforma Modular de Automatización y Microservicios Cloud con Docker (PMA-Docker 2026)",
+  "course": "Herramientas Informáticas Avanzadas (HIA 2026) - UNJu",
+  "team": [
+    {
+      "role": "Product Owner",
+      "name": "Marcos",
+      "lu": "APU-08421",
+      "type": "Pure Business & Backlog"
+    },
+    {
+      "role": "Scrum Master & Backend Dev",
+      "name": "Integrante 2",
+      "lu": "APU-08512",
+      "type": "Agile Facilitator & Data/Security"
+    },
+    {
+      "role": "Developer & DevOps/QA",
+      "name": "Integrante 3",
+      "lu": "APU-08633",
+      "type": "Docker Architecture & CI/CD"
+    }
+  ],
+  "columns": [
+    "Product Backlog",
+    "Sprint Backlog (Ready)",
+    "In Progress",
+    "Review / QA",
+    "Done"
+  ],
+  "sprint_1_summary": {
+    "duration_weeks": 2,
+    "committed_story_points": 26,
+    "completed_story_points": 26,
+    "team_capacity_hours": 180,
+    "estimated_dev_hours": 110
+  },
+  "epics": [
+    {
+      "id": "EP-01",
+      "name": "Entorno de Contenedores y Gateway Web"
+    },
+    {
+      "id": "EP-02",
+      "name": "Capa de Persistencia y Datos Relacionales"
+    },
+    {
+      "id": "EP-03",
+      "name": "Orquestación de Flujos con n8n"
+    },
+    {
+      "id": "EP-04",
+      "name": "Integración y Despliegue Continuo (CI/CD)"
+    },
+    {
+      "id": "EP-05",
+      "name": "Seguridad, Monitoreo y Gobernanza de Contenedores"
+    }
+  ],
+  "user_stories": [
+    {
+      "id": "US-01",
+      "epic": "EP-01",
+      "title": "Configuración de Docker Engine y Orquestación Base con Docker Compose v2",
+      "description": "Como Ingeniero DevOps, quiero configurar el entorno de ejecución Docker Engine y el archivo base docker-compose.yml, para orquestar todos los microservicios.",
+      "priority": "Must Have",
+      "story_points": 5,
+      "status": "Done",
+      "sprint": 1,
+      "assigned_to": "Integrante 3 (DevOps)"
+    },
+    {
+      "id": "US-02",
+      "epic": "EP-01",
+      "title": "Despliegue de Nginx Reverse Proxy como Gateway Centralizado",
+      "description": "Como Administrador de Sistemas, quiero configurar un contenedor Nginx que actúe como proxy inverso y punto único de entrada, para enrutar el tráfico HTTP/HTTPS.",
+      "priority": "Must Have",
+      "story_points": 3,
+      "status": "Done",
+      "sprint": 1,
+      "assigned_to": "Integrante 3 (DevOps)"
+    },
+    {
+      "id": "US-03",
+      "epic": "EP-01",
+      "title": "Configuración de Redes Aisladas y Políticas de Reinicio Automático",
+      "description": "Como Ingeniero de Infraestructura, quiero segmentar los contenedores en redes independientes (gateway-net y app-network), para aislar la base de datos.",
+      "priority": "Should Have",
+      "story_points": 3,
+      "status": "Product Backlog",
+      "sprint": 2,
+      "assigned_to": "Integrante 2 (Backend)"
+    },
+    {
+      "id": "US-04",
+      "epic": "EP-02",
+      "title": "Despliegue de MySQL 8.0 con Volumen Persistente y Aislamiento expose: 3306",
+      "description": "Como Desarrollador Backend, quiero desplegar MySQL 8.0 con volumen persistente mysql_data y expose: 3306 en app-network, habilitando acceso a DBeaver solo opcionalmente vía docker-compose.override.yml local sin exponer puertos en la definición base.",
+      "priority": "Must Have",
+      "story_points": 3,
+      "status": "Done",
+      "sprint": 1,
+      "assigned_to": "Integrante 2 (Backend)"
+    },
+    {
+      "id": "US-05",
+      "epic": "EP-02",
+      "title": "Configuración de Schemas, Usuario de Aplicación y Healthchecks",
+      "description": "Como Administrador de Base de Datos, quiero automatizar la creación del schema pmai_db, un usuario pmai_app con permisos mínimos y healthcheck nativo.",
+      "priority": "Must Have",
+      "story_points": 2,
+      "status": "Done",
+      "sprint": 1,
+      "assigned_to": "Integrante 2 (Backend)"
+    },
+    {
+      "id": "US-06",
+      "epic": "EP-02",
+      "title": "Automatización de Respaldos Lógicos de Base de Datos (mysqldump)",
+      "description": "Como DBA, quiero un contenedor utilitario que ejecute copias lógicas diarias con mysqldump comprimidas en .sql.gz, para disponer de copias portables.",
+      "priority": "Should Have",
+      "story_points": 2,
+      "status": "Product Backlog",
+      "sprint": 2,
+      "assigned_to": "Integrante 2 (Backend)"
+    },
+    {
+      "id": "US-07",
+      "epic": "EP-03",
+      "title": "Despliegue de n8n en Docker Compose con Persistencia y Variables Protegidas",
+      "description": "Como Especialista en Automatización, quiero desplegar n8n en Docker Compose con volumen persistente n8n_data, para construir workflows visuales.",
+      "priority": "Must Have",
+      "story_points": 5,
+      "status": "Done",
+      "sprint": 1,
+      "assigned_to": "Integrante 3 (DevOps)"
+    },
+    {
+      "id": "US-08",
+      "epic": "EP-03",
+      "title": "Integración Nativa de n8n con MySQL mediante Resolución DNS Interna",
+      "description": "Como Desarrollador de Automatización, quiero conectar n8n a MySQL utilizando el hostname mysql dentro de app-network, para operar sin exponer puertos.",
+      "priority": "Must Have",
+      "story_points": 3,
+      "status": "Done",
+      "sprint": 1,
+      "assigned_to": "Integrante 2 & 3 (Pair)"
+    },
+    {
+      "id": "US-09",
+      "epic": "EP-03",
+      "title": "Implementación de Flujo de Webhooks y Alertas Automáticas",
+      "description": "Como Operador de Sistemas, quiero un workflow en n8n que reciba eventos HTTP y envíe notificaciones estructuradas por correo/SMTP ante fallos.",
+      "priority": "Should Have",
+      "story_points": 3,
+      "status": "Product Backlog",
+      "sprint": 2,
+      "assigned_to": "Integrante 3 (DevOps)"
+    },
+    {
+      "id": "US-10",
+      "epic": "EP-04",
+      "title": "Pipeline de GitHub Actions para Validación de Compose, Linting y Tests",
+      "description": "Como Desarrollador de Software, quiero que cada Pull Request ejecute un pipeline automatizado de validación estática y pruebas, para evitar código roto en main.",
+      "priority": "Must Have",
+      "story_points": 3,
+      "status": "Done",
+      "sprint": 1,
+      "assigned_to": "Integrante 3 (DevOps)"
+    },
+    {
+      "id": "US-11",
+      "epic": "EP-04",
+      "title": "Pipeline de Construcción de Imágenes Docker y Publicación en GHCR",
+      "description": "Como Ingeniero DevOps, quiero compilar imágenes personalizadas y publicarlas en GitHub Container Registry, para disponer de artefactos inmutables.",
+      "priority": "Should Have",
+      "story_points": 3,
+      "status": "Product Backlog",
+      "sprint": 2,
+      "assigned_to": "Integrante 3 (DevOps)"
+    },
+    {
+      "id": "US-12",
+      "epic": "EP-04",
+      "title": "Despliegue Continuo Automatizado (CD) hacia el Servidor de Producción",
+      "description": "Como Administrador de Sistemas, quiero que las nuevas versiones se desplieguen automáticamente en el servidor host tras aprobarse en main.",
+      "priority": "Could Have",
+      "story_points": 5,
+      "status": "Product Backlog",
+      "sprint": 2,
+      "assigned_to": "Integrante 3 (DevOps)"
+    },
+    {
+      "id": "US-13",
+      "epic": "EP-05",
+      "title": "Hardening de Contenedores y Cero Exposición Pública de Base de Datos",
+      "description": "Como Ingeniero de Seguridad, quiero asegurar que MySQL opere únicamente con expose: 3306 dentro de app-network, para cerrar vectores de ataque.",
+      "priority": "Must Have",
+      "story_points": 3,
+      "status": "Product Backlog",
+      "sprint": 2,
+      "assigned_to": "Integrante 2 (Backend)"
+    },
+    {
+      "id": "US-14",
+      "epic": "EP-05",
+      "title": "Monitoreo del Estado de Salud con Docker Healthchecks y Logs",
+      "description": "Como Operador DevOps, quiero consultar el estado de salud de todos los microservicios mediante docker compose ps y rotación de logs.",
+      "priority": "Should Have",
+      "story_points": 3,
+      "status": "Product Backlog",
+      "sprint": 2,
+      "assigned_to": "Integrante 3 (DevOps)"
+    },
+    {
+      "id": "US-15",
+      "epic": "EP-05",
+      "title": "Gestión Centralizada de Secretos y Variables de Entorno Seguras",
+      "description": "Como Oficial de Seguridad, quiero centralizar todas las contraseñas en un archivo .env protegido y excluirlo de Git, para evitar fugas.",
+      "priority": "Must Have",
+      "story_points": 2,
+      "status": "Done",
+      "sprint": 1,
+      "assigned_to": "Integrante 2 (Backend)"
+    }
+  ]
+}
