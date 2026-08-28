@@ -75,6 +75,7 @@ Planificar, desarrollar y validar de forma iterativa e incremental una plataform
 - Frontend móvil nativo.
 - Certificados TLS Let's Encrypt automatizados (el gateway opera HTTP en el entorno académico; HTTPS queda como configuración declarativa pendiente).
 - Múltiples bases de datos (se mantiene una sola instancia MySQL 8.0 con `pmai_db`).
+- **Ejecución real de US-12 (CD a producción):** el pipeline `.github/workflows/deploy-production.yml` se implementó, versionó y validó estructuralmente, pero su ejecución contra un servidor real (VPS) y/o dominio público queda fuera de alcance del TP, ya que el objetivo evaluado es la aplicación del marco Scrum y no la operación de infraestructura productiva. El workflow queda listo para activarse el día que exista un servidor de destino.
 
 ## 1.7. Stakeholders
 | Rol | Persona / Entidad | Interés principal |
