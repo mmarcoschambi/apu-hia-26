@@ -88,6 +88,10 @@ Fundamentándonos en el análisis comparativo del apunte de la cátedra (*Espino
 Se seleccionó **GitHub Projects (Tablero Kanban/Scrum) integrado con Trello**.  
 *Justificación:* Ofrece soporte ágil nativo de Scrum con costo $0 para estudiantes, vinculación automática y bidireccional entre *User Stories* (GitHub Issues), ramas (`feature/*`), Pull Requests, ejecución de pipelines CI/CD y trazabilidad total de la *Definition of Done (DoD)* directamente en el código fuente.
 
+**Enlaces Públicos a los Tableros de Gestión:**
+- 🐙 **Tablero GitHub Projects (Trazabilidad CI/CD y Código):** [Tablero Scrum PMA-Docker 2026 (GitHub)](https://github.com/users/mmarcoschambi/projects/2)
+- 📋 **Tablero Trello (Radiador Visual de Información):** [Tablero Scrum PMA-Docker 2026 (Trello)](https://trello.com/b/6a90ce2dd4b9a284f5128472)
+
 ### 2.2. Configuración del Tablero Ágil
 El tablero se configuró respetando el flujo de valor ágil en 5 columnas obligatorias:
 1. **Product Backlog:** Repositorio central de requerimientos priorizados que cumplen la *Definition of Ready (DoR)*.
