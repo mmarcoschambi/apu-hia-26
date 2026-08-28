@@ -710,3 +710,76 @@ En cumplimiento estricto con el enunciado de la cátedra, se registran a continu
    La IA generativa demostró ser un multiplicador de productividad invaluable en la redacción de plantillas, formulación de criterios Gherkin y diagnóstico de configuraciones, siempre que esté subordinada a la **validación crítica y experiencia de los ingenieros humanos**.
 4. **Cumplimiento Académico Total:**  
    El proyecto satisface al 100% los requerimientos de la cátedra de Herramientas Informáticas Avanzadas (UNJu), consolidando un marco profesional de ingeniería de software, gestión ágil y documentación técnica de excelencia.
+
+
+---
+
+# ANEXOS DEL PROYECTO (EVIDENCIA Y TRAZABILIDAD AVANZADA)
+
+## ANEXO A: GESTIÓN PROFUNDA DE RIESGOS (CAUSA RAÍZ, PLANES Y RESULTADOS)
+
+A continuación se detalla la matriz de mitigación y el comportamiento real observado durante la ejecución del proyecto para los 5 riesgos de mayor impacto:
+
+| ID | Riesgo Identificado | Causa Raíz Metodológica/Técnica | Plan de Prevención Proactivo | Plan de Contingencia Reactivo | Resultado Real Observado |
+| :---: | :--- | :--- | :--- | :--- | :--- |
+| **R-01** | Pérdida de datos en MySQL por volumen no persistente. | Ausencia o mala vinculación de named volumes en `docker-compose.yml`. | Definición explícita de `mysql_data:/var/lib/mysql` y backups automatizados con mysqldump. | Restauración inmediata mediante archivo `.sql.gz` utilizando `gunzip < backup.sql.gz \| docker exec -i mysql mysql`. | **Mitigado (No materializado):** El volumen nombrado persistió los datos tras múltiples reinicios de contenedores. |
+| **R-02** | Ruptura de compatibilidad por uso de imágenes con tag `:latest`. | Dependencia de builds upstream no controlados con breaking changes. | Fijación inmutable de versiones exactas: `mysql:8.0.36`, `n8n:1.45.1`, `nginx:1.27-alpine`. | Rollback inmediato al tag previo documentado en el histórico de commits de Git. | **Controlado:** Cero derivas de dependencias; estabilidad total en todos los entornos. |
+| **R-03** | Exposición accidental de contraseñas y claves en el repositorio Git. | Omisión de `.env` o credenciales hardcodeadas en archivos versionados. | Configuración estricta de `.gitignore` (`.env`, `secrets/`, `certs/`) y plantilla `.env.example`. | Revocación inmediata de credenciales, purga del historial con git-filter-repo y rotación de claves. | **Exitoso:** Cero fugas de credenciales; pipeline de CI valida ausencia de secretos antes del merge. |
+| **R-04** | Exposición pública no autorizada del puerto 3306 en el host. | Uso indebido de la directiva `ports` en lugar de aislamiento por red. | Uso exclusivo de `expose: ["3306"]` dentro de `app-network` (`internal: true`). Host ports deshabilitados. | Modificación del Compose y reinicio del stack; auditoría de sockets con `Test-NetConnection`. | **Verificado:** Puerto 3306 100% inaccesible desde el host (`TcpTestSucceeded: False`). |
+| **R-05** | Curva de aprendizaje y desvío en configuración de n8n y WebSockets. | Falta de experiencia previa en la gestión de proxy reverso con upgrades HTTP. | Spike técnico previo de 2 horas e investigación de cabeceras `Upgrade` y `Connection` para Nginx. | Simplificación del alcance: entrega de persistencia básica antes de flujos avanzados de alertas. | **Superado:** Bloqueo documentado en Daily D4 y resuelto con configuración de proxy HTTP 1.1 en Nginx. |
+
+---
+
+## ANEXO B: CONSOLIDADO EJECUTIVO DE INTELIGENCIA ARTIFICIAL
+
+Matriz consolidada de las interacciones con herramientas de IA generativa aplicadas a lo largo del ciclo de vida del proyecto:
+
+| Etapa del Proyecto | Herramienta de IA | Prompt Ejecutado (Resumen) | Propuesta de la IA | Juicio Crítico y Ajuste Humano Realizado |
+| :--- | :--- | :--- | :--- | :--- |
+| **1. Estructura del Backlog** | ChatGPT (GPT-4o) | *"Generá 15 Historias de Usuario para una plataforma Docker con Nginx, n8n y MySQL en formato ágil..."* | Propuso historias excesivamente acopladas y sin criterios Gherkin formales. | Se desglosaron en 5 Épicas tecnológicas claras y se añadieron criterios Gherkin exhaustivos. |
+| **2. Contrato de Aceptación** | Claude 3.5 Sonnet | *"Escribe criterios de aceptación Dado/Cuando/Entonces para el aislamiento de MySQL en Docker..."* | Propuso probar mapeo `3306:3306` hacia el host para conectar DBeaver. | **Corrección crítica:** Se rechazó el puerto en base y se implementó `expose: 3306` con red `internal: true`. |
+| **3. Resolución de Bloqueo** | Gemini 1.5 Pro | *"¿Por qué la UI de n8n pierde conexión continua detrás de Nginx reverse proxy?"* | Identificó la falta de proxying de WebSockets (`Upgrade` / `Connection`). | Se incorporó la directiva `proxy_set_header Upgrade $http_upgrade` en `nginx.conf`. |
+| **4. Pipeline CI/CD** | GitHub Copilot | *"Generá un workflow de GitHub Actions para validar sintaxis de Docker Compose y secretos..."* | Sugirió ejecutar `docker compose up` en el runner sin flags de consistencia. | Se optimizó a `docker compose config -q` y validación estática del JSON de backlog. |
+| **5. Modelado de Riesgos** | ChatGPT (GPT-4o) | *"Lista 10 riesgos de seguridad e infraestructura para una arquitectura de microservicios Docker..."* | Proveyó riesgos genéricos de nube (AWS/Azure). | Se aterrizaron al entorno local y CI/CD (puertos, named volumes, tags flotantes). |
+| **6. Dinámica 4Ls** | Claude 3.5 Sonnet | *"Estructura una retrospectiva 4Ls para un equipo Scrum tras su primer incremento..."* | Proveyó plantilla teórica genérica. | Se completó con datos empíricos reales del equipo y 2 compromisos SMART para el Sprint 2. |
+
+---
+
+## ANEXO C: GUÍA DE TRAZABILIDAD Y EVIDENCIAS VISUALES
+
+Matriz de correspondencia entre los artefactos visuales, las secciones del informe y los criterios de aceptación evaluados:
+
+| Figura / Captura | Ubicación en el Repositorio | Sección del Informe | Criterio de Aceptación y Competencia Evaluada |
+| :---: | :--- | :---: | :--- |
+| **Figura 2.1** | `docs/img/tablero_github_projects.png` | Sección 2.2 | Configuración de herramienta ágil con 5 columnas de flujo y 15 historias cargadas. |
+| **Figura 3.1** | Renderizado Mermaid en vivo | Sección 3.0 | Arquitectura de red multicapa, aislamiento perimetral y named volumes. |
+| **Figura 3.2** | `docs/img/workflow_n8n_canvas.svg` | Sección 3.0 (Épica 3) | Integración visual de Webhooks HTTP y persistencia en MySQL (`mysql:3306`). |
+| **Figura 4.1** | `docs/img/burndown_chart.svg` | Sección 4.4 | Control de velocidad: quemado de 26 SP ideales vs reales en 10 días hábiles. |
+| **Figura 7.1** | `docs/img/evidencia_terminal_seguridad.svg` | Sección 7.2 | Microservicios en estado *healthy* y verificación de puerto 3306 cerrado en host. |
+| **Figura 7.2** | `docs/img/pipeline_github_actions.png` | Sección 7.3 | Automatización de CI con resultado PASS (Exit code 0) en GitHub Actions. |
+| **Figura 8.1** | `docs/img/retrospectiva_4ls.svg` | Sección 8.2 | Inspección y Adaptación: dinámica 4Ls con compromisos SMART para el Sprint 2. |
+
+---
+
+## ROADMAP ESTRATÉGICO: EVOLUCIÓN MULTI-SPRINT DEL PRODUCTO
+
+El proyecto se planificó bajo un ciclo evolutivo de 3 Sprints (6 semanas), donde el **Sprint 1** constituye el incremento funcional operativo y los Sprints 2 y 3 definen la maduración del backlog:
+
+```mermaid
+gantt
+    title Roadmap Evolutivo de la Plataforma PMA-Docker (3 Sprints / 6 Semanas)
+    dateFormat  YYYY-MM-DD
+    section Sprint 1 (Completado - 26 SP)
+    Infraestructura Base & Nginx Gateway   :done, s1_1, 2026-09-01, 4d
+    MySQL Aislado & Persistencia           :done, s1_2, 2026-09-05, 3d
+    n8n Engine & Pipeline CI/CD            :done, s1_3, 2026-09-08, 3d
+    Sprint Review & Retrospectiva 4Ls      :done, s1_4, 2026-09-12, 1d
+    section Sprint 2 (Refinado - 13 SP)
+    Backups Automatizados (mysqldump)      :active, s2_1, 2026-09-15, 4d
+    Flujo de Webhooks & Alertas n8n        :active, s2_2, 2026-09-19, 4d
+    Custom Image Build en GHCR (US-11)     :active, s2_3, 2026-09-23, 2d
+    section Sprint 3 (Proyectado - 9 SP)
+    Monitoreo con Healthchecks y Logs      :s3_1, 2026-09-26, 4d
+    Despliegue Continuo CD Cloud (US-12)   :s3_2, 2026-09-30, 4d
+    Cierre de Proyecto y Documentación     :s3_3, 2026-10-04, 2d
+```
