@@ -67,7 +67,7 @@ Planificar, desarrollar y validar de forma iterativa e incremental una plataform
 - **Cliente / Patrocinador Institucional:** Dirección de Transformación Digital Universitaria (UNJu).
 - **Usuarios Finales:** Desarrolladores backend, administradores de bases de datos y analistas de automatización.
 - **Cátedra Evaluadora:** Herramientas Informáticas Avanzadas (Prof. Ing. Alfredo R. Espinoza).
-- **Scrum Team:** Marcos (Product Owner), Integrante 2 (Scrum Master / Backend), Integrante 3 (Developer / DevOps).
+- **Scrum Team:** Marcos (Product Owner), Juan Flores (Scrum Master / Backend), Camila Tejeda (Developer / DevOps).
 
 ### 1.9. Recursos
 - **Hardware:** Estaciones de trabajo y servidores estándar con soporte de virtualización y Docker Engine (CPU x86_64, 8/16 GB RAM, almacenamiento SSD).
@@ -140,7 +140,7 @@ graph TD
 
 ##### US-01: Configuración de Docker Engine y Orquestación Base con Docker Compose v2
 - **Descripción:** *Como* Ingeniero DevOps, *quiero* configurar el entorno de ejecución Docker Engine y el archivo base `docker-compose.yml`, *para* orquestar todos los microservicios de forma estandarizada y declarativa.
-- **Prioridad:** Must Have | **Story Points:** 5 SP | **Responsable:** Integrante 3 (DevOps)
+- **Prioridad:** Must Have | **Story Points:** 5 SP | **Responsable:** Camila Tejeda (DevOps & QA)
 - **Subtareas:**
   1. Instalar y verificar Docker CE 26.x y Docker Compose plugin en el host.
   2. Redactar la estructura raíz del `docker-compose.yml` con especificación de versión y metadatos del proyecto.
@@ -154,7 +154,7 @@ graph TD
 
 ##### US-02: Despliegue de Nginx Reverse Proxy como Gateway Centralizado
 - **Descripción:** *Como* Administrador de Sistemas, *quiero* configurar un contenedor Nginx que actúe como proxy inverso y punto único de entrada, *para* enrutar el tráfico HTTP/HTTPS hacia n8n y exponer servicios web de forma segura.
-- **Prioridad:** Must Have | **Story Points:** 3 SP | **Responsable:** Integrante 3 (DevOps)
+- **Prioridad:** Must Have | **Story Points:** 3 SP | **Responsable:** Camila Tejeda (DevOps & QA)
 - **Subtareas:**
   1. Crear archivo de configuración `nginx.conf` con directivas `proxy_pass` hacia `n8n:5678`.
   2. Definir servicio `nginx` en Docker Compose con mapeo de puertos `80:80` y `443:443`.
@@ -168,7 +168,7 @@ graph TD
 
 ##### US-03: Configuración de Redes Aisladas y Políticas de Reinicio Automático
 - **Descripción:** *Como* Ingeniero de Infraestructura, *quiero* segmentar los contenedores en redes Docker independientes (`gateway-net` y `app-network`), *para* aislar la base de datos de la red pública y garantizar alta disponibilidad con políticas de reinicio.
-- **Prioridad:** Should Have | **Story Points:** 3 SP | **Responsable:** Integrante 2 (Backend)
+- **Prioridad:** Should Have | **Story Points:** 3 SP | **Responsable:** Juan Flores (Backend Dev)
 - **Subtareas:**
   1. Definir red bridge `gateway-net` (para Nginx y n8n) y `app-network` (para n8n y MySQL).
   2. Configurar directivas `restart: unless-stopped` en todos los servicios de Compose.
@@ -186,7 +186,7 @@ graph TD
 
 ##### US-04: Despliegue de MySQL 8.0 con Volumen Persistente y Aislamiento `expose: 3306`
 - **Descripción:** *Como* Desarrollador Backend, *quiero* desplegar MySQL 8.0 utilizando un volumen nombrado (`mysql_data`) y directiva de aislamiento interno `expose: ["3306"]` dentro de `app-network` (`internal: true`), *para* asegurar la persistencia de datos y desacoplar el acceso de desarrollo mediante `docker-compose.override.yml.example` sin exponer puertos en la definición base de producción.
-- **Prioridad:** Must Have | **Story Points:** 3 SP | **Responsable:** Integrante 2 (Backend)
+- **Prioridad:** Must Have | **Story Points:** 3 SP | **Responsable:** Juan Flores (Backend Dev)
 - **Subtareas:**
   1. Configurar servicio `mysql` con imagen oficial `mysql:8.0.36-bookworm` y aliases DNS `['mysql', 'mysql-db']`.
   2. Mapear volumen nombrado `mysql_data:/var/lib/mysql`.
@@ -201,7 +201,7 @@ graph TD
 
 ##### US-05: Configuración de Schemas, Usuario de Aplicación y Healthchecks
 - **Descripción:** *Como* Administrador de Base de Datos, *quiero* automatizar la creación del schema `pmai_db`, un usuario de aplicación `pmai_app` con permisos mínimos y un healthcheck nativo, *para* garantizar inicio ordenado y seguro.
-- **Prioridad:** Must Have | **Story Points:** 2 SP | **Responsable:** Integrante 2 (Backend)
+- **Prioridad:** Must Have | **Story Points:** 2 SP | **Responsable:** Juan Flores (Backend Dev)
 - **Subtareas:**
   1. Crear script `init.sql` montado en `/docker-entrypoint-initdb.d/` con tabla `productos`.
   2. Configurar usuario `pmai_app` con permisos `SELECT, INSERT, UPDATE, DELETE` exclusivos sobre `pmai_db`.
@@ -215,7 +215,7 @@ graph TD
 
 ##### US-06: Automatización de Respaldos Lógicos de Base de Datos (mysqldump)
 - **Descripción:** *Como* DBA, *quiero* un contenedor utilitario que ejecute copias lógicas diarias con `mysqldump` comprimidas en `.sql.gz`, *para* contar con copias de seguridad portables y versionadas.
-- **Prioridad:** Should Have | **Story Points:** 2 SP | **Responsable:** Integrante 2 (Backend)
+- **Prioridad:** Should Have | **Story Points:** 2 SP | **Responsable:** Juan Flores (Backend Dev)
 - **Subtareas:**
   1. Crear script `backup.sh` con comando `mysqldump --single-transaction | gzip`.
   2. Configurar retención automática de 14 copias.
@@ -233,7 +233,7 @@ graph TD
 
 ##### US-07: Despliegue de n8n en Docker Compose con Persistencia y Variables Protegidas
 - **Descripción:** *Como* Especialista en Automatización, *quiero* desplegar n8n en Docker Compose con volumen persistente `n8n_data`, *para* construir workflows visuales cuya configuración no se pierda al reiniciar.
-- **Prioridad:** Must Have | **Story Points:** 5 SP | **Responsable:** Integrante 3 (DevOps)
+- **Prioridad:** Must Have | **Story Points:** 5 SP | **Responsable:** Camila Tejeda (DevOps & QA)
 - **Subtareas:**
   1. Definir servicio `n8n` con imagen `n8nio/n8n:1.45.1` y volumen `n8n_data:/home/node/.n8n`.
   2. Configurar variables de entorno `N8N_ENCRYPTION_KEY`, `WEBHOOK_URL` y timezone `America/Argentina/Jujuy`.
@@ -247,7 +247,7 @@ graph TD
 
 ##### US-08: Integración Nativa de n8n con MySQL mediante Resolución DNS Interna
 - **Descripción:** *Como* Desarrollador de Automatización, *quiero* conectar n8n a MySQL utilizando el hostname del servicio `mysql` dentro de la red `app-network`, *para* ejecutar operaciones de base de datos sin depender de IPs estáticas ni exponer puertos al exterior.
-- **Prioridad:** Must Have | **Story Points:** 3 SP | **Responsable:** Integrante 2 y 3 (Pair Dev)
+- **Prioridad:** Must Have | **Story Points:** 3 SP | **Responsable:** Juan Flores y Camila Tejeda (Pair Dev)
 - **Subtareas:**
   1. Crear credencial de base de datos en n8n con host `mysql`, puerto `3306`, user `pmai_app` y base `pmai_db`.
   2. Construir workflow de prueba con nodo MySQL que ejecute `SELECT * FROM productos`.
@@ -264,7 +264,7 @@ graph TD
 
 ##### US-09: Implementación de Flujo de Webhooks y Alertas Automáticas
 - **Descripción:** *Como* Operador de Sistemas, *quiero* un workflow en n8n que reciba eventos HTTP vía Webhook y envíe notificaciones estructuradas por correo/SMTP ante fallos críticos, *para* responder en tiempo real a incidentes.
-- **Prioridad:** Should Have | **Story Points:** 3 SP | **Responsable:** Integrante 3 (DevOps)
+- **Prioridad:** Should Have | **Story Points:** 3 SP | **Responsable:** Camila Tejeda (DevOps & QA)
 - **Subtareas:**
   1. Configurar nodo Webhook en n8n para escuchar eventos POST en `/webhook/alerts`.
   2. Añadir nodo condicional IF para filtrar por nivel de severidad `CRITICAL`.
@@ -282,7 +282,7 @@ graph TD
 
 ##### US-10: Pipeline de GitHub Actions para Validación de Compose, Linting y Tests
 - **Descripción:** *Como* Desarrollador de Software, *quiero* que cada Pull Request ejecute un pipeline automatizado de validación estática y pruebas, *para* asegurar que ningún cambio roto ingrese a la rama principal `main`.
-- **Prioridad:** Must Have | **Story Points:** 3 SP | **Responsable:** Integrante 3 (DevOps)
+- **Prioridad:** Must Have | **Story Points:** 3 SP | **Responsable:** Camila Tejeda (DevOps & QA)
 - **Subtareas:**
   1. Crear archivo de workflow `.github/workflows/ci.yml`.
   2. Configurar pasos de `docker compose config -q`, ShellCheck en scripts `.sh` y linters de SQL.
@@ -296,7 +296,7 @@ graph TD
 
 ##### US-11: Pipeline de Construcción de Imágenes Docker y Publicación en GHCR
 - **Descripción:** *Como* Ingeniero DevOps, *quiero* compilar imágenes personalizadas (ej. Nginx con configuraciones fijas) y publicarlas en GitHub Container Registry (`ghcr.io`), *para* disponer de artefactos inmutables versionados.
-- **Prioridad:** Should Have | **Story Points:** 3 SP | **Responsable:** Integrante 3 (DevOps)
+- **Prioridad:** Should Have | **Story Points:** 3 SP | **Responsable:** Camila Tejeda (DevOps & QA)
 - **Subtareas:**
   1. Configurar Docker Buildx y autenticación con `secrets.GITHUB_TOKEN`.
   2. Implementar etiquetado semántico (`:v1.0.0`, `:sha-xxxx`).
@@ -310,7 +310,7 @@ graph TD
 
 ##### US-12: Despliegue Continuo Automatizado (CD) hacia el Servidor de Producción
 - **Descripción:** *Como* Administrador de Sistemas, *quiero* que las nuevas versiones se desplieguen automáticamente en el servidor host tras aprobarse en `main`, *para* eliminar intervenciones manuales de despliegue.
-- **Prioridad:** Could Have | **Story Points:** 5 SP | **Responsable:** Integrante 3 (DevOps)
+- **Prioridad:** Could Have | **Story Points:** 5 SP | **Responsable:** Camila Tejeda (DevOps & QA)
 - **Subtareas:**
   1. Configurar SSH seguro con llave privada en GitHub Secrets (`DEPLOY_KEY`, `SERVER_HOST`).
   2. Escribir script de CD que ejecute `docker compose pull && docker compose up -d --remove-orphans`.
@@ -328,7 +328,7 @@ graph TD
 
 ##### US-13: Hardening de Contenedores y Cero Exposición Pública de Base de Datos
 - **Descripción:** *Como* Ingeniero de Seguridad, *quiero* asegurar que MySQL opere únicamente con `expose: 3306` dentro de `app-network`, limitar memoria RAM/CPU de cada servicio y evitar usuarios root, *para* cerrar completamente vectores de ataque externos y prevenir saturaciones del host.
-- **Prioridad:** Must Have | **Story Points:** 3 SP | **Responsable:** Integrante 2 (Backend)
+- **Prioridad:** Must Have | **Story Points:** 3 SP | **Responsable:** Juan Flores (Backend Dev)
 - **Subtareas:**
   1. Verificar que MySQL no posee directiva `ports` pública en el `docker-compose.yml` base.
   2. Añadir directivas `deploy.resources.limits.memory` (MySQL: 1.5 GB, n8n: 1 GB, Nginx: 256 MB) y `cpus`.
@@ -342,7 +342,7 @@ graph TD
 
 ##### US-14: Monitoreo del Estado de Salud con Docker Healthchecks y Logs
 - **Descripción:** *Como* Operador DevOps, *quiero* consultar el estado de salud de todos los microservicios mediante `docker compose ps` y rotación de logs, *para* detectar caídas de servicios preventivamente.
-- **Prioridad:** Should Have | **Story Points:** 3 SP | **Responsable:** Integrante 3 (DevOps)
+- **Prioridad:** Should Have | **Story Points:** 3 SP | **Responsable:** Camila Tejeda (DevOps & QA)
 - **Subtareas:**
   1. Configurar directivas `healthcheck` en MySQL, n8n y Nginx.
   2. Configurar rotación de logs con `json-file` (máximo 3 archivos de 10 MB por contenedor).
@@ -356,7 +356,7 @@ graph TD
 
 ##### US-15: Gestión Centralizada de Secretos y Variables de Entorno Seguras
 - **Descripción:** *Como* Oficial de Seguridad, *quiero* centralizar todas las contraseñas y tokens en un archivo `.env` protegido y excluirlo del control de versiones, *para* evitar la filtración de credenciales en el repositorio público.
-- **Prioridad:** Must Have | **Story Points:** 2 SP | **Responsable:** Integrante 2 (Backend)
+- **Prioridad:** Must Have | **Story Points:** 2 SP | **Responsable:** Juan Flores (Backend Dev)
 - **Subtareas:**
   1. Crear archivo `.env.example` documentando todas las variables requeridas con valores dummy.
   2. Incluir `.env`, `*.key` y certificados en `.gitignore`.
@@ -394,14 +394,14 @@ graph TD
 
 | ID Historia | Título de la Historia de Usuario | Responsable Técnico | Story Points | Horas Estimadas |
 | :--- | :--- | :--- | :--- | :--- |
-| **US-01** | Docker Engine & Orquestación Base en Compose | Integrante 3 (DevOps) | 5 SP | 20 hs |
-| **US-02** | Nginx Reverse Proxy como Gateway Centralizado | Integrante 3 (DevOps) | 3 SP | 14 hs |
-| **US-04** | MySQL 8.0 con Volumen Persistente y Aislamiento | Integrante 2 (Backend) | 3 SP | 14 hs |
-| **US-05** | Schemas, Usuario `pmai_app` y Healthchecks | Integrante 2 (Backend) | 2 SP | 8 hs |
-| **US-07** | Despliegue de n8n en Docker Compose | Integrante 3 (DevOps) | 5 SP | 22 hs |
+| **US-01** | Docker Engine & Orquestación Base en Compose | Camila Tejeda (DevOps & QA) | 5 SP | 20 hs |
+| **US-02** | Nginx Reverse Proxy como Gateway Centralizado | Camila Tejeda (DevOps & QA) | 3 SP | 14 hs |
+| **US-04** | MySQL 8.0 con Volumen Persistente y Aislamiento | Juan Flores (Backend Dev) | 3 SP | 14 hs |
+| **US-05** | Schemas, Usuario `pmai_app` y Healthchecks | Juan Flores (Backend Dev) | 2 SP | 8 hs |
+| **US-07** | Despliegue de n8n en Docker Compose | Camila Tejeda (DevOps & QA) | 5 SP | 22 hs |
 | **US-08** | Integración n8n - MySQL por DNS Interno | Integrante 2 y 3 (Pair) | 3 SP | 12 hs |
-| **US-10** | Pipeline GitHub Actions Linter & Test | Integrante 3 (DevOps) | 3 SP | 12 hs |
-| **US-15** | Gestión Centralizada de Secretos `.env` | Integrante 2 (Backend) | 2 SP | 8 hs |
+| **US-10** | Pipeline GitHub Actions Linter & Test | Camila Tejeda (DevOps & QA) | 3 SP | 12 hs |
+| **US-15** | Gestión Centralizada de Secretos `.env` | Juan Flores (Backend Dev) | 2 SP | 8 hs |
 | **Total Sprint 1** | — | — | **26 SP** | **110 hs** |
 
 *(El tiempo restante de 70 horas se destina a colchón de contingencia, Dailies, Code Reviews entre pares, Refinamiento del Backlog y preparación de la Sprint Review, respetando el principio de desarrollo sostenible de Scrum, Palacio p. 57).*
@@ -532,16 +532,16 @@ A continuación se analizan en profundidad los 5 riesgos de mayor severidad del 
 #### Daily Meeting - Día 1 (Inicio y Sincronización)
 - **Marcos (PO):** *"Supervisé la carga del Sprint Backlog en GitHub Projects. Me mantengo disponible para resolver dudas de criterios de aceptación de US-01 y US-04. Sin bloqueos."*
 - **Integrante 2 (SM & Backend):** *"Ayer refinamos el schema relacional. Hoy configuro el contenedor MySQL 8.0 con su volumen persistente, aislamiento `expose: 3306` y script de inicialización (`init.sql`). Sin impedimentos."*
-- **Integrante 3 (DevOps):** *"Ayer configuré la estructura del repositorio. Hoy redacto el `docker-compose.yml` base y levanto el Gateway Nginx. Sin impedimentos."*
+- **Camila Tejeda (DevOps & QA):** *"Ayer configuré la estructura del repositorio. Hoy redacto el `docker-compose.yml` base y levanto el Gateway Nginx. Sin impedimentos."*
 
 #### Daily Meeting - Día 4 (Gestión de Impedimento Real 1)
 - **Marcos (PO):** *"Verifiqué que el Gateway Nginx responde en el puerto 80. Todo en orden."*
-- **Integrante 3 (DevOps):** *"Ayer levanté n8n detrás de Nginx, pero la interfaz web se desconecta continuamente al abrir el editor visual de workflows (*BLOQUEO*)."*
+- **Camila Tejeda (DevOps & QA):** *"Ayer levanté n8n detrás de Nginx, pero la interfaz web se desconecta continuamente al abrir el editor visual de workflows (*BLOQUEO*)."*
 - **Integrante 2 (SM):** *"Tomo el impedimento. Investigamos el tráfico HTTP: n8n utiliza WebSockets para la comunicación bidireccional del canvas de nodos. Nginx requiere directivas explícitas de Upgrade de cabeceras. Agrego las directivas `proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection 'upgrade';` en el `nginx.conf` y pruebo. Desbloqueado."*
 
 #### Daily Meeting - Día 8 (Gestión de Impedimento Real 2)
 - **Integrante 2 (SM & Backend):** *"MySQL está corriendo, aislado y healthy. Ayer configuramos la conexión desde n8n pero obtuvimos un error `ECONNREFUSED` al apuntar a `127.0.0.1` (*BLOQUEO*)."*
-- **Integrante 3 (DevOps):** *"El problema radica en el aislamiento de red de Docker. Cada contenedor tiene su propio localhost. Como ambos están en la red bridge `app-network`, el endpoint debe ser el nombre del servicio `mysql:3306`. Modifiqué la credencial en n8n con el hostname `mysql` y la conexión quedó 100% operativa y estable."*
+- **Camila Tejeda (DevOps & QA):** *"El problema radica en el aislamiento de red de Docker. Cada contenedor tiene su propio localhost. Como ambos están en la red bridge `app-network`, el endpoint debe ser el nombre del servicio `mysql:3306`. Modifiqué la credencial en n8n con el hostname `mysql` y la conexión quedó 100% operativa y estable."*
 
 ### 7.2. Control de Calidad, Estado de Contenedores y Evidencia de Seguridad
 

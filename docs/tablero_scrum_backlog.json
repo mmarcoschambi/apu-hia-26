@@ -67,7 +67,7 @@
       "story_points": 5,
       "status": "Done",
       "sprint": 1,
-      "assigned_to": "Integrante 3 (DevOps)"
+      "assigned_to": "Camila Tejeda (DevOps & QA)"
     },
     {
       "id": "US-02",
@@ -78,7 +78,7 @@
       "story_points": 3,
       "status": "Done",
       "sprint": 1,
-      "assigned_to": "Integrante 3 (DevOps)"
+      "assigned_to": "Camila Tejeda (DevOps & QA)"
     },
     {
       "id": "US-03",
@@ -89,7 +89,7 @@
       "story_points": 3,
       "status": "Done",
       "sprint": 2,
-      "assigned_to": "Integrante 2 (Backend)"
+      "assigned_to": "Juan Flores (Backend Dev)"
     },
     {
       "id": "US-04",
@@ -100,7 +100,7 @@
       "story_points": 3,
       "status": "Done",
       "sprint": 1,
-      "assigned_to": "Integrante 2 (Backend)"
+      "assigned_to": "Juan Flores (Backend Dev)"
     },
     {
       "id": "US-05",
@@ -111,7 +111,7 @@
       "story_points": 2,
       "status": "Done",
       "sprint": 1,
-      "assigned_to": "Integrante 2 (Backend)"
+      "assigned_to": "Juan Flores (Backend Dev)"
     },
     {
       "id": "US-06",
@@ -122,7 +122,7 @@
       "story_points": 2,
       "status": "Done",
       "sprint": 2,
-      "assigned_to": "Integrante 2 (Backend)"
+      "assigned_to": "Juan Flores (Backend Dev)"
     },
     {
       "id": "US-07",
@@ -133,7 +133,7 @@
       "story_points": 5,
       "status": "Done",
       "sprint": 1,
-      "assigned_to": "Integrante 3 (DevOps)"
+      "assigned_to": "Camila Tejeda (DevOps & QA)"
     },
     {
       "id": "US-08",
@@ -144,7 +144,7 @@
       "story_points": 3,
       "status": "Done",
       "sprint": 1,
-      "assigned_to": "Integrante 2 & 3 (Pair)"
+      "assigned_to": "Juan Flores (Backend Dev)"
     },
     {
       "id": "US-09",
@@ -155,7 +155,7 @@
       "story_points": 3,
       "status": "Done",
       "sprint": 2,
-      "assigned_to": "Integrante 3 (DevOps)"
+      "assigned_to": "Camila Tejeda (DevOps & QA)"
     },
     {
       "id": "US-10",
@@ -166,7 +166,7 @@
       "story_points": 3,
       "status": "Done",
       "sprint": 1,
-      "assigned_to": "Integrante 3 (DevOps)"
+      "assigned_to": "Camila Tejeda (DevOps & QA)"
     },
     {
       "id": "US-11",
@@ -177,7 +177,7 @@
       "story_points": 3,
       "status": "Done",
       "sprint": 2,
-      "assigned_to": "Integrante 3 (DevOps)"
+      "assigned_to": "Camila Tejeda (DevOps & QA)"
     },
     {
       "id": "US-12",
@@ -188,7 +188,7 @@
       "story_points": 5,
       "status": "Done",
       "sprint": 2,
-      "assigned_to": "Integrante 3 (DevOps)"
+      "assigned_to": "Camila Tejeda (DevOps & QA)"
     },
     {
       "id": "US-13",
@@ -199,7 +199,7 @@
       "story_points": 3,
       "status": "Done",
       "sprint": 2,
-      "assigned_to": "Integrante 2 (Backend)"
+      "assigned_to": "Juan Flores (Backend Dev)"
     },
     {
       "id": "US-14",
@@ -210,7 +210,7 @@
       "story_points": 3,
       "status": "Done",
       "sprint": 2,
-      "assigned_to": "Integrante 3 (DevOps)"
+      "assigned_to": "Camila Tejeda (DevOps & QA)"
     },
     {
       "id": "US-15",
@@ -221,12 +221,17 @@
       "story_points": 2,
       "status": "Done",
       "sprint": 1,
-      "assigned_to": "Integrante 2 (Backend)"
+      "assigned_to": "Juan Flores (Backend Dev)"
     }
   ],
   "sprint_2_summary": {
     "duration_weeks": 2,
     "committed_story_points": 22,
     "completed_story_points": 22
+  },
+  "scrum_team": {
+    "product_owner": "Marcos Chambi (LU: 4559)",
+    "scrum_master_backend": "Juan Flores (LU: 4623)",
+    "developer_devops_qa": "Camila Tejeda (LU: 6494)"
   }
 }

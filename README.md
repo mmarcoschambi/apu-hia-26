@@ -8,9 +8,9 @@ Este repositorio contiene la planificación metodológica, documentación técni
 
 ## 👥 Scrum Team
 
-- **Product Owner (Puro Negocio):** Marcos (APU-08421)
-- **Scrum Master & Backend Dev:** Integrante 2 (APU-08512)
-- **Developer & DevOps/QA:** Integrante 3 (APU-08633)
+- **Product Owner (Puro Negocio):** Marcos Chambi (LU: 4559)
+- **Scrum Master & Backend Dev:** Juan Flores (LU: 4623)
+- **Developer & DevOps/QA:** Camila Tejeda (LU: 6494)
 
 ---
 
