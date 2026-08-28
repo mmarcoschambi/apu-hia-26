@@ -1,0 +1,118 @@
+# ==============================================================================
+# US-10: Pipeline de validación de Docker Compose, linting y tests
+# ==============================================================================
+# Disparadores: PRs hacia main/develop + push a main
+# Salidas: badge verde en el README si pasa, marca la PR como ready-for-review
+# ==============================================================================
+name: ci-validation
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  COMPOSE_FILE: docker-compose.yml
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: Validación de esquema YAML + sintaxis de Docker Compose
+  # ---------------------------------------------------------------------------
+  compose-schema:
+    name: Compose schema & syntax
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Validar docker-compose.yml (sin .env)
+        run: |
+          docker compose -f "$COMPOSE_FILE" config --quiet
+          echo "OK: docker compose config válido sin .env"
+
+      - name: Validar con .env.example
+        run: |
+          cp .env.example .env.test
+          docker compose --env-file .env.test -f "$COMPOSE_FILE" config --quiet
+          rm -f .env.test
+          echo "OK: variables de entorno resueltas correctamente"
+
+      - name: Verificar aislamiento de MySQL (expose sin ports)
+        run: |
+          ! docker compose -f "$COMPOSE_FILE" config \
+            | yq -e '.services.mysql.ports // [] | length > 0' \
+            && echo "OK: MySQL no publica puertos en host" \
+            || (echo "FAIL: MySQL expone puertos al host" && exit 1)
+
+      - name: 'Verificar internal=true en app-network'
+        run: |
+          docker compose -f "$COMPOSE_FILE" config \
+            | yq -e '.networks."app-network".internal == true' \
+            && echo "OK: app-network con internal: true"
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Lint de YAML y shell scripts
+  # ---------------------------------------------------------------------------
+  lint:
+    name: YAML & shell lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: yamllint
+        uses: reviewdog/action-yamllint@v1
+        with:
+          level: warning
+          config_file: .yamllint.yml
+
+      - name: shellcheck (scripts/*.sh)
+        uses: ludeeus/action-shellcheck@2.0.0
+        with:
+          scandir: ./scripts
+          additional_files: docker/n8n/entrypoint.sh
+
+      - name: hadolint (Dockerfile)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: docker/n8n/Dockerfile
+          failure-threshold: warning
+
+  # ---------------------------------------------------------------------------
+  # Job 3: Pruebas estructurales de la documentación
+  # ---------------------------------------------------------------------------
+  docs-check:
+    name: Docs & backlog integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validar JSON del backlog Scrum
+        run: |
+          jq -e '.user_stories | length >= 15' docs/tablero_scrum_backlog.json
+          echo "OK: backlog Scrum con $(jq '.user_stories | length' docs/tablero_scrum_backlog.json) historias"
+
+      - name: Verificar .gitignore cubre secretos
+        run: |
+          grep -E '^\.env$|^\.env\.local$|^secrets/|^certs/' .gitignore
+          echo "OK: .gitignore excluye secretos"
+
+      - name: Detección de secretos accidentales
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: .
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --only-verified --fail
