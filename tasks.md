@@ -1,21 +1,18 @@
-# Tasks: chore(clean): eliminar dead code en terminal_gui (resto siempre vacio, hq_n sin uso)
+# Tasks: feat(tui): persistent validation progress indicator and explicit completion modal on [v]
 
-## Problema
-La verificación formal de #67 (verify-report, sección Suggestions) dejó registrados dos hallazgos de código muerto / innecesario en `src/utils/terminal_gui.py` que quedaron fuera de alcance:
+## Problem Statement
+1. Pressing \[v]\ triggers an asynchronous validation routine in BubbleTea. If the operator presses any key during execution, the toast notification is cleared, leaving no visual indicator of ongoing progress or final seal success.
+2. The operator is currently forced to inspect raw terminal logs or query \loomctl status <id>\ to verify whether sealing completed.
 
-1. **S1 — Dead code (~L951-961):** `resto = [t for t in rendered_tickers if t not in rendered_set]` es siempre lista vacía porque `rendered_set == set(rendered_tickers)` por construcción. Consecuencia: la línea "En espera" del mensaje nunca renderiza.
-2. **S2 — Parámetro `hq_n` retenido pero sin uso** (documentado como shim de compatibilidad).
+## Proposed Solution
+1. Render a persistent spinner or progress badge (\⏳ VALIDATING & SEALING...\) in the inspector header while the validation goroutine is executing.
+2. Display a distinct confirmation modal or sticky banner (\✅ SEALED: Revision #<rev> | Ready for [p] PR or [d] Done\) upon successful transition to \[SEALING]\.
+3. If validation fails, keep the failure reason permanently visible in the inspector until the operator acts.
 
-## Alcance propuesto
-- [x] Eliminar el bloque dead code de `resto` (y su render nunca-ejecutado) — decisión: eliminación. La línea "En espera" nunca renderizó (por construcción `rendered_set == set(rendered_tickers)`); implementarla exigiría una fuente de datos nueva, fuera de alcance de esta chore.
-- [x] Decidir destino de `hq_n`: **removido** de `build_telegram_brief` tras grep de callers (`scripts/finviz_monitor.py:271` llama con solo `snapshot`; tests ídem). Se conserva en `print_terminal_brief` donde sí se usa (L576, caller `scripts/paper_finviz.py`).
-- [x] Suite `pytest tests/test_telegram_brief.py` verde sin cambios de comportamiento visible: 28 passed + snapshot antes/después byte-idéntico (2490 chars).
-- [x] Ruff limpio.
+## Acceptance Criteria
+- [x] Active validation shows persistent busy state in the inspector pane.
+- [x] Successful validation displays a non-transient success banner in [SEALING].
+- [x] Error toasts from rejected reviews remain pinned until dismissed.
 
-## Notas
-- Origen exacto: sección Suggestions del verify-report del cambio issue-67 (`.openspec/changes/issue-67/verify-report.md` en la rama `issue-67`).
-- Issue pequeña, ideal para cleanup entre features. No tocar nada de `src/backtest/` ni `src/data/`.
-
-
-URL: https://github.com/mmarcoschambi/swing-momentum-v1/issues/76
-Labels: chore:clean, tech-debt
+URL: https://github.com/mmarcoschambi/loom/issues/31
+Labels: enhancement
